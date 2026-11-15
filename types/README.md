@@ -23,7 +23,7 @@ The namespace `axt` and every namespace beginning with `axt.` are reserved for t
 | ------------------------------------------------ | -------------------------------------------------------------------- |
 | [Note](axt/example/v1/Note.1.avsc)               | A text with a title, a format (plain or Markdown) and tags           |
 | [Task](axt/example/v1/Task.1.avsc)               | Something to do, with a due date, a repeat rule, done and a priority |
-| [Appointment](axt/example/v1/Appointment.1.avsc) | An event with start, end, time zone, place and reminders             |
+| [Appointment](axt/example/v1/Appointment.1.avsc) | An event with start, end, place and reminders                        |
 | [Person](axt/example/v1/Person.1.avsc)           | A contact with name parts, birthday, phones, emails and addresses    |
 | [Car](axt/example/v1/Car.1.avsc)                 | A car with make, model, year, plate, VIN and odometer reading        |
 | [Pet](axt/example/v1/Pet.1.avsc)                 | An animal with name, species, breed, sex, birthday and microchip     |

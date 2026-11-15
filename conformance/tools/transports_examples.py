@@ -481,7 +481,7 @@ client_hello = hello(CAT_SEED, CLIENT, CERT_HASH)
 server_hello = hello(OBF_SEED, SERVER, CERT_HASH)
 data_frame = frame(MESSAGE, pe.data_msg)
 ping_frame = frame(PING, b"")
-assert hashlib.sha256(pe.data_msg).hexdigest() == "77b613c6f7f4f637c55479135122d3b382a2311e96a0db95b524fdd5acf9bbd8", \
+assert hashlib.sha256(pe.data_msg).hexdigest() == "931e6f370f80527bae25f7475aa56e59f9bde6d71a0fe77c3dfad75700786086", \
     "not the DATA of spec/protocol.md, section 17.5"
 
 server = Peer(SERVER, CERT_HASH)

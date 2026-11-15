@@ -544,9 +544,9 @@ def encoding_category():
 # --- types (spec/types.md) -------------------------------------------------------------
 
 EXAMPLES = REPO / "types" / "axt" / "example" / "v1"
-TYPE_FPS = {"Appointment": 0x1B57DE39E9441B59, "Car": 0x7277E2001E503F8B, "Document": 0x4EA7ED4FB856C4D3,
-            "Measurement": 0xCBC0764900436ED4, "Note": 0x627AB0D4D84FB306, "Person": 0x2BEDD25E9E4558F1,
-            "Pet": 0x2D9F89A71269EB61, "Task": 0x88AE7A18288CA463}
+TYPE_FPS = {"Appointment": 0x1AF207F82B6430CD, "Car": 0x7277E2001E503F8B, "Document": 0xD610000B15046BAC,
+            "Measurement": 0x00F7713C4975C427, "Note": 0x0D3E5D90BDBC4EE0, "Person": 0x749561A5AF95D9F6,
+            "Pet": 0x6B792C0235531071, "Task": 0xA83870208718DD20}
 
 
 def types_category():
@@ -579,8 +579,7 @@ def types_category():
             wtext = json.dumps(reduced, separators=(",", ":"), ensure_ascii=False)
             record_vector(f"axt.example.v1.{name} written without its fields that have a default, read with every default",
                           ["types.md 5.4", "envelope.md 6"], wtext, texts[name], single_object(wtext, rules.project(schema, datum)))
-        nested = [f for f in schema["fields"] if isinstance(f["type"], dict) and f["type"]["type"] == "array"
-                  and isinstance(f["type"]["items"], dict) and f["type"]["items"]["type"] == "record"]
+        nested = rules.nested_arrays(schema)
         if nested:
             ndatum = dict(datum, **{f["name"]: datum[f["name"]][:1] for f in nested})
             wtext = json.dumps(rules.without_defaults(schema, nested_only=True), separators=(",", ":"), ensure_ascii=False)
@@ -600,10 +599,11 @@ def types_category():
 
     ap_text, ap = texts["Appointment"], rules.DATA["Appointment"]
     ap_body = single_object(ap_text, ap)
-    # The reminders in two array blocks, the first with a negative count and its size (Avro 1.12, Arrays).
-    one_block = keys.zigzag(2) + keys.zigzag(1440) + keys.zigzag(60) + keys.zigzag(0)
-    assert ap_body.count(one_block) == 1
-    blocks = keys.zigzag(-1) + keys.zigzag(2) + keys.zigzag(1440) + keys.zigzag(1) + keys.zigzag(60) + keys.zigzag(0)
+    # The reminders, two axt.Duration, in two array blocks, the first with a negative count and its size (Avro 1.12, Arrays).
+    first, second = (b"".join(keys.zigzag(d[k]) for k in ("months", "days", "millis")) for d in ap["reminders"])
+    one_block = keys.zigzag(2) + first + second + keys.zigzag(0)
+    assert ap_body.count(one_block) == 1 and ap_body.endswith(one_block)
+    blocks = keys.zigzag(-1) + keys.zigzag(len(first)) + first + keys.zigzag(1) + second + keys.zigzag(0)
     record_vector("axt.example.v1.Appointment with its reminders in two array blocks, one with a negative count",
                   ["envelope.md 1"], ap_text, None, ap_body.replace(one_block, blocks),
                   accept({"value": decode_meaning(ap_text, None, ap_body[10:])}))

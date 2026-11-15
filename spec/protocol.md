@@ -508,8 +508,8 @@ The keys are the test keys of [keys.md](keys.md), section 7.1: cat-a-log signs w
 | `offer_id`           | `6f1c2b9e-3d4a-4e5f-8a7b-1c2d3e4f5a6b`                                                                                                                                                                                                                                                                                                                                                                   |
 | The Appointment's id | `a2d4f6b8-1c3e-4a5b-9d7f-0e2c4a6b8d1f`, version 1                                                                                                                                                                                                                                                                                                                                                        |
 | The Pet's id         | `5e8a1f3c-7b2d-4c6e-a9f0-3d5b7c9e1a2f`, version 1                                                                                                                                                                                                                                                                                                                                                        |
-| The offered schemas  | [Pet.1.avsc](../types/axt/example/v1/Pet.1.avsc) and [Appointment.1.avsc](../types/axt/example/v1/Appointment.1.avsc), each written as JSON without whitespace, with every attribute and in the order of the file: 1,464 bytes (SHA-256 `747916b489fd5955aa9ce3a15d8353d07444031ae9028ae9946cb74004fdcb5d`) and 1,913 bytes (SHA-256 `85439a43a3ed8ee8c82ce3a1dcaeeb6d4370972d27fe34763ea0b398d4c29825`) |
-| The Appointment      | `title` "Vet: vaccination", `start` 2026-11-24 10:00 and `end` 10:30 in `Europe/Berlin`, `location` "Tierarztpraxis, Hauptstraße 1", `notes` "Bring the vaccination certificate.", `reminders` 1440 and 60 minutes before                                                                                                                                                                                |
+| The offered schemas  | [Pet.1.avsc](../types/axt/example/v1/Pet.1.avsc) and [Appointment.1.avsc](../types/axt/example/v1/Appointment.1.avsc), each written as JSON without whitespace, with every attribute and in the order of the file: 4,629 bytes (SHA-256 `019020a619b235bff0a2b006325c47e8792397a4849d014544b5f47bc842a745`) and 6,389 bytes (SHA-256 `d90e32b250cc1cd4bb58b35921261deb18fb03d6e6411fc6248126d54eea84b7`) |
+| The Appointment      | `title` "Vet: vaccination", `start` 2026-11-24 10:00 and `end` 10:30 in `Europe/Berlin` with the offset 3600, `location` "Tierarztpraxis, Hauptstraße 1", `notes` "Bring the vaccination certificate.", `reminders` `-P1D` and `-PT1H`                                                                                                                                                                   |
 
 | Step | Message, from → to                    | What happens                                                                                                                                                                                  |
 | ---- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -587,7 +587,7 @@ Old Brain Fix's MANIFEST: 549 bytes, SHA-256 `d8d61697a0189e3afe3b500901b634a356
 
 The two schema texts are shown shortened; the script prints their SHA-256.
 
-cat-a-log's OFFER: 3,575 bytes, SHA-256 `59128bbdf06413dd21c1d40fbc2f1e670b0c92d64caeb84073f3362c0df1d3cb`.
+cat-a-log's OFFER: 11,217 bytes, SHA-256 `777d0b503c7ae6cb09eb816a923a0d84c0e10b6fc8a02db4b384136a6fc16689`.
 
 ```text
 0000  c3 01                    single-object marker
@@ -599,36 +599,36 @@ cat-a-log's OFFER: 3,575 bytes, SHA-256 `59128bbdf06413dd21c1d40fbc2f1e670b0c92d
       4b f6 bd 69 af f1 47 1c
       ce 64 10 d5 3c 26 ec 4a
 002c  00                       record: union index 0, null
-002d  90 36                    body: bytes length 3464
-002f  c3 01                    body: single-object marker
-0031  7d 68 7a ca ca 63 54 41  body: fingerprint of axt.Offer, format 1
-0039  da 9e 54 c9 aa 2d b4 32  body: to: fixed(32), Old Brain Fix's test key
+002d  c2 ad 01                 body: bytes length 11105
+0030  c3 01                    body: single-object marker
+0032  7d 68 7a ca ca 63 54 41  body: fingerprint of axt.Offer, format 1
+003a  da 9e 54 c9 aa 2d b4 32  body: to: fixed(32), Old Brain Fix's test key
       44 df 99 88 9d 91 38 c1
       ca 71 75 d4 ca 09 08 16
       8f 63 53 0e 4a 7d ed b7
-0059  48                       body: offer_id: string length 36
-005a  36 66 31 63 32 62 39 65  body: "6f1c2b9e-3d4a-4e5f-8a7b-1c2d3e4f5a6b"
+005a  48                       body: offer_id: string length 36
+005b  36 66 31 63 32 62 39 65  body: "6f1c2b9e-3d4a-4e5f-8a7b-1c2d3e4f5a6b"
       2d 33 64 34 61 2d 34 65
       35 66 2d 38 61 37 62 2d
       31 63 32 64 33 65 34 66
       35 61 36 62
-007e  04                       body: types: array block of 2 items
-007f  f0 16                    body: types[0].schema: string length 1464
-0081  7b 22 74 79 ... 5d 7d    body: Pet.1.avsc without whitespace (1464 bytes of UTF-8 JSON)
-0639  02                       body: types[0].count: long 1
-063a  f2 1d                    body: types[1].schema: string length 1913
-063c  7b 22 74 79 ... 5d 7d    body: Appointment.1.avsc without whitespace (1913 bytes of UTF-8 JSON)
-0db5  02                       body: types[1].count: long 1
-0db6  00                       body: types: end of the array
-0db7  4f ba 2b 05 5b 51 34 9a  signature: fixed(64)
-      a8 b9 44 1a 49 b2 22 09
-      f1 85 a8 b5 b8 3b 4c c0
-      79 3e 94 48 d0 4f 59 34
-      24 06 cf aa 86 13 9b 5c
-      83 51 6f 8d c2 0c a6 06
-      3a d1 ee a6 db 6c f4 7d
-      ac f2 7b e1 7a af e0 06
-0df7  end
+007f  04                       body: types: array block of 2 items
+0080  aa 48                    body: types[0].schema: string length 4629
+0082  7b 22 74 79 ... 5d 7d    body: Pet.1.avsc without whitespace (4629 bytes of UTF-8 JSON)
+1297  02                       body: types[0].count: long 1
+1298  ea 63                    body: types[1].schema: string length 6389
+129a  7b 22 74 79 ... 5d 7d    body: Appointment.1.avsc without whitespace (6389 bytes of UTF-8 JSON)
+2b8f  02                       body: types[1].count: long 1
+2b90  00                       body: types: end of the array
+2b91  fe f0 94 80 c3 7e ce 7d  signature: fixed(64)
+      ba 76 61 77 85 e6 37 3e
+      10 eb e0 d7 bd 08 7a 33
+      85 e4 31 93 88 2a e6 82
+      b0 d3 df 4f 97 52 3e d8
+      04 11 07 dd bb 91 93 68
+      ad 96 db 1c ef 18 ec c6
+      00 54 d0 2c 25 f1 19 0a
+2bd1  end
 ```
 
 ### 17.4 The answers
@@ -721,9 +721,9 @@ Old Brain Fix's DECLINE: 212 bytes, SHA-256 `183d7ce9cae4b3130b52a59d2cee78f8a1e
 
 ### 17.5 The record and its acknowledgement
 
-The body of the `DATA` names the Appointment's schema by its fingerprint, `0x1b57de39e9441b59` ([types.md](types.md), section 7.3). Old Brain Fix finds it among the schemas of cat-a-log's current offers, and only there.
+The body of the `DATA` names the Appointment's schema by its fingerprint, `0x1af207f82b6430cd` ([types.md](types.md), section 7.3). Old Brain Fix finds it among the schemas of cat-a-log's current offers, and only there.
 
-cat-a-log's DATA: 276 bytes, SHA-256 `77b613c6f7f4f637c55479135122d3b382a2311e96a0db95b524fdd5acf9bbd8`.
+cat-a-log's DATA: 321 bytes, SHA-256 `931e6f370f80527bae25f7475aa56e59f9bde6d71a0fe77c3dfad75700786086`.
 
 ```text
 0000  c3 01                    single-object marker
@@ -742,44 +742,60 @@ cat-a-log's DATA: 276 bytes, SHA-256 `77b613c6f7f4f637c55479135122d3b382a2311e96
       30 65 32 63 34 61 36 62
       38 64 31 66
 0052  02                       record.version: long 1
-0053  fe 01                    body: bytes length 127
+0053  d8 02                    body: bytes length 172
 0055  c3 01                    body: single-object marker
-0057  59 1b 44 e9 39 de 57 1b  body: fingerprint of axt.example.v1.Appointment, version 1
+0057  cd 30 64 2b f8 07 f2 1a  body: fingerprint of axt.example.v1.Appointment, version 1
 005f  20                       body: title: string length 16
 0060  56 65 74 3a 20 76 61 63  body: "Vet: vaccination"
       63 69 6e 61 74 69 6f 6e
-0070  80 f4 fb cf c1 68        body: start: long 1795514400000 (2026-11-24 10:00)
-0076  02                       body: end: union index 1, long
-0077  80 d1 d7 d1 c1 68        body: end: long 1795516200000 (2026-11-24 10:30)
-007d  02                       body: time_zone: union index 1, string
-007e  1a                       body: time_zone: string length 13
-007f  45 75 72 6f 70 65 2f 42  body: "Europe/Berlin"
+0070  d4 1f 16 30 14 00 00 00  body: start: wall clock 2026-11-24 10:00:00.000, seven ints
+0078  02                       body: start.zone: union index 1, string
+0079  1a                       body: start.zone: string length 13
+007a  45 75 72 6f 70 65 2f 42  body: "Europe/Berlin"
       65 72 6c 69 6e
-008c  00                       body: all_day: boolean false
-008d  3c                       body: location: string length 30
-008e  54 69 65 72 61 72 7a 74  body: "Tierarztpraxis, Hauptstraße 1"
+0087  02                       body: start.offset_seconds: union index 1, int
+0088  a0 38                    body: start.offset_seconds: int 3600
+008a  02                       body: start.instant_ms: union index 1, long
+008b  80 ba c4 cc c1 68        body: start.instant_ms: long 1795510800000
+0091  02                       body: end: union index 1, axt.DateTime
+0092  d4 1f 16 30 14 3c 00 00  body: end: wall clock 2026-11-24 10:30:00.000, seven ints
+009a  02                       body: end.zone: union index 1, string
+009b  1a                       body: end.zone: string length 13
+009c  45 75 72 6f 70 65 2f 42  body: "Europe/Berlin"
+      65 72 6c 69 6e
+00a9  02                       body: end.offset_seconds: union index 1, int
+00aa  a0 38                    body: end.offset_seconds: int 3600
+00ac  02                       body: end.instant_ms: union index 1, long
+00ad  80 97 a0 ce c1 68        body: end.instant_ms: long 1795512600000
+00b3  00                       body: all_day: boolean false
+00b4  3c                       body: location: string length 30
+00b5  54 69 65 72 61 72 7a 74  body: "Tierarztpraxis, Hauptstraße 1"
       70 72 61 78 69 73 2c 20
       48 61 75 70 74 73 74 72
       61 c3 9f 65 20 31
-00ac  44                       body: notes: string length 34
-00ad  42 72 69 6e 67 20 74 68  body: "Bring the vaccination certificate."
+00d3  44                       body: notes: string length 34
+00d4  42 72 69 6e 67 20 74 68  body: "Bring the vaccination certificate."
       65 20 76 61 63 63 69 6e
       61 74 69 6f 6e 20 63 65
       72 74 69 66 69 63 61 74
       65 2e
-00cf  04                       body: reminders: array block of 2 items
-00d0  c0 16                    body: reminders[0]: int 1440
-00d2  78                       body: reminders[1]: int 60
-00d3  00                       body: reminders: end of the array
-00d4  12 49 c2 98 fb c8 0d f9  signature: fixed(64)
-      79 b6 0b aa 30 be 22 aa
-      a3 aa 4e f9 05 30 18 78
-      c2 f7 d7 6f e7 ae 53 ff
-      5e 1c 51 5f 08 bf a2 26
-      3a 85 c4 43 36 74 40 60
-      7b 30 80 bb b2 f6 e9 14
-      9d 3c 26 dd 06 bb d1 09
-0114  end
+00f6  04                       body: reminders: array block of 2 items
+00f7  00                       body: reminders[0].months: int 0
+00f8  01                       body: reminders[0].days: int -1
+00f9  00                       body: reminders[0].millis: long 0
+00fa  00                       body: reminders[1].months: int 0
+00fb  00                       body: reminders[1].days: int 0
+00fc  ff b9 b7 03              body: reminders[1].millis: long -3600000
+0100  00                       body: reminders: end of the array
+0101  2a 45 f1 d4 10 35 71 58  signature: fixed(64)
+      bb c5 c0 6a 18 ee 0d cd
+      af 09 67 be 7d 09 62 c1
+      68 60 db 2a 91 ce b7 af
+      58 0f 71 2a ec b8 d3 e9
+      16 f0 e6 aa f2 fb 53 22
+      45 41 a3 85 ee 9c c9 ef
+      ef 55 5c 9a 9e ce 41 0d
+0141  end
 ```
 
 Old Brain Fix's ACK: 197 bytes, SHA-256 `0f2d0004d3b42c9f4013e6e5ba3d4250dbaffa205b25eb509c974746c22fd9ca`.
@@ -827,9 +843,9 @@ Old Brain Fix's ACK: 197 bytes, SHA-256 `0f2d0004d3b42c9f4013e6e5ba3d4250dbaffa2
 
 ### 17.6 A record without an accepted offer
 
-The `DATA` of step 8 carries the Pet of [conformance/tools/example_types.py](../conformance/tools/example_types.py) as the record `5e8a1f3c-7b2d-4c6e-a9f0-3d5b7c9e1a2f`, version 1, written with the offered Pet schema. Old Brain Fix knows the fingerprint from the offer, but the Pet's answer was `DECLINE`, so step 5 of section 6.2 fails. The `ERROR` names the message by its hash, `8e31966111b293e62c848b999e1237f6b95795e2603140a2be0fed345932c57c`.
+The `DATA` of step 8 carries the Pet of [conformance/tools/example_types.py](../conformance/tools/example_types.py) as the record `5e8a1f3c-7b2d-4c6e-a9f0-3d5b7c9e1a2f`, version 1, written with the offered Pet schema. Old Brain Fix knows the fingerprint from the offer, but the Pet's answer was `DECLINE`, so step 5 of section 6.2 fails. The `ERROR` names the message by its hash, `48b45d9eb50217990b348cb51f49a383c0feb93235e6f605701364fa73e41c61`.
 
-Old Brain Fix's ERROR: 246 bytes, SHA-256 `c914667b3a3ec12c3a76094c174bb228c548bf9c0a2f56cd2e694dcce8bf8c13`.
+Old Brain Fix's ERROR: 246 bytes, SHA-256 `b0a788378deb7148e49a616791ddb9e3c1ff6b3d30e883edb9fb9f0845ce917b`.
 
 ```text
 0000  c3 01                    single-object marker
@@ -849,10 +865,10 @@ Old Brain Fix's ERROR: 246 bytes, SHA-256 `c914667b3a3ec12c3a76094c174bb228c548b
       4b f6 bd 69 af f1 47 1c
       ce 64 10 d5 3c 26 ec 4a
 0059  12                       body: code: enum index 9, NOT_ACCEPTED
-005a  8e 31 96 61 11 b2 93 e6  body: message_hash: fixed(32), SHA-256 of the reported message
-      2c 84 8b 99 9e 12 37 f6
-      b9 57 95 e2 60 31 40 a2
-      be 0f ed 34 59 32 c5 7c
+005a  48 b4 5d 9e b5 02 17 99  body: message_hash: fixed(32), SHA-256 of the reported message
+      0b 34 8c b5 1f 49 a3 83
+      c0 fe b9 32 35 e6 f6 05
+      70 13 64 fa 73 e4 1c 61
 007a  02                       body: record: union index 1, ErrorRecord
 007b  48                       body: record.id: string length 36
 007c  35 65 38 61 31 66 33 63  body: "5e8a1f3c-7b2d-4c6e-a9f0-3d5b7c9e1a2f"
@@ -867,14 +883,14 @@ Old Brain Fix's ERROR: 246 bytes, SHA-256 `c914667b3a3ec12c3a76094c174bb228c548b
 00a4  61 78 74 2e 65 78 61 6d  body: "axt.example.v1.Pet"
       70 6c 65 2e 76 31 2e 50
       65 74
-00b6  4d 57 b3 6f c1 98 4e dc  signature: fixed(64)
-      e5 75 f1 7e aa e3 47 de
-      50 01 90 7c bf 4c f8 28
-      74 3d fa 6e dc 45 91 06
-      a5 4c fa 12 3c e0 50 76
-      54 e0 c6 5f 75 b9 f9 49
-      de 15 c2 11 c0 6f 7b 56
-      26 35 54 66 38 11 79 08
+00b6  c8 1e 52 96 fd 22 0a 71  signature: fixed(64)
+      77 a4 4a f2 25 82 eb fd
+      68 b3 ea 2e e8 74 06 05
+      4c 73 03 d1 5e 84 53 58
+      d4 37 6e 33 3a 51 51 42
+      4c 18 02 c5 bc 9f aa 90
+      d9 9a ce 9a 09 76 62 05
+      5d 99 c2 cb b2 7a 4a 01
 00f6  end
 ```
 

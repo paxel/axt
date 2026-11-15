@@ -91,11 +91,11 @@ The record, every nested named type (record, enum, fixed) and every field MUST c
 
 Names are in English and follow these cases:
 
-| Name                   | Case             | Example                      |
-| ---------------------- | ---------------- | ---------------------------- |
-| Record, enum and fixed | UpperCamelCase   | `Appointment`, `PersonPhone` |
-| Field                  | snake_case       | `display_name`, `time_zone`  |
-| Enum symbol            | UPPER_SNAKE_CASE | `MARKDOWN`, `KILOMETRE`      |
+| Name                   | Case             | Example                       |
+| ---------------------- | ---------------- | ----------------------------- |
+| Record, enum and fixed | UpperCamelCase   | `Appointment`, `PersonPhone`  |
+| Field                  | snake_case       | `display_name`, `due_all_day` |
+| Enum symbol            | UPPER_SNAKE_CASE | `MARKDOWN`, `KILOMETRE`       |
 
 A field name consists of lower-case ASCII letters, digits and single underscores and starts with a letter. snake_case is chosen because a receiver that shows an unknown field by its name (section 6) gets words by replacing each underscore with a space, and because names in lower case cannot differ from each other only in case.
 
@@ -128,7 +128,7 @@ A reader that does not know a logical type uses the underlying type ([envelope.m
 These rules hold for every example type that has the fields named:
 
 - **Time zone.** The zone of a date and time is part of its `axt.DateTime` ([time.md](time.md), section 6); a type has no field of its own for it.
-- **All day.** A boolean field `all_day`, or `<name>_all_day` for the single field `<name>`, set to `true` means that only the day of the times counts; their time of day is then 00:00 and has no meaning.
+- **All day.** A boolean field `all_day`, or `<name>_all_day` for the single field `<name>`, set to `true` means that only the day of the times counts: they are then floating times at 00:00 ([time.md](time.md), section 6.5), and their time of day has no meaning. Such a time stays an `axt.DateTime` rather than an `axt.Date`, since a field has one type (section 5.3) and the start of an appointment, which every Appointment has (section 5.4), is one field for both kinds.
 - **End.** A field `end` is the first moment after the event, as the `DTEND` property of [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545) is. For an all-day event it is 00:00 of the day after the last day.
 - **Repetition.** A repetition rule is a `string` with the value of an RFC 5545 `RRULE` property without the `RRULE:` prefix, such as `FREQ=WEEKLY;BYDAY=TU`.
 - **Text.** Text fields hold plain text, with lines separated by LF (U+000A), unless their `axt.format` ([metadata.md](metadata.md), section 6.3) or their `doc` says otherwise. Note's field `format` names [CommonMark](https://spec.commonmark.org/) as the only other format, for each record on its own.
@@ -179,18 +179,18 @@ The schemas are in [types/axt/example/v1/](../types/axt/example/v1/). They are n
 
 ### 7.1 The types
 
-| Type          | Title field    | Fields                                                                                                                                                                                   |
-| ------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Note`        | `title`        | `title`, `text`, `format` (`PLAIN`, `MARKDOWN`), `created`, `updated` (instants), `tags`                                                                                                 |
-| `Task`        | `title`        | `title`, `notes`, `due` (wall clock), `due_all_day`, `time_zone`, `repeat` (RRULE), `done`, `done_at` (instant), `priority` (`NONE`, `LOW`, `MEDIUM`, `HIGH`)                            |
-| `Appointment` | `title`        | `title`, `start`, `end` (wall clock), `time_zone`, `all_day`, `location`, `notes`, `reminders` (minutes before `start`)                                                                  |
-| `Person`      | `display_name` | `display_name`, `prefix`, `given_name`, `middle_name`, `family_name`, `suffix`, `birthday` (date), `birthday_year_known`, `phones`, `emails`, `addresses` (each with a `label`), `notes` |
-| `Car`         | `model`        | `make`, `model`, `year`, `plate`, `vin`, `odometer`, `odometer_unit` (`KILOMETRE`, `MILE`, `UNKNOWN`), `notes`                                                                           |
-| `Pet`         | `name`         | `name`, `species`, `breed`, `sex` (`UNKNOWN`, `FEMALE`, `MALE`), `neutered`, `birthday` (date), `microchip`, `notes`                                                                     |
-| `Measurement` | `quantity`     | `quantity`, `value`, `unit` (UCUM), `measured_at` (instant), `subject`, `notes`                                                                                                          |
-| `Document`    | `title`        | `title`, `file_name`, `media_type`, `content` (bytes), `dated` (date), `notes`                                                                                                           |
+| Type          | Title field    | Fields                                                                                                                                                                           |
+| ------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Note`        | `title`        | `title`, `text`, `format` (`PLAIN`, `MARKDOWN`), `created`, `updated` (`axt.DateTime`, instants), `tags`                                                                         |
+| `Task`        | `title`        | `title`, `notes`, `due` (`axt.DateTime`, wall clock), `due_all_day`, `repeat` (RRULE), `done`, `done_at` (`axt.DateTime`, instant), `priority` (`NONE`, `LOW`, `MEDIUM`, `HIGH`) |
+| `Appointment` | `title`        | `title`, `start`, `end` (`axt.DateTime`, wall clock), `all_day`, `location`, `notes`, `reminders` (`axt.Duration` from `start`, negative before it)                              |
+| `Person`      | `display_name` | `display_name`, `prefix`, `given_name`, `middle_name`, `family_name`, `suffix`, `birthday` (`axt.Date`), `phones` (E.164), `emails`, `addresses` (each with a `label`), `notes`  |
+| `Car`         | `model`        | `make`, `model`, `year`, `plate`, `vin`, `odometer`, `odometer_unit` (`KILOMETRE`, `MILE`, `UNKNOWN`), `notes`                                                                   |
+| `Pet`         | `name`         | `name`, `species`, `breed`, `sex` (`UNKNOWN`, `FEMALE`, `MALE`), `neutered`, `birthday` (`axt.Date`), `microchip`, `notes`                                                       |
+| `Measurement` | `quantity`     | `quantity`, `value`, `unit` (UCUM), `measured_at` (`axt.DateTime`, instant), `subject`, `notes`                                                                                  |
+| `Document`    | `title`        | `title`, `file_name`, `media_type`, `content` (bytes), `dated` (`axt.Date`), `notes`                                                                                             |
 
-`birthday_year_known` lets a Person carry a birthday whose year is not known, which a `date` alone cannot express; address books often hold birthdays without a year.
+A Person's `birthday` may leave out the year, as address books often hold birthdays without one; a Pet's `birthday` and a Document's `dated` may give only a month or a year ([time.md](time.md), section 4). Car's `year` is a number rather than an `axt.Date`: a model year names a version of the model, not a date on the calendar.
 
 ### 7.2 Why these types
 
@@ -204,24 +204,25 @@ Note, Task, Appointment, Person and Car are the example types named when the sco
 
 | Type                         | Version | Schema                                                           | CRC-64-AVRO          | As bytes                  |
 | ---------------------------- | ------- | ---------------------------------------------------------------- | -------------------- | ------------------------- |
-| `axt.example.v1.Appointment` | 1       | [Appointment.1.avsc](../types/axt/example/v1/Appointment.1.avsc) | `0x1b57de39e9441b59` | `59 1b 44 e9 39 de 57 1b` |
+| `axt.example.v1.Appointment` | 1       | [Appointment.1.avsc](../types/axt/example/v1/Appointment.1.avsc) | `0x1af207f82b6430cd` | `cd 30 64 2b f8 07 f2 1a` |
 | `axt.example.v1.Car`         | 1       | [Car.1.avsc](../types/axt/example/v1/Car.1.avsc)                 | `0x7277e2001e503f8b` | `8b 3f 50 1e 00 e2 77 72` |
-| `axt.example.v1.Document`    | 1       | [Document.1.avsc](../types/axt/example/v1/Document.1.avsc)       | `0x4ea7ed4fb856c4d3` | `d3 c4 56 b8 4f ed a7 4e` |
-| `axt.example.v1.Measurement` | 1       | [Measurement.1.avsc](../types/axt/example/v1/Measurement.1.avsc) | `0xcbc0764900436ed4` | `d4 6e 43 00 49 76 c0 cb` |
-| `axt.example.v1.Note`        | 1       | [Note.1.avsc](../types/axt/example/v1/Note.1.avsc)               | `0x627ab0d4d84fb306` | `06 b3 4f d8 d4 b0 7a 62` |
-| `axt.example.v1.Person`      | 1       | [Person.1.avsc](../types/axt/example/v1/Person.1.avsc)           | `0x2bedd25e9e4558f1` | `f1 58 45 9e 5e d2 ed 2b` |
-| `axt.example.v1.Pet`         | 1       | [Pet.1.avsc](../types/axt/example/v1/Pet.1.avsc)                 | `0x2d9f89a71269eb61` | `61 eb 69 12 a7 89 9f 2d` |
-| `axt.example.v1.Task`        | 1       | [Task.1.avsc](../types/axt/example/v1/Task.1.avsc)               | `0x88ae7a18288ca463` | `63 a4 8c 28 18 7a ae 88` |
+| `axt.example.v1.Document`    | 1       | [Document.1.avsc](../types/axt/example/v1/Document.1.avsc)       | `0xd610000b15046bac` | `ac 6b 04 15 0b 00 10 d6` |
+| `axt.example.v1.Measurement` | 1       | [Measurement.1.avsc](../types/axt/example/v1/Measurement.1.avsc) | `0x00f7713c4975c427` | `27 c4 75 49 3c 71 f7 00` |
+| `axt.example.v1.Note`        | 1       | [Note.1.avsc](../types/axt/example/v1/Note.1.avsc)               | `0x0d3e5d90bdbc4ee0` | `e0 4e bc bd 90 5d 3e 0d` |
+| `axt.example.v1.Person`      | 1       | [Person.1.avsc](../types/axt/example/v1/Person.1.avsc)           | `0x749561a5af95d9f6` | `f6 d9 95 af a5 61 95 74` |
+| `axt.example.v1.Pet`         | 1       | [Pet.1.avsc](../types/axt/example/v1/Pet.1.avsc)                 | `0x6b792c0235531071` | `71 10 53 35 02 2c 79 6b` |
+| `axt.example.v1.Task`        | 1       | [Task.1.avsc](../types/axt/example/v1/Task.1.avsc)               | `0xa83870208718dd20` | `20 dd 18 87 20 70 38 a8` |
 
 The fingerprints were computed with [conformance/tools/example_types.py](../conformance/tools/example_types.py). For every schema, the script:
 
-- checks the rules of section 5 that a program can check, among them the rules of every attribute it carries, with the code of [conformance/tools/metadata_rules.py](../conformance/tools/metadata_rules.py);
+- checks the rules of section 5 that a program can check, among them the rules of every attribute it carries, with the code of [conformance/tools/metadata_rules.py](../conformance/tools/metadata_rules.py), the attributes that section 5.9 requires, and each time type defined in place as its published schema and referred to by its full name after it ([time.md](time.md), section 3.1);
+- checks that the example datum keeps the rules of the time types and every check of its schema, and that each of its zoned times has the offset of its zone at its instant by the zone rules of Python's `zoneinfo`;
 - computes the Parsing Canonical Form and the CRC-64-AVRO fingerprint, and compares them with those of the Python libraries fastavro 1.13.1 and `avro` 1.12.2;
 - encodes one example datum with fastavro, decodes it back, and checks that `avro` decodes the same bytes and encodes them to the same bytes again;
 - uses every default once in schema resolution, with both libraries: it writes a datum with the schema without its defaulted fields, and one with the schema whose nested records lack their defaulted fields, and reads both with the full schema;
 - writes, for every enum, a symbol the schema does not have and checks that the full schema reads it as the enum's default symbol. fastavro does so; the `avro` package 1.12.2 raises a schema resolution error instead, against the Avro specification, so a receiver built on it does not get the compatibility of section 3.3 for enum symbols.
 
-Two further differences from the Avro specification showed: `avro` 1.12.2 does not know `local-timestamp-millis` and reads it as a `long` ([envelope.md](envelope.md), section 7), and fastavro 1.13.1 returns the default of a `bytes` field as the JSON string rather than as bytes.
+One further difference from the Avro specification showed: fastavro 1.13.1 returns the default of a `bytes` field as the JSON string rather than as bytes.
 
 The test vectors of [conformance.md](conformance.md) take precedence over these values.
 
@@ -235,4 +236,4 @@ The test vectors of [conformance.md](conformance.md) take precedence over these 
 - [CommonMark](https://spec.commonmark.org/)
 - [UCUM](https://ucum.org/): the Unified Code for Units of Measure
 - [ITU-T E.164](https://www.itu.int/rec/T-REC-E.164): international phone numbers, for Person's phone numbers
-- ISO 3779 (vehicle identification number) and ISO 11784 (animal microchips), named in the `doc` of Car and Pet
+- ISO 3779 (vehicle identification number), ISO 11784 (animal microchips) and ISO 3166-1 (country codes), named in the `doc` of Car, Pet and Person

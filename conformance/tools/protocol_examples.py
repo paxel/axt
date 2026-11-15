@@ -49,7 +49,6 @@ outside tests.
 
 import contextlib
 import copy
-import datetime
 import hashlib
 import importlib.util
 import io
@@ -704,6 +703,7 @@ OFFER_ID = "6f1c2b9e-3d4a-4e5f-8a7b-1c2d3e4f5a6b"
 APPOINTMENT_ID = "a2d4f6b8-1c3e-4a5b-9d7f-0e2c4a6b8d1f"
 PET_ID = "5e8a1f3c-7b2d-4c6e-a9f0-3d5b7c9e1a2f"
 APPOINTMENT = rules.DATA["Appointment"]
+APPOINTMENT_FP = 0x1AF207F82B6430CD  # spec/types.md, section 7.3
 PET = rules.DATA["Pet"]
 
 obf_decide = {"axt.example.v1.Appointment": True}
@@ -743,7 +743,7 @@ o_parts, offer_msg = cat_app.offer(OFFER_ID, [
 for text in (PET_TEXT, APPOINTMENT_TEXT):
     assert canonical_fp(text) == rules.crc64_avro(fastavro.schema.to_parsing_canonical_form(
         fastavro.parse_schema(json.loads(text))).encode())
-assert canonical_fp(APPOINTMENT_TEXT) == 0x1B57DE39E9441B59 and canonical_fp(PET_TEXT) == 0x2D9F89A71269EB61
+assert canonical_fp(APPOINTMENT_TEXT) == APPOINTMENT_FP and canonical_fp(PET_TEXT) == 0x6B792C0235531071
 
 # 4. and 5. Old Brain Fix accepts the Appointment and declines the Pet; cat-a-log takes both answers.
 what, replies = obf_app.receive(offer_msg)
@@ -760,33 +760,45 @@ assert cat_app.accepted("axt.example.v1.Appointment") and not cat_app.accepted("
 
 
 # 6. The Appointment, version 1.
-def local_millis(dt):
-    return (dt - datetime.datetime(1970, 1, 1)) // datetime.timedelta(milliseconds=1)
+def datetime_parts(name, v):
+    """An axt.DateTime of spec/time.md, section 6.1: the wall clock, then the zone, the offset and the instant."""
+    wall = (v["year"], v["month"], v["day"], v["hour"], v["minute"], v["second"], v["millisecond"])
+    out = [(b"".join(zigzag(x) for x in wall),
+            f"{name}: wall clock {v['year']:04d}-{v['month']:02d}-{v['day']:02d} "
+            f"{v['hour']:02d}:{v['minute']:02d}:{v['second']:02d}.{v['millisecond']:03d}, seven ints")]
+    out += null_or(f"{name}.zone", v["zone"], "string", lambda z: string_parts(f"{name}.zone", z))
+    out += null_or(f"{name}.offset_seconds", v["offset_seconds"], "int",
+                   lambda o: [(zigzag(o), f"{name}.offset_seconds: int {o}")])
+    out += null_or(f"{name}.instant_ms", v["instant_ms"], "long",
+                   lambda i: [(zigzag(i), f"{name}.instant_ms: long {i}")])
+    return out
+
+
+def duration_parts(name, d):
+    """An axt.Duration of spec/time.md, section 7.1."""
+    return [(zigzag(d["months"]), f"{name}.months: int {d['months']}"), (zigzag(d["days"]), f"{name}.days: int {d['days']}"),
+            (zigzag(d["millis"]), f"{name}.millis: long {d['millis']}")]
 
 
 def appointment_parts(a):
     return [
         *string_parts("title", a["title"]),
-        (zigzag(local_millis(a["start"])), f"start: long {local_millis(a['start'])} ({a['start']:%Y-%m-%d %H:%M})"),
-        (zigzag(1), "end: union index 1, long"),
-        (zigzag(local_millis(a["end"])), f"end: long {local_millis(a['end'])} ({a['end']:%Y-%m-%d %H:%M})"),
-        (zigzag(1), "time_zone: union index 1, string"),
-        *string_parts("time_zone", a["time_zone"]),
+        *datetime_parts("start", a["start"]),
+        *null_or("end", a["end"], "axt.DateTime", lambda v: datetime_parts("end", v)),
         (b"\x01" if a["all_day"] else b"\x00", f"all_day: boolean {str(a['all_day']).lower()}"),
         *string_parts("location", a["location"]),
         *string_parts("notes", a["notes"]),
-        *array_parts("reminders", a["reminders"], lambda n, v: [(zigzag(v), f"{n}: int {v}")]),
+        *array_parts("reminders", a["reminders"], duration_parts),
     ]
 
 
 ap_body_parts = [(b"\xc3\x01", "single-object marker"),
-                 (fp8(0x1B57DE39E9441B59), "fingerprint of axt.example.v1.Appointment, version 1")] + appointment_parts(APPOINTMENT)
+                 (fp8(APPOINTMENT_FP), "fingerprint of axt.example.v1.Appointment, version 1")] + appointment_parts(APPOINTMENT)
 ap_body = b"".join(p[0] for p in ap_body_parts)
 assert ap_body[10:] == library_binary(fastavro.parse_schema(json.loads(APPOINTMENT_TEXT)), APPOINTMENT)
-# avro 1.12.2 reads local-timestamp-millis as a long (spec/types.md, section 5.5).
 apache_appointment = avro.schema.parse(APPOINTMENT_TEXT)
 back = avro.io.DatumReader(apache_appointment).read(avro.io.BinaryDecoder(io.BytesIO(ap_body[10:])))
-assert back == dict(APPOINTMENT, start=local_millis(APPOINTMENT["start"]), end=local_millis(APPOINTMENT["end"]))
+assert back == APPOINTMENT
 out = io.BytesIO()
 avro.io.DatumWriter(apache_appointment).write(back, avro.io.BinaryEncoder(out))
 assert out.getvalue() == ap_body[10:], "avro encodes the Appointment to other bytes"
@@ -1061,7 +1073,7 @@ DATA = {
     "Ack": {"to": CAT, "records": [{"id": APPOINTMENT_ID, "version": 3, "outcome": "MERGED", "receiver_version": 3,
                                     "kept_fields": ["location"]}], "moved_from": OTHER},
     "Error": {"to": CAT, "code": "SCHEMA_UNKNOWN", "message_hash": bytes(range(32)), "record": {"id": APPOINTMENT_ID, "version": 3},
-              "fingerprint": fp8(0x1B57DE39E9441B59), "field": None, "detail": "no schema with this fingerprint"},
+              "fingerprint": fp8(APPOINTMENT_FP), "field": None, "detail": "no schema with this fingerprint"},
 }
 library_findings = set()
 defaults_resolved = {}

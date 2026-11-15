@@ -163,7 +163,7 @@ The example types of version 1 carry no references; Measurement names what was m
 
 ## 9. Example
 
-A sender keeps an appointment at the vet as an `axt.example.v1.Appointment` with the id `3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80` and sends it to a receiver that lets its user change received records and merges per field. The times are wall-clock times (`local-timestamp-millis`, [types.md](types.md), section 5.6); the fields not shown keep their defaults. Every message's `record` carries the id above and the version in the table.
+A sender keeps an appointment at the vet as an `axt.example.v1.Appointment` with the id `3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80` and sends it to a receiver that lets its user change received records and merges per field. The times are `axt.DateTime` values ([time.md](time.md), section 6), shown by their wall clock; the fields not shown keep their defaults. Every message's `record` carries the id above and the version in the table.
 
 | Step | What happens                                                                                                                                               | Message, `record.version` | Receiver's version before | Outcome                   | Receiver's version after |
 | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | ------------------------- | ------------------------- | ------------------------ |
