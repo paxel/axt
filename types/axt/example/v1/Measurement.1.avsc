@@ -1,0 +1,47 @@
+{
+  "type": "record",
+  "name": "Measurement",
+  "namespace": "axt.example.v1",
+  "doc": "One measured value or count at a point in time, such as a weight, a blood pressure reading or a tally of glasses of water.",
+  "axt.version": 1,
+  "axt.title": "quantity",
+  "fields": [
+    {
+      "name": "quantity",
+      "type": "string",
+      "default": "",
+      "doc": "What was measured or counted, as the user calls it, such as Weight or Glasses of water."
+    },
+    {
+      "name": "value",
+      "type": "double",
+      "doc": "The measured value or the count, in unit."
+    },
+    {
+      "name": "unit",
+      "type": "string",
+      "default": "1",
+      "doc": "The unit of value as a case-sensitive code of UCUM, such as kg, Cel or mm[Hg]. A count is 1, or an annotation in braces alone that names what is counted, such as {glass}."
+    },
+    {
+      "name": "measured_at",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      },
+      "doc": "When the value was measured or counted."
+    },
+    {
+      "name": "subject",
+      "type": "string",
+      "default": "",
+      "doc": "Who or what was measured, as text, such as the name of a pet. Empty when it is the user."
+    },
+    {
+      "name": "notes",
+      "type": "string",
+      "default": "",
+      "doc": "Free notes on the measurement, as plain text; lines are separated by LF. Empty when there are none."
+    }
+  ]
+}

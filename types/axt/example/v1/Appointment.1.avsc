@@ -1,0 +1,73 @@
+{
+  "type": "record",
+  "name": "Appointment",
+  "namespace": "axt.example.v1",
+  "doc": "An appointment: an event at a time and possibly a place, such as a visit to the vet.",
+  "axt.version": 1,
+  "axt.title": "title",
+  "fields": [
+    {
+      "name": "title",
+      "type": "string",
+      "default": "",
+      "doc": "What the appointment is, as plain text on one line."
+    },
+    {
+      "name": "start",
+      "type": {
+        "type": "long",
+        "logicalType": "local-timestamp-millis"
+      },
+      "doc": "When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day."
+    },
+    {
+      "name": "end",
+      "type": [
+        "null",
+        {
+          "type": "long",
+          "logicalType": "local-timestamp-millis"
+        }
+      ],
+      "default": null,
+      "doc": "When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day."
+    },
+    {
+      "name": "time_zone",
+      "type": [
+        "null",
+        "string"
+      ],
+      "default": null,
+      "doc": "The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment."
+    },
+    {
+      "name": "all_day",
+      "type": "boolean",
+      "default": false,
+      "doc": "True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day."
+    },
+    {
+      "name": "location",
+      "type": "string",
+      "default": "",
+      "doc": "Where the appointment takes place, as text, such as an address or a room. Empty when not given."
+    },
+    {
+      "name": "notes",
+      "type": "string",
+      "default": "",
+      "doc": "Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none."
+    },
+    {
+      "name": "reminders",
+      "type": {
+        "type": "array",
+        "items": "int"
+      },
+      "default": [],
+      "doc": "When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.",
+      "axt.unit": "min"
+    }
+  ]
+}

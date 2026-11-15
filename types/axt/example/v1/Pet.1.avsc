@@ -1,0 +1,77 @@
+{
+  "type": "record",
+  "name": "Pet",
+  "namespace": "axt.example.v1",
+  "doc": "A pet: an animal the user keeps, such as a cat or a dog.",
+  "axt.version": 1,
+  "axt.title": "name",
+  "fields": [
+    {
+      "name": "name",
+      "type": "string",
+      "default": "",
+      "doc": "The pet's name. Empty when it has none."
+    },
+    {
+      "name": "species",
+      "type": "string",
+      "default": "",
+      "doc": "The kind of animal, as the user wrote it, such as cat or dog. Empty when not given."
+    },
+    {
+      "name": "breed",
+      "type": "string",
+      "default": "",
+      "doc": "The breed, as the user wrote it, such as Maine Coon. Empty when not known."
+    },
+    {
+      "name": "sex",
+      "type": {
+        "type": "enum",
+        "name": "PetSex",
+        "doc": "The sex of an animal. FEMALE, MALE: female and male. UNKNOWN: not known or not given; a symbol this version does not know is read as UNKNOWN.",
+        "symbols": [
+          "UNKNOWN",
+          "FEMALE",
+          "MALE"
+        ],
+        "default": "UNKNOWN"
+      },
+      "default": "UNKNOWN",
+      "doc": "The pet's sex."
+    },
+    {
+      "name": "neutered",
+      "type": [
+        "null",
+        "boolean"
+      ],
+      "default": null,
+      "doc": "True when the pet is neutered or spayed, false when it is not. Null when not known."
+    },
+    {
+      "name": "birthday",
+      "type": [
+        "null",
+        {
+          "type": "int",
+          "logicalType": "date"
+        }
+      ],
+      "default": null,
+      "doc": "The pet's day of birth. Null when not known."
+    },
+    {
+      "name": "microchip",
+      "type": "string",
+      "default": "",
+      "doc": "The number of the pet's microchip, as read from it; 15 digits for a chip of ISO 11784. Empty when it has none or it is not known."
+    },
+    {
+      "name": "notes",
+      "type": "string",
+      "default": "",
+      "doc": "Free notes on the pet, as plain text; lines are separated by LF. Empty when there are none."
+    }
+  ]
+}

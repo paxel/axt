@@ -1,0 +1,74 @@
+{
+  "type": "record",
+  "name": "Car",
+  "namespace": "axt.example.v1",
+  "doc": "A car the user owns or drives.",
+  "axt.version": 1,
+  "axt.title": "model",
+  "fields": [
+    {
+      "name": "make",
+      "type": "string",
+      "default": "",
+      "doc": "The manufacturer, such as Volkswagen. Empty when not known."
+    },
+    {
+      "name": "model",
+      "type": "string",
+      "default": "",
+      "doc": "The model, such as Golf. Empty when not known."
+    },
+    {
+      "name": "year",
+      "type": [
+        "null",
+        "int"
+      ],
+      "default": null,
+      "doc": "The model year, such as 2019. Null when not known."
+    },
+    {
+      "name": "plate",
+      "type": "string",
+      "default": "",
+      "doc": "The licence plate number as written on the plate. Empty when the car has none or it is not known."
+    },
+    {
+      "name": "vin",
+      "type": "string",
+      "default": "",
+      "doc": "The vehicle identification number of ISO 3779, 17 characters. Empty when not known."
+    },
+    {
+      "name": "odometer",
+      "type": [
+        "null",
+        "long"
+      ],
+      "default": null,
+      "doc": "The distance on the odometer, in odometer_unit. Null when not known."
+    },
+    {
+      "name": "odometer_unit",
+      "type": {
+        "type": "enum",
+        "name": "CarDistanceUnit",
+        "doc": "A unit of distance. KILOMETRE: kilometres. MILE: international miles. UNKNOWN: a unit this version does not name; a symbol this version does not know is read as UNKNOWN.",
+        "symbols": [
+          "KILOMETRE",
+          "MILE",
+          "UNKNOWN"
+        ],
+        "default": "UNKNOWN"
+      },
+      "default": "KILOMETRE",
+      "doc": "The unit of odometer."
+    },
+    {
+      "name": "notes",
+      "type": "string",
+      "default": "",
+      "doc": "Free notes on the car, as plain text; lines are separated by LF. Empty when there are none."
+    }
+  ]
+}

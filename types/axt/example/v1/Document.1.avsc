@@ -1,0 +1,52 @@
+{
+  "type": "record",
+  "name": "Document",
+  "namespace": "axt.example.v1",
+  "doc": "A document: a file with a title, such as a scanned invoice, a certificate or a photo.",
+  "axt.version": 1,
+  "axt.title": "title",
+  "fields": [
+    {
+      "name": "title",
+      "type": "string",
+      "default": "",
+      "doc": "What the document is, as plain text on one line."
+    },
+    {
+      "name": "file_name",
+      "type": "string",
+      "default": "",
+      "doc": "The file's name with its extension, such as invoice-2026-11.pdf. Empty when not known."
+    },
+    {
+      "name": "media_type",
+      "type": "string",
+      "default": "application/octet-stream",
+      "doc": "The media type of content as in RFC 6838, such as application/pdf or image/jpeg."
+    },
+    {
+      "name": "content",
+      "type": "bytes",
+      "default": "",
+      "doc": "The file's content. The whole message, this record included, must stay within the message limit of the AXT envelope."
+    },
+    {
+      "name": "dated",
+      "type": [
+        "null",
+        {
+          "type": "int",
+          "logicalType": "date"
+        }
+      ],
+      "default": null,
+      "doc": "The date the document bears, such as the date of an invoice. Null when it bears none."
+    },
+    {
+      "name": "notes",
+      "type": "string",
+      "default": "",
+      "doc": "Free notes on the document, as plain text; lines are separated by LF. Empty when there are none."
+    }
+  ]
+}

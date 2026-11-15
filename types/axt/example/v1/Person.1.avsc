@@ -1,0 +1,175 @@
+{
+  "type": "record",
+  "name": "Person",
+  "namespace": "axt.example.v1",
+  "doc": "A person: a contact with name, birthday, phone numbers, email addresses and postal addresses.",
+  "axt.version": 1,
+  "axt.title": "display_name",
+  "fields": [
+    {
+      "name": "display_name",
+      "type": "string",
+      "default": "",
+      "doc": "The name to show for the person, as the user wrote it, such as Dr. Anna Maria Schmidt. When empty, a receiver may build a name from the name parts."
+    },
+    {
+      "name": "prefix",
+      "type": "string",
+      "default": "",
+      "doc": "Titles written before the name, such as Dr. Empty when there are none."
+    },
+    {
+      "name": "given_name",
+      "type": "string",
+      "default": "",
+      "doc": "The given name, such as Anna. Empty when not known."
+    },
+    {
+      "name": "middle_name",
+      "type": "string",
+      "default": "",
+      "doc": "Further given names, such as Maria. Empty when there are none."
+    },
+    {
+      "name": "family_name",
+      "type": "string",
+      "default": "",
+      "doc": "The family name, such as Schmidt. Empty when not known."
+    },
+    {
+      "name": "suffix",
+      "type": "string",
+      "default": "",
+      "doc": "Additions written after the name, such as Jr. Empty when there are none."
+    },
+    {
+      "name": "birthday",
+      "type": [
+        "null",
+        {
+          "type": "int",
+          "logicalType": "date"
+        }
+      ],
+      "default": null,
+      "doc": "The day of birth; see birthday_year_known. Null when not known."
+    },
+    {
+      "name": "birthday_year_known",
+      "type": "boolean",
+      "default": true,
+      "doc": "False when only the day and month of birthday are known; the year of birthday has no meaning then, and the sender writes a leap year, such as 2000, so that 29 February can be written."
+    },
+    {
+      "name": "phones",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "PersonPhone",
+          "doc": "A phone number of a person.",
+          "fields": [
+            {
+              "name": "label",
+              "type": "string",
+              "default": "",
+              "doc": "What the number is for, as the user wrote it, such as home, work or mobile. Empty when not given."
+            },
+            {
+              "name": "number",
+              "type": "string",
+              "default": "",
+              "doc": "The phone number as written, preferably in the international format of ITU-T E.164 with a leading +, such as +49 30 1234567."
+            }
+          ]
+        }
+      },
+      "default": [],
+      "doc": "The person's phone numbers, in the user's order. Empty when there are none."
+    },
+    {
+      "name": "emails",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "PersonEmail",
+          "doc": "An email address of a person.",
+          "fields": [
+            {
+              "name": "label",
+              "type": "string",
+              "default": "",
+              "doc": "What the address is for, as the user wrote it, such as home, work or mobile. Empty when not given."
+            },
+            {
+              "name": "address",
+              "type": "string",
+              "default": "",
+              "doc": "The email address, such as anna@example.org."
+            }
+          ]
+        }
+      },
+      "default": [],
+      "doc": "The person's email addresses, in the user's order. Empty when there are none."
+    },
+    {
+      "name": "addresses",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "PersonAddress",
+          "doc": "A postal address of a person. Every part is empty when not given.",
+          "fields": [
+            {
+              "name": "label",
+              "type": "string",
+              "default": "",
+              "doc": "What the address is for, as the user wrote it, such as home, work or mobile. Empty when not given."
+            },
+            {
+              "name": "street",
+              "type": "string",
+              "default": "",
+              "doc": "The street and house number, and further lines such as a flat or a c/o, separated by LF."
+            },
+            {
+              "name": "postal_code",
+              "type": "string",
+              "default": "",
+              "doc": "The postal code, such as 10115."
+            },
+            {
+              "name": "locality",
+              "type": "string",
+              "default": "",
+              "doc": "The city, town or village."
+            },
+            {
+              "name": "region",
+              "type": "string",
+              "default": "",
+              "doc": "The state, province or county, where an address names one."
+            },
+            {
+              "name": "country",
+              "type": "string",
+              "default": "",
+              "doc": "The country, as written in the address."
+            }
+          ]
+        }
+      },
+      "default": [],
+      "doc": "The person's postal addresses, in the user's order. Empty when there are none."
+    },
+    {
+      "name": "notes",
+      "type": "string",
+      "default": "",
+      "doc": "Free notes on the person, as plain text; lines are separated by LF. Empty when there are none."
+    }
+  ]
+}

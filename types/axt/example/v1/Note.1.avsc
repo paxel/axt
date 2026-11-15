@@ -1,0 +1,70 @@
+{
+  "type": "record",
+  "name": "Note",
+  "namespace": "axt.example.v1",
+  "doc": "A note: a piece of text the user wrote down, with a title and tags.",
+  "axt.version": 1,
+  "axt.title": "title",
+  "fields": [
+    {
+      "name": "title",
+      "type": "string",
+      "default": "",
+      "doc": "The note's title, as plain text on one line. Empty when the note has none."
+    },
+    {
+      "name": "text",
+      "type": "string",
+      "default": "",
+      "doc": "The note's content, written in the format named by the field format. Empty when the note has only a title."
+    },
+    {
+      "name": "format",
+      "type": {
+        "type": "enum",
+        "name": "NoteFormat",
+        "doc": "How the text of a note is written. PLAIN: plain text, lines separated by LF. MARKDOWN: CommonMark. A symbol this version does not know is read as PLAIN.",
+        "symbols": [
+          "PLAIN",
+          "MARKDOWN"
+        ],
+        "default": "PLAIN"
+      },
+      "default": "PLAIN",
+      "doc": "How the field text is written."
+    },
+    {
+      "name": "created",
+      "type": [
+        "null",
+        {
+          "type": "long",
+          "logicalType": "timestamp-millis"
+        }
+      ],
+      "default": null,
+      "doc": "When the note was written. Null when not known."
+    },
+    {
+      "name": "updated",
+      "type": [
+        "null",
+        {
+          "type": "long",
+          "logicalType": "timestamp-millis"
+        }
+      ],
+      "default": null,
+      "doc": "When the note's content last changed. Null when not known."
+    },
+    {
+      "name": "tags",
+      "type": {
+        "type": "array",
+        "items": "string"
+      },
+      "default": [],
+      "doc": "Tags the user gave the note, in the user's order and without duplicates; each a word or short phrase without a leading #. Empty when there are none."
+    }
+  ]
+}
