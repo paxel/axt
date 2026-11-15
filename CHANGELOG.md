@@ -10,6 +10,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - The repository skeleton with its licences, contribution rules and spec index. ([axt-1000](https://github.com/paxel/axt/issues/1))
 - The envelope: every message is a signed `axt.Envelope`, sent live in single-object encoding and in files as an Avro container. ([axt-1001](https://github.com/paxel/axt/issues/2))
 - Eight example types under `axt.example.v1`, with the rules for naming, versioning and replacing types. ([axt-1002](https://github.com/paxel/axt/issues/3))
+- The time types `axt.Date`, `axt.Time`, `axt.DateTime` and `axt.Duration`, with time zones, partial dates and duration arithmetic. ([axt-1016](https://github.com/paxel/axt/issues/17))
 - Records with a stable id and a rising version, sent whole, with updates, deletions and the receiver's own changes. ([axt-1003](https://github.com/paxel/axt/issues/4))
 - The manifest, in which an app names the types it takes and what it does with them. ([axt-1004](https://github.com/paxel/axt/issues/5))
 - Ed25519 signatures, relay encryption with HPKE, trust on first use and moving a key to a new installation. ([axt-1006](https://github.com/paxel/axt/issues/7))

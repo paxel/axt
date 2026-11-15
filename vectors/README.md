@@ -9,6 +9,7 @@ This directory holds the test vectors of AXT: bytes with their expected meaning,
 | [vectors.schema.json](vectors.schema.json)                       | The JSON Schema of the vector files                                                           |
 | [encoding/encoding.json](encoding/encoding.json)                 | Canonical forms, fingerprints, envelopes and bodies ([spec/envelope.md](../spec/envelope.md)) |
 | [types/types.json](types/types.json)                             | The example types and schema resolution ([spec/types.md](../spec/types.md))                   |
+| [time/time.json](time/time.json)                                 | The time types, zone rules and durations ([spec/time.md](../spec/time.md))                    |
 | [records/records.json](records/records.json)                     | Applying record messages ([spec/records.md](../spec/records.md))                              |
 | [manifest/manifest.json](manifest/manifest.json)                 | Validity of a manifest and which types fit ([spec/manifest.md](../spec/manifest.md))          |
 | [keys/keys.json](keys/keys.json)                                 | Signatures, key moves, sealing ([spec/keys.md](../spec/keys.md))                              |

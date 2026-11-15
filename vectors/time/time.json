@@ -1,0 +1,1913 @@
+{
+ "format": 1,
+ "specification": "0.1.0",
+ "category": "time",
+ "description": "The time types: fingerprints, the bytes and meaning of their values, the values that are not valid, a type that holds several of them, other zone rules, and the addition of a duration (spec/time.md).",
+ "vectors": [
+  {
+   "id": "time/fingerprint/axt-date",
+   "op": "fingerprint",
+   "description": "axt.Date",
+   "refs": ["time.md 2", "time.md 9.1"],
+   "input": {
+    "schema": "{\n  \"type\": \"record\",\n  \"name\": \"Date\",\n  \"namespace\": \"axt\",\n  \"doc\": \"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\n  \"fields\": [\n    {\n      \"name\": \"year\",\n      \"type\": [\n        \"null\",\n        \"int\"\n      ],\n      \"default\": null,\n      \"doc\": \"The year, 1 to 9999. Null when the year is not known or does not matter.\"\n    },\n    {\n      \"name\": \"month\",\n      \"type\": [\n        \"null\",\n        \"int\"\n      ],\n      \"default\": null,\n      \"doc\": \"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"\n    },\n    {\n      \"name\": \"day\",\n      \"type\": [\n        \"null\",\n        \"int\"\n      ],\n      \"default\": null,\n      \"doc\": \"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"\n    }\n  ]\n}\n"
+   },
+   "expected": {
+    "accept": {
+     "canonical_form": "{\"name\":\"axt.Date\",\"type\":\"record\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"]},{\"name\":\"month\",\"type\":[\"null\",\"int\"]},{\"name\":\"day\",\"type\":[\"null\",\"int\"]}]}",
+     "fingerprint": "6b79ae7dc89383f2"
+    }
+   }
+  },
+  {
+   "id": "time/fingerprint/axt-time",
+   "op": "fingerprint",
+   "description": "axt.Time",
+   "refs": ["time.md 2", "time.md 9.1"],
+   "input": {
+    "schema": "{\n  \"type\": \"record\",\n  \"name\": \"Time\",\n  \"namespace\": \"axt\",\n  \"doc\": \"A time of day on the wall clock, to the millisecond, without a date and without a time zone, such as 07:30 for an alarm. Defined in spec/time.md. Its schema never changes.\",\n  \"fields\": [\n    {\n      \"name\": \"hour\",\n      \"type\": \"int\",\n      \"doc\": \"The hour, 0 to 23.\"\n    },\n    {\n      \"name\": \"minute\",\n      \"type\": \"int\",\n      \"doc\": \"The minute, 0 to 59.\"\n    },\n    {\n      \"name\": \"second\",\n      \"type\": \"int\",\n      \"doc\": \"The second, 0 to 59; a leap second is not written as 60. 0 when the time is given to the minute.\"\n    },\n    {\n      \"name\": \"millisecond\",\n      \"type\": \"int\",\n      \"doc\": \"The millisecond, 0 to 999. 0 when the time is given to the second or the minute.\"\n    }\n  ]\n}\n"
+   },
+   "expected": {
+    "accept": {
+     "canonical_form": "{\"name\":\"axt.Time\",\"type\":\"record\",\"fields\":[{\"name\":\"hour\",\"type\":\"int\"},{\"name\":\"minute\",\"type\":\"int\"},{\"name\":\"second\",\"type\":\"int\"},{\"name\":\"millisecond\",\"type\":\"int\"}]}",
+     "fingerprint": "ef1499f0aba0786f"
+    }
+   }
+  },
+  {
+   "id": "time/fingerprint/axt-datetime",
+   "op": "fingerprint",
+   "description": "axt.DateTime",
+   "refs": ["time.md 2", "time.md 9.1"],
+   "input": {
+    "schema": "{\n  \"type\": \"record\",\n  \"name\": \"DateTime\",\n  \"namespace\": \"axt\",\n  \"doc\": \"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\n  \"fields\": [\n    {\n      \"name\": \"year\",\n      \"type\": \"int\",\n      \"doc\": \"The year of the proleptic Gregorian calendar, 1 to 9999.\"\n    },\n    {\n      \"name\": \"month\",\n      \"type\": \"int\",\n      \"doc\": \"The month, 1 (January) to 12 (December).\"\n    },\n    {\n      \"name\": \"day\",\n      \"type\": \"int\",\n      \"doc\": \"The day of the month, 1 to the number of days of that month in that year.\"\n    },\n    {\n      \"name\": \"hour\",\n      \"type\": \"int\",\n      \"doc\": \"The hour on the wall clock, 0 to 23.\"\n    },\n    {\n      \"name\": \"minute\",\n      \"type\": \"int\",\n      \"doc\": \"The minute, 0 to 59.\"\n    },\n    {\n      \"name\": \"second\",\n      \"type\": \"int\",\n      \"doc\": \"The second, 0 to 59; a leap second is not written as 60.\"\n    },\n    {\n      \"name\": \"millisecond\",\n      \"type\": \"int\",\n      \"doc\": \"The millisecond, 0 to 999.\"\n    },\n    {\n      \"name\": \"zone\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null,\n      \"doc\": \"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"\n    },\n    {\n      \"name\": \"offset_seconds\",\n      \"type\": [\n        \"null\",\n        \"int\"\n      ],\n      \"default\": null,\n      \"doc\": \"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"\n    },\n    {\n      \"name\": \"instant_ms\",\n      \"type\": [\n        \"null\",\n        \"long\"\n      ],\n      \"default\": null,\n      \"doc\": \"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"\n    }\n  ]\n}\n"
+   },
+   "expected": {
+    "accept": {
+     "canonical_form": "{\"name\":\"axt.DateTime\",\"type\":\"record\",\"fields\":[{\"name\":\"year\",\"type\":\"int\"},{\"name\":\"month\",\"type\":\"int\"},{\"name\":\"day\",\"type\":\"int\"},{\"name\":\"hour\",\"type\":\"int\"},{\"name\":\"minute\",\"type\":\"int\"},{\"name\":\"second\",\"type\":\"int\"},{\"name\":\"millisecond\",\"type\":\"int\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"]},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"]},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"]}]}",
+     "fingerprint": "3789a6b1c38b8b59"
+    }
+   }
+  },
+  {
+   "id": "time/fingerprint/axt-duration",
+   "op": "fingerprint",
+   "description": "axt.Duration",
+   "refs": ["time.md 2", "time.md 9.1"],
+   "input": {
+    "schema": "{\n  \"type\": \"record\",\n  \"name\": \"Duration\",\n  \"namespace\": \"axt\",\n  \"doc\": \"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\n  \"fields\": [\n    {\n      \"name\": \"months\",\n      \"type\": \"int\",\n      \"doc\": \"The number of calendar months, negative for a length back in time. A year is 12 months.\"\n    },\n    {\n      \"name\": \"days\",\n      \"type\": \"int\",\n      \"doc\": \"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\"\n    },\n    {\n      \"name\": \"millis\",\n      \"type\": \"long\",\n      \"doc\": \"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\"\n    }\n  ]\n}\n"
+   },
+   "expected": {
+    "accept": {
+     "canonical_form": "{\"name\":\"axt.Duration\",\"type\":\"record\",\"fields\":[{\"name\":\"months\",\"type\":\"int\"},{\"name\":\"days\",\"type\":\"int\"},{\"name\":\"millis\",\"type\":\"long\"}]}",
+     "fingerprint": "85f0b37354d1ddff"
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-datetime-vet-appointment-europe-berlin-2026-10-25-02-30-before-the-c",
+   "op": "decode_record",
+   "description": "axt.DateTime: Vet appointment, Europe/Berlin, 2026-10-25 02:30 before the clocks go back",
+   "refs": ["time.md 6.2", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f1432043c0000021a4575726f70652f4265726c696e02c0700280edb687ae68"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "year": 2026,
+      "month": 10,
+      "day": 25,
+      "hour": 2,
+      "minute": 30,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 7200,
+      "instant_ms": 1792888200000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-datetime-the-same-wall-clock-after-the-clocks-went-back-an-hour-late",
+   "op": "decode_record",
+   "description": "axt.DateTime: The same wall clock after the clocks went back, an hour later",
+   "refs": ["time.md 6.2", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f1432043c0000021a4575726f70652f4265726c696e02a0380280a7ee8aae68"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "year": 2026,
+      "month": 10,
+      "day": 25,
+      "hour": 2,
+      "minute": 30,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1792891800000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-datetime-alarm-floating-2026-11-16-07-00-wherever-the-user-is",
+   "op": "decode_record",
+   "description": "axt.DateTime: Alarm, floating, 2026-11-16 07:00 wherever the user is",
+   "refs": ["time.md 6.2", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f16200e000000000000"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "year": 2026,
+      "month": 11,
+      "day": 16,
+      "hour": 7,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": null,
+      "offset_seconds": null,
+      "instant_ms": null
+     }
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-time-daily-alarm-at-07-00",
+   "op": "decode_record",
+   "description": "axt.Time: Daily alarm at 07:00",
+   "refs": ["time.md 5", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Time\",\"namespace\":\"axt\",\"doc\":\"A time of day on the wall clock, to the millisecond, without a date and without a time zone, such as 07:30 for an alarm. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60. 0 when the time is given to the minute.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999. 0 when the time is given to the second or the minute.\"}]}",
+    "reader_schema": null,
+    "body": "c301ef1499f0aba0786f0e000000"
+   },
+   "expected": {
+    "accept": {
+     "value": {"hour": 7, "minute": 0, "second": 0, "millisecond": 0}
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-date-birthday-without-a-year-3-may",
+   "op": "decode_record",
+   "description": "axt.Date: Birthday without a year, 3 May",
+   "refs": ["time.md 4", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}",
+    "reader_schema": null,
+    "body": "c3016b79ae7dc89383f200020a0206"
+   },
+   "expected": {
+    "accept": {
+     "value": {"year": null, "month": 5, "day": 3}
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-date-since-2019",
+   "op": "decode_record",
+   "description": "axt.Date: Since 2019",
+   "refs": ["time.md 4", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}",
+    "reader_schema": null,
+    "body": "c3016b79ae7dc89383f202c61f0000"
+   },
+   "expected": {
+    "accept": {
+     "value": {"year": 2019, "month": null, "day": null}
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-date-expiry-march-2027",
+   "op": "decode_record",
+   "description": "axt.Date: Expiry March 2027",
+   "refs": ["time.md 4", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}",
+    "reader_schema": null,
+    "body": "c3016b79ae7dc89383f202d61f020600"
+   },
+   "expected": {
+    "accept": {
+     "value": {"year": 2027, "month": 3, "day": null}
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-date-born-29-february-year-not-known",
+   "op": "decode_record",
+   "description": "axt.Date: Born 29 February, year not known",
+   "refs": ["time.md 4", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}",
+    "reader_schema": null,
+    "body": "c3016b79ae7dc89383f2000204023a"
+   },
+   "expected": {
+    "accept": {
+     "value": {"year": null, "month": 2, "day": 29}
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-date-a-full-date-2026-11-24",
+   "op": "decode_record",
+   "description": "axt.Date: A full date, 2026-11-24",
+   "refs": ["time.md 4", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}",
+    "reader_schema": null,
+    "body": "c3016b79ae7dc89383f202d41f02160230"
+   },
+   "expected": {
+    "accept": {
+     "value": {"year": 2026, "month": 11, "day": 24}
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-duration-reminder-15-minutes-before-pt15m",
+   "op": "decode_record",
+   "description": "axt.Duration: Reminder, 15 minutes before: -PT15M",
+   "refs": ["time.md 7.1", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Duration\",\"namespace\":\"axt\",\"doc\":\"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"months\",\"type\":\"int\",\"doc\":\"The number of calendar months, negative for a length back in time. A year is 12 months.\"},{\"name\":\"days\",\"type\":\"int\",\"doc\":\"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\"},{\"name\":\"millis\",\"type\":\"long\",\"doc\":\"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\"}]}",
+    "reader_schema": null,
+    "body": "c30185f0b37354d1ddff0000bfee6d"
+   },
+   "expected": {
+    "accept": {
+     "value": {"months": 0, "days": 0, "millis": -900000}
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-duration-every-month-p1m",
+   "op": "decode_record",
+   "description": "axt.Duration: Every month: P1M",
+   "refs": ["time.md 7.1", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Duration\",\"namespace\":\"axt\",\"doc\":\"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"months\",\"type\":\"int\",\"doc\":\"The number of calendar months, negative for a length back in time. A year is 12 months.\"},{\"name\":\"days\",\"type\":\"int\",\"doc\":\"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\"},{\"name\":\"millis\",\"type\":\"long\",\"doc\":\"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\"}]}",
+    "reader_schema": null,
+    "body": "c30185f0b37354d1ddff020000"
+   },
+   "expected": {
+    "accept": {
+     "value": {"months": 1, "days": 0, "millis": 0}
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-duration-p1m2dt3h",
+   "op": "decode_record",
+   "description": "axt.Duration: P1M2DT3H",
+   "refs": ["time.md 7.1", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Duration\",\"namespace\":\"axt\",\"doc\":\"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"months\",\"type\":\"int\",\"doc\":\"The number of calendar months, negative for a length back in time. A year is 12 months.\"},{\"name\":\"days\",\"type\":\"int\",\"doc\":\"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\"},{\"name\":\"millis\",\"type\":\"long\",\"doc\":\"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\"}]}",
+    "reader_schema": null,
+    "body": "c30185f0b37354d1ddff020480aea60a"
+   },
+   "expected": {
+    "accept": {
+     "value": {"months": 1, "days": 2, "millis": 10800000}
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-date-29-february-2000-a-leap-year",
+   "op": "decode_record",
+   "description": "axt.Date: 29 February 2000, a leap year",
+   "refs": ["time.md 4", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}",
+    "reader_schema": null,
+    "body": "c3016b79ae7dc89383f202a01f0204023a"
+   },
+   "expected": {
+    "accept": {
+     "value": {"year": 2000, "month": 2, "day": 29}
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-date-the-month-alone",
+   "op": "decode_record",
+   "description": "axt.Date: the month alone",
+   "refs": ["time.md 4", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}",
+    "reader_schema": null,
+    "body": "c3016b79ae7dc89383f200020600"
+   },
+   "expected": {
+    "accept": {
+     "value": {"year": null, "month": 3, "day": null}
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-date-the-first-day",
+   "op": "decode_record",
+   "description": "axt.Date: the first day",
+   "refs": ["time.md 4", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}",
+    "reader_schema": null,
+    "body": "c3016b79ae7dc89383f2020202020202"
+   },
+   "expected": {
+    "accept": {
+     "value": {"year": 1, "month": 1, "day": 1}
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-date-the-last-day",
+   "op": "decode_record",
+   "description": "axt.Date: the last day",
+   "refs": ["time.md 4", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}",
+    "reader_schema": null,
+    "body": "c3016b79ae7dc89383f2029e9c010218023e"
+   },
+   "expected": {
+    "accept": {
+     "value": {"year": 9999, "month": 12, "day": 31}
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-time-the-last-millisecond-of-a-day",
+   "op": "decode_record",
+   "description": "axt.Time: the last millisecond of a day",
+   "refs": ["time.md 5", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Time\",\"namespace\":\"axt\",\"doc\":\"A time of day on the wall clock, to the millisecond, without a date and without a time zone, such as 07:30 for an alarm. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60. 0 when the time is given to the minute.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999. 0 when the time is given to the second or the minute.\"}]}",
+    "reader_schema": null,
+    "body": "c301ef1499f0aba0786f2e7676ce0f"
+   },
+   "expected": {
+    "accept": {
+     "value": {"hour": 23, "minute": 59, "second": 59, "millisecond": 999}
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-datetime-the-first-instant-of-1970-in-utc",
+   "op": "decode_record",
+   "description": "axt.DateTime: the first instant of 1970 in UTC",
+   "refs": ["time.md 6.2", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59e41e020200000000020e4574632f55544302000200"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "year": 1970,
+      "month": 1,
+      "day": 1,
+      "hour": 0,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Etc/UTC",
+      "offset_seconds": 0,
+      "instant_ms": 0
+     }
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-datetime-before-1970-with-a-negative-instant",
+   "op": "decode_record",
+   "description": "axt.DateTime: before 1970, with a negative instant",
+   "refs": ["time.md 6.2", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59e21e0e2828220000020e4574632f555443020002bfe6f8d569"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "year": 1969,
+      "month": 7,
+      "day": 20,
+      "hour": 20,
+      "minute": 17,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Etc/UTC",
+      "offset_seconds": 0,
+      "instant_ms": -14182980000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-datetime-a-zone-this-database-does-not-have",
+   "op": "decode_record",
+   "description": "axt.DateTime: a zone this database does not have",
+   "refs": ["time.md 6.2", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f16200e00000002224d6172732f4f6c796d7075735f4d6f6e7302000280c6beb2bc68"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "year": 2026,
+      "month": 11,
+      "day": 16,
+      "hour": 7,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Mars/Olympus_Mons",
+      "offset_seconds": 0,
+      "instant_ms": 1794812400000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-datetime-an-offset-with-seconds-the-local-mean-time-of-berlin-in-189",
+   "op": "decode_record",
+   "description": "axt.DateTime: an offset with seconds, the local mean time of Berlin in 1890",
+   "refs": ["time.md 6.2", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59c41d0c0218000000021a4575726f70652f4265726c696e02903202ffd4a0d3979201"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "year": 1890,
+      "month": 6,
+      "day": 1,
+      "hour": 12,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3208,
+      "instant_ms": -2511435208000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-datetime-the-largest-offset",
+   "op": "decode_record",
+   "description": "axt.DateTime: the largest offset",
+   "refs": ["time.md 6.2", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f02020000000002204578616d706c652f4661725f4561737402c0f40702808cefafee66"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "year": 2026,
+      "month": 1,
+      "day": 1,
+      "hour": 0,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Example/Far_East",
+      "offset_seconds": 64800,
+      "instant_ms": 1767160800000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-duration-the-zero-duration",
+   "op": "decode_record",
+   "description": "axt.Duration: the zero Duration",
+   "refs": ["time.md 7.1", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Duration\",\"namespace\":\"axt\",\"doc\":\"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"months\",\"type\":\"int\",\"doc\":\"The number of calendar months, negative for a length back in time. A year is 12 months.\"},{\"name\":\"days\",\"type\":\"int\",\"doc\":\"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\"},{\"name\":\"millis\",\"type\":\"long\",\"doc\":\"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\"}]}",
+    "reader_schema": null,
+    "body": "c30185f0b37354d1ddff000000"
+   },
+   "expected": {
+    "accept": {
+     "value": {"months": 0, "days": 0, "millis": 0}
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-duration-a-duration-back-by-a-month-two-days-and-three-hours",
+   "op": "decode_record",
+   "description": "axt.Duration: a Duration back by a month, two days and three hours",
+   "refs": ["time.md 7.1", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Duration\",\"namespace\":\"axt\",\"doc\":\"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"months\",\"type\":\"int\",\"doc\":\"The number of calendar months, negative for a length back in time. A year is 12 months.\"},{\"name\":\"days\",\"type\":\"int\",\"doc\":\"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\"},{\"name\":\"millis\",\"type\":\"long\",\"doc\":\"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\"}]}",
+    "reader_schema": null,
+    "body": "c30185f0b37354d1ddff0103ffada60a"
+   },
+   "expected": {
+    "accept": {
+     "value": {"months": -1, "days": -2, "millis": -10800000}
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-duration-36-hours-not-converted-into-days",
+   "op": "decode_record",
+   "description": "axt.Duration: 36 hours, not converted into days",
+   "refs": ["time.md 7.1", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Duration\",\"namespace\":\"axt\",\"doc\":\"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"months\",\"type\":\"int\",\"doc\":\"The number of calendar months, negative for a length back in time. A year is 12 months.\"},{\"name\":\"days\",\"type\":\"int\",\"doc\":\"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\"},{\"name\":\"millis\",\"type\":\"long\",\"doc\":\"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\"}]}",
+    "reader_schema": null,
+    "body": "c30185f0b37354d1ddff000080a8cc7b"
+   },
+   "expected": {
+    "accept": {
+     "value": {"months": 0, "days": 0, "millis": 129600000}
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-date-without-any-part",
+   "op": "decode_record",
+   "description": "reject a Date without any part",
+   "refs": ["time.md 4", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}",
+    "reader_schema": null,
+    "body": "c3016b79ae7dc89383f2000000"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "no part"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-date-with-the-day-and-the-year-but-no-month",
+   "op": "decode_record",
+   "description": "reject a Date with the day and the year but no month",
+   "refs": ["time.md 4", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}",
+    "reader_schema": null,
+    "body": "c3016b79ae7dc89383f202d41f000206"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "a day without its month"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-date-with-the-day-alone",
+   "op": "decode_record",
+   "description": "reject a Date with the day alone",
+   "refs": ["time.md 4", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}",
+    "reader_schema": null,
+    "body": "c3016b79ae7dc89383f200000206"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "a day without its month"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-date-in-the-month-13",
+   "op": "decode_record",
+   "description": "reject a Date in the month 13",
+   "refs": ["time.md 4", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}",
+    "reader_schema": null,
+    "body": "c3016b79ae7dc89383f202d41f021a00"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "month out of range"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-date-in-the-month-0",
+   "op": "decode_record",
+   "description": "reject a Date in the month 0",
+   "refs": ["time.md 4", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}",
+    "reader_schema": null,
+    "body": "c3016b79ae7dc89383f200020000"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "month out of range"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-date-in-the-year-0",
+   "op": "decode_record",
+   "description": "reject a Date in the year 0",
+   "refs": ["time.md 4", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}",
+    "reader_schema": null,
+    "body": "c3016b79ae7dc89383f2020002020202"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "year out of range"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-date-in-the-year-10000",
+   "op": "decode_record",
+   "description": "reject a Date in the year 10000",
+   "refs": ["time.md 4", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}",
+    "reader_schema": null,
+    "body": "c3016b79ae7dc89383f202a09c010000"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "year out of range"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-31-april",
+   "op": "decode_record",
+   "description": "reject 31 April",
+   "refs": ["time.md 4", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}",
+    "reader_schema": null,
+    "body": "c3016b79ae7dc89383f2000208023e"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "day out of range for the month"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-29-february-2027-not-a-leap-year",
+   "op": "decode_record",
+   "description": "reject 29 February 2027, not a leap year",
+   "refs": ["time.md 4", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}",
+    "reader_schema": null,
+    "body": "c3016b79ae7dc89383f202d61f0204023a"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "day out of range for the month"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-29-february-1900-not-a-leap-year",
+   "op": "decode_record",
+   "description": "reject 29 February 1900, not a leap year",
+   "refs": ["time.md 4", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}",
+    "reader_schema": null,
+    "body": "c3016b79ae7dc89383f202d81d0204023a"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "day out of range for the month"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-the-day-0",
+   "op": "decode_record",
+   "description": "reject the day 0",
+   "refs": ["time.md 4", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}",
+    "reader_schema": null,
+    "body": "c3016b79ae7dc89383f202d41f02020200"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "day out of range for the month"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-time-at-24-00",
+   "op": "decode_record",
+   "description": "reject a Time at 24:00",
+   "refs": ["time.md 5", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Time\",\"namespace\":\"axt\",\"doc\":\"A time of day on the wall clock, to the millisecond, without a date and without a time zone, such as 07:30 for an alarm. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60. 0 when the time is given to the minute.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999. 0 when the time is given to the second or the minute.\"}]}",
+    "reader_schema": null,
+    "body": "c301ef1499f0aba0786f30000000"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "hour out of range"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-time-with-the-minute-60",
+   "op": "decode_record",
+   "description": "reject a Time with the minute 60",
+   "refs": ["time.md 5", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Time\",\"namespace\":\"axt\",\"doc\":\"A time of day on the wall clock, to the millisecond, without a date and without a time zone, such as 07:30 for an alarm. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60. 0 when the time is given to the minute.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999. 0 when the time is given to the second or the minute.\"}]}",
+    "reader_schema": null,
+    "body": "c301ef1499f0aba0786f2e780000"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "minute out of range"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-time-with-the-leap-second-60",
+   "op": "decode_record",
+   "description": "reject a Time with the leap second 60",
+   "refs": ["time.md 5", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Time\",\"namespace\":\"axt\",\"doc\":\"A time of day on the wall clock, to the millisecond, without a date and without a time zone, such as 07:30 for an alarm. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60. 0 when the time is given to the minute.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999. 0 when the time is given to the second or the minute.\"}]}",
+    "reader_schema": null,
+    "body": "c301ef1499f0aba0786f2e767800"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "second out of range"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-time-with-the-millisecond-1000",
+   "op": "decode_record",
+   "description": "reject a Time with the millisecond 1000",
+   "refs": ["time.md 5", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Time\",\"namespace\":\"axt\",\"doc\":\"A time of day on the wall clock, to the millisecond, without a date and without a time zone, such as 07:30 for an alarm. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60. 0 when the time is given to the minute.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999. 0 when the time is given to the second or the minute.\"}]}",
+    "reader_schema": null,
+    "body": "c301ef1499f0aba0786f140000d00f"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "millisecond out of range"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-time-with-a-negative-hour",
+   "op": "decode_record",
+   "description": "reject a Time with a negative hour",
+   "refs": ["time.md 5", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Time\",\"namespace\":\"axt\",\"doc\":\"A time of day on the wall clock, to the millisecond, without a date and without a time zone, such as 07:30 for an alarm. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60. 0 when the time is given to the minute.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999. 0 when the time is given to the second or the minute.\"}]}",
+    "reader_schema": null,
+    "body": "c301ef1499f0aba0786f01000000"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "hour out of range"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-on-30-february",
+   "op": "decode_record",
+   "description": "reject a DateTime on 30 February",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d81f043c14000000000000"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "day out of range for the month"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-in-the-year-0",
+   "op": "decode_record",
+   "description": "reject a DateTime in the year 0",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b5900183e14000000000000"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "year out of range"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-with-the-second-60",
+   "op": "decode_record",
+   "description": "reject a DateTime with the second 60",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f183e2e767800000000"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "second out of range"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-floating-datetime-with-an-offset-and-an-instant",
+   "op": "decode_record",
+   "description": "reject a floating DateTime with an offset and an instant",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f16200e0000000002a03802808c87afbc68"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "zone, offset_seconds and instant_ms not all null or all set"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-with-a-zone-but-no-offset-and-no-instant",
+   "op": "decode_record",
+   "description": "reject a DateTime with a zone but no offset and no instant",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f16200e000000021a4575726f70652f4265726c696e0000"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "zone, offset_seconds and instant_ms not all null or all set"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-with-a-zone-and-an-offset-but-no-instant",
+   "op": "decode_record",
+   "description": "reject a DateTime with a zone and an offset but no instant",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f16200e000000021a4575726f70652f4265726c696e02a03800"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "zone, offset_seconds and instant_ms not all null or all set"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-whose-instant-is-an-hour-off",
+   "op": "decode_record",
+   "description": "reject a DateTime whose instant is an hour off",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f16200e000000021a4575726f70652f4265726c696e02a0380280c6beb2bc68"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "instant_ms is not the wall clock minus offset_seconds"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-with-an-offset-above-18-hours",
+   "op": "decode_record",
+   "description": "reject a DateTime with an offset above 18 hours",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f16200e00000002204578616d706c652f4661725f4561737402c2f40702b0a2d8f4bb68"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "offset_seconds out of range"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-with-an-empty-zone-name",
+   "op": "decode_record",
+   "description": "reject a DateTime with an empty zone name",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f16200e000000020002000280c6beb2bc68"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "zone is not a time zone name"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-with-a-zone-name-that-holds-a-space",
+   "op": "decode_record",
+   "description": "reject a DateTime with a zone name that holds a space",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f16200e000000021c4575726f70652f4265726c696e2002a03802808c87afbc68"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "zone is not a time zone name"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-with-a-zone-name-that-climbs-a-directory",
+   "op": "decode_record",
+   "description": "reject a DateTime with a zone name that climbs a directory",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f16200e000000021a2e2e2f6574632f70617373776402000280c6beb2bc68"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "zone is not a time zone name"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-duration-of-plus-a-month-and-minus-a-day",
+   "op": "decode_record",
+   "description": "reject a Duration of plus a month and minus a day",
+   "refs": ["time.md 7.1", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Duration\",\"namespace\":\"axt\",\"doc\":\"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"months\",\"type\":\"int\",\"doc\":\"The number of calendar months, negative for a length back in time. A year is 12 months.\"},{\"name\":\"days\",\"type\":\"int\",\"doc\":\"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\"},{\"name\":\"millis\",\"type\":\"long\",\"doc\":\"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\"}]}",
+    "reader_schema": null,
+    "body": "c30185f0b37354d1ddff020100"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "parts of both signs"}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-duration-of-minus-a-day-and-plus-an-hour",
+   "op": "decode_record",
+   "description": "reject a Duration of minus a day and plus an hour",
+   "refs": ["time.md 7.1", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Duration\",\"namespace\":\"axt\",\"doc\":\"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"months\",\"type\":\"int\",\"doc\":\"The number of calendar months, negative for a length back in time. A year is 12 months.\"},{\"name\":\"days\",\"type\":\"int\",\"doc\":\"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\"},{\"name\":\"millis\",\"type\":\"long\",\"doc\":\"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\"}]}",
+    "reader_schema": null,
+    "body": "c30185f0b37354d1ddff000180bab703"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "parts of both signs"}
+   }
+  },
+  {
+   "id": "time/decode_record/a-type-that-defines-axt-datetime-in-place-and-refers-to-it-by-its-full-n",
+   "op": "decode_record",
+   "description": "a type that defines axt.DateTime in place and refers to it by its full name",
+   "refs": ["time.md 3.1", "time.md 9.3"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Visit\",\"namespace\":\"com.example\",\"doc\":\"An illustration for spec/time.md; not an AXT example type.\",\"fields\":[{\"name\":\"start\",\"type\":{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]},\"doc\":\"When the visit starts.\",\"axt.anchor\":\"local\"},{\"name\":\"end\",\"type\":[\"null\",\"axt.DateTime\"],\"default\":null,\"doc\":\"When the visit ends; null when open.\",\"axt.anchor\":\"local\"},{\"name\":\"booked\",\"type\":{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]},\"doc\":\"The day the visit was booked.\"},{\"name\":\"remind\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"Duration\",\"namespace\":\"axt\",\"doc\":\"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"months\",\"type\":\"int\",\"doc\":\"The number of calendar months, negative for a length back in time. A year is 12 months.\"},{\"name\":\"days\",\"type\":\"int\",\"doc\":\"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\"},{\"name\":\"millis\",\"type\":\"long\",\"doc\":\"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\"}]}},\"default\":[],\"doc\":\"When to remind, each before start.\"}]}",
+    "reader_schema": null,
+    "body": "c30190a9bb8bd45c3e0ed41f163014000000021a4575726f70652f4265726c696e02a0380280bac4ccc16802d41f1630143c0000021a4575726f70652f4265726c696e02a038028097a0cec16802d41f0216021e040001000000ffb9b70300"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "start": {
+       "year": 2026,
+       "month": 11,
+       "day": 24,
+       "hour": 10,
+       "minute": 0,
+       "second": 0,
+       "millisecond": 0,
+       "zone": "Europe/Berlin",
+       "offset_seconds": 3600,
+       "instant_ms": 1795510800000
+      },
+      "end": {
+       "year": 2026,
+       "month": 11,
+       "day": 24,
+       "hour": 10,
+       "minute": 30,
+       "second": 0,
+       "millisecond": 0,
+       "zone": "Europe/Berlin",
+       "offset_seconds": 3600,
+       "instant_ms": 1795512600000
+      },
+      "booked": {"year": 2026, "month": 11, "day": 15},
+      "remind": [
+       {"months": 0, "days": -1, "millis": 0},
+       {"months": 0, "days": 0, "millis": -3600000}
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/reject-that-type-when-its-second-datetime-has-an-instant-a-millisecond-o",
+   "op": "decode_record",
+   "description": "reject that type when its second DateTime has an instant a millisecond off",
+   "refs": ["time.md 3.1", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Visit\",\"namespace\":\"com.example\",\"doc\":\"An illustration for spec/time.md; not an AXT example type.\",\"fields\":[{\"name\":\"start\",\"type\":{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]},\"doc\":\"When the visit starts.\",\"axt.anchor\":\"local\"},{\"name\":\"end\",\"type\":[\"null\",\"axt.DateTime\"],\"default\":null,\"doc\":\"When the visit ends; null when open.\",\"axt.anchor\":\"local\"},{\"name\":\"booked\",\"type\":{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]},\"doc\":\"The day the visit was booked.\"},{\"name\":\"remind\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"Duration\",\"namespace\":\"axt\",\"doc\":\"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"months\",\"type\":\"int\",\"doc\":\"The number of calendar months, negative for a length back in time. A year is 12 months.\"},{\"name\":\"days\",\"type\":\"int\",\"doc\":\"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\"},{\"name\":\"millis\",\"type\":\"long\",\"doc\":\"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\"}]}},\"default\":[],\"doc\":\"When to remind, each before start.\"}]}",
+    "reader_schema": null,
+    "body": "c30190a9bb8bd45c3e0ed41f163014000000021a4575726f70652f4265726c696e02a0380280bac4ccc16802d41f1630143c0000021a4575726f70652f4265726c696e02a038028297a0cec16802d41f0216021e040001000000ffb9b70300"
+   },
+   "expected": {
+    "reject": {
+     "error": "UNDECODABLE",
+     "note": "axt.DateTime: instant_ms is not the wall clock minus offset_seconds"
+    }
+   }
+  },
+  {
+   "id": "time/resolve_date_time/local-the-wall-clock-and-the-zone-kept-the-instant-an-hour-earlier",
+   "op": "resolve_date_time",
+   "description": "local: the wall clock and the zone kept, the instant an hour earlier",
+   "refs": ["time.md 6.4"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 7,
+     "day": 1,
+     "hour": 10,
+     "minute": 0,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Europe/Berlin",
+     "offset_seconds": 3600,
+     "instant_ms": 1782896400000
+    },
+    "anchor": "local"
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 7,
+      "day": 1,
+      "hour": 10,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 7200,
+      "instant_ms": 1782892800000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/resolve_date_time/instant-the-instant-and-the-zone-kept-the-wall-clock-an-hour-later",
+   "op": "resolve_date_time",
+   "description": "instant: the instant and the zone kept, the wall clock an hour later",
+   "refs": ["time.md 6.4"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 7,
+     "day": 1,
+     "hour": 10,
+     "minute": 0,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Europe/Berlin",
+     "offset_seconds": 3600,
+     "instant_ms": 1782896400000
+    },
+    "anchor": "instant"
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 7,
+      "day": 1,
+      "hour": 11,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 7200,
+      "instant_ms": 1782896400000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/resolve_date_time/local-a-value-that-agrees-with-these-rules-is-kept",
+   "op": "resolve_date_time",
+   "description": "local: a value that agrees with these rules is kept",
+   "refs": ["time.md 6.4"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 10,
+     "day": 25,
+     "hour": 2,
+     "minute": 30,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Europe/Berlin",
+     "offset_seconds": 7200,
+     "instant_ms": 1792888200000
+    },
+    "anchor": "local"
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 10,
+      "day": 25,
+      "hour": 2,
+      "minute": 30,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 7200,
+      "instant_ms": 1792888200000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/resolve_date_time/local-the-later-reading-of-02-30-on-2026-10-25-is-kept",
+   "op": "resolve_date_time",
+   "description": "local: the later reading of 02:30 on 2026-10-25 is kept",
+   "refs": ["time.md 6.4"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 10,
+     "day": 25,
+     "hour": 2,
+     "minute": 30,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Europe/Berlin",
+     "offset_seconds": 3600,
+     "instant_ms": 1792891800000
+    },
+    "anchor": "local"
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 10,
+      "day": 25,
+      "hour": 2,
+      "minute": 30,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1792891800000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/resolve_date_time/local-a-zone-these-rules-do-not-have-keeps-every-field",
+   "op": "resolve_date_time",
+   "description": "local: a zone these rules do not have keeps every field",
+   "refs": ["time.md 6.4"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 11,
+     "day": 16,
+     "hour": 7,
+     "minute": 0,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Mars/Olympus_Mons",
+     "offset_seconds": 0,
+     "instant_ms": 1794812400000
+    },
+    "anchor": "local"
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 11,
+      "day": 16,
+      "hour": 7,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Mars/Olympus_Mons",
+      "offset_seconds": 0,
+      "instant_ms": 1794812400000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/resolve_date_time/instant-a-floating-time-keeps-every-field",
+   "op": "resolve_date_time",
+   "description": "instant: a floating time keeps every field",
+   "refs": ["time.md 6.4"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 11,
+     "day": 16,
+     "hour": 7,
+     "minute": 0,
+     "second": 0,
+     "millisecond": 0,
+     "zone": null,
+     "offset_seconds": null,
+     "instant_ms": null
+    },
+    "anchor": "instant"
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 11,
+      "day": 16,
+      "hour": 7,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": null,
+      "offset_seconds": null,
+      "instant_ms": null
+     }
+    }
+   }
+  },
+  {
+   "id": "time/resolve_date_time/local-a-wall-clock-in-the-overlap-with-an-offset-these-rules-do-not-give",
+   "op": "resolve_date_time",
+   "description": "local: a wall clock in the overlap with an offset these rules do not give takes the earlier offset",
+   "refs": ["time.md 6.4"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 10,
+     "day": 25,
+     "hour": 2,
+     "minute": 30,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Europe/Berlin",
+     "offset_seconds": 0,
+     "instant_ms": 1792895400000
+    },
+    "anchor": "local"
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 10,
+      "day": 25,
+      "hour": 2,
+      "minute": 30,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 7200,
+      "instant_ms": 1792888200000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/resolve_date_time/local-a-wall-clock-in-the-gap-with-an-offset-these-rules-do-not-give-mov",
+   "op": "resolve_date_time",
+   "description": "local: a wall clock in the gap with an offset these rules do not give moves later by the gap",
+   "refs": ["time.md 6.4"],
+   "input": {
+    "date_time": {
+     "year": 2027,
+     "month": 3,
+     "day": 28,
+     "hour": 2,
+     "minute": 30,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Europe/Berlin",
+     "offset_seconds": 3600,
+     "instant_ms": 1806197400000
+    },
+    "anchor": "local"
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2027,
+      "month": 3,
+      "day": 28,
+      "hour": 3,
+      "minute": 30,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 7200,
+      "instant_ms": 1806197400000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/31-january-1-month-is-28-february-in-2027",
+   "op": "add_duration",
+   "description": "31 January + 1 month is 28 February in 2027",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2027,
+     "month": 1,
+     "day": 31,
+     "hour": 9,
+     "minute": 0,
+     "second": 0,
+     "millisecond": 0,
+     "zone": null,
+     "offset_seconds": null,
+     "instant_ms": null
+    },
+    "duration": {"months": 1, "days": 0, "millis": 0}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2027,
+      "month": 2,
+      "day": 28,
+      "hour": 9,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": null,
+      "offset_seconds": null,
+      "instant_ms": null
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/31-january-1-month-is-29-february-in-2028",
+   "op": "add_duration",
+   "description": "31 January + 1 month is 29 February in 2028",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2028,
+     "month": 1,
+     "day": 31,
+     "hour": 9,
+     "minute": 0,
+     "second": 0,
+     "millisecond": 0,
+     "zone": null,
+     "offset_seconds": null,
+     "instant_ms": null
+    },
+    "duration": {"months": 1, "days": 0, "millis": 0}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2028,
+      "month": 2,
+      "day": 29,
+      "hour": 9,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": null,
+      "offset_seconds": null,
+      "instant_ms": null
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/31-january-1-month-1-day-is-1-march-in-2027-the-months-first",
+   "op": "add_duration",
+   "description": "31 January + 1 month + 1 day is 1 March in 2027, the months first",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2027,
+     "month": 1,
+     "day": 31,
+     "hour": 9,
+     "minute": 0,
+     "second": 0,
+     "millisecond": 0,
+     "zone": null,
+     "offset_seconds": null,
+     "instant_ms": null
+    },
+    "duration": {"months": 1, "days": 1, "millis": 0}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2027,
+      "month": 3,
+      "day": 1,
+      "hour": 9,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": null,
+      "offset_seconds": null,
+      "instant_ms": null
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/31-march-1-month-is-28-february-in-2027",
+   "op": "add_duration",
+   "description": "31 March - 1 month is 28 February in 2027",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2027,
+     "month": 3,
+     "day": 31,
+     "hour": 9,
+     "minute": 0,
+     "second": 0,
+     "millisecond": 0,
+     "zone": null,
+     "offset_seconds": null,
+     "instant_ms": null
+    },
+    "duration": {"months": -1, "days": 0, "millis": 0}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2027,
+      "month": 2,
+      "day": 28,
+      "hour": 9,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": null,
+      "offset_seconds": null,
+      "instant_ms": null
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/31-december-2026-2-months-is-28-february-2027",
+   "op": "add_duration",
+   "description": "31 December 2026 + 2 months is 28 February 2027",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 12,
+     "day": 31,
+     "hour": 9,
+     "minute": 0,
+     "second": 0,
+     "millisecond": 0,
+     "zone": null,
+     "offset_seconds": null,
+     "instant_ms": null
+    },
+    "duration": {"months": 2, "days": 0, "millis": 0}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2027,
+      "month": 2,
+      "day": 28,
+      "hour": 9,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": null,
+      "offset_seconds": null,
+      "instant_ms": null
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/europe-berlin-2026-10-24-10-00-1-day-is-10-00-the-next-day-25-hours-late",
+   "op": "add_duration",
+   "description": "Europe/Berlin 2026-10-24 10:00 + 1 day is 10:00 the next day, 25 hours later",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 10,
+     "day": 24,
+     "hour": 10,
+     "minute": 0,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Europe/Berlin",
+     "offset_seconds": 7200,
+     "instant_ms": 1792828800000
+    },
+    "duration": {"months": 0, "days": 1, "millis": 0}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 10,
+      "day": 25,
+      "hour": 10,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1792918800000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/europe-berlin-2026-10-24-10-00-24-hours-is-09-00-the-next-day",
+   "op": "add_duration",
+   "description": "Europe/Berlin 2026-10-24 10:00 + 24 hours is 09:00 the next day",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 10,
+     "day": 24,
+     "hour": 10,
+     "minute": 0,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Europe/Berlin",
+     "offset_seconds": 7200,
+     "instant_ms": 1792828800000
+    },
+    "duration": {"months": 0, "days": 0, "millis": 86400000}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 10,
+      "day": 25,
+      "hour": 9,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1792915200000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/europe-berlin-2026-10-25-02-20-after-the-change-pt15m-is-02-05-after-the",
+   "op": "add_duration",
+   "description": "Europe/Berlin 2026-10-25 02:20 after the change, -PT15M, is 02:05 after the change",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 10,
+     "day": 25,
+     "hour": 2,
+     "minute": 20,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Europe/Berlin",
+     "offset_seconds": 3600,
+     "instant_ms": 1792891200000
+    },
+    "duration": {"months": 0, "days": 0, "millis": -900000}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 10,
+      "day": 25,
+      "hour": 2,
+      "minute": 5,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1792890300000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/europe-berlin-2026-10-25-03-10-pt15m-is-02-55-after-the-change",
+   "op": "add_duration",
+   "description": "Europe/Berlin 2026-10-25 03:10, -PT15M, is 02:55 after the change",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 10,
+     "day": 25,
+     "hour": 3,
+     "minute": 10,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Europe/Berlin",
+     "offset_seconds": 3600,
+     "instant_ms": 1792894200000
+    },
+    "duration": {"months": 0, "days": 0, "millis": -900000}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 10,
+      "day": 25,
+      "hour": 2,
+      "minute": 55,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1792893300000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/europe-berlin-2026-10-25-02-05-after-the-change-pt15m-is-02-50-before-it",
+   "op": "add_duration",
+   "description": "Europe/Berlin 2026-10-25 02:05 after the change, -PT15M, is 02:50 before it",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 10,
+     "day": 25,
+     "hour": 2,
+     "minute": 5,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Europe/Berlin",
+     "offset_seconds": 3600,
+     "instant_ms": 1792890300000
+    },
+    "duration": {"months": 0, "days": 0, "millis": -900000}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 10,
+      "day": 25,
+      "hour": 2,
+      "minute": 50,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 7200,
+      "instant_ms": 1792889400000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/europe-berlin-2026-09-25-02-30-1-month-is-the-earlier-02-30-of-2026-10-2",
+   "op": "add_duration",
+   "description": "Europe/Berlin 2026-09-25 02:30 + 1 month is the earlier 02:30 of 2026-10-25, its offset kept",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 9,
+     "day": 25,
+     "hour": 2,
+     "minute": 30,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Europe/Berlin",
+     "offset_seconds": 7200,
+     "instant_ms": 1790296200000
+    },
+    "duration": {"months": 1, "days": 0, "millis": 0}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 10,
+      "day": 25,
+      "hour": 2,
+      "minute": 30,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 7200,
+      "instant_ms": 1792888200000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/europe-berlin-2026-11-25-02-30-1-month-is-the-later-02-30-of-2026-10-25",
+   "op": "add_duration",
+   "description": "Europe/Berlin 2026-11-25 02:30 - 1 month is the later 02:30 of 2026-10-25, its offset kept",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 11,
+     "day": 25,
+     "hour": 2,
+     "minute": 30,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Europe/Berlin",
+     "offset_seconds": 3600,
+     "instant_ms": 1795570200000
+    },
+    "duration": {"months": -1, "days": 0, "millis": 0}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 10,
+      "day": 25,
+      "hour": 2,
+      "minute": 30,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1792891800000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/europe-berlin-2027-03-27-02-30-1-day-falls-into-the-gap-and-moves-to-03",
+   "op": "add_duration",
+   "description": "Europe/Berlin 2027-03-27 02:30 + 1 day falls into the gap and moves to 03:30",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2027,
+     "month": 3,
+     "day": 27,
+     "hour": 2,
+     "minute": 30,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Europe/Berlin",
+     "offset_seconds": 3600,
+     "instant_ms": 1806111000000
+    },
+    "duration": {"months": 0, "days": 1, "millis": 0}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2027,
+      "month": 3,
+      "day": 28,
+      "hour": 3,
+      "minute": 30,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 7200,
+      "instant_ms": 1806197400000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/europe-berlin-2026-09-23-00-30-p1m2dt3h-is-the-later-02-30-of-2026-10-25",
+   "op": "add_duration",
+   "description": "Europe/Berlin 2026-09-23 00:30 + P1M2DT3H is the later 02:30 of 2026-10-25, three hours elapsed across the change",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 9,
+     "day": 23,
+     "hour": 0,
+     "minute": 30,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Europe/Berlin",
+     "offset_seconds": 7200,
+     "instant_ms": 1790116200000
+    },
+    "duration": {"months": 1, "days": 2, "millis": 10800000}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 10,
+      "day": 25,
+      "hour": 2,
+      "minute": 30,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1792891800000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/a-floating-2026-10-24-10-00-24-hours-is-10-00-the-next-day",
+   "op": "add_duration",
+   "description": "a floating 2026-10-24 10:00 + 24 hours is 10:00 the next day",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 10,
+     "day": 24,
+     "hour": 10,
+     "minute": 0,
+     "second": 0,
+     "millisecond": 0,
+     "zone": null,
+     "offset_seconds": null,
+     "instant_ms": null
+    },
+    "duration": {"months": 0, "days": 0, "millis": 86400000}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 10,
+      "day": 25,
+      "hour": 10,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": null,
+      "offset_seconds": null,
+      "instant_ms": null
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/a-floating-2026-11-16-00-05-pt15m-is-23-50-the-day-before",
+   "op": "add_duration",
+   "description": "a floating 2026-11-16 00:05, -PT15M, is 23:50 the day before",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 11,
+     "day": 16,
+     "hour": 0,
+     "minute": 5,
+     "second": 0,
+     "millisecond": 0,
+     "zone": null,
+     "offset_seconds": null,
+     "instant_ms": null
+    },
+    "duration": {"months": 0, "days": 0, "millis": -900000}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 11,
+      "day": 15,
+      "hour": 23,
+      "minute": 50,
+      "second": 0,
+      "millisecond": 0,
+      "zone": null,
+      "offset_seconds": null,
+      "instant_ms": null
+     }
+    }
+   }
+  }
+ ]
+}

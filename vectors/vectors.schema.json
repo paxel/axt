@@ -18,6 +18,7 @@
    "enum": [
     "encoding",
     "types",
+    "time",
     "records",
     "manifest",
     "keys",
@@ -85,6 +86,20 @@
     "expected": {"$ref": "#/$defs/result"}
    },
    "allOf": [
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "add_duration"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["date_time", "duration"]
+       }
+      }
+     }
+    },
     {
      "if": {
       "properties": {
@@ -438,6 +453,20 @@
     {
      "if": {
       "properties": {
+       "op": {"const": "resolve_date_time"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["date_time", "anchor"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
        "op": {"const": "seal"}
       }
      },
@@ -598,6 +627,26 @@
        "properties": {
         "op": {
          "enum": ["decode_record", "fingerprint"]
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "if": {
+    "properties": {
+     "category": {"const": "time"}
+    }
+   },
+   "then": {
+    "properties": {
+     "vectors": {
+      "items": {
+       "properties": {
+        "op": {
+         "enum": ["add_duration", "decode_record", "fingerprint", "resolve_date_time"]
         }
        }
       }

@@ -7,15 +7,15 @@ It answers every operation of the suite with the code of the example scripts in
 conformance/tools/, which check the examples of the specification: the Avro
 encoding and the schema checks of example_types.py and manifest_examples.py,
 the Ed25519, X25519 and HPKE of keys_examples.py, the model of an app of
-protocol_examples.py, and the QR code, frames and relay of
-transports_examples.py. Where those scripts have no model, for a receiver's
+protocol_examples.py, the QR code, frames and relay of
+transports_examples.py, and the time types of time_examples.py. Where those scripts have no model, for a receiver's
 own changes to records (spec/records.md, section 6) and for reading a file
 (spec/transports.md, section 2.2), it has its own code below. That it passes
 every vector shows that the vectors agree with the scripts' checks; it is a
 test of the vectors, not a library.
 
-It needs what the example scripts need: fastavro, avro (1.12), pynacl and
-cryptography. Every key it uses comes from the request; it holds none itself.
+It needs what the example scripts need: fastavro, avro (1.12), pynacl,
+cryptography, and a time zone database where Python's zoneinfo finds it. Every key it uses comes from the request; it holds none itself.
 """
 
 import contextlib
@@ -42,11 +42,12 @@ def load(name):
 
 tx = load("transports_examples")
 pe, me, keys, rules = tx.pe, tx.me, tx.keys, tx.rules
+tm = load("time_examples")
 
 import fastavro  # noqa: E402
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305  # noqa: E402
 
-CATEGORIES = ["encoding", "types", "records", "manifest", "keys", "protocol", "file", "qr", "local", "relay", "relay-server"]
+CATEGORIES = ["encoding", "types", "time", "records", "manifest", "keys", "protocol", "file", "qr", "local", "relay", "relay-server"]
 OUT_INLINE = 1 << 20  # bytes above which an answer carries raw DEFLATE rather than hex
 
 
@@ -169,7 +170,13 @@ def read(t, r, names, namespace="", depth=0):
     if kind == "record":
         if depth + 1 > MAX_DATA_DEPTH:
             raise Undecodable("a data depth above 32")
-        return {f["name"]: read(f["type"], r, names, namespace, depth + 1) for f in t["fields"]}
+        value = {f["name"]: read(f["type"], r, names, namespace, depth + 1) for f in t["fields"]}
+        full = t["name"] if "." in t["name"] else ".".join(x for x in (namespace, t["name"]) if x)
+        if full in tm.FULL:
+            broken = tm.problems(tm.FULL[full], value)
+            if broken:
+                raise Undecodable(f"{full}: {broken[0]} (spec/time.md, section 8)")
+        return value
     if kind == "enum":
         i = r.long()
         if not 0 <= i < len(t["symbols"]):
@@ -895,6 +902,8 @@ OPS = {
     "decode_record": op_decode_record,
     "check_manifest": op_check_manifest,
     "fit": op_fit,
+    "resolve_date_time": lambda i: ok({"date_time": tm.resolve(i["date_time"], i["anchor"])}),
+    "add_duration": lambda i: ok({"date_time": tm.add(i["date_time"], i["duration"])}),
     "public_key": lambda i: ok({"public_key": keys.public_key(b_in(i["seed"])).hex()}),
     "sign": lambda i: ok({"signature": keys.sign(b_in(i["seed"]), b_in(i["data"])).hex()}),
     "verify": op_verify,

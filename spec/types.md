@@ -19,12 +19,12 @@ Avro terms such as "Parsing Canonical Form", "CRC-64-AVRO", "schema resolution" 
 
 The namespace `axt` and every namespace that begins with `axt.` are reserved for the AXT repository:
 
-| Namespace        | Content                                                              | Defined in                 |
-| ---------------- | -------------------------------------------------------------------- | -------------------------- |
-| `axt`            | The schemas of the specification, such as `axt.Envelope`             | [envelope.md](envelope.md) |
-| `axt.example.vN` | The example types in their major version N, such as `axt.example.v1` | this document              |
+| Namespace        | Content                                                                                              | Defined in                                     |
+| ---------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `axt`            | The schemas of the specification, such as `axt.Envelope`, and the time types, such as `axt.DateTime` | [envelope.md](envelope.md), [time.md](time.md) |
+| `axt.example.vN` | The example types in their major version N, such as `axt.example.v1`                                 | this document                                  |
 
-An app MUST NOT define a type, or any named type inside one, in a reserved namespace. An app type SHOULD use a namespace in reverse domain name order of a domain the app's maker controls, such as `org.example.catalog`, so that two apps do not pick the same full name by accident.
+An app MUST NOT define a type, or any named type inside one, in a reserved namespace, except a time type that it defines in place as [time.md](time.md), section 3.1, requires. An app type SHOULD use a namespace in reverse domain name order of a domain the app's maker controls, such as `org.example.catalog`, so that two apps do not pick the same full name by accident.
 
 The schema files mirror the namespace in their path, and their file name is the type's name and its `axt.version`: version 1 of `axt.example.v1.Note` is [types/axt/example/v1/Note.1.avsc](../types/axt/example/v1/Note.1.avsc).
 
@@ -57,7 +57,7 @@ A new version within the same major version MUST make only these changes against
 3. add a symbol to an enum, which has a default symbol (section 5.4);
 4. change `doc` texts, or add, change or remove `axt.title` (section 6), without changing the meaning of any value.
 
-Each of these changes keeps schema resolution working in both directions: a receiver with the new version reads records of the old one, filling added fields with their defaults, and a receiver with the old version reads records of the new one, ignoring added fields, filling removed ones with its defaults, and reading unknown symbols as the enum's default. A removed field's name is not used again because a receiver with a version that still has the field would read the new field under the old field's type and meaning. Every other change, such as changing a field's type, logical type, default or `axt.unit`, renaming a field, adding a branch to a union or removing an enum symbol, MUST be published under the next major version. A change that keeps the Avro encoding but changes what a value means is incompatible as well.
+Each of these changes keeps schema resolution working in both directions: a receiver with the new version reads records of the old one, filling added fields with their defaults, and a receiver with the old version reads records of the new one, ignoring added fields, filling removed ones with its defaults, and reading unknown symbols as the enum's default. A removed field's name is not used again because a receiver with a version that still has the field would read the new field under the old field's type and meaning. Every other change, such as changing a field's type, logical type, default, `axt.unit` or `axt.anchor`, renaming a field, adding a branch to a union or removing an enum symbol, MUST be published under the next major version. A change that keeps the Avro encoding but changes what a value means is incompatible as well.
 
 ### 3.4 Fingerprints and the Parsing Canonical Form
 
@@ -100,6 +100,8 @@ A field name consists of lower-case ASCII letters, digits and single underscores
 
 An example type MUST define each of its nested named types in place, where it is used, and MUST NOT refer to a named type by its name. The name of a nested type MUST begin with the name of the type it belongs to, such as `PersonPhone` in `Person`, and it has the namespace of that type. Every schema file can then be parsed on its own, and an app that parses all example types into one set of names finds each name defined once.
 
+The time types are the exception: a type holds them under their own full names, such as `axt.DateTime`, defined in place at their first occurrence and referred to by full name after it, as [time.md](time.md), section 3.1, requires. An app that parses all example types into one set of names finds each time type defined in several of them, each time with the same canonical form, and handles that as [time.md](time.md), section 3.1, says.
+
 ### 5.3 Optional values
 
 A field whose value may be absent MUST have the type `["null", T]`, with `null` first, and the default `null`. An example type MUST NOT use any other union. A text that may be empty is a `string` with the default `""`; a list is an `array` with the default `[]`.
@@ -110,24 +112,21 @@ A field whose value may be absent MUST have the type `["null", T]`, with `null` 
 - A field may be removed within a major version only if it had a default in every earlier version (section 3.3). Example types therefore give every field a default, except the few without which a record of the type has no meaning: `start` of Appointment, and `value` and `measured_at` of Measurement. These cannot be removed within the major version.
 - Every enum MUST have a default symbol, the Avro `default` attribute of the enum, so that a symbol added in a later version resolves for a receiver that does not know it. Where reading an unknown symbol as one of the known ones would change a value, as with a unit, the enum has the symbol `UNKNOWN` and that is its default. A receiver reads an unknown symbol as the enum's default, as schema resolution requires ([envelope.md](envelope.md), section 6); not every Avro library does so (section 7.3).
 
-### 5.5 Logical types
+### 5.5 Times and logical types
 
-Times and ids follow [envelope.md](envelope.md), section 7. An example type MUST use only these logical types:
+Dates, times of day, dates and times, and lengths of time are the time types `axt.Date`, `axt.Time`, `axt.DateTime` and `axt.Duration` ([time.md](time.md)). A field of an `axt.DateTime` carries the attribute `axt.anchor` (section 6) where the anchor `local` does not apply to it ([time.md](time.md), section 6.4). Ids follow [envelope.md](envelope.md), section 7. An example type MUST use only this logical type:
 
-| Value                             | Avro type and logical type                   |
-| --------------------------------- | -------------------------------------------- |
-| A point in time                   | `long` with `timestamp-millis`               |
-| A calendar day                    | `int` with `date`                            |
-| A date and time on the wall clock | `long` with `local-timestamp-millis`         |
-| A UUID                            | `string` with `uuid`, lower-case hexadecimal |
+| Value  | Avro type and logical type                   |
+| ------ | -------------------------------------------- |
+| A UUID | `string` with `uuid`, lower-case hexadecimal |
 
-A reader that does not know a logical type uses the underlying type ([envelope.md](envelope.md), section 7); the Python `avro` package 1.12.2, for example, reads `local-timestamp-millis` as a `long`.
+A reader that does not know a logical type uses the underlying type ([envelope.md](envelope.md), section 7).
 
 ### 5.6 Times, time zones and text
 
 These rules hold for every example type that has the fields named:
 
-- **Time zone.** A record that has `local-timestamp-millis` fields MAY have a field `time_zone` of type `["null", "string"]`. Its value is a time zone name of the [IANA time zone database](https://www.iana.org/time-zones), such as `Europe/Berlin`, and it applies to every `local-timestamp-millis` field of the record. `null` means that the times are meant on the wall clock of whatever time zone the user is in at that moment. A receiver that does not know the zone name MAY show the times as written, together with the name.
+- **Time zone.** The zone of a date and time is part of its `axt.DateTime` ([time.md](time.md), section 6); a type has no field of its own for it.
 - **All day.** A boolean field `all_day`, or `<name>_all_day` for the single field `<name>`, set to `true` means that only the day of the times counts; their time of day is then 00:00 and has no meaning.
 - **End.** A field `end` is the first moment after the event, as the `DTEND` property of [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545) is. For an all-day event it is 00:00 of the day after the last day.
 - **Repetition.** A repetition rule is a `string` with the value of an RFC 5545 `RRULE` property without the `RRULE:` prefix, such as `FREQ=WEEKLY;BYDAY=TU`.
@@ -157,10 +156,11 @@ Avro permits attributes that its specification does not define, as long as they 
 | `axt.version` | The type's record      | The version within the major version, an integer from 1 (section 3.2)                                                                                                                                                     |
 | `axt.title`   | The type's record      | The name of a field of type `string` or `["null", "string"]` of that record whose value is the record's title, such as `title` in Note or `display_name` in Person. A receiver MAY show it as the record's name in a list |
 | `axt.unit`    | A field (not its type) | The unit of a number field, or of each item of an array of numbers, as a case-sensitive code of [UCUM](https://ucum.org/), such as `min` for minutes. Used only where the schema fixes the unit                           |
+| `axt.anchor`  | A field (not its type) | For a field of `axt.DateTime` values, what a receiver keeps when its zone rules differ from the writer's: `local`, the wall clock, or `instant`, the instant ([time.md](time.md), section 6.4). Absent means `local`      |
 
 - Attribute names beginning with `axt.` are reserved for this specification. An app MAY add attributes of its own to its types; their names SHOULD begin with its namespace, such as `org.example.catalog.colour`.
-- A receiver MUST ignore attributes it does not know, and MUST NOT reject a schema because of them. A receiver MUST also ignore an `axt.title` that does not name a string field of the record, and an `axt.unit` on a field that is not a number.
-- `axt.unit` sits on the field, not on the field's type, so that it describes that field only. Where the unit differs from record to record, as for an odometer reading or a measurement, it is a field of its own, not an attribute.
+- A receiver MUST ignore attributes it does not know, and MUST NOT reject a schema because of them. A receiver MUST also ignore an `axt.title` that does not name a string field of the record, an `axt.unit` on a field that is not a number, and an `axt.anchor` on a field that holds no `axt.DateTime`.
+- `axt.unit` and `axt.anchor` sit on the field, not on the field's type, so that they describe that field only; `axt.anchor` cannot sit on the type, since the same `axt.DateTime` serves both anchors. Where the unit differs from record to record, as for an odometer reading or a measurement, it is a field of its own, not an attribute.
 - No attribute is part of the fingerprint (section 3.4).
 
 ## 7. The example types
@@ -211,7 +211,7 @@ The fingerprints were computed with [conformance/tools/example_types.py](../conf
 - uses every default once in schema resolution, with both libraries: it writes a datum with the schema without its defaulted fields, and one with the schema whose nested records lack their defaulted fields, and reads both with the full schema;
 - writes, for every enum, a symbol the schema does not have and checks that the full schema reads it as the enum's default symbol. fastavro does so; the `avro` package 1.12.2 raises a schema resolution error instead, against the Avro specification, so a receiver built on it does not get the compatibility of section 3.3 for enum symbols.
 
-Two further differences from the Avro specification showed: `avro` 1.12.2 does not know `local-timestamp-millis` and reads it as a `long` (section 5.5), and fastavro 1.13.1 returns the default of a `bytes` field as the JSON string rather than as bytes.
+Two further differences from the Avro specification showed: `avro` 1.12.2 does not know `local-timestamp-millis` and reads it as a `long` ([envelope.md](envelope.md), section 7), and fastavro 1.13.1 returns the default of a `bytes` field as the JSON string rather than as bytes.
 
 The test vectors of [conformance.md](conformance.md) take precedence over these values.
 

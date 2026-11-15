@@ -6,6 +6,7 @@ The specification of AXT, Avro eXchange Transfer, as separate documents. Each do
 | ----------------------------- | --------------------------------------------------------------------- | -------------- | -------------------------------------------------- |
 | [Envelope](envelope.md)       | How records travel as bytes, in a live connection and in a file       | written, 0.1.0 | [axt-1001](https://github.com/paxel/axt/issues/2)  |
 | [Types](types.md)             | The example types and the rules for evolving or replacing them        | written, 0.1.0 | [axt-1002](https://github.com/paxel/axt/issues/3)  |
+| [Time](time.md)               | Dates, times of day, dates and times with their zone, and durations   | written, 0.1.0 | [axt-1016](https://github.com/paxel/axt/issues/17) |
 | [Records](records.md)         | Record id and version, updates and deletions                          | written, 0.1.0 | [axt-1003](https://github.com/paxel/axt/issues/4)  |
 | [Manifest](manifest.md)       | Which types an app takes and what it does with them                   | written, 0.1.0 | [axt-1004](https://github.com/paxel/axt/issues/5)  |
 | [Protocol](protocol.md)       | The steps of an exchange: offer, accept or decline, data, acknowledge | written, 0.1.0 | [axt-1005](https://github.com/paxel/axt/issues/6)  |

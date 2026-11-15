@@ -29,7 +29,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 FILE_FORMAT = 1
-CATEGORIES = ["encoding", "types", "records", "manifest", "keys", "protocol", "file", "qr", "local", "relay",
+CATEGORIES = ["encoding", "types", "time", "records", "manifest", "keys", "protocol", "file", "qr", "local", "relay",
               "relay-server"]
 HEX = re.compile(r"^(?:[0-9a-f]{2})*$")
 

@@ -10,7 +10,7 @@ table of the specification, where the scripts have no model; the reference
 adapter, conformance/reference/adapter.py, then has to reach it on its own.
 
 Run from anywhere, with fastavro, avro (1.12), pynacl and cryptography
-installed:
+installed, and a time zone database where Python's zoneinfo finds it:
 
     python3 conformance/tools/generate_vectors.py          # write vectors/
     python3 conformance/tools/generate_vectors.py --check  # compare with vectors/
@@ -54,6 +54,7 @@ def load(name):
 tx = load("transports_examples")
 pe, me, keys, rules = tx.pe, tx.me, tx.keys, tx.rules
 env = load("envelope_examples")
+tm = load("time_examples")
 
 import fastavro  # noqa: E402  (after the scripts, which check the library versions they were written with)
 
@@ -645,6 +646,57 @@ def types_category():
         data = single_object(pe.OUTLINE_TEXT, datum)
         record_vector(f"a recursive app type at data depth {depth}", ["types.md 5.7"], pe.OUTLINE_TEXT, None, data,
                       None if ok else reject("UNDECODABLE", f"data depth {depth} above 32"))
+    return c
+
+
+# --- time (spec/time.md) -----------------------------------------------------------------
+
+
+def time_category():
+    c = Category("time", "The time types: fingerprints, the bytes and meaning of their values, the values that are not "
+                         "valid, a type that holds several of them, other zone rules, and the addition of a duration "
+                         "(spec/time.md).")
+    for n in tm.NAMES:
+        text = tm.texts[n]
+        pcf, fp = me.fingerprint(text)
+        assert (pcf, fp) == tm.fingerprints[n], n
+        c.add("fingerprint", f"axt.{n}", ["time.md 2", "time.md 9.1"], {"schema": text},
+              accept({"canonical_form": pcf, "fingerprint": H(pe.fp8(fp))}))
+    # The counts of spec/time.md, section 9.
+    assert (len(tm.EDGES), len(tm.INVALID), len(tm.ADDITIONS)) == (13, 29, 16)
+    refs = {"Date": "time.md 4", "Time": "time.md 5", "DateTime": "time.md 6.2", "Duration": "time.md 7.1"}
+
+    def record_vector(label, refs_, text, data, expected):
+        c.add("decode_record", label, refs_, {"writer_schema": text, "reader_schema": None, "body": B(data)}, expected)
+
+    for label, n, v in tm.EXAMPLES + tm.EDGES:
+        text = tm.compact(n)
+        body = single_object(text, v)
+        value = decode_meaning(text, None, body[10:])
+        assert value == v and not tm.problems(n, value), label
+        record_vector(f"axt.{n}: {label}", [refs[n], "time.md 9.2"], text, body, accept({"value": value}))
+    for label, n, v, rule in tm.INVALID:
+        assert tm.problems(n, v) == [rule], label
+        text = tm.compact(n)
+        record_vector(f"reject {label}", [refs[n], "time.md 8"], text, single_object(text, v), reject("UNDECODABLE", rule))
+    host = json.loads(tm.HOST_TEXT)
+    body = single_object(tm.HOST_TEXT, tm.HOST_VALUE)
+    assert body[10:] == tm.HOST_DATA and pe.canonical_fp(tm.HOST_TEXT) == tm.HOST_FP
+    record_vector("a type that defines axt.DateTime in place and refers to it by its full name", ["time.md 3.1", "time.md 9.3"],
+                  tm.HOST_TEXT, body, accept({"value": decode_meaning(tm.HOST_TEXT, None, body[10:])}))
+    broken = dict(tm.HOST_VALUE, end=dict(tm.HOST_VALUE["end"], instant_ms=tm.HOST_VALUE["end"]["instant_ms"] + 1))
+    problems = tm.time_problems(host, broken)
+    assert problems == ["axt.DateTime: instant_ms is not the wall clock minus offset_seconds"]
+    record_vector("reject that type when its second DateTime has an instant a millisecond off", ["time.md 3.1", "time.md 8"],
+                  tm.HOST_TEXT, single_object(tm.HOST_TEXT, broken), reject("UNDECODABLE", problems[0]))
+
+    for label, v, anchor, want in tm.RESOLUTIONS:
+        assert tm.resolve(v, anchor) == want, label
+        c.add("resolve_date_time", f"{anchor}: {label}", ["time.md 6.4"], {"date_time": v, "anchor": anchor},
+              accept({"date_time": want}))
+    for label, v, d, want in tm.ADDITIONS:
+        assert tm.add(v, d) == want, label
+        c.add("add_duration", label, ["time.md 7.2"], {"date_time": v, "duration": d}, accept({"date_time": want}))
     return c
 
 
@@ -1525,7 +1577,7 @@ def file_category():
 
 # --- output ---------------------------------------------------------------------
 
-CATEGORIES = [encoding_category, types_category, records_category, manifest_category, keys_category, protocol_category,
+CATEGORIES = [encoding_category, types_category, time_category, records_category, manifest_category, keys_category, protocol_category,
               file_category, qr_category, local_category, relay_category, relay_server_category]
 
 
