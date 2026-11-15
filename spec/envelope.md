@@ -75,11 +75,11 @@ In a live connection, the schema of each record type is sent in the offer that s
 2. the 8-byte little-endian CRC-64-AVRO fingerprint of the envelope schema, which for format 1 is `7d 0c e4 e5 4f e8 e1 a2` (section 10.1);
 3. the envelope in binary encoding.
 
-The envelope carries no length and no terminator; the transport supplies the boundaries of each message ([transports.md](transports.md)). A receiver MUST reject a message with bytes left over after the envelope.
+The envelope carries no length and no terminator; the transport supplies the boundaries of each message, on the local network a frame ([transports.md](transports.md), section 4.4). A receiver MUST reject a message with bytes left over after the envelope.
 
 An offer carries each writer schema as its full JSON text, including `doc` attributes, so that a receiver can show fields it does not know by name and description ([types.md](types.md)). The Parsing Canonical Form is used only to compute the fingerprint. The receiver keeps the offered schemas by fingerprint for as long as the offer stays open ([protocol.md](protocol.md), section 4.3).
 
-Through a relay, the end-to-end encryption defined in [keys.md](keys.md), section 4, wraps the complete encoded message. No envelope field, not even `kind`, is visible to the relay ([relay.md](relay.md)).
+Through a relay, the end-to-end encryption defined in [keys.md](keys.md), section 4, wraps the complete encoded message. No envelope field, not even `kind`, is visible to the relay ([transports.md](transports.md), section 5).
 
 ### 3.1 Unknown fingerprints
 
@@ -107,7 +107,7 @@ A reader identifies the envelope format by the fingerprint of `avro.schema` and 
 
 The metadata is not part of any message, so no message signature covers it. `axt.signature` signs the value of `axt.schemas` with the key in `axt.sender`, and every message of a file has that sender, apart from key moves at its start ([keys.md](keys.md), sections 2.5 and 5.2). The fingerprint alone would not protect the schemas (section 5).
 
-Which kinds a file may hold is defined in [transports.md](transports.md).
+A file holds `KEY_MOVE` messages at its start, at most one `MANIFEST` and record messages, and no other kind; [transports.md](transports.md), section 2, defines their order and what a reader rejects.
 
 ### 4.2 Codecs
 

@@ -73,6 +73,7 @@ MAX_TYPES = 256  # entries of takes; entries of sends
 MAX_FULL_NAME = 512  # bytes
 MAX_APP_NAME = 256  # bytes
 MAX_URL = 2048  # bytes
+MAX_RELAY_URL = 256  # bytes
 MAX_SENTENCE = 512  # bytes
 MAX_TRANSLATIONS = 64  # per sentence
 MAX_TAG = 35  # characters
@@ -114,6 +115,7 @@ CAT_A_LOG = {
         {"type": "axt.example.v1.Document", "min_version": 1, "max_version": 1},
     ],
     "encryption_key": None,
+    "relay": None,
 }
 
 OLD_BRAIN_FIX = {
@@ -150,6 +152,7 @@ OLD_BRAIN_FIX = {
     },
     "sends": None,
     "encryption_key": None,
+    "relay": None,
 }
 
 SENDERS = {
@@ -326,6 +329,16 @@ def manifest_problems(datum, body_length, envelope_format=1):
     key = datum["encryption_key"]
     if key is not None and keys.encryption_key_problem(key):
         problems.append("encryption_key is an X25519 key of small order")
+    relay = datum["relay"]
+    if (key is None) != (relay is None):
+        problems.append("relay and encryption_key are not both present or both null")
+    if relay is not None:
+        url = relay["url"]
+        parts = urlsplit(url)
+        if (len(url.encode("utf-8")) > MAX_RELAY_URL or parts.scheme != "https" or not parts.hostname
+                or "@" in parts.netloc or parts.query or parts.fragment or "?" in url or "#" in url
+                or not url.endswith("/") or not one_line(url) or " " in url):
+            problems.append(f"relay.url is not an absolute https base URL of up to {MAX_RELAY_URL} bytes")
     return problems
 
 
@@ -361,6 +374,15 @@ def big(datum):
 def note_sends(**change):
     return [dict({"type": "axt.example.v1.Note", "min_version": 1, "max_version": None}, **change)]
 
+
+# A valid encryption key and relay, for the cases that need one (spec/keys.md, section 7.1;
+# spec/transports.md, section 5.1): Old Brain Fix's X25519 test key and its test mailbox.
+X25519_KEY = bytes.fromhex("34fa7e71770d8d94c76001ac8d575609f005981f80c115bb7a8fe312687ea40b")
+RELAY = {"url": "https://relay.example.org/axt/", "mailbox": bytes(range(32))}
+assert not manifest_problems(dict(OLD_BRAIN_FIX, encryption_key=X25519_KEY, relay=RELAY), 0)
+assert len(("https://relay.example.org/" + "a" * 229 + "/").encode()) == MAX_RELAY_URL
+assert not manifest_problems(dict(OLD_BRAIN_FIX, encryption_key=X25519_KEY,
+                                  relay=dict(RELAY, url="https://relay.example.org/" + "a" * 229 + "/")), 0)
 
 # Each broken manifest breaks one rule; every problem reported must name it.
 NEGATIVE = [
@@ -398,7 +420,14 @@ NEGATIVE = [
     ("sends min_version 0", lambda d: d.update(sends=note_sends(min_version=0)), "min_version"),
     ("sends max below min", lambda d: d.update(sends=note_sends(min_version=2, max_version=1)), "max_version"),
     ("257 types sent", lambda d: d.update(sends=[dict(note_sends()[0], type=f"org.example.T{i}") for i in range(257)]), "more than 256"),
-    ("encryption key of small order", lambda d: d.update(encryption_key=bytes(32)), "encryption_key"),
+    ("encryption key of small order", lambda d: d.update(encryption_key=bytes(32), relay=RELAY), "encryption_key"),
+    ("encryption key without relay", lambda d: d.update(encryption_key=X25519_KEY), "relay and encryption_key"),
+    ("relay without encryption key", lambda d: d.update(relay=RELAY), "relay and encryption_key"),
+    ("relay URL http", lambda d: d.update(encryption_key=X25519_KEY, relay=dict(RELAY, url="http://relay.example.org/axt/")), "relay.url"),
+    ("relay URL without a slash at the end", lambda d: d.update(encryption_key=X25519_KEY, relay=dict(RELAY, url="https://relay.example.org/axt")), "relay.url"),
+    ("relay URL with a query", lambda d: d.update(encryption_key=X25519_KEY, relay=dict(RELAY, url="https://relay.example.org/?a=1/")), "relay.url"),
+    ("relay URL with user information", lambda d: d.update(encryption_key=X25519_KEY, relay=dict(RELAY, url="https://me@relay.example.org/")), "relay.url"),
+    ("relay URL above the limit", lambda d: d.update(encryption_key=X25519_KEY, relay=dict(RELAY, url="https://relay.example.org/" + "a" * 230 + "/")), "relay.url"),
     ("body above the limit", big, "body of"),
 ]
 for label, change, expected in NEGATIVE:
@@ -546,6 +575,8 @@ def body_parts(m):
     parts += null_or("sends", m["sends"], "array", sends_parts)
     parts += null_or("encryption_key", m["encryption_key"], "ManifestEncryptionKey",
                      lambda k: [(k, "encryption_key: fixed(32)")])
+    parts += null_or("relay", m["relay"], "ManifestRelay",
+                     lambda r: string_parts("relay.url", r["url"]) + [(r["mailbox"], "relay.mailbox: fixed(32)")])
     return parts
 
 

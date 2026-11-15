@@ -1,6 +1,6 @@
 # Keys, signatures and encryption
 
-Status: written, 0.1.0. Until 0.1.0 is released, [protocol.md](protocol.md), [transports.md](transports.md) and [relay.md](relay.md) may still change the details this document leaves to them, and the schema of `axt.KeyMove` may still change in place; its fingerprint (section 6) and the examples (section 7) are then produced again.
+Status: written, 0.1.0. Until 0.1.0 is released, [protocol.md](protocol.md) and [transports.md](transports.md) may still change the details this document leaves to them, and the schema of `axt.KeyMove` may still change in place; its fingerprint (section 6) and the examples (section 7) are then produced again.
 
 This document defines the keys of an installation, how every message is signed and verified, how the schemas a message uses are bound to its sender, how an app meets and remembers another app's key, how messages through a relay are encrypted, and how a key moves to a new installation.
 
@@ -39,7 +39,7 @@ In a live message, the second part is the bytes from offset 10, after the single
 - A receiver MUST verify a signature over the bytes as it received them. It MUST NOT encode decoded values again to verify them: a decoded value can encode differently, as a UUID received with upper-case digits does ([envelope.md](envelope.md), section 7). An Avro library's file reader returns decoded values; a reader of a file therefore takes the datum's bytes from the block itself. Every field of the envelope is either of fixed length or carries its length in front, so the end of each datum follows from its bytes (section 7.3).
 - The single-object marker and the envelope fingerprint of a live message, and the `avro.schema` of a file, are not signed. The `format` field is. A receiver MUST reject a message whose `format` is not the format named by its envelope fingerprint, or in a file by the file's `avro.schema` ([envelope.md](envelope.md), section 2.1).
 
-The prefix separates signatures over AXT messages from every other signature the same key makes: over a file header (section 2.5), in a key move (section 5.1), or in another protocol, such as a TLS handshake if [transports.md](transports.md) uses the key there. Every prefix of this document ends with the only zero byte in it, so none is the beginning of another. Ed25519ctx would do the same with a context string, but not every library implements it; Apple CryptoKit, for example, offers pure Ed25519 only.
+The prefix separates signatures over AXT messages from every other signature the same key makes: over a file header (section 2.5), in a key move (section 5.1), in the `HELLO` of a live connection ([transports.md](transports.md), section 4.5), or in another protocol. The TLS connection on the local network uses a key of its own, not the signing key ([transports.md](transports.md), section 4.3). Every prefix of this document ends with the only zero byte in it, so none is the beginning of another. Ed25519ctx would do the same with a context string, but not every library implements it; Apple CryptoKit, for example, offers pure Ed25519 only.
 
 ### 2.3 Verification
 
@@ -107,7 +107,7 @@ A writer MUST write both entries in every file. A reader:
 
 The values are hexadecimal text because Avro libraries handle metadata values differently: the Python library fastavro 1.13.1, for example, writes only metadata given as text. A text of 64 or 128 ASCII digits passes through every library unchanged.
 
-**One sender per file.** Every message of a file is from the file's sender, the key in `axt.sender`, apart from the `KEY_MOVE` messages of section 5.2. A file is written by one installation, as an export or for one receiver; a relay and a connection carry the messages of one sender each as well, so the rule constrains no transport ([transports.md](transports.md)). It lets a reader confirm one key for the whole file (section 3.2).
+**One sender per file.** Every message of a file is from the file's sender, the key in `axt.sender`, apart from the `KEY_MOVE` messages of section 5.2. A file is written by one installation, as an export or for one receiver; a relay and a connection carry the messages of one sender each as well, so the rule constrains no transport ([transports.md](transports.md), section 2.1). It lets a reader confirm one key for the whole file (section 3.2).
 
 **The envelope schema.** `avro.schema` is not signed. A reader MUST compare the Parsing Canonical Form of `avro.schema` byte for byte with the Parsing Canonical Form of a published envelope format, not only its fingerprint, and MUST decode the file's messages with its own copy of that format's schema, never with the schema from the file ([envelope.md](envelope.md), section 4.1). Together with the signed `format` field (section 2.2), the envelope schema is then fixed by this specification, and a forged `avro.schema` with a matching CRC-64-AVRO cannot change how a message is read. `avro.codec` is not signed either; it selects only how blocks are decompressed, and a wrong codec yields bytes whose signatures fail.
 
@@ -117,7 +117,7 @@ The values are hexadecimal text because Avro libraries handle metadata values di
 
 - **Whom a message is for.** A signature names the sender, not the receiver. A receiver can pass a signed message on, and the third app then holds a genuine message of the sender. For records this is intended: a sender sends a record under the same id to every receiver, and a file can be forwarded. [protocol.md](protocol.md) MUST bind to their receiver or their connection, in their body, the messages whose replay to another app would matter, such as `ACCEPT`, `DECLINE`, `ACK` and `ERROR`. It does so with the field `to` in their bodies ([protocol.md](protocol.md), section 9.1).
 - **When it was sent.** A message carries no time. A relay or a user can deliver a message again. Record messages and manifests are safe to repeat by their versions and revisions ([records.md](records.md), section 5.2; [manifest.md](manifest.md), section 6); [protocol.md](protocol.md) MUST make every other kind safe to repeat, and does so in its section 9.2.
-- **Secrecy.** A signature hides nothing. A live connection is encrypted by its transport ([transports.md](transports.md)), a message through a relay as section 4 says, and a file is readable by whoever holds it.
+- **Secrecy.** A signature hides nothing. A live connection is encrypted by TLS ([transports.md](transports.md), section 4.3), a message through a relay as section 4 says, and a file is readable by whoever holds it.
 
 ## 3. Trust
 
@@ -137,7 +137,7 @@ An app MUST show the short fingerprint of its own signing key where its user can
 
 An app meets another app's key in one of these ways:
 
-- **QR code.** A QR code that the other app shows carries its signing key and, for the relay, its encryption key; [transports.md](transports.md) defines the payload. Scanning it in person is the user's confirmation of the key: the app MAY remember the key without asking again. It MUST check that the messages it then gets from that app are signed with the scanned key; on the local network the pinned TLS key of [transports.md](transports.md) does the same for the connection. The app that showed the code learns the scanner's key from the connection and meets it as a first contact by the next rule.
+- **QR code.** A QR code that the other app shows carries its signing key and, for the relay, its encryption key and its mailbox; [transports.md](transports.md), section 3, defines the payload. Scanning it in person is the user's confirmation of the key: the app MAY remember the key without asking again. It MUST check that the messages it then gets from that app are signed with the scanned key; on the local network the `HELLO` of [transports.md](transports.md), section 4.5, binds the connection to the scanned key. The app that showed the code learns the scanner's key from the connection and meets it as a first contact by the next rule.
 - **Any other way**: the first message of a file, a connection without a QR code, or a relay message from an unknown key. This is trust on first use. The app MUST verify the message's signature first (section 2.3), and then MUST ask its user before it remembers the key. It shows the app name from a valid `MANIFEST` signed with that key if it has one ([manifest.md](manifest.md), section 3.1), or says that the app has not named itself, and the short fingerprint of the key. The user SHOULD compare the short fingerprint with the one the other app shows.
 
 Until its user accepts the key, the app MUST NOT apply any record signed with it and MUST NOT use a manifest signed with it, except to show the app name. It MAY keep the messages until the user decides, and processes them once the user accepts. If the user declines, it discards them; it MAY remember the key as declined, so that it does not ask again.
@@ -149,7 +149,7 @@ A file is confirmed once, for its sender in `axt.sender` (section 2.5). An app M
 To remember a key, an app keeps for each known sender:
 
 - its current key, and its moved-from keys, each with the key it moved to (section 5);
-- its encryption key, if it has one, and where it came from: a QR code, a manifest of a given revision, or a key move (section 4.2);
+- its encryption key and its relay and mailbox ([manifest.md](manifest.md), section 3.10), if it has them, and where they came from: a QR code, a manifest of a given revision, or a key move (section 4.2);
 - the kept manifest ([manifest.md](manifest.md), section 6);
 - its records and tombstones ([records.md](records.md), section 5.1).
 
@@ -199,7 +199,7 @@ It MUST NOT use an encryption key from any other source. Of these, the latest wi
 
 An app MUST reject an encryption key of small order: one for which X25519 gives the all-zero value with every private key. Computing X25519 with any one private key, such as the app's own, and comparing the result with 32 zero bytes detects it. A manifest with such a key is invalid ([manifest.md](manifest.md), section 4), and a key move with one is rejected (section 5.3).
 
-An installation MAY replace its encryption key, by a manifest with a higher revision. It SHOULD keep the old private key for as long as the relay may hold messages sealed to it ([relay.md](relay.md)).
+An installation MAY replace its encryption key, by a manifest with a higher revision. It SHOULD keep the old private key for as long as a relay may hold messages sealed to it: 15 days after it has sent the manifest with the new key ([transports.md](transports.md), section 5.5).
 
 ### 4.3 Sealing
 
@@ -238,7 +238,7 @@ A sender MUST pad to exactly P(n). Some lengths:
 | 100,000               | 100,352       |
 | 16,777,216, the limit | 17,301,504    |
 
-The sealed message is 49 bytes longer than the padded message, so the largest is 17,301,553 bytes; [relay.md](relay.md) MUST accept sealed messages up to that size.
+The sealed message is 49 bytes longer than the padded message, so the largest is 17,301,553 bytes; a relay MUST accept sealed messages up to that size ([transports.md](transports.md), section 5.6).
 
 The length is what the relay sees of a message besides its mailbox and its time (section 4.6). The minimum of 1,024 bytes gives the small messages, such as an `ACK`, a `DELETE`, a short `DATA` and most manifests, one length; above it, Padmé leaves only the top bits of the length visible and adds less than a sixteenth of the length, 6.25 %.
 
@@ -255,9 +255,9 @@ A message that cannot be opened has no sender a receiver could report to; a mess
 
 ### 4.6 What the relay sees
 
-The relay sees, of each sealed message, the mailbox it is put into ([relay.md](relay.md)), its length, when it is put and fetched, and the network addresses of the apps that put and fetch it, unless they hide them. It does not see the kind, the sender's key, the record, the type, the schema or the content.
+The relay sees, of each sealed message, the mailbox it is put into ([transports.md](transports.md), section 5.1), its length, when it is put and fetched, and the network addresses of the apps that put and fetch it, unless they hide them. It does not see the kind, the sender's key, the record, the type, the schema or the content.
 
-The relay can drop, delay, reorder and repeat messages. It cannot read or change one, or make a new one in a sender's name: the AEAD tag fails for a changed message, and the signature for a message made by anyone else. Section 2.6 says how repeats are handled. Whether the relay learns which encryption key a mailbox belongs to is for [relay.md](relay.md) to decide.
+The relay can drop, delay, reorder and repeat messages. It cannot read or change one, or make a new one in a sender's name: the AEAD tag fails for a changed message, and the signature for a message made by anyone else. Section 2.6 says how repeats are handled. The relay does not learn which encryption key a mailbox belongs to: a mailbox is not bound to a key ([transports.md](transports.md), section 5.1).
 
 ## 5. Moving a key
 
@@ -288,12 +288,12 @@ The proof shows that the new installation holds the new key, so that a key move 
 When its user moves the app to a new installation, such as a new phone:
 
 1. The new installation generates its own signing key and encryption key, and makes the proof.
-2. The old installation signs the `KEY_MOVE` with its key and hands it to the new installation together with the app's data. How the data moves, such as through a backup or a transfer between the devices, is up to the app. The data includes the highest version of every record and the highest manifest revision ([records.md](records.md), section 3; [manifest.md](manifest.md), section 3.8), and the known senders with their keys.
+2. The old installation signs the `KEY_MOVE` with its key and hands it to the new installation together with the app's data. How the data moves, such as through a backup or a transfer between the devices, is up to the app. The data includes the highest version of every record and the highest manifest revision ([records.md](records.md), section 3; [manifest.md](manifest.md), section 3.8), the known senders with their keys, and the mailbox secret ([transports.md](transports.md), section 5.8).
 3. After it has signed the `KEY_MOVE`, the old installation MUST NOT sign any further message with the old key, MUST NOT sign a second `KEY_MOVE`, and MUST delete its private keys.
 
 The new installation sends the `KEY_MOVE` to every app it exchanges with, before any other message signed with the new key: in a live connection as its first messages, before its `MANIFEST`, and through a relay as the first message. It SHOULD send the `KEY_MOVE` again until the receiver has acknowledged or rejected it, within the bounds of [protocol.md](protocol.md), section 3.3.
 
-A key that has moved more than once has a chain of `KEY_MOVE` messages, each signed with the key before. A file signed with the new key SHOULD begin with the chain, oldest first, so that a reader that knows any earlier key can follow it. These `KEY_MOVE` messages are the exception to one sender per file (section 2.5): each is signed with a key of the chain, and the last moves to the key in `axt.sender`. A file MUST NOT hold a `KEY_MOVE` anywhere but at its start, and its chain MUST end at `axt.sender`. Whether a file may hold `KEY_MOVE` messages at all is for [transports.md](transports.md) to decide.
+A key that has moved more than once has a chain of `KEY_MOVE` messages, each signed with the key before. A file signed with the new key SHOULD begin with the chain, oldest first, so that a reader that knows any earlier key can follow it. These `KEY_MOVE` messages are the exception to one sender per file (section 2.5): each is signed with a key of the chain, and the last moves to the key in `axt.sender`. A file MUST NOT hold a `KEY_MOVE` anywhere but at its start, and its chain MUST end at `axt.sender` ([transports.md](transports.md), section 2.1).
 
 ### 5.3 Receiving a key move
 
@@ -568,8 +568,7 @@ The two signatures with the neutral element as key verify for every message unde
 ## 8. What other documents define
 
 - [protocol.md](protocol.md): the `OFFER` as section 2.4 requires it (section 4 there); the binding of `ACCEPT`, `DECLINE`, `ACK` and `ERROR` to their receiver, and how every kind is made safe to repeat (section 2.6; section 9 there); how a message whose signature does not verify is reported (section 8.3 there); where a `KEY_MOVE` stands in a connection, and its acknowledgement (section 5.2; section 3.3 there).
-- [transports.md](transports.md): the QR payload with the signing key and the encryption key (section 3.2); the TLS connection on the local network with the pinned key, and whether its certificate uses the signing key (section 2.2); whether a file may hold `KEY_MOVE` messages (section 5.2).
-- [relay.md](relay.md): the mailbox, and whether it is bound to an encryption key (section 4.6); the size limit, which accepts sealed messages up to 17,301,553 bytes (section 4.4); how long the relay holds messages (section 4.2).
+- [transports.md](transports.md): the QR payload with the signing key, the encryption key and the mailbox (section 3.2; section 3 there); the TLS connection on the local network, whose certificate has a key of its own, and the `HELLO` that binds it to the signing key (section 2.2; sections 4.3 and 4.5 there); the `KEY_MOVE` messages at the start of a file (section 5.2; section 2.1 there); the mailbox, which is bound to no key (section 4.6; section 5.1 there); the size limit of the relay, which accepts sealed messages up to 17,301,553 bytes (section 4.4; section 5.6 there); the holding time of 14 days (section 4.2; section 5.5 there); and the mailbox secret, which moves with a key move (section 5.2; section 5.8 there).
 
 ## References
 

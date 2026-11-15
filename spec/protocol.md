@@ -1,6 +1,6 @@
 # Protocol
 
-Status: written, 0.1.0. Until 0.1.0 is released, [transports.md](transports.md) and [relay.md](relay.md) may still change the details this document leaves to them, and the schemas of the protocol messages may still change in place; their fingerprints (section 16) and the example (section 17) are then produced again.
+Status: written, 0.1.0. Until 0.1.0 is released, [transports.md](transports.md) may still change the details this document leaves to it, and the schemas of the protocol messages may still change in place; their fingerprints (section 16) and the example (section 17) are then produced again.
 
 This document defines the steps of an exchange between two apps: the first messages of a live connection and the choice of the envelope format, the offer of types with their schemas, the acceptance or refusal of each type, the record messages, the acknowledgement and the error report. It defines the bodies of the messages `OFFER`, `ACCEPT`, `DECLINE`, `ACK` and `ERROR`, how each message is bound to the app it is for and made safe to repeat, timeouts, resends, what a declined or interrupted exchange leaves behind, and how the same messages behave in a live connection, through a relay and in a file.
 
@@ -9,7 +9,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 ## 1. Terms
 
 - **Sender** and **receiver**: as in [records.md](records.md), section 1. In an exchange between two apps each is the sender of the records it offers and the receiver of the records the other offers.
-- **Channel**: the way two apps exchange messages: one live connection ([transports.md](transports.md)), or the relay. Two apps can use several channels one after the other, or at the same time.
+- **Channel**: the way two apps exchange messages: one live connection ([transports.md](transports.md), section 4), or the relay ([transports.md](transports.md), section 5). Two apps can use several channels one after the other, or at the same time.
 - **Exchange**: an offer, its answers, and the record messages and acknowledgements that follow it.
 - **Offer**: an `OFFER` message. It names the types whose records the sender wants to send and carries their writer schemas.
 - **Answer**: an `ACCEPT` or `DECLINE` message. It names one offer and some of its types.
@@ -22,19 +22,19 @@ The receiver's user confirms the other app's key before the two apps exchange re
 
 ## 2. Messages
 
-| Kind       | `record` | Body                                               | `to` in the body | Sent by                    | In a file                              |
-| ---------- | -------- | -------------------------------------------------- | ---------------- | -------------------------- | -------------------------------------- |
-| `MANIFEST` | `null`   | `axt.Manifest` ([manifest.md](manifest.md))        | no               | each app, about itself     | at most one, as transports.md decides  |
-| `OFFER`    | `null`   | `axt.Offer` (section 4)                            | yes              | the sender                 | no                                     |
-| `ACCEPT`   | `null`   | `axt.Accept` (section 5)                           | yes              | the receiver               | no                                     |
-| `DECLINE`  | `null`   | `axt.Decline` (section 5)                          | yes              | the receiver               | no                                     |
-| `DATA`     | required | the record ([records.md](records.md), section 4.1) | no               | the sender                 | yes                                    |
-| `DELETE`   | required | empty ([records.md](records.md), section 4.2)      | no               | the sender                 | yes                                    |
-| `ACK`      | `null`   | `axt.Ack` (section 7)                              | yes              | the receiver               | no                                     |
-| `ERROR`    | `null`   | `axt.Error` (section 8)                            | yes              | the app that got a message | no                                     |
-| `KEY_MOVE` | `null`   | `axt.KeyMove` ([keys.md](keys.md), section 5)      | no               | a sender whose key moved   | at the start, as transports.md decides |
+| Kind       | `record` | Body                                               | `to` in the body | Sent by                    | In a file                        |
+| ---------- | -------- | -------------------------------------------------- | ---------------- | -------------------------- | -------------------------------- |
+| `MANIFEST` | `null`   | `axt.Manifest` ([manifest.md](manifest.md))        | no               | each app, about itself     | at most one, after the key moves |
+| `OFFER`    | `null`   | `axt.Offer` (section 4)                            | yes              | the sender                 | no                               |
+| `ACCEPT`   | `null`   | `axt.Accept` (section 5)                           | yes              | the receiver               | no                               |
+| `DECLINE`  | `null`   | `axt.Decline` (section 5)                          | yes              | the receiver               | no                               |
+| `DATA`     | required | the record ([records.md](records.md), section 4.1) | no               | the sender                 | yes                              |
+| `DELETE`   | required | empty ([records.md](records.md), section 4.2)      | no               | the sender                 | yes                              |
+| `ACK`      | `null`   | `axt.Ack` (section 7)                              | yes              | the receiver               | no                               |
+| `ERROR`    | `null`   | `axt.Error` (section 8)                            | yes              | the app that got a message | no                               |
+| `KEY_MOVE` | `null`   | `axt.KeyMove` ([keys.md](keys.md), section 5)      | no               | a sender whose key moved   | at the start                     |
 
-The schemas are in [types/axt/](../types/axt/); their fingerprints are in section 16. Each is a schema of the specification and changes only with a new envelope format ([manifest.md](manifest.md), section 2). An app MUST reject a message whose `record` is present where the table says `null` or absent where it is required, and a message whose body fingerprint is not the one of its kind and format ([envelope.md](envelope.md), section 3.1), with the error `INVALID_MESSAGE` (section 8).
+The column "In a file" is that of [transports.md](transports.md), section 2.1. The schemas are in [types/axt/](../types/axt/); their fingerprints are in section 16. Each is a schema of the specification and changes only with a new envelope format ([manifest.md](manifest.md), section 2). An app MUST reject a message whose `record` is present where the table says `null` or absent where it is required, and a message whose body fingerprint is not the one of its kind and format ([envelope.md](envelope.md), section 3.1), with the error `INVALID_MESSAGE` (section 8).
 
 `MANIFEST`, `DATA`, `DELETE` and `KEY_MOVE` are the same for every receiver: a manifest says what an app takes, a record message is sent under the same id to every receiver ([records.md](records.md), section 2), and a key move is for every app that knows the key. They carry no addressee, so that they keep their signature when they are passed on or put into a file ([keys.md](keys.md), sections 2.2 and 2.6). An offer depends on the receiver's manifest and the replies on the messages of one app, so their bodies name the app they are for.
 
@@ -42,7 +42,7 @@ The schemas are in [types/axt/](../types/axt/); their fingerprints are in sectio
 
 ### 3.1 The first messages
 
-When a live connection is open ([transports.md](transports.md)), each app:
+When a live connection is open, after both apps' `HELLO` ([transports.md](transports.md), section 4.6), each app:
 
 1. sends the `KEY_MOVE` messages of section 3.3, if it has any for the other app;
 2. sends its `MANIFEST` ([manifest.md](manifest.md), section 5.1), in the format of section 3.2;
@@ -128,7 +128,7 @@ Each exchange starts with an offer. The records a sender wants to send, and thei
 - **In a live connection**, an accepted offer covers the record messages of its type for the rest of the connection, including changes the sender's user makes while the connection is open.
 - **Through a relay**, an accepted offer covers the record messages that were due when the sender made the offer, and their resends (section 11). For a record that changes after the offer, the sender makes a new offer. Through a relay, an exchange therefore takes three trips before its acknowledgement: the offer, the answer and the records. A receiver that has stored its user's answer can answer at once (section 5.2).
 
-The receiver keeps, for each sender, channel and type, the **current offer**: the last offer of that type it got from the sender in that channel, its schema and its answer. A sender may make offers through the relay faster than they arrive, and a relay may deliver them out of order. A receiver that gets again an offer it has already answered answers it again as before, and the offer does not become current again (section 9.2). A receiver SHOULD keep the ids of the offers it answered through the relay, with their answers, for at least as long as [relay.md](relay.md) lets the relay hold a message.
+The receiver keeps, for each sender, channel and type, the **current offer**: the last offer of that type it got from the sender in that channel, its schema and its answer. A sender may make offers through the relay faster than they arrive, and a relay may deliver them out of order. A receiver that gets again an offer it has already answered answers it again as before, and the offer does not become current again (section 9.2). A receiver SHOULD keep the ids of the offers it answered through the relay, with their answers, for at least as long as a relay may hold a message: 15 days ([transports.md](transports.md), section 5.5).
 
 ## 5. Accept and decline
 
@@ -303,7 +303,7 @@ A receiver checks the addressee of the replies and the offer after their signatu
 
 ### 8.3 Reporting
 
-- **Only to a sender that can be addressed.** In a live connection, an app sends an `ERROR` to the other app once it knows its key from a `MANIFEST` of the connection whose signature verified, valid or not; before that, it reports nothing. Through the relay, it sends an `ERROR` only to a known sender whose message verified and whose encryption key it has ([keys.md](keys.md), section 4.2). A message through the relay that fails before its signature is verified is dropped without a report, since its `sender` may be anyone's key. In a live connection the other app is known by the connection, so a message from it that fails those checks is reported to it. In both, the receiver reports nothing to a key its user has not accepted, apart from `MANIFEST_INVALID` and, in a live connection, `KEY_MOVE_REJECTED`, which goes to the move's old key on the connection (section 3.3).
+- **Only to a sender that can be addressed.** In a live connection, an app sends an `ERROR` to the other app once it has a `MANIFEST` of the connection whose signature verified, valid or not, and so knows the formats the other app reads (section 3.2); before that, it reports nothing. The other app's key is the one its `HELLO` proved ([transports.md](transports.md), section 4.5). Through the relay, it sends an `ERROR` only to a known sender whose message verified and whose encryption key it has ([keys.md](keys.md), section 4.2). A message through the relay that fails before its signature is verified is dropped without a report, since its `sender` may be anyone's key. In a live connection the other app is known by the connection, so a message from it that fails those checks is reported to it. In both, the receiver reports nothing to a key its user has not accepted, apart from `MANIFEST_INVALID` and, in a live connection, `KEY_MOVE_REJECTED`, which goes to the move's old key on the connection (section 3.3).
 - **Never about an error.** An app MUST NOT send an `ERROR` about an `ERROR`. An `ERROR` that is not valid is dropped.
 - **Once.** An app sends at most one `ERROR` for each message it gets; a repeated message MAY be reported again.
 - **Closing.** In a live connection, an app MAY close the connection after it has reported `TOO_LARGE` when the transport cannot skip the message ([envelope.md](envelope.md), section 8), after `SIGNATURE_INVALID`, and after `INVALID_MESSAGE`.
@@ -355,7 +355,7 @@ The alternative, a hash of the record's content in each `DUPLICATE`, would make 
 
 A sender sends a record message again:
 
-- **Without an acknowledgement.** A record message with neither an outcome nor an error that settles it has not been delivered. In a live connection, the sender sends the record again in a later connection, under an offer accepted there and in its current state. Through a relay, it sends the same message again under the same offer, once the time for which the relay holds a message ([relay.md](relay.md)) has passed without an outcome, not before. A record that has changed since the offer is offered again instead (section 4.3).
+- **Without an acknowledgement.** A record message with neither an outcome nor an error that settles it has not been delivered. In a live connection, the sender sends the record again in a later connection, under an offer accepted there and in its current state. Through a relay, it sends the same message again under the same offer, once the holding time of 14 days ([transports.md](transports.md), section 5.5) has passed without an outcome, not before. A record that has changed since the offer is offered again instead (section 4.3).
 - **For a schema.** After `SCHEMA_UNKNOWN` (section 8.2), once the type is accepted again.
 - **When a type is accepted again.** When a type that a receiver had stopped taking ([manifest.md](manifest.md), section 6) fits again and is accepted, the sender SHOULD send the current state of each record of the type it had sent to that receiver before: a `DATA` with the current version of a record that exists, a `DELETE` with the version of the deletion of one deleted in between.
 - **After a key move.** As [keys.md](keys.md), section 5.4, says.
@@ -364,14 +364,14 @@ A receiver cannot ask for a resend beyond the schema request of `SCHEMA_UNKNOWN`
 
 ## 12. Timeouts
 
-The protocol relies on few timers. Every step is safe to repeat (section 9.2), so a lost message costs time, not correctness. The transport detects a connection that has died ([transports.md](transports.md)).
+The protocol relies on few timers. Every step is safe to repeat (section 9.2), so a lost message costs time, not correctness. The transport detects a connection that has died ([transports.md](transports.md), section 4.6).
 
 | What                                                           | Time                                                                                                                                                                                                                                |
 | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | The other app's valid `MANIFEST` after a live connection opens | An app SHOULD close a connection without one after 30 seconds                                                                                                                                                                       |
 | An acknowledgement after processing a record message           | Within 5 seconds (section 7.2)                                                                                                                                                                                                      |
 | An answer in a live connection                                 | Types the receiver decides on its own SHOULD be answered within 5 seconds. A type whose answer waits for the user has no limit; the sender MAY close a connection in which nothing but unanswered types has happened for 10 minutes |
-| A resend through a relay                                       | After the time for which the relay holds a message ([relay.md](relay.md)), not before                                                                                                                                               |
+| A resend through a relay                                       | After the holding time of 14 days ([transports.md](transports.md), section 5.5), not before                                                                                                                                         |
 | An unanswered offer through a relay                            | The sender MAY offer again after the same time                                                                                                                                                                                      |
 | A key move without an answer                                   | Three connections or three sends through the relay (section 3.3)                                                                                                                                                                    |
 
@@ -412,7 +412,7 @@ A new `MANIFEST` of the receiver with a higher revision is a transition of both 
 
 ### 15.1 Through a relay
 
-Through a relay ([relay.md](relay.md)) the messages and the rules are the same, with these differences:
+Through a relay ([transports.md](transports.md), section 5) the messages and the rules are the same, with these differences:
 
 - **No connection.** There is no Opening phase and no end of a connection. Each app sends its current `MANIFEST` through the relay to every known sender that takes messages through the relay and has not got it there yet: after it has accepted the other app's key, and whenever its manifest changes. This is when [manifest.md](manifest.md), section 5.1, has an app send a `MANIFEST` through the relay. A sender offers by the manifest it keeps of the receiver ([manifest.md](manifest.md), section 6), and an offer stays open until replaced (section 4.3).
 - **Replies come back the same way.** An app that sends record messages or offers through a relay MUST take messages through it, that is, have an encryption key in its manifest ([manifest.md](manifest.md), section 3.9). Otherwise its answers and acknowledgements cannot reach it.
@@ -425,15 +425,16 @@ Through a relay ([relay.md](relay.md)) the messages and the rules are the same, 
 
 A file has no way back to its sender ([records.md](records.md), section 7). Its header's `axt.schemas`, signed by `axt.signature`, takes the place of the offer ([envelope.md](envelope.md), section 4.1; [keys.md](keys.md), section 2.5). The reader's user, who chooses to open the file, together with the reader's manifest ([manifest.md](manifest.md), section 7), takes the place of the answer. Nothing acknowledges it. Hence:
 
-- `OFFER`, `ACCEPT`, `DECLINE`, `ACK` and `ERROR` are bound to one exchange and need a way back, which a file does not have. This document therefore needs [transports.md](transports.md), which decides the kinds a file may hold ([envelope.md](envelope.md), section 4.1), to exclude them from files.
+- `OFFER`, `ACCEPT`, `DECLINE`, `ACK` and `ERROR` are bound to one exchange and need a way back, which a file does not have. A file therefore holds none of them ([transports.md](transports.md), section 2.1).
 - A reader applies the record messages of a file by [records.md](records.md), section 5, and reaches the outcomes there, without the steps 4 and 5 of section 6.2. The schemas are those of the header, and a record is taken only if its type fits the reader's manifest ([manifest.md](manifest.md), section 7). A record message that fails another step of section 6.2 is not applied; a `DATA` whose fingerprint is not in `axt.schemas` makes the whole file invalid ([envelope.md](envelope.md), section 4.3).
 - Reading a file accepts no offer. Records that the same sender later sends through a relay or a connection need an offer there.
 
-### 15.3 What this document needs from transports.md and relay.md
+### 15.3 What transports.md settles
 
-- [transports.md](transports.md) supplies the boundaries of each live message ([envelope.md](envelope.md), section 3) and tells an app when a connection opens and ends (section 3.1 and section 14). It also decides whether the connection authenticates the other app's key before its `MANIFEST`.
-- [transports.md](transports.md) decides which kinds a file may hold. This document needs it to exclude `OFFER`, `ACCEPT`, `DECLINE`, `ACK` and `ERROR` (section 15.2); whether a file may hold a `MANIFEST` and `KEY_MOVE` messages is for [transports.md](transports.md) ([manifest.md](manifest.md), section 7; [keys.md](keys.md), section 5.2).
-- [relay.md](relay.md) defines the time for which a relay holds a message, which sets the resends of sections 11 and 12, and how long a receiver keeps the ids of the offers it answered (section 4.3).
+- **The boundaries of each live message** are the frames of [transports.md](transports.md), section 4.4 ([envelope.md](envelope.md), section 3), and a connection opens and ends as [transports.md](transports.md), section 4.6, says (section 3.1 and section 14).
+- **The other app's key** is authenticated before its `MANIFEST`: each app proves its signing key in a `HELLO` bound to the TLS connection ([transports.md](transports.md), section 4.5), and every message in the connection carries that key as its `sender`, apart from the key moves at its start.
+- **A file** holds the key moves at its start, at most one `MANIFEST`, and record messages, and no `OFFER`, `ACCEPT`, `DECLINE`, `ACK` or `ERROR` ([transports.md](transports.md), section 2.1).
+- **The holding time** of a relay is 14 days ([transports.md](transports.md), section 5.5). It sets the resends of sections 11 and 12, and how long a receiver keeps the ids of the offers it answered (section 4.3).
 
 ## 16. Schemas and fingerprints
 
@@ -522,7 +523,7 @@ The messages are live messages in envelope format 1. Offsets are hexadecimal. Ea
 
 The bodies are those of [manifest.md](manifest.md), section 10.3, byte for byte, and are shown shortened. With real keys and signatures in place of the placeholders there, the messages keep their lengths.
 
-cat-a-log's MANIFEST: 314 bytes, SHA-256 `a69cdbb94dfafc3f25aba728a5373ed0faa68e82710d184f9d8f2a90d4b404fc`.
+cat-a-log's MANIFEST: 315 bytes, SHA-256 `1ee7dfafb7a27b1ba7f1dd7fedb04e822d4cbc3f23033f8908b1b8691a163771`.
 
 ```text
 0000  c3 01                    single-object marker
@@ -534,22 +535,22 @@ cat-a-log's MANIFEST: 314 bytes, SHA-256 `a69cdbb94dfafc3f25aba728a5373ed0faa68e
       4b f6 bd 69 af f1 47 1c
       ce 64 10 d5 3c 26 ec 4a
 002c  00                       record: union index 0, null
-002d  96 03                    body: bytes length 203
+002d  98 03                    body: bytes length 204
 002f  c3 01                    body: single-object marker
-0031  cb e5 de 64 f5 71 d4 23  body: fingerprint of axt.Manifest, format 1
+0031  b3 03 80 d3 b5 ec 08 6b  body: fingerprint of axt.Manifest, format 1
 0039  02 12 63 61 ... 00 00    body: the manifest of spec/manifest.md, section 10.3, from 0039
-00fa  13 e6 92 d4 80 de 5a f7  signature: fixed(64)
-      0a 69 8c 94 75 b9 c5 12
-      96 ec b7 dc c5 3c a1 64
-      f9 9b 4b 48 21 bc a6 d0
-      80 97 d4 df 19 5f 1b 89
-      4a 18 48 e0 dd 8e ca 50
-      e1 e4 14 ac 8a 26 1a 7f
-      be 9f 2b 90 f3 d6 f4 0a
-013a  end
+00fb  21 cc f8 c7 3d 1f f7 c7  signature: fixed(64)
+      56 20 75 68 0d 2d d2 8f
+      db d8 d7 2a 00 fa 89 f8
+      76 11 43 de 49 5a d5 bb
+      85 33 a6 b5 e5 45 99 2d
+      f2 0b a4 cd 86 b9 6e 53
+      32 44 54 56 7f fe 19 c2
+      f2 a6 f7 8c 46 2e 3a 0a
+013b  end
 ```
 
-Old Brain Fix's MANIFEST: 548 bytes, SHA-256 `ee202ac2f5dc99bb02fc864946e1f368201c4580f0490d752ae95e0d3a32e366`.
+Old Brain Fix's MANIFEST: 549 bytes, SHA-256 `d8d61697a0189e3afe3b500901b634a356ac1af1986b42bdf9d62d358e59dcaf`.
 
 ```text
 0000  c3 01                    single-object marker
@@ -561,19 +562,19 @@ Old Brain Fix's MANIFEST: 548 bytes, SHA-256 `ee202ac2f5dc99bb02fc864946e1f36820
       ca 71 75 d4 ca 09 08 16
       8f 63 53 0e 4a 7d ed b7
 002c  00                       record: union index 0, null
-002d  ea 06                    body: bytes length 437
+002d  ec 06                    body: bytes length 438
 002f  c3 01                    body: single-object marker
-0031  cb e5 de 64 f5 71 d4 23  body: fingerprint of axt.Manifest, format 1
+0031  b3 03 80 d3 b5 ec 08 6b  body: fingerprint of axt.Manifest, format 1
 0039  02 1a 4f 6c ... 00 00    body: the manifest of spec/manifest.md, section 10.3, from 0039
-01e4  34 a1 bb c6 cc ca 09 f3  signature: fixed(64)
-      d5 f8 7d 4a 42 95 66 f5
-      a4 0d 4b ba 8f c0 c6 44
-      cc 58 04 b6 f3 62 50 0c
-      34 db 75 64 76 3e 59 40
-      81 3c 5a 44 06 09 c5 3c
-      1c 62 fe 5f 70 da ef 9f
-      7c e5 b3 3a 02 98 a3 0c
-0224  end
+01e5  dc 24 c3 04 4b 0b 8d 06  signature: fixed(64)
+      cc 61 3b aa a7 43 6e 26
+      ff ca 67 f2 96 2c a1 d4
+      c8 46 d8 e1 d4 fc ec 5c
+      c5 3f ba e6 d0 3d 50 10
+      4d c1 56 38 fd f6 2c 61
+      a0 70 f3 41 83 7c 61 b1
+      6e b7 df 50 28 0a 95 00
+0225  end
 ```
 
 ### 17.3 The offer
@@ -874,8 +875,7 @@ cat-a-log has no outcome for the Pet, so it takes the error. It sends Mimi's rec
 
 ## 18. What other documents define
 
-- [transports.md](transports.md): the connection, its opening and its end; whether it authenticates the other app's key; which kinds a file may hold, without the replies and the offer (section 15.3).
-- [relay.md](relay.md): the time for which the relay holds a message, which sets the resends through the relay (sections 11 and 12).
+- [transports.md](transports.md): the live connection, its `HELLO`, its opening and its end (section 4 there); the kinds a file holds (section 2.1 there); the relay and its holding time, which sets the resends through it (section 5 there; section 15.3).
 - [conformance.md](conformance.md): test vectors for every message of this document and for the cases of section 16.
 
 ## References

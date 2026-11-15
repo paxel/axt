@@ -158,6 +158,36 @@
       ],
       "default": null,
       "doc": "The X25519 public key of this installation with which other apps encrypt messages to it through a relay, as spec/keys.md defines. Null when the app takes no messages through a relay."
+    },
+    {
+      "name": "relay",
+      "type": [
+        "null",
+        {
+          "type": "record",
+          "name": "ManifestRelay",
+          "doc": "The relay and the mailbox at it into which other apps put messages for this installation. Defined in spec/transports.md.",
+          "fields": [
+            {
+              "name": "url",
+              "type": "string",
+              "doc": "The base URL of the relay: an absolute https URL with a host, ending with a slash, without user information, query or fragment, at most 256 bytes, such as https://relay.example.org/axt/. The paths of the relay's interface are appended to it."
+            },
+            {
+              "name": "mailbox",
+              "type": {
+                "type": "fixed",
+                "name": "ManifestRelayMailbox",
+                "size": 32,
+                "doc": "A mailbox id: the SHA-256 of a fixed prefix and the mailbox secret that only the mailbox's owner holds. Defined in spec/transports.md."
+              },
+              "doc": "The id of the mailbox at the relay into which other apps put messages for this installation."
+            }
+          ]
+        }
+      ],
+      "default": null,
+      "doc": "Where other apps put messages for this installation through a relay. Null when the app takes no messages through a relay; it is present exactly when encryption_key is."
     }
   ]
 }

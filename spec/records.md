@@ -140,7 +140,7 @@ Every record message a receiver processes has one of these outcomes:
 
 A message the receiver cannot process, such as one with an invalid id or version, a changed type or a body it cannot decode, has no outcome; the receiver reports it as an error ([protocol.md](protocol.md), section 8) and does not change its version of the record.
 
-A reader of a file applies the same rules and reaches the same outcomes, but a file has no way back to the sender, so nothing is reported. In a live connection and through a relay, the receiver reports each outcome in an `ACK` message. [protocol.md](protocol.md), section 7, defines the `ACK`: its body schema `axt.Ack`, when it is sent, and that one `ACK` reports up to 4,096 record messages. For each record message, the `ACK` MUST carry:
+A reader of a file applies the same rules and reaches the same outcomes, but a file has no way back to the sender, so nothing is reported. Which failures reject a whole file, and which only the one message, is in [transports.md](transports.md), section 2.2. In a live connection and through a relay, the receiver reports each outcome in an `ACK` message. [protocol.md](protocol.md), section 7, defines the `ACK`: its body schema `axt.Ack`, when it is sent, and that one `ACK` reports up to 4,096 record messages. For each record message, the `ACK` MUST carry:
 
 - the record's id and the version of the message it acknowledges. These are the sender's id and version, although the `ACK`'s own `sender` is the receiver: an `ACK` is about a record of the party it goes to;
 - the outcome;

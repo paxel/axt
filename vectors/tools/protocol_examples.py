@@ -113,7 +113,7 @@ raw = {n: fastavro.parse_schema(without_logical_types(jsons[n]), _write_hint=Fal
 
 fingerprints = {n: me.fingerprint(texts[n]) for n in ALL_SPEC}  # (canonical form, fingerprint)
 assert fingerprints["Envelope"][1] == 0xA2E1E84FE5E40C7D, "the envelope fingerprint is not that of spec/envelope.md"
-assert fingerprints["Manifest"][1] == 0x23D471F564DEE5CB, "the manifest fingerprint is not that of spec/manifest.md"
+assert fingerprints["Manifest"][1] == 0x6B08ECB5D38003B3, "the manifest fingerprint is not that of spec/manifest.md"
 assert fingerprints["KeyMove"][1] == 0xA9E20AFEA72F2876, "the key move fingerprint is not that of spec/keys.md"
 assert len({fp for _, fp in fingerprints.values()}) == len(ALL_SPEC)
 
