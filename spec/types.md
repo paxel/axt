@@ -144,7 +144,7 @@ The schema itself also stays within the size and nesting limits of [envelope.md]
 
 ### 5.8 Ids and versions of records
 
-A type MUST NOT carry the id or the version of its records in fields of its own: the envelope carries both ([envelope.md](envelope.md), section 2; [records.md](records.md)). How one record refers to another, such as a Measurement to the Pet it was taken of, is not defined in 0.1.0; such a reference would be a `uuid` string whose meaning [records.md](records.md) defines.
+A type MUST NOT carry the id or the version of its records in fields of its own: the envelope carries both ([envelope.md](envelope.md), section 2; [records.md](records.md)). How one record refers to another, such as a Measurement to the Pet it was taken of, is defined in [records.md](records.md), section 8: a reference is a `uuid` string that holds the id of another record of the same sender. The example types of version 1 carry no references.
 
 ## 6. Display hints
 

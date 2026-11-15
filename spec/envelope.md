@@ -12,7 +12,7 @@ AXT encodes everything with [Apache Avro 1.12](https://avro.apache.org/docs/1.12
 
 ## 2. The envelope
 
-Every AXT message is one datum of the record `axt.Envelope`. Its schema is [types/axt/Envelope.avsc](../types/axt/Envelope.avsc); the schemas of this specification live in [types/axt/](../types/axt/) under the Avro namespace `axt`, which is reserved for them.
+Every AXT message is one datum of the record `axt.Envelope`. Its schema is [types/axt/Envelope.avsc](../types/axt/Envelope.avsc); the schemas of this specification live in [types/axt/](../types/axt/) under the Avro namespace `axt`. The namespace `axt` and every namespace that begins with `axt.` are reserved for the AXT repository ([types.md](types.md), section 2).
 
 | Field       | Avro type                                  | Content                                                                                   | Defined in                 |
 | ----------- | ------------------------------------------ | ----------------------------------------------------------------------------------------- | -------------------------- |
