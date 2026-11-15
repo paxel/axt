@@ -1,0 +1,1014 @@
+{
+ "format": 1,
+ "specification": "0.1.0",
+ "category": "keys",
+ "description": "Signing keys, signatures, short fingerprints, key moves, and sealing for the relay (spec/keys.md).",
+ "vectors": [
+  {
+   "id": "keys/public_key/the-public-key-of-the-test-seed-rfc-8032-section-7-1-test-1",
+   "op": "public_key",
+   "description": "the public key of the test seed RFC 8032, section 7.1, TEST 1",
+   "refs": ["keys.md 7.1"],
+   "input": {"seed": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60"},
+   "expected": {
+    "accept": {"public_key": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"}
+   }
+  },
+  {
+   "id": "keys/public_key/the-public-key-of-the-test-seed-cat-a-log-old-phone",
+   "op": "public_key",
+   "description": "the public key of the test seed cat-a-log, old phone",
+   "refs": ["keys.md 7.1"],
+   "input": {"seed": "2b4515a86ea2f9e9948bbb1b38ceb8726df536c021da2c54b91b1288fa2ac24e"},
+   "expected": {
+    "accept": {"public_key": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a"}
+   }
+  },
+  {
+   "id": "keys/public_key/the-public-key-of-the-test-seed-cat-a-log-new-phone",
+   "op": "public_key",
+   "description": "the public key of the test seed cat-a-log, new phone",
+   "refs": ["keys.md 7.1"],
+   "input": {"seed": "daeb74626747506147fb64a839a74b170d7819e7bfaf2ce8dc348a9e5139a8dc"},
+   "expected": {
+    "accept": {"public_key": "bc8213b9e5a1325c8ac9877a72555aa19f7b8b6841cbffb9345aad04328e1f7b"}
+   }
+  },
+  {
+   "id": "keys/public_key/the-public-key-of-the-test-seed-old-brain-fix",
+   "op": "public_key",
+   "description": "the public key of the test seed Old Brain Fix",
+   "refs": ["keys.md 7.1"],
+   "input": {"seed": "071b538b5d99ab63cc1d39aa21fcc96c3698e2cd0c093baf5fd244af0f813ae7"},
+   "expected": {
+    "accept": {"public_key": "da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7"}
+   }
+  },
+  {
+   "id": "keys/sign/sign-rfc-8032-section-7-1-test-1-the-empty-message",
+   "op": "sign",
+   "description": "sign RFC 8032, section 7.1, TEST 1: the empty message",
+   "refs": ["keys.md 2.2"],
+   "input": {"seed": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60", "data": ""},
+   "expected": {
+    "accept": {
+     "signature": "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"
+    }
+   }
+  },
+  {
+   "id": "keys/sign/sign-the-data-message-of-keys-md-section-7-2",
+   "op": "sign",
+   "description": "sign the DATA message of keys.md, section 7.2",
+   "refs": ["keys.md 2.2", "keys.md 7.2"],
+   "input": {
+    "seed": "2b4515a86ea2f9e9948bbb1b38ceb8726df536c021da2c54b91b1288fa2ac24e",
+    "data": "4158542d7631206d6573736167650002081b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024830623561336331652d346432662d346136622d396338642d3765366635613462336332640246c30168b356680ce41cb7245665742c20547565736461792031303a303080d4a8efd066"
+   },
+   "expected": {
+    "accept": {
+     "signature": "33875e5e5b36d7dfacea9fe183e4118b2beff6e61eb1367e53a33c74d32e20539e2ec515ee75d966528eb68fbc88d4094cfa1f482feb6c24ce1e5c2ff6c15003"
+    }
+   }
+  },
+  {
+   "id": "keys/sign/sign-the-file-header-of-keys-md-section-7-3",
+   "op": "sign",
+   "description": "sign the file header of keys.md, section 7.3",
+   "refs": ["keys.md 2.5", "keys.md 7.3"],
+   "input": {
+    "seed": "2b4515a86ea2f9e9948bbb1b38ceb8726df536c021da2c54b91b1288fa2ac24e",
+    "data": "4158542d76312066696c6520686561646572001b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4aa4f86183d65632511014faa8d89bdb4a12e911d1e0a160affe9da4e30017b188"
+   },
+   "expected": {
+    "accept": {
+     "signature": "edd02ed03eea22c8586d1dddf330cd88edc1abf3c2664941cde1cb7fad1126ec811a9908a25ae76d02235fc8495f6c9b9bf3dec86dd443d1bf77e03d9d355506"
+    }
+   }
+  },
+  {
+   "id": "keys/sign/sign-the-proof-of-the-key-move-of-keys-md-section-7-5",
+   "op": "sign",
+   "description": "sign the proof of the KEY_MOVE of keys.md, section 7.5",
+   "refs": ["keys.md 5.1", "keys.md 7.5"],
+   "input": {
+    "seed": "daeb74626747506147fb64a839a74b170d7819e7bfaf2ce8dc348a9e5139a8dc",
+    "data": "4158542d7631206b6579206d6f7665001b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4abc8213b9e5a1325c8ac9877a72555aa19f7b8b6841cbffb9345aad04328e1f7b"
+   },
+   "expected": {
+    "accept": {
+     "signature": "4b98c112639c50f351b2c58ff6e495c8e20e7a1b741d123e2bd76debf30568b8f1045c1d369dbb9f6d306f6e13d3dad872c9385785f6a46527ae729bd81d8d0f"
+    }
+   }
+  },
+  {
+   "id": "keys/verify/the-signature-of-rfc-8032-section-7-1-test-1",
+   "op": "verify",
+   "description": "the signature of RFC 8032, section 7.1, TEST 1",
+   "refs": ["keys.md 2.3"],
+   "input": {
+    "public_key": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+    "data": "",
+    "signature": "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b"
+   },
+   "expected": {
+    "accept": {}
+   }
+  },
+  {
+   "id": "keys/verify/keys-md-7-6-the-signature-of-example-1",
+   "op": "verify",
+   "description": "keys.md 7.6: the signature of example 1",
+   "refs": ["keys.md 2.3", "keys.md 7.6"],
+   "input": {
+    "public_key": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+    "data": "4158542d7631206d6573736167650002081b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024830623561336331652d346432662d346136622d396338642d3765366635613462336332640246c30168b356680ce41cb7245665742c20547565736461792031303a303080d4a8efd066",
+    "signature": "33875e5e5b36d7dfacea9fe183e4118b2beff6e61eb1367e53a33c74d32e20539e2ec515ee75d966528eb68fbc88d4094cfa1f482feb6c24ce1e5c2ff6c15003"
+   },
+   "expected": {
+    "accept": {}
+   }
+  },
+  {
+   "id": "keys/verify/keys-md-7-6-one-byte-of-the-message-changed",
+   "op": "verify",
+   "description": "keys.md 7.6: one byte of the message changed",
+   "refs": ["keys.md 2.3", "keys.md 7.6"],
+   "input": {
+    "public_key": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+    "data": "4158542d7631206d6573736167650002081b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024830623561336331652d346432662d346136622d396338642d3765366635613462336332640246c30168b356680ce41cb7245665742c20547565736461792031303a303080d4a8efd067",
+    "signature": "33875e5e5b36d7dfacea9fe183e4118b2beff6e61eb1367e53a33c74d32e20539e2ec515ee75d966528eb68fbc88d4094cfa1f482feb6c24ce1e5c2ff6c15003"
+   },
+   "expected": {
+    "reject": {"error": "SIGNATURE_INVALID", "note": "equation does not hold"}
+   }
+  },
+  {
+   "id": "keys/verify/keys-md-7-6-another-key",
+   "op": "verify",
+   "description": "keys.md 7.6: another key",
+   "refs": ["keys.md 2.3", "keys.md 7.6"],
+   "input": {
+    "public_key": "da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7",
+    "data": "4158542d7631206d6573736167650002081b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024830623561336331652d346432662d346136622d396338642d3765366635613462336332640246c30168b356680ce41cb7245665742c20547565736461792031303a303080d4a8efd066",
+    "signature": "33875e5e5b36d7dfacea9fe183e4118b2beff6e61eb1367e53a33c74d32e20539e2ec515ee75d966528eb68fbc88d4094cfa1f482feb6c24ce1e5c2ff6c15003"
+   },
+   "expected": {
+    "reject": {"error": "SIGNATURE_INVALID", "note": "equation does not hold"}
+   }
+  },
+  {
+   "id": "keys/verify/keys-md-7-6-s-l-in-place-of-s",
+   "op": "verify",
+   "description": "keys.md 7.6: S + L in place of S",
+   "refs": ["keys.md 2.3", "keys.md 7.6"],
+   "input": {
+    "public_key": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+    "data": "4158542d7631206d6573736167650002081b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024830623561336331652d346432662d346136622d396338642d3765366635613462336332640246c30168b356680ce41cb7245665742c20547565736461792031303a303080d4a8efd066",
+    "signature": "33875e5e5b36d7dfacea9fe183e4118b2beff6e61eb1367e53a33c74d32e20538b02bb7208d9ebbe282bae329b82b31e4cfa1f482feb6c24ce1e5c2ff6c15013"
+   },
+   "expected": {
+    "reject": {"error": "SIGNATURE_INVALID", "note": "S not below L"}
+   }
+  },
+  {
+   "id": "keys/verify/keys-md-7-6-r-of-small-order-the-identity-s-k-a",
+   "op": "verify",
+   "description": "keys.md 7.6: R of small order (the identity), S = k*a",
+   "refs": ["keys.md 2.3", "keys.md 7.6"],
+   "input": {
+    "public_key": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+    "data": "4158542d7631206d6573736167650002081b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024830623561336331652d346432662d346136622d396338642d3765366635613462336332640246c30168b356680ce41cb7245665742c20547565736461792031303a303080d4a8efd066",
+    "signature": "0100000000000000000000000000000000000000000000000000000000000000af9ad1ec37d2300b02becebe749e2ef344f374c7498d86de90eafecbee209301"
+   },
+   "expected": {
+    "reject": {"error": "SIGNATURE_INVALID", "note": "R not of order L"}
+   }
+  },
+  {
+   "id": "keys/verify/keys-md-7-6-r-with-a-component-of-order-8",
+   "op": "verify",
+   "description": "keys.md 7.6: R with a component of order 8",
+   "refs": ["keys.md 2.3", "keys.md 7.6"],
+   "input": {
+    "public_key": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+    "data": "4158542d7631206d6573736167650002081b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024830623561336331652d346432662d346136622d396338642d3765366635613462336332640246c30168b356680ce41cb7245665742c20547565736461792031303a303080d4a8efd066",
+    "signature": "9afac811cadc6d41dcfa3edba1a9ee890403b60689bdc10c6acb1187e66315f6a5a4a500e25e2c50ba9a6e6a5e14f1afc98b8263072557205d8874ce0fa46909"
+   },
+   "expected": {
+    "reject": {"error": "SIGNATURE_INVALID", "note": "R not of order L"}
+   }
+  },
+  {
+   "id": "keys/verify/keys-md-7-6-r-the-identity-non-canonical-s-k-a",
+   "op": "verify",
+   "description": "keys.md 7.6: R the identity, non-canonical, S = k*a",
+   "refs": ["keys.md 2.3", "keys.md 7.6"],
+   "input": {
+    "public_key": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+    "data": "4158542d7631206d6573736167650002081b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024830623561336331652d346432662d346136622d396338642d3765366635613462336332640246c30168b356680ce41cb7245665742c20547565736461792031303a303080d4a8efd066",
+    "signature": "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fe6d8849fcaaf64bc8ca439c1b0417672a5e560d3edaa55a41c2d69c0be11c004"
+   },
+   "expected": {
+    "reject": {"error": "SIGNATURE_INVALID", "note": "R not a canonical encoding of a point"}
+   }
+  },
+  {
+   "id": "keys/verify/keys-md-7-6-key-the-identity-r-the-identity-s-0",
+   "op": "verify",
+   "description": "keys.md 7.6: key the identity, R the identity, S = 0",
+   "refs": ["keys.md 2.3", "keys.md 7.6"],
+   "input": {
+    "public_key": "0100000000000000000000000000000000000000000000000000000000000000",
+    "data": "4158542d7631206d6573736167650002081b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024830623561336331652d346432662d346136622d396338642d3765366635613462336332640246c30168b356680ce41cb7245665742c20547565736461792031303a303080d4a8efd066",
+    "signature": "01000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+   },
+   "expected": {
+    "reject": {"error": "SIGNATURE_INVALID", "note": "key not of order L"}
+   }
+  },
+  {
+   "id": "keys/verify/keys-md-7-6-key-with-a-component-of-order-8",
+   "op": "verify",
+   "description": "keys.md 7.6: key with a component of order 8",
+   "refs": ["keys.md 2.3", "keys.md 7.6"],
+   "input": {
+    "public_key": "3708fc86c0d0892ddcc160bc020324ebe7a6a51799f526f06f34dce0e430bce2",
+    "data": "4158542d7631206d6573736167650002081b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024830623561336331652d346432662d346136622d396338642d3765366635613462336332640246c30168b356680ce41cb7245665742c20547565736461792031303a303080d4a8efd066",
+    "signature": "3dd7e1bbc9a416dabebbc0ea636d153826df23db97948678e83c3053dfaf8b6e11c49f9cc254e27ea788b692f78fcbfa42f6ed2769ff30a7078794662fc73207"
+   },
+   "expected": {
+    "reject": {"error": "SIGNATURE_INVALID", "note": "key not of order L"}
+   }
+  },
+  {
+   "id": "keys/verify/keys-md-7-6-key-the-identity-non-canonical-r-the-identity-s-0",
+   "op": "verify",
+   "description": "keys.md 7.6: key the identity, non-canonical, R the identity, S = 0",
+   "refs": ["keys.md 2.3", "keys.md 7.6"],
+   "input": {
+    "public_key": "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+    "data": "4158542d7631206d6573736167650002081b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024830623561336331652d346432662d346136622d396338642d3765366635613462336332640246c30168b356680ce41cb7245665742c20547565736461792031303a303080d4a8efd066",
+    "signature": "01000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+   },
+   "expected": {
+    "reject": {"error": "SIGNATURE_INVALID", "note": "key not a canonical encoding of a point"}
+   }
+  },
+  {
+   "id": "keys/check_signing_key/the-test-key-cat-a-log-old-phone",
+   "op": "check_signing_key",
+   "description": "the test key cat-a-log, old phone",
+   "refs": ["keys.md 2.3"],
+   "input": {"public_key": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a"},
+   "expected": {
+    "accept": {}
+   }
+  },
+  {
+   "id": "keys/check_signing_key/the-test-key-cat-a-log-new-phone",
+   "op": "check_signing_key",
+   "description": "the test key cat-a-log, new phone",
+   "refs": ["keys.md 2.3"],
+   "input": {"public_key": "bc8213b9e5a1325c8ac9877a72555aa19f7b8b6841cbffb9345aad04328e1f7b"},
+   "expected": {
+    "accept": {}
+   }
+  },
+  {
+   "id": "keys/check_signing_key/the-test-key-old-brain-fix",
+   "op": "check_signing_key",
+   "description": "the test key Old Brain Fix",
+   "refs": ["keys.md 2.3"],
+   "input": {"public_key": "da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7"},
+   "expected": {
+    "accept": {}
+   }
+  },
+  {
+   "id": "keys/check_signing_key/reject-the-point-of-small-order-00000000-0000",
+   "op": "check_signing_key",
+   "description": "reject the point of small order 00000000...0000",
+   "refs": ["keys.md 2.3"],
+   "input": {"public_key": "0000000000000000000000000000000000000000000000000000000000000000"},
+   "expected": {
+    "reject": {"error": "KEY_INVALID", "note": "key not of order L"}
+   }
+  },
+  {
+   "id": "keys/check_signing_key/reject-the-point-of-small-order-00000000-0080",
+   "op": "check_signing_key",
+   "description": "reject the point of small order 00000000...0080",
+   "refs": ["keys.md 2.3"],
+   "input": {"public_key": "0000000000000000000000000000000000000000000000000000000000000080"},
+   "expected": {
+    "reject": {"error": "KEY_INVALID", "note": "key not of order L"}
+   }
+  },
+  {
+   "id": "keys/check_signing_key/reject-the-point-of-small-order-01000000-0000",
+   "op": "check_signing_key",
+   "description": "reject the point of small order 01000000...0000",
+   "refs": ["keys.md 2.3"],
+   "input": {"public_key": "0100000000000000000000000000000000000000000000000000000000000000"},
+   "expected": {
+    "reject": {"error": "KEY_INVALID", "note": "key not of order L"}
+   }
+  },
+  {
+   "id": "keys/check_signing_key/reject-the-point-of-small-order-26e8958f-fc05",
+   "op": "check_signing_key",
+   "description": "reject the point of small order 26e8958f...fc05",
+   "refs": ["keys.md 2.3"],
+   "input": {"public_key": "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05"},
+   "expected": {
+    "reject": {"error": "KEY_INVALID", "note": "key not of order L"}
+   }
+  },
+  {
+   "id": "keys/check_signing_key/reject-the-point-of-small-order-26e8958f-fc85",
+   "op": "check_signing_key",
+   "description": "reject the point of small order 26e8958f...fc85",
+   "refs": ["keys.md 2.3"],
+   "input": {"public_key": "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85"},
+   "expected": {
+    "reject": {"error": "KEY_INVALID", "note": "key not of order L"}
+   }
+  },
+  {
+   "id": "keys/check_signing_key/reject-the-point-of-small-order-c7176a70-037a",
+   "op": "check_signing_key",
+   "description": "reject the point of small order c7176a70...037a",
+   "refs": ["keys.md 2.3"],
+   "input": {"public_key": "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a"},
+   "expected": {
+    "reject": {"error": "KEY_INVALID", "note": "key not of order L"}
+   }
+  },
+  {
+   "id": "keys/check_signing_key/reject-the-point-of-small-order-c7176a70-03fa",
+   "op": "check_signing_key",
+   "description": "reject the point of small order c7176a70...03fa",
+   "refs": ["keys.md 2.3"],
+   "input": {"public_key": "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa"},
+   "expected": {
+    "reject": {"error": "KEY_INVALID", "note": "key not of order L"}
+   }
+  },
+  {
+   "id": "keys/check_signing_key/reject-the-point-of-small-order-ecffffff-ff7f",
+   "op": "check_signing_key",
+   "description": "reject the point of small order ecffffff...ff7f",
+   "refs": ["keys.md 2.3"],
+   "input": {"public_key": "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"},
+   "expected": {
+    "reject": {"error": "KEY_INVALID", "note": "key not of order L"}
+   }
+  },
+  {
+   "id": "keys/check_signing_key/reject-the-neutral-element-encoded-with-y-p-1",
+   "op": "check_signing_key",
+   "description": "reject the neutral element encoded with y = p + 1",
+   "refs": ["keys.md 2.3"],
+   "input": {"public_key": "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"},
+   "expected": {
+    "reject": {"error": "KEY_INVALID", "note": "key not a canonical encoding of a point"}
+   }
+  },
+  {
+   "id": "keys/check_signing_key/reject-the-neutral-element-with-the-sign-bit-set",
+   "op": "check_signing_key",
+   "description": "reject the neutral element with the sign bit set",
+   "refs": ["keys.md 2.3"],
+   "input": {"public_key": "0100000000000000000000000000000000000000000000000000000000000080"},
+   "expected": {
+    "reject": {"error": "KEY_INVALID", "note": "key not a canonical encoding of a point"}
+   }
+  },
+  {
+   "id": "keys/check_signing_key/reject-an-encoding-that-is-not-a-point-y-2",
+   "op": "check_signing_key",
+   "description": "reject an encoding that is not a point, y = 2",
+   "refs": ["keys.md 2.3"],
+   "input": {"public_key": "0200000000000000000000000000000000000000000000000000000000000000"},
+   "expected": {
+    "reject": {"error": "KEY_INVALID", "note": "key not a canonical encoding of a point"}
+   }
+  },
+  {
+   "id": "keys/check_signing_key/reject-a-key-with-a-component-of-order-8",
+   "op": "check_signing_key",
+   "description": "reject a key with a component of order 8",
+   "refs": ["keys.md 2.3"],
+   "input": {"public_key": "3708fc86c0d0892ddcc160bc020324ebe7a6a51799f526f06f34dce0e430bce2"},
+   "expected": {
+    "reject": {"error": "KEY_INVALID", "note": "key not of order L"}
+   }
+  },
+  {
+   "id": "keys/check_encryption_key/accept-old-brain-fix-s-x25519-test-key",
+   "op": "check_encryption_key",
+   "description": "accept Old Brain Fix's X25519 test key",
+   "refs": ["keys.md 4.2"],
+   "input": {"encryption_key": "34fa7e71770d8d94c76001ac8d575609f005981f80c115bb7a8fe312687ea40b"},
+   "expected": {
+    "accept": {}
+   }
+  },
+  {
+   "id": "keys/check_encryption_key/accept-cat-a-log-s-new-x25519-test-key",
+   "op": "check_encryption_key",
+   "description": "accept cat-a-log's new X25519 test key",
+   "refs": ["keys.md 4.2"],
+   "input": {"encryption_key": "04c3ae114f9673fe61354502d8d7d646fa37cef5e5900e00ef17808cd15a2355"},
+   "expected": {
+    "accept": {}
+   }
+  },
+  {
+   "id": "keys/check_encryption_key/reject-u-0",
+   "op": "check_encryption_key",
+   "description": "reject u = 0",
+   "refs": ["keys.md 4.2"],
+   "input": {"encryption_key": "0000000000000000000000000000000000000000000000000000000000000000"},
+   "expected": {
+    "reject": {"error": "ENCRYPTION_KEY_INVALID", "note": "X25519 gives the all-zero value"}
+   }
+  },
+  {
+   "id": "keys/check_encryption_key/reject-u-1",
+   "op": "check_encryption_key",
+   "description": "reject u = 1",
+   "refs": ["keys.md 4.2"],
+   "input": {"encryption_key": "0100000000000000000000000000000000000000000000000000000000000000"},
+   "expected": {
+    "reject": {"error": "ENCRYPTION_KEY_INVALID", "note": "X25519 gives the all-zero value"}
+   }
+  },
+  {
+   "id": "keys/check_encryption_key/reject-a-point-of-order-8",
+   "op": "check_encryption_key",
+   "description": "reject a point of order 8",
+   "refs": ["keys.md 4.2"],
+   "input": {"encryption_key": "e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b800"},
+   "expected": {
+    "reject": {"error": "ENCRYPTION_KEY_INVALID", "note": "X25519 gives the all-zero value"}
+   }
+  },
+  {
+   "id": "keys/check_encryption_key/reject-the-other-point-of-order-8",
+   "op": "check_encryption_key",
+   "description": "reject the other point of order 8",
+   "refs": ["keys.md 4.2"],
+   "input": {"encryption_key": "5f9c95bca3508c24b1d0b1559c83ef5b04445cc4581c8e86d8224eddd09f1157"},
+   "expected": {
+    "reject": {"error": "ENCRYPTION_KEY_INVALID", "note": "X25519 gives the all-zero value"}
+   }
+  },
+  {
+   "id": "keys/check_encryption_key/reject-u-p-1",
+   "op": "check_encryption_key",
+   "description": "reject u = p - 1",
+   "refs": ["keys.md 4.2"],
+   "input": {"encryption_key": "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"},
+   "expected": {
+    "reject": {"error": "ENCRYPTION_KEY_INVALID", "note": "X25519 gives the all-zero value"}
+   }
+  },
+  {
+   "id": "keys/check_encryption_key/reject-u-p-non-canonical-0",
+   "op": "check_encryption_key",
+   "description": "reject u = p, non-canonical 0",
+   "refs": ["keys.md 4.2"],
+   "input": {"encryption_key": "edffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"},
+   "expected": {
+    "reject": {"error": "ENCRYPTION_KEY_INVALID", "note": "X25519 gives the all-zero value"}
+   }
+  },
+  {
+   "id": "keys/check_encryption_key/reject-u-p-1-non-canonical-1",
+   "op": "check_encryption_key",
+   "description": "reject u = p + 1, non-canonical 1",
+   "refs": ["keys.md 4.2"],
+   "input": {"encryption_key": "eeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f"},
+   "expected": {
+    "reject": {"error": "ENCRYPTION_KEY_INVALID", "note": "X25519 gives the all-zero value"}
+   }
+  },
+  {
+   "id": "keys/check_encryption_key/reject-u-0-with-the-top-bit-set",
+   "op": "check_encryption_key",
+   "description": "reject u = 0 with the top bit set",
+   "refs": ["keys.md 4.2"],
+   "input": {"encryption_key": "0000000000000000000000000000000000000000000000000000000000000080"},
+   "expected": {
+    "reject": {"error": "ENCRYPTION_KEY_INVALID", "note": "X25519 gives the all-zero value"}
+   }
+  },
+  {
+   "id": "keys/short_fingerprint/the-short-fingerprint-of-cat-a-log-old-phone",
+   "op": "short_fingerprint",
+   "description": "the short fingerprint of cat-a-log, old phone",
+   "refs": ["keys.md 3.1", "keys.md 7.1"],
+   "input": {"public_key": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a"},
+   "expected": {
+    "accept": {"short_fingerprint": "24773 42899 01908 98427 81734"}
+   }
+  },
+  {
+   "id": "keys/short_fingerprint/the-short-fingerprint-of-cat-a-log-new-phone",
+   "op": "short_fingerprint",
+   "description": "the short fingerprint of cat-a-log, new phone",
+   "refs": ["keys.md 3.1", "keys.md 7.1"],
+   "input": {"public_key": "bc8213b9e5a1325c8ac9877a72555aa19f7b8b6841cbffb9345aad04328e1f7b"},
+   "expected": {
+    "accept": {"short_fingerprint": "09244 67325 13841 38603 74394"}
+   }
+  },
+  {
+   "id": "keys/short_fingerprint/the-short-fingerprint-of-old-brain-fix",
+   "op": "short_fingerprint",
+   "description": "the short fingerprint of Old Brain Fix",
+   "refs": ["keys.md 3.1", "keys.md 7.1"],
+   "input": {"public_key": "da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7"},
+   "expected": {
+    "accept": {"short_fingerprint": "01399 72263 65477 52894 90179"}
+   }
+  },
+  {
+   "id": "keys/verify_message/the-data-message-of-keys-md-section-7-2",
+   "op": "verify_message",
+   "description": "the DATA message of keys.md, section 7.2",
+   "refs": ["keys.md 2.2", "keys.md 2.3", "keys.md 7.2"],
+   "input": {
+    "message": "c3017d0ce4e54fe8e1a202081b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024830623561336331652d346432662d346136622d396338642d3765366635613462336332640246c30168b356680ce41cb7245665742c20547565736461792031303a303080d4a8efd06633875e5e5b36d7dfacea9fe183e4118b2beff6e61eb1367e53a33c74d32e20539e2ec515ee75d966528eb68fbc88d4094cfa1f482feb6c24ce1e5c2ff6c15003"
+   },
+   "expected": {
+    "accept": {}
+   }
+  },
+  {
+   "id": "keys/verify_message/the-key-move-of-keys-md-section-7-5-signed-with-the-old-key",
+   "op": "verify_message",
+   "description": "the KEY_MOVE of keys.md, section 7.5, signed with the old key",
+   "refs": ["keys.md 2.2", "keys.md 2.3", "keys.md 5.1", "keys.md 7.5"],
+   "input": {
+    "message": "c3017d0ce4e54fe8e1a202101b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a009602c30176282fa7fe0ae2a9bc8213b9e5a1325c8ac9877a72555aa19f7b8b6841cbffb9345aad04328e1f7b0204c3ae114f9673fe61354502d8d7d646fa37cef5e5900e00ef17808cd15a23554b98c112639c50f351b2c58ff6e495c8e20e7a1b741d123e2bd76debf30568b8f1045c1d369dbb9f6d306f6e13d3dad872c9385785f6a46527ae729bd81d8d0f7bcf5a34f7f55f067f7afb087bbbbdb1cb962c7af85405c6accfaceb9b760770d0def5740f01ae96b28a9a6477e75b582c58501362e9f25c3c413a9817927f0c"
+   },
+   "expected": {
+    "accept": {}
+   }
+  },
+  {
+   "id": "keys/verify_message/the-manifest-of-cat-a-log-of-protocol-md-section-17-2",
+   "op": "verify_message",
+   "description": "the MANIFEST of cat-a-log of protocol.md, section 17.2",
+   "refs": ["keys.md 2.2", "keys.md 2.3", "protocol.md 17.2"],
+   "input": {
+    "message": "c3017d0ce4e54fe8e1a202001b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a009803c301b30380d3b5ec086b02126361742d612d6c6f670002020002246178742e6578616d706c652e76312e50657402004e4120506574206265636f6d657320616e20616e696d616c20696e2074686520706574206c6f672e0000000208246178742e6578616d706c652e76312e506574020202346178742e6578616d706c652e76312e4170706f696e746d656e74020202346178742e6578616d706c652e76312e4d6561737572656d656e740202022e6178742e6578616d706c652e76312e446f63756d656e7402020200000021ccf8c73d1ff7c7562075680d2dd28fdbd8d72a00fa89f8761143de495ad5bb8533a6b5e545992df20ba4cd86b96e53324454567ffe19c2f2a6f78c462e3a0a"
+   },
+   "expected": {
+    "accept": {}
+   }
+  },
+  {
+   "id": "keys/verify_message/the-offer-of-protocol-md-section-17-3",
+   "op": "verify_message",
+   "description": "the OFFER of protocol.md, section 17.3",
+   "refs": ["keys.md 2.2", "keys.md 2.3", "protocol.md 17.3"],
+   "input": {
+    "message": "c3017d0ce4e54fe8e1a202021b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a009036c3017d687acaca635441da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb74836663163326239652d336434612d346535662d386137622d31633264336534663561366204f0167b2274797065223a227265636f7264222c226e616d65223a22506574222c226e616d657370616365223a226178742e6578616d706c652e7631222c22646f63223a2241207065743a20616e20616e696d616c207468652075736572206b656570732c2073756368206173206120636174206f72206120646f672e222c226178742e76657273696f6e223a312c226178742e7469746c65223a226e616d65222c226669656c6473223a5b7b226e616d65223a226e616d65222c2274797065223a22737472696e67222c2264656661756c74223a22222c22646f63223a22546865207065742773206e616d652e20456d707479207768656e20697420686173206e6f6e652e227d2c7b226e616d65223a2273706563696573222c2274797065223a22737472696e67222c2264656661756c74223a22222c22646f63223a22546865206b696e64206f6620616e696d616c2c2061732074686520757365722077726f74652069742c207375636820617320636174206f7220646f672e20456d707479207768656e206e6f7420676976656e2e227d2c7b226e616d65223a226272656564222c2274797065223a22737472696e67222c2264656661756c74223a22222c22646f63223a225468652062726565642c2061732074686520757365722077726f74652069742c2073756368206173204d61696e6520436f6f6e2e20456d707479207768656e206e6f74206b6e6f776e2e227d2c7b226e616d65223a22736578222c2274797065223a7b2274797065223a22656e756d222c226e616d65223a22506574536578222c22646f63223a2254686520736578206f6620616e20616e696d616c2e2046454d414c452c204d414c453a2066656d616c6520616e64206d616c652e20554e4b4e4f574e3a206e6f74206b6e6f776e206f72206e6f7420676976656e3b20612073796d626f6c20746869732076657273696f6e20646f6573206e6f74206b6e6f77206973207265616420617320554e4b4e4f574e2e222c2273796d626f6c73223a5b22554e4b4e4f574e222c2246454d414c45222c224d414c45225d2c2264656661756c74223a22554e4b4e4f574e227d2c2264656661756c74223a22554e4b4e4f574e222c22646f63223a22546865207065742773207365782e227d2c7b226e616d65223a226e65757465726564222c2274797065223a5b226e756c6c222c22626f6f6c65616e225d2c2264656661756c74223a6e756c6c2c22646f63223a2254727565207768656e2074686520706574206973206e65757465726564206f72207370617965642c2066616c7365207768656e206974206973206e6f742e204e756c6c207768656e206e6f74206b6e6f776e2e227d2c7b226e616d65223a226269727468646179222c2274797065223a5b226e756c6c222c7b2274797065223a22696e74222c226c6f676963616c54797065223a2264617465227d5d2c2264656661756c74223a6e756c6c2c22646f63223a2254686520706574277320646179206f662062697274682e204e756c6c207768656e206e6f74206b6e6f776e2e227d2c7b226e616d65223a226d6963726f63686970222c2274797065223a22737472696e67222c2264656661756c74223a22222c22646f63223a22546865206e756d626572206f6620746865207065742773206d6963726f636869702c20617320726561642066726f6d2069743b2031352064696769747320666f7220612063686970206f662049534f2031313738342e20456d707479207768656e20697420686173206e6f6e65206f72206974206973206e6f74206b6e6f776e2e227d2c7b226e616d65223a226e6f746573222c2274797065223a22737472696e67222c2264656661756c74223a22222c22646f63223a2246726565206e6f746573206f6e20746865207065742c20617320706c61696e20746578743b206c696e65732061726520736570617261746564206279204c462e20456d707479207768656e20746865726520617265206e6f6e652e227d5d7d02f21d7b2274797065223a227265636f7264222c226e616d65223a224170706f696e746d656e74222c226e616d657370616365223a226178742e6578616d706c652e7631222c22646f63223a22416e206170706f696e746d656e743a20616e206576656e7420617420612074696d6520616e6420706f737369626c79206120706c6163652c2073756368206173206120766973697420746f20746865207665742e222c226178742e76657273696f6e223a312c226178742e7469746c65223a227469746c65222c226669656c6473223a5b7b226e616d65223a227469746c65222c2274797065223a22737472696e67222c2264656661756c74223a22222c22646f63223a225768617420746865206170706f696e746d656e742069732c20617320706c61696e2074657874206f6e206f6e65206c696e652e227d2c7b226e616d65223a227374617274222c2274797065223a7b2274797065223a226c6f6e67222c226c6f676963616c54797065223a226c6f63616c2d74696d657374616d702d6d696c6c6973227d2c22646f63223a225768656e20746865206170706f696e746d656e74207374617274732c2061732061206461746520616e642074696d65206f6e207468652077616c6c20636c6f636b3b207365652074696d655f7a6f6e652e20466f7220616e20616c6c2d646179206170706f696e746d656e742c2030303a3030206f6620697473206669727374206461792e227d2c7b226e616d65223a22656e64222c2274797065223a5b226e756c6c222c7b2274797065223a226c6f6e67222c226c6f676963616c54797065223a226c6f63616c2d74696d657374616d702d6d696c6c6973227d5d2c2264656661756c74223a6e756c6c2c22646f63223a225768656e20746865206170706f696e746d656e7420656e64732c2061732061206461746520616e642074696d65206f6e207468652077616c6c20636c6f636b20696e207468652074696d65207a6f6e65206f662073746172743b2074686520656e6420697473656c66206973206e6f742070617274206f6620746865206170706f696e746d656e742e20466f7220616e20616c6c2d646179206170706f696e746d656e742c2030303a3030206f66207468652064617920616674657220697473206c617374206461792e204e756c6c207768656e206e6f20656e6420697320676976656e3b20616e20616c6c2d646179206170706f696e746d656e7420776974686f757420616e20656e642074616b6573206f6e65206461792e227d2c7b226e616d65223a2274696d655f7a6f6e65222c2274797065223a5b226e756c6c222c22737472696e67225d2c2264656661756c74223a6e756c6c2c22646f63223a225468652049414e412074696d65207a6f6e65206e616d652c2073756368206173204575726f70652f4265726c696e2c20696e20776869636820737461727420616e6420656e642072656164206f6e207468652077616c6c20636c6f636b2e204e756c6c207768656e20737461727420616e6420656e6420617265206d65616e7420696e2077686174657665722074696d65207a6f6e6520746865207573657220697320696e2061742074686174206d6f6d656e742e227d2c7b226e616d65223a22616c6c5f646179222c2274797065223a22626f6f6c65616e222c2264656661756c74223a66616c73652c22646f63223a2254727565207768656e20746865206170706f696e746d656e742074616b65732077686f6c6520646179733b207468652074696d6573206f6620737461727420616e6420656e6420617265207468656e2030303a303020616e642068617665206e6f206d65616e696e67206265796f6e6420746865206461792e227d2c7b226e616d65223a226c6f636174696f6e222c2274797065223a22737472696e67222c2264656661756c74223a22222c22646f63223a22576865726520746865206170706f696e746d656e742074616b657320706c6163652c20617320746578742c207375636820617320616e2061646472657373206f72206120726f6f6d2e20456d707479207768656e206e6f7420676976656e2e227d2c7b226e616d65223a226e6f746573222c2274797065223a22737472696e67222c2264656661756c74223a22222c22646f63223a2246726565206e6f746573206f6e20746865206170706f696e746d656e742c20617320706c61696e20746578743b206c696e65732061726520736570617261746564206279204c462e20456d707479207768656e20746865726520617265206e6f6e652e227d2c7b226e616d65223a2272656d696e64657273222c2274797065223a7b2274797065223a226172726179222c226974656d73223a22696e74227d2c2264656661756c74223a5b5d2c22646f63223a225768656e2074686520757365722077616e747320746f2062652072656d696e6465642c20656163682061732061206e756d626572206f66206d696e75746573206265666f72652073746172743b20302069732061742073746172742e204e6f2076616c7565206973206e656761746976652e20456d707479207768656e20746865726520617265206e6f2072656d696e646572732e222c226178742e756e6974223a226d696e227d5d7d02004fba2b055b51349aa8b9441a49b22209f185a8b5b83b4cc0793e9448d04f59342406cfaa86139b5c83516f8dc20ca6063ad1eea6db6cf47dacf27be17aafe006"
+   },
+   "expected": {
+    "accept": {}
+   }
+  },
+  {
+   "id": "keys/verify_message/the-ack-of-protocol-md-section-17-5",
+   "op": "verify_message",
+   "description": "the ACK of protocol.md, section 17.5",
+   "refs": ["keys.md 2.2", "keys.md 2.3", "protocol.md 17.5"],
+   "input": {
+    "message": "c3017d0ce4e54fe8e1a2020cda9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb700ac01c301d86e16a8ccc725ee1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024861326434663662382d316333652d346135622d396437662d3065326334613662386431660200020000005742fa3f10cc0c44d9d74e82396781b0e885b8a715765d0c48b49c279e5c7d8de741da4fe6529fead81bb7616808c6e0c6e718ee956872545a5ace7553d6d20a"
+   },
+   "expected": {
+    "accept": {}
+   }
+  },
+  {
+   "id": "keys/verify_message/the-data-message-with-its-record-id-in-upper-case-signature-unchanged",
+   "op": "verify_message",
+   "description": "the DATA message with its record id in upper case, signature unchanged",
+   "refs": ["keys.md 2.2", "keys.md 2.3", "keys.md 2.2", "keys.md 7.2"],
+   "input": {
+    "message": "c3017d0ce4e54fe8e1a202081b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024830423541334331452d344432462d344136422d394338442d3745364635413442334332440246c30168b356680ce41cb7245665742c20547565736461792031303a303080d4a8efd06633875e5e5b36d7dfacea9fe183e4118b2beff6e61eb1367e53a33c74d32e20539e2ec515ee75d966528eb68fbc88d4094cfa1f482feb6c24ce1e5c2ff6c15003"
+   },
+   "expected": {
+    "reject": {"error": "SIGNATURE_INVALID"}
+   }
+  },
+  {
+   "id": "keys/verify_message/the-data-message-with-one-byte-of-the-body-changed",
+   "op": "verify_message",
+   "description": "the DATA message with one byte of the body changed",
+   "refs": ["keys.md 2.2", "keys.md 2.3", "keys.md 2.3"],
+   "input": {
+    "message": "c3017d0ce4e54fe8e1a202081b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024830623561336331652d346432662d346136622d396338642d3765366635613462336332640246c30168b356680ce41cb7245664742c20547565736461792031303a303080d4a8efd06633875e5e5b36d7dfacea9fe183e4118b2beff6e61eb1367e53a33c74d32e20539e2ec515ee75d966528eb68fbc88d4094cfa1f482feb6c24ce1e5c2ff6c15003"
+   },
+   "expected": {
+    "reject": {"error": "SIGNATURE_INVALID"}
+   }
+  },
+  {
+   "id": "keys/verify_message/the-data-message-signed-with-another-key-than-its-sender",
+   "op": "verify_message",
+   "description": "the DATA message signed with another key than its sender",
+   "refs": ["keys.md 2.2", "keys.md 2.3", "keys.md 2.3"],
+   "input": {
+    "message": "c3017d0ce4e54fe8e1a202081b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024830623561336331652d346432662d346136622d396338642d3765366635613462336332640246c30168b356680ce41cb7245665742c20547565736461792031303a303080d4a8efd066a948dbb279a2102729cdf1c7d78a052e16fcdf92e7f34ba773a465d542a4f6138abe1ba9876ae80cf3f56cd46abb4c3e0e57c40a3dbdecd8ec83203394d9f30e"
+   },
+   "expected": {
+    "reject": {"error": "SIGNATURE_INVALID"}
+   }
+  },
+  {
+   "id": "keys/key_move/the-key-move-of-keys-md-section-7-5",
+   "op": "key_move",
+   "description": "the KEY_MOVE of keys.md, section 7.5",
+   "refs": ["keys.md 5.1", "keys.md 5.3", "keys.md 7.5"],
+   "input": {
+    "message": "c3017d0ce4e54fe8e1a202101b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a009602c30176282fa7fe0ae2a9bc8213b9e5a1325c8ac9877a72555aa19f7b8b6841cbffb9345aad04328e1f7b0204c3ae114f9673fe61354502d8d7d646fa37cef5e5900e00ef17808cd15a23554b98c112639c50f351b2c58ff6e495c8e20e7a1b741d123e2bd76debf30568b8f1045c1d369dbb9f6d306f6e13d3dad872c9385785f6a46527ae729bd81d8d0f7bcf5a34f7f55f067f7afb087bbbbdb1cb962c7af85405c6accfaceb9b760770d0def5740f01ae96b28a9a6477e75b582c58501362e9f25c3c413a9817927f0c"
+   },
+   "expected": {
+    "accept": {
+     "old_key": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+     "new_key": "bc8213b9e5a1325c8ac9877a72555aa19f7b8b6841cbffb9345aad04328e1f7b",
+     "new_encryption_key": "04c3ae114f9673fe61354502d8d7d646fa37cef5e5900e00ef17808cd15a2355"
+    }
+   }
+  },
+  {
+   "id": "keys/key_move/a-key-move-without-an-encryption-key",
+   "op": "key_move",
+   "description": "a KEY_MOVE without an encryption key",
+   "refs": ["keys.md 5.1", "keys.md 5.3"],
+   "input": {
+    "message": "c3017d0ce4e54fe8e1a202101b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a00d601c30176282fa7fe0ae2a9bc8213b9e5a1325c8ac9877a72555aa19f7b8b6841cbffb9345aad04328e1f7b004b98c112639c50f351b2c58ff6e495c8e20e7a1b741d123e2bd76debf30568b8f1045c1d369dbb9f6d306f6e13d3dad872c9385785f6a46527ae729bd81d8d0f11371235f2ecf085aa849ed1a5545be4becfe06502e259aa8b04d487123dd8d3b0ac0b69e1025532b4ab36a7246970e897afbdb3f975d307481613f7397d4d05"
+   },
+   "expected": {
+    "accept": {
+     "old_key": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+     "new_key": "bc8213b9e5a1325c8ac9877a72555aa19f7b8b6841cbffb9345aad04328e1f7b",
+     "new_encryption_key": null
+    }
+   }
+  },
+  {
+   "id": "keys/key_move/reject-a-proof-made-by-another-key-than-the-new-one",
+   "op": "key_move",
+   "description": "reject a proof made by another key than the new one",
+   "refs": ["keys.md 5.3"],
+   "input": {
+    "message": "c3017d0ce4e54fe8e1a202101b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a009602c30176282fa7fe0ae2a9bc8213b9e5a1325c8ac9877a72555aa19f7b8b6841cbffb9345aad04328e1f7b0204c3ae114f9673fe61354502d8d7d646fa37cef5e5900e00ef17808cd15a2355aebc68ac1061723c9a46b1fe793c4cd3035e27ac3380a500081ac79d35e6199e875b338a11fe5b33906c15c1172a60373601211f00f5150d34a70cd35de8ee0cd863df6f437745bc8036c35fcf37ba33de66f0a0bd47ce131f0692891b9ffeccb52b654d84f3325cf3805c7e5489633a5b05dfd7e1cff4a5b94a49b9f128e102"
+   },
+   "expected": {
+    "reject": {"error": "KEY_MOVE_REJECTED", "note": "the proof does not verify"}
+   }
+  },
+  {
+   "id": "keys/key_move/reject-a-proof-over-another-old-key",
+   "op": "key_move",
+   "description": "reject a proof over another old key",
+   "refs": ["keys.md 5.3"],
+   "input": {
+    "message": "c3017d0ce4e54fe8e1a202101b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a009602c30176282fa7fe0ae2a9bc8213b9e5a1325c8ac9877a72555aa19f7b8b6841cbffb9345aad04328e1f7b0204c3ae114f9673fe61354502d8d7d646fa37cef5e5900e00ef17808cd15a2355420a44b06d5f0835b0b7be32ba39962eedd1f852274352cfb00b7347ad092ec4797edf6b3b9418a10a8e58d565c1a0470d436d64647ab6e4dd2fed3dd4ef460f49a8173a8e06362dbda8e6e7d60dac078133b84ce55bbf0660d8d5af3ba0979788314a68b91abf40ac15b8412ca36dacbcb72e18ae63336ccfa5de86f1e5a303"
+   },
+   "expected": {
+    "reject": {"error": "KEY_MOVE_REJECTED", "note": "the proof does not verify"}
+   }
+  },
+  {
+   "id": "keys/key_move/reject-a-proof-with-the-prefix-of-a-message-signature",
+   "op": "key_move",
+   "description": "reject a proof with the prefix of a message signature",
+   "refs": ["keys.md 5.3"],
+   "input": {
+    "message": "c3017d0ce4e54fe8e1a202101b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a009602c30176282fa7fe0ae2a9bc8213b9e5a1325c8ac9877a72555aa19f7b8b6841cbffb9345aad04328e1f7b0204c3ae114f9673fe61354502d8d7d646fa37cef5e5900e00ef17808cd15a235593661d42b9ff41416694c27636db5c14be03d3622f4ae5b5b88deb07a78fae7879c2064597a85d7ffaa19a9540447d923e6a5c1adb983b84fdafefc04606070c16e9d400d714befd7e864d10de75bc3f4265260090a65780d46b8a3a0340d1ac1b9975fae3c1eeae3a0b1e45a4728dba90f35c62d0224af8bbdafdb5a9695f02"
+   },
+   "expected": {
+    "reject": {"error": "KEY_MOVE_REJECTED", "note": "the proof does not verify"}
+   }
+  },
+  {
+   "id": "keys/key_move/reject-a-new-encryption-key-of-small-order",
+   "op": "key_move",
+   "description": "reject a new encryption key of small order",
+   "refs": ["keys.md 5.3"],
+   "input": {
+    "message": "c3017d0ce4e54fe8e1a202101b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a009602c30176282fa7fe0ae2a9bc8213b9e5a1325c8ac9877a72555aa19f7b8b6841cbffb9345aad04328e1f7b0200000000000000000000000000000000000000000000000000000000000000004b98c112639c50f351b2c58ff6e495c8e20e7a1b741d123e2bd76debf30568b8f1045c1d369dbb9f6d306f6e13d3dad872c9385785f6a46527ae729bd81d8d0f8ad9d0d65d35cec9c709d1bc451450a1cf3f39b5ebdc524f7881614a1ed06322866a9c76f6b56ea3941a716e82b504a5f2dcdc787ccb809c2ee5cdef27f13704"
+   },
+   "expected": {
+    "reject": {"error": "KEY_MOVE_REJECTED", "note": "the encryption key is of small order"}
+   }
+  },
+  {
+   "id": "keys/key_move/reject-a-new-key-of-small-order-with-a-proof-that-verifies-under-a-lax-r",
+   "op": "key_move",
+   "description": "reject a new key of small order, with a proof that verifies under a lax rule",
+   "refs": ["keys.md 2.3", "keys.md 5.3"],
+   "input": {
+    "message": "c3017d0ce4e54fe8e1a202101b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a009602c30176282fa7fe0ae2a901000000000000000000000000000000000000000000000000000000000000000204c3ae114f9673fe61354502d8d7d646fa37cef5e5900e00ef17808cd15a235501000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000d97bf96caab16d2d5e4222b4a834a4684e49210696a21c32555d167477a3ddc517c8e2d1f1384ad1f1c7ed7b145f121c5f6c62177d373d98262587d7c36fd206"
+   },
+   "expected": {
+    "reject": {"error": "KEY_MOVE_REJECTED", "note": "the new key is not of order L"}
+   }
+  },
+  {
+   "id": "keys/key_move/reject-a-key-move-whose-signature-by-the-old-key-does-not-verify",
+   "op": "key_move",
+   "description": "reject a KEY_MOVE whose signature by the old key does not verify",
+   "refs": ["keys.md 5.3"],
+   "input": {
+    "message": "c3017d0ce4e54fe8e1a202101b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a009602c30176282fa7fe0ae2a9bc8213b9e5a1325c8ac9877a72555aa19f7b8b6841cbffb9345aad04328e1f7b0204c3ae114f9673fe61354502d8d7d646fa37cef5e5900e00ef17808cd15a23554b98c112639c50f351b2c58ff6e495c8e20e7a1b741d123e2bd76debf30568b8f1045c1d369dbb9f6d306f6e13d3dad872c9385785f6a46527ae729bd81d8d0f7bcf5a34f7f55f067f7afb087bbbbdb1cb962c7af85405c6accfaceb9b760770d0def5740f01ae96b28a9a6477e75b582c58501362e9f25c3c413a9817927f0d"
+   },
+   "expected": {
+    "reject": {"error": "SIGNATURE_INVALID"}
+   }
+  },
+  {
+   "id": "keys/padded_length/the-padded-length-of-a-message-of-1-bytes",
+   "op": "padded_length",
+   "description": "the padded length of a message of 1 bytes",
+   "refs": ["keys.md 4.4"],
+   "input": {"length": 1},
+   "expected": {
+    "accept": {"padded_length": 1024}
+   }
+  },
+  {
+   "id": "keys/padded_length/the-padded-length-of-a-message-of-183-bytes",
+   "op": "padded_length",
+   "description": "the padded length of a message of 183 bytes",
+   "refs": ["keys.md 4.4"],
+   "input": {"length": 183},
+   "expected": {
+    "accept": {"padded_length": 1024}
+   }
+  },
+  {
+   "id": "keys/padded_length/the-padded-length-of-a-message-of-1022-bytes",
+   "op": "padded_length",
+   "description": "the padded length of a message of 1022 bytes",
+   "refs": ["keys.md 4.4"],
+   "input": {"length": 1022},
+   "expected": {
+    "accept": {"padded_length": 1024}
+   }
+  },
+  {
+   "id": "keys/padded_length/the-padded-length-of-a-message-of-1023-bytes",
+   "op": "padded_length",
+   "description": "the padded length of a message of 1023 bytes",
+   "refs": ["keys.md 4.4"],
+   "input": {"length": 1023},
+   "expected": {
+    "accept": {"padded_length": 1024}
+   }
+  },
+  {
+   "id": "keys/padded_length/the-padded-length-of-a-message-of-1024-bytes",
+   "op": "padded_length",
+   "description": "the padded length of a message of 1024 bytes",
+   "refs": ["keys.md 4.4"],
+   "input": {"length": 1024},
+   "expected": {
+    "accept": {"padded_length": 1088}
+   }
+  },
+  {
+   "id": "keys/padded_length/the-padded-length-of-a-message-of-1087-bytes",
+   "op": "padded_length",
+   "description": "the padded length of a message of 1087 bytes",
+   "refs": ["keys.md 4.4"],
+   "input": {"length": 1087},
+   "expected": {
+    "accept": {"padded_length": 1088}
+   }
+  },
+  {
+   "id": "keys/padded_length/the-padded-length-of-a-message-of-1088-bytes",
+   "op": "padded_length",
+   "description": "the padded length of a message of 1088 bytes",
+   "refs": ["keys.md 4.4"],
+   "input": {"length": 1088},
+   "expected": {
+    "accept": {"padded_length": 1152}
+   }
+  },
+  {
+   "id": "keys/padded_length/the-padded-length-of-a-message-of-4000-bytes",
+   "op": "padded_length",
+   "description": "the padded length of a message of 4000 bytes",
+   "refs": ["keys.md 4.4"],
+   "input": {"length": 4000},
+   "expected": {
+    "accept": {"padded_length": 4096}
+   }
+  },
+  {
+   "id": "keys/padded_length/the-padded-length-of-a-message-of-100000-bytes",
+   "op": "padded_length",
+   "description": "the padded length of a message of 100000 bytes",
+   "refs": ["keys.md 4.4"],
+   "input": {"length": 100000},
+   "expected": {
+    "accept": {"padded_length": 100352}
+   }
+  },
+  {
+   "id": "keys/padded_length/the-padded-length-of-a-message-of-16777216-bytes",
+   "op": "padded_length",
+   "description": "the padded length of a message of 16777216 bytes",
+   "refs": ["keys.md 4.4"],
+   "input": {"length": 16777216},
+   "expected": {
+    "accept": {"padded_length": 17301504}
+   }
+  },
+  {
+   "id": "keys/seal/seal-the-data-message-of-keys-md-section-7-2-for-old-brain-fix",
+   "op": "seal",
+   "description": "seal the DATA message of keys.md, section 7.2 for Old Brain Fix",
+   "refs": ["keys.md 4.3", "keys.md 4.4"],
+   "input": {
+    "message": "c3017d0ce4e54fe8e1a202081b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024830623561336331652d346432662d346136622d396338642d3765366635613462336332640246c30168b356680ce41cb7245665742c20547565736461792031303a303080d4a8efd06633875e5e5b36d7dfacea9fe183e4118b2beff6e61eb1367e53a33c74d32e20539e2ec515ee75d966528eb68fbc88d4094cfa1f482feb6c24ce1e5c2ff6c15003",
+    "encryption_key": "34fa7e71770d8d94c76001ac8d575609f005981f80c115bb7a8fe312687ea40b"
+   },
+   "expected": {
+    "accept": {
+     "sealed": {
+      "opens_with": "8a5e1abca252aefadec7cf0764f52c64b587cdbef900ea3d9046cbf51bc6ed97",
+      "to": "c3017d0ce4e54fe8e1a202081b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024830623561336331652d346432662d346136622d396338642d3765366635613462336332640246c30168b356680ce41cb7245665742c20547565736461792031303a303080d4a8efd06633875e5e5b36d7dfacea9fe183e4118b2beff6e61eb1367e53a33c74d32e20539e2ec515ee75d966528eb68fbc88d4094cfa1f482feb6c24ce1e5c2ff6c15003",
+      "length": 1073
+     }
+    }
+   }
+  },
+  {
+   "id": "keys/seal/seal-the-key-move-of-keys-md-section-7-5-for-old-brain-fix",
+   "op": "seal",
+   "description": "seal the KEY_MOVE of keys.md, section 7.5 for Old Brain Fix",
+   "refs": ["keys.md 4.3", "keys.md 4.4"],
+   "input": {
+    "message": "c3017d0ce4e54fe8e1a202101b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a009602c30176282fa7fe0ae2a9bc8213b9e5a1325c8ac9877a72555aa19f7b8b6841cbffb9345aad04328e1f7b0204c3ae114f9673fe61354502d8d7d646fa37cef5e5900e00ef17808cd15a23554b98c112639c50f351b2c58ff6e495c8e20e7a1b741d123e2bd76debf30568b8f1045c1d369dbb9f6d306f6e13d3dad872c9385785f6a46527ae729bd81d8d0f7bcf5a34f7f55f067f7afb087bbbbdb1cb962c7af85405c6accfaceb9b760770d0def5740f01ae96b28a9a6477e75b582c58501362e9f25c3c413a9817927f0c",
+    "encryption_key": "34fa7e71770d8d94c76001ac8d575609f005981f80c115bb7a8fe312687ea40b"
+   },
+   "expected": {
+    "accept": {
+     "sealed": {
+      "opens_with": "8a5e1abca252aefadec7cf0764f52c64b587cdbef900ea3d9046cbf51bc6ed97",
+      "to": "c3017d0ce4e54fe8e1a202101b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a009602c30176282fa7fe0ae2a9bc8213b9e5a1325c8ac9877a72555aa19f7b8b6841cbffb9345aad04328e1f7b0204c3ae114f9673fe61354502d8d7d646fa37cef5e5900e00ef17808cd15a23554b98c112639c50f351b2c58ff6e495c8e20e7a1b741d123e2bd76debf30568b8f1045c1d369dbb9f6d306f6e13d3dad872c9385785f6a46527ae729bd81d8d0f7bcf5a34f7f55f067f7afb087bbbbdb1cb962c7af85405c6accfaceb9b760770d0def5740f01ae96b28a9a6477e75b582c58501362e9f25c3c413a9817927f0c",
+      "length": 1073
+     }
+    }
+   }
+  },
+  {
+   "id": "keys/open/open-the-sealed-message-of-keys-md-section-7-4",
+   "op": "open",
+   "description": "open the sealed message of keys.md, section 7.4",
+   "refs": ["keys.md 4.5"],
+   "input": {
+    "sealed": "01ed7a4a213ac37cdffc78372805f51ea53b592174ea7bd2bceacf6b359438b3363d9df8be1f421f9f802400665192510b102d0b8280b805e875fdc3f3d74efc7d1177b764a6cc83c0e6c921b2625f90358af1a50a4b94e71021c2cfbc080a66cddad5a024ce411701fc66005a50ebe60f42358fe69dfedde660f96b0da034729f162a41190d1175dcbbb595e79064009f21afaaed50c0c4a2f4a5324117dd8ad6df347f56107353b45f3555331c2f0b1ed8ba6e4dbdb3cdfca008873f958a7114c9b835868b2312e9585fde5ce334f9e6dc7b3a711f18bbb035a3d22316469c8a3e18a67d86c797510b411fb78efbf5f781b6c4391bed4c6da8d32cda80cbb51bfd9c52ec1e1f8563c393add99e4069dce46eb830b354c6358689044fd1a4a625c7ebb7fede84fa1ed4855f2bca6fd612acccee4f6f437731a27075f7fda48a5f1d8f9c7808fa150cd6d2de49a932e3dd91960d40e004544fc128781c512bc0bedb04024cc0e5d564e7a11ace2fc01b8ea52e070f9013d11acad2396630cdd8ea957654acd64b7c7a28fc4edfa08e29ace79a95e01d5900b07f0998f7c87bfb060d4390168c08337aaf478c9c66ade02cbfa8ef8ba121360e4478da7e37e036c1637b267de9a4d8508d25cc734608db362875d0ae4f10540b93ed5b963a58adfa502591e64f622d2f1ad320c3e08a334d6548c4b578068026f4f260aaadfaa77f2965e0acc2cf97de7f194e82a58277d58bcc3f9d71890490531c643a9d602fb21e3e40ffe63eab5b733bf1905d3e2cb899254664e20e034e0a10204b3b2b83e4a2bbbc0901aa8431245c1c165f0e6c2c76a305dee22f65e2f54a6e2fdf2b4d927f0920eaa088d26fec6bfc39bd32cbea9c9a996ff7d6599abd4fe9a0e461263c5aa8a14fde67717344fe129f465384942615dc7f440d443660740969057142d4955ac936f0ab2b342d81e81180c713c5c4028f988d0b6f39ed1c42e79a2f59ba26c2cf50c4a4523269ff570af9bc1ba8b23e70ec8618717b65f073dcc82f627b4bfee879f8eb1008f6b547f8072205f97b385578c70f14ec6f5502169353e4647aef24bdc720486a56ab782c520de96925917e9cc671bc0e27656839c614e0e61ddb8c0153a7965bd05e3831126c729eab4ea24a96bb8ebdf54ba426c479e99e72c32bee007e477945e6fcfeabf77e1fc1513f0a68fee3ec740872335ade8cb57fd3aaa7b37dce84dfd9e3a89b4d52348740a3d76c029e112ef5b742c587dc9db091eaa54fadcbe8cd59244c51226e36af9da543e760322b6849315390949f457afa1c15afea2611a177551fe56b407b4b547bc954ae122f7a312d2b608ea088bd1b76bb31a4989495e22c5570c05ec75809d80d575233da4b9998c1cd9ca0ce088570554bf2e597c4643643d2f06e266867ab86e29cc935f2614f65e0b8109dad403311c3d551eca27016125505a079c3fe80106c17f243ff91a4facff1f38785f781931b9ca7654ebbba575f24cd29",
+    "private_keys": ["8a5e1abca252aefadec7cf0764f52c64b587cdbef900ea3d9046cbf51bc6ed97"]
+   },
+   "expected": {
+    "accept": {
+     "message": "c3017d0ce4e54fe8e1a202081b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024830623561336331652d346432662d346136622d396338642d3765366635613462336332640246c30168b356680ce41cb7245665742c20547565736461792031303a303080d4a8efd06633875e5e5b36d7dfacea9fe183e4118b2beff6e61eb1367e53a33c74d32e20539e2ec515ee75d966528eb68fbc88d4094cfa1f482feb6c24ce1e5c2ff6c15003"
+    }
+   }
+  },
+  {
+   "id": "keys/open/open-the-sealed-message-with-an-earlier-key-after-the-current-one",
+   "op": "open",
+   "description": "open the sealed message with an earlier key after the current one",
+   "refs": ["keys.md 4.5"],
+   "input": {
+    "sealed": "01ed7a4a213ac37cdffc78372805f51ea53b592174ea7bd2bceacf6b359438b3363d9df8be1f421f9f802400665192510b102d0b8280b805e875fdc3f3d74efc7d1177b764a6cc83c0e6c921b2625f90358af1a50a4b94e71021c2cfbc080a66cddad5a024ce411701fc66005a50ebe60f42358fe69dfedde660f96b0da034729f162a41190d1175dcbbb595e79064009f21afaaed50c0c4a2f4a5324117dd8ad6df347f56107353b45f3555331c2f0b1ed8ba6e4dbdb3cdfca008873f958a7114c9b835868b2312e9585fde5ce334f9e6dc7b3a711f18bbb035a3d22316469c8a3e18a67d86c797510b411fb78efbf5f781b6c4391bed4c6da8d32cda80cbb51bfd9c52ec1e1f8563c393add99e4069dce46eb830b354c6358689044fd1a4a625c7ebb7fede84fa1ed4855f2bca6fd612acccee4f6f437731a27075f7fda48a5f1d8f9c7808fa150cd6d2de49a932e3dd91960d40e004544fc128781c512bc0bedb04024cc0e5d564e7a11ace2fc01b8ea52e070f9013d11acad2396630cdd8ea957654acd64b7c7a28fc4edfa08e29ace79a95e01d5900b07f0998f7c87bfb060d4390168c08337aaf478c9c66ade02cbfa8ef8ba121360e4478da7e37e036c1637b267de9a4d8508d25cc734608db362875d0ae4f10540b93ed5b963a58adfa502591e64f622d2f1ad320c3e08a334d6548c4b578068026f4f260aaadfaa77f2965e0acc2cf97de7f194e82a58277d58bcc3f9d71890490531c643a9d602fb21e3e40ffe63eab5b733bf1905d3e2cb899254664e20e034e0a10204b3b2b83e4a2bbbc0901aa8431245c1c165f0e6c2c76a305dee22f65e2f54a6e2fdf2b4d927f0920eaa088d26fec6bfc39bd32cbea9c9a996ff7d6599abd4fe9a0e461263c5aa8a14fde67717344fe129f465384942615dc7f440d443660740969057142d4955ac936f0ab2b342d81e81180c713c5c4028f988d0b6f39ed1c42e79a2f59ba26c2cf50c4a4523269ff570af9bc1ba8b23e70ec8618717b65f073dcc82f627b4bfee879f8eb1008f6b547f8072205f97b385578c70f14ec6f5502169353e4647aef24bdc720486a56ab782c520de96925917e9cc671bc0e27656839c614e0e61ddb8c0153a7965bd05e3831126c729eab4ea24a96bb8ebdf54ba426c479e99e72c32bee007e477945e6fcfeabf77e1fc1513f0a68fee3ec740872335ade8cb57fd3aaa7b37dce84dfd9e3a89b4d52348740a3d76c029e112ef5b742c587dc9db091eaa54fadcbe8cd59244c51226e36af9da543e760322b6849315390949f457afa1c15afea2611a177551fe56b407b4b547bc954ae122f7a312d2b608ea088bd1b76bb31a4989495e22c5570c05ec75809d80d575233da4b9998c1cd9ca0ce088570554bf2e597c4643643d2f06e266867ab86e29cc935f2614f65e0b8109dad403311c3d551eca27016125505a079c3fe80106c17f243ff91a4facff1f38785f781931b9ca7654ebbba575f24cd29",
+    "private_keys": [
+     "1ccea4e9796a140cb9470852567f73767674b3e7d40c1a802f6094bdd55fc4b3",
+     "8a5e1abca252aefadec7cf0764f52c64b587cdbef900ea3d9046cbf51bc6ed97"
+    ]
+   },
+   "expected": {
+    "accept": {
+     "message": "c3017d0ce4e54fe8e1a202081b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024830623561336331652d346432662d346136622d396338642d3765366635613462336332640246c30168b356680ce41cb7245665742c20547565736461792031303a303080d4a8efd06633875e5e5b36d7dfacea9fe183e4118b2beff6e61eb1367e53a33c74d32e20539e2ec515ee75d966528eb68fbc88d4094cfa1f482feb6c24ce1e5c2ff6c15003"
+    }
+   }
+  },
+  {
+   "id": "keys/open/reject-the-sealed-message-with-another-key-only",
+   "op": "open",
+   "description": "reject the sealed message with another key only",
+   "refs": ["keys.md 4.5"],
+   "input": {
+    "sealed": "01ed7a4a213ac37cdffc78372805f51ea53b592174ea7bd2bceacf6b359438b3363d9df8be1f421f9f802400665192510b102d0b8280b805e875fdc3f3d74efc7d1177b764a6cc83c0e6c921b2625f90358af1a50a4b94e71021c2cfbc080a66cddad5a024ce411701fc66005a50ebe60f42358fe69dfedde660f96b0da034729f162a41190d1175dcbbb595e79064009f21afaaed50c0c4a2f4a5324117dd8ad6df347f56107353b45f3555331c2f0b1ed8ba6e4dbdb3cdfca008873f958a7114c9b835868b2312e9585fde5ce334f9e6dc7b3a711f18bbb035a3d22316469c8a3e18a67d86c797510b411fb78efbf5f781b6c4391bed4c6da8d32cda80cbb51bfd9c52ec1e1f8563c393add99e4069dce46eb830b354c6358689044fd1a4a625c7ebb7fede84fa1ed4855f2bca6fd612acccee4f6f437731a27075f7fda48a5f1d8f9c7808fa150cd6d2de49a932e3dd91960d40e004544fc128781c512bc0bedb04024cc0e5d564e7a11ace2fc01b8ea52e070f9013d11acad2396630cdd8ea957654acd64b7c7a28fc4edfa08e29ace79a95e01d5900b07f0998f7c87bfb060d4390168c08337aaf478c9c66ade02cbfa8ef8ba121360e4478da7e37e036c1637b267de9a4d8508d25cc734608db362875d0ae4f10540b93ed5b963a58adfa502591e64f622d2f1ad320c3e08a334d6548c4b578068026f4f260aaadfaa77f2965e0acc2cf97de7f194e82a58277d58bcc3f9d71890490531c643a9d602fb21e3e40ffe63eab5b733bf1905d3e2cb899254664e20e034e0a10204b3b2b83e4a2bbbc0901aa8431245c1c165f0e6c2c76a305dee22f65e2f54a6e2fdf2b4d927f0920eaa088d26fec6bfc39bd32cbea9c9a996ff7d6599abd4fe9a0e461263c5aa8a14fde67717344fe129f465384942615dc7f440d443660740969057142d4955ac936f0ab2b342d81e81180c713c5c4028f988d0b6f39ed1c42e79a2f59ba26c2cf50c4a4523269ff570af9bc1ba8b23e70ec8618717b65f073dcc82f627b4bfee879f8eb1008f6b547f8072205f97b385578c70f14ec6f5502169353e4647aef24bdc720486a56ab782c520de96925917e9cc671bc0e27656839c614e0e61ddb8c0153a7965bd05e3831126c729eab4ea24a96bb8ebdf54ba426c479e99e72c32bee007e477945e6fcfeabf77e1fc1513f0a68fee3ec740872335ade8cb57fd3aaa7b37dce84dfd9e3a89b4d52348740a3d76c029e112ef5b742c587dc9db091eaa54fadcbe8cd59244c51226e36af9da543e760322b6849315390949f457afa1c15afea2611a177551fe56b407b4b547bc954ae122f7a312d2b608ea088bd1b76bb31a4989495e22c5570c05ec75809d80d575233da4b9998c1cd9ca0ce088570554bf2e597c4643643d2f06e266867ab86e29cc935f2614f65e0b8109dad403311c3d551eca27016125505a079c3fe80106c17f243ff91a4facff1f38785f781931b9ca7654ebbba575f24cd29",
+    "private_keys": ["1ccea4e9796a140cb9470852567f73767674b3e7d40c1a802f6094bdd55fc4b3"]
+   },
+   "expected": {
+    "reject": {"error": "NOT_OPENED"}
+   }
+  },
+  {
+   "id": "keys/open/reject-a-first-byte-other-than-01",
+   "op": "open",
+   "description": "reject a first byte other than 01",
+   "refs": ["keys.md 4.5"],
+   "input": {
+    "sealed": "02ed7a4a213ac37cdffc78372805f51ea53b592174ea7bd2bceacf6b359438b3363d9df8be1f421f9f802400665192510b102d0b8280b805e875fdc3f3d74efc7d1177b764a6cc83c0e6c921b2625f90358af1a50a4b94e71021c2cfbc080a66cddad5a024ce411701fc66005a50ebe60f42358fe69dfedde660f96b0da034729f162a41190d1175dcbbb595e79064009f21afaaed50c0c4a2f4a5324117dd8ad6df347f56107353b45f3555331c2f0b1ed8ba6e4dbdb3cdfca008873f958a7114c9b835868b2312e9585fde5ce334f9e6dc7b3a711f18bbb035a3d22316469c8a3e18a67d86c797510b411fb78efbf5f781b6c4391bed4c6da8d32cda80cbb51bfd9c52ec1e1f8563c393add99e4069dce46eb830b354c6358689044fd1a4a625c7ebb7fede84fa1ed4855f2bca6fd612acccee4f6f437731a27075f7fda48a5f1d8f9c7808fa150cd6d2de49a932e3dd91960d40e004544fc128781c512bc0bedb04024cc0e5d564e7a11ace2fc01b8ea52e070f9013d11acad2396630cdd8ea957654acd64b7c7a28fc4edfa08e29ace79a95e01d5900b07f0998f7c87bfb060d4390168c08337aaf478c9c66ade02cbfa8ef8ba121360e4478da7e37e036c1637b267de9a4d8508d25cc734608db362875d0ae4f10540b93ed5b963a58adfa502591e64f622d2f1ad320c3e08a334d6548c4b578068026f4f260aaadfaa77f2965e0acc2cf97de7f194e82a58277d58bcc3f9d71890490531c643a9d602fb21e3e40ffe63eab5b733bf1905d3e2cb899254664e20e034e0a10204b3b2b83e4a2bbbc0901aa8431245c1c165f0e6c2c76a305dee22f65e2f54a6e2fdf2b4d927f0920eaa088d26fec6bfc39bd32cbea9c9a996ff7d6599abd4fe9a0e461263c5aa8a14fde67717344fe129f465384942615dc7f440d443660740969057142d4955ac936f0ab2b342d81e81180c713c5c4028f988d0b6f39ed1c42e79a2f59ba26c2cf50c4a4523269ff570af9bc1ba8b23e70ec8618717b65f073dcc82f627b4bfee879f8eb1008f6b547f8072205f97b385578c70f14ec6f5502169353e4647aef24bdc720486a56ab782c520de96925917e9cc671bc0e27656839c614e0e61ddb8c0153a7965bd05e3831126c729eab4ea24a96bb8ebdf54ba426c479e99e72c32bee007e477945e6fcfeabf77e1fc1513f0a68fee3ec740872335ade8cb57fd3aaa7b37dce84dfd9e3a89b4d52348740a3d76c029e112ef5b742c587dc9db091eaa54fadcbe8cd59244c51226e36af9da543e760322b6849315390949f457afa1c15afea2611a177551fe56b407b4b547bc954ae122f7a312d2b608ea088bd1b76bb31a4989495e22c5570c05ec75809d80d575233da4b9998c1cd9ca0ce088570554bf2e597c4643643d2f06e266867ab86e29cc935f2614f65e0b8109dad403311c3d551eca27016125505a079c3fe80106c17f243ff91a4facff1f38785f781931b9ca7654ebbba575f24cd29",
+    "private_keys": ["8a5e1abca252aefadec7cf0764f52c64b587cdbef900ea3d9046cbf51bc6ed97"]
+   },
+   "expected": {
+    "reject": {"error": "NOT_OPENED"}
+   }
+  },
+  {
+   "id": "keys/open/reject-one-byte-of-the-ciphertext-changed",
+   "op": "open",
+   "description": "reject one byte of the ciphertext changed",
+   "refs": ["keys.md 4.5"],
+   "input": {
+    "sealed": "01ed7a4a213ac37cdffc78372805f51ea53b592174ea7bd2bceacf6b359438b3363d9df8be1f421f9f802400665192510b102d0b8280b805e875fdc3f3d74efc7d1177b764a6cc83c0e6c921b2625f90358af1a50a4b94e71021c2cfbc080a66cddad5a024ce411701fc66005a50ebe60f42358fe69dfedde660f96b0da034729f162a41190d1175dcbbb595e79064009f21afaaed50c0c4a2f4a5324117dd8ad6df347f56107353b45f3555331c2f0b1ed8ba6e4dbdb3cdfca008873f958a7114c9b835868b2312e9585fde5ce334f9e6dc7b3a711f18bbb035a3d22316469c8a3e18a67d86c797510b411fb78efbf5f781b6c4391bed4c6da8d32cda80cbb51bfd9c52ec1e1f8563c393add99e4069dce46eb830b354c6358689044fd1a4a625c7ebb7fede84fa1ed4855f2bca6fd612acccee4f6f437731a27075f7fda48a5f1d8f9c7808fa150cd6d2de49a932e3dd91960d40e004544fc128781c512bc0bedb04024cc0e5d564e7a11ace2fc01b8ea52e070f9013d11acad2396630cdd8ea957654acd64b7c7a28fc4edfa08e29ace79a95e01d5900b07f0998f7c87bfb060d4390168c08337aaf478c9c66ade02cbfa8ef8ba121360e4478da7e37e036c1637b267de9a4d8508d25cc734608db362875d0ae4f10540b93ed5b963a58adfa502591e64f622d2f1ad320c3e08a334d6548c4b578068026f4f260aaadfaa77f2965e0acc2cf97de7f194e82a58277d58bcc3f9d71890490531c643a9d602fb21e3e40ffe63eab5b733bf1905d3e2cb899254664e20e034e0a10204b3b2b83e4a2bbbc0901aa8431245c1c165f0e6c2c76a305dee22f65e2f54a6e2fdf2b4d927f0920eaa088d26fec6bfc39bd32cbea9c9a996ff7d6599abd4fe9a0e461263c5aa8a14fde67717344fe129f465384942615dc7f440d443660740969057142d4955ac936f0ab2b342d81e81180c713c5c4028f988d0b6f39ed1c42e79a2f59ba26c2cf50c4a4523269ff570af9bc1ba8b23e70ec8618717b65f073dcc82f627b4bfee879f8eb1008f6b547f8072205f97b385578c70f14ec6f5502169353e4647aef24bdc720486a56ab782c520de96925917e9cc671bc0e27656839c614e0e61ddb8c0153a7965bd05e3831126c729eab4ea24a96bb8ebdf54ba426c479e99e72c32bee007e477945e6fcfeabf77e1fc1513f0a68fee3ec740872335ade8cb57fd3aaa7b37dce84dfd9e3a89b4d52348740a3d76c029e112ef5b742c587dc9db091eaa54fadcbe8cd59244c51226e36af9da543e760322b6849315390949f457afa1c15afea2611a177551fe56b407b4b547bc954ae122f7a312d2b608ea088bd1b76bb31a4989495e22c5570c05ec75809d80d575233da4b9998c1cd9ca0ce088570554bf2e597c4643643d2f06e266867ab86e29cc935f2614f65e0b8109dad403311c3d551eca27016125505a079c3fe80106c17f243ff91a4facff1f38785f781931b9ca7654ebbba575f24cd28",
+    "private_keys": ["8a5e1abca252aefadec7cf0764f52c64b587cdbef900ea3d9046cbf51bc6ed97"]
+   },
+   "expected": {
+    "reject": {"error": "NOT_OPENED"}
+   }
+  },
+  {
+   "id": "keys/open/reject-one-byte-of-enc-changed",
+   "op": "open",
+   "description": "reject one byte of enc changed",
+   "refs": ["keys.md 4.5"],
+   "input": {
+    "sealed": "01ed7a4a213bc37cdffc78372805f51ea53b592174ea7bd2bceacf6b359438b3363d9df8be1f421f9f802400665192510b102d0b8280b805e875fdc3f3d74efc7d1177b764a6cc83c0e6c921b2625f90358af1a50a4b94e71021c2cfbc080a66cddad5a024ce411701fc66005a50ebe60f42358fe69dfedde660f96b0da034729f162a41190d1175dcbbb595e79064009f21afaaed50c0c4a2f4a5324117dd8ad6df347f56107353b45f3555331c2f0b1ed8ba6e4dbdb3cdfca008873f958a7114c9b835868b2312e9585fde5ce334f9e6dc7b3a711f18bbb035a3d22316469c8a3e18a67d86c797510b411fb78efbf5f781b6c4391bed4c6da8d32cda80cbb51bfd9c52ec1e1f8563c393add99e4069dce46eb830b354c6358689044fd1a4a625c7ebb7fede84fa1ed4855f2bca6fd612acccee4f6f437731a27075f7fda48a5f1d8f9c7808fa150cd6d2de49a932e3dd91960d40e004544fc128781c512bc0bedb04024cc0e5d564e7a11ace2fc01b8ea52e070f9013d11acad2396630cdd8ea957654acd64b7c7a28fc4edfa08e29ace79a95e01d5900b07f0998f7c87bfb060d4390168c08337aaf478c9c66ade02cbfa8ef8ba121360e4478da7e37e036c1637b267de9a4d8508d25cc734608db362875d0ae4f10540b93ed5b963a58adfa502591e64f622d2f1ad320c3e08a334d6548c4b578068026f4f260aaadfaa77f2965e0acc2cf97de7f194e82a58277d58bcc3f9d71890490531c643a9d602fb21e3e40ffe63eab5b733bf1905d3e2cb899254664e20e034e0a10204b3b2b83e4a2bbbc0901aa8431245c1c165f0e6c2c76a305dee22f65e2f54a6e2fdf2b4d927f0920eaa088d26fec6bfc39bd32cbea9c9a996ff7d6599abd4fe9a0e461263c5aa8a14fde67717344fe129f465384942615dc7f440d443660740969057142d4955ac936f0ab2b342d81e81180c713c5c4028f988d0b6f39ed1c42e79a2f59ba26c2cf50c4a4523269ff570af9bc1ba8b23e70ec8618717b65f073dcc82f627b4bfee879f8eb1008f6b547f8072205f97b385578c70f14ec6f5502169353e4647aef24bdc720486a56ab782c520de96925917e9cc671bc0e27656839c614e0e61ddb8c0153a7965bd05e3831126c729eab4ea24a96bb8ebdf54ba426c479e99e72c32bee007e477945e6fcfeabf77e1fc1513f0a68fee3ec740872335ade8cb57fd3aaa7b37dce84dfd9e3a89b4d52348740a3d76c029e112ef5b742c587dc9db091eaa54fadcbe8cd59244c51226e36af9da543e760322b6849315390949f457afa1c15afea2611a177551fe56b407b4b547bc954ae122f7a312d2b608ea088bd1b76bb31a4989495e22c5570c05ec75809d80d575233da4b9998c1cd9ca0ce088570554bf2e597c4643643d2f06e266867ab86e29cc935f2614f65e0b8109dad403311c3d551eca27016125505a079c3fe80106c17f243ff91a4facff1f38785f781931b9ca7654ebbba575f24cd29",
+    "private_keys": ["8a5e1abca252aefadec7cf0764f52c64b587cdbef900ea3d9046cbf51bc6ed97"]
+   },
+   "expected": {
+    "reject": {"error": "NOT_OPENED"}
+   }
+  },
+  {
+   "id": "keys/open/reject-an-enc-of-small-order-whose-x25519-output-is-all-zero",
+   "op": "open",
+   "description": "reject an enc of small order, whose X25519 output is all zero",
+   "refs": ["keys.md 4.5"],
+   "input": {
+    "sealed": "0100000000000000000000000000000000000000000000000000000000000000003d9df8be1f421f9f802400665192510b102d0b8280b805e875fdc3f3d74efc7d1177b764a6cc83c0e6c921b2625f90358af1a50a4b94e71021c2cfbc080a66cddad5a024ce411701fc66005a50ebe60f42358fe69dfedde660f96b0da034729f162a41190d1175dcbbb595e79064009f21afaaed50c0c4a2f4a5324117dd8ad6df347f56107353b45f3555331c2f0b1ed8ba6e4dbdb3cdfca008873f958a7114c9b835868b2312e9585fde5ce334f9e6dc7b3a711f18bbb035a3d22316469c8a3e18a67d86c797510b411fb78efbf5f781b6c4391bed4c6da8d32cda80cbb51bfd9c52ec1e1f8563c393add99e4069dce46eb830b354c6358689044fd1a4a625c7ebb7fede84fa1ed4855f2bca6fd612acccee4f6f437731a27075f7fda48a5f1d8f9c7808fa150cd6d2de49a932e3dd91960d40e004544fc128781c512bc0bedb04024cc0e5d564e7a11ace2fc01b8ea52e070f9013d11acad2396630cdd8ea957654acd64b7c7a28fc4edfa08e29ace79a95e01d5900b07f0998f7c87bfb060d4390168c08337aaf478c9c66ade02cbfa8ef8ba121360e4478da7e37e036c1637b267de9a4d8508d25cc734608db362875d0ae4f10540b93ed5b963a58adfa502591e64f622d2f1ad320c3e08a334d6548c4b578068026f4f260aaadfaa77f2965e0acc2cf97de7f194e82a58277d58bcc3f9d71890490531c643a9d602fb21e3e40ffe63eab5b733bf1905d3e2cb899254664e20e034e0a10204b3b2b83e4a2bbbc0901aa8431245c1c165f0e6c2c76a305dee22f65e2f54a6e2fdf2b4d927f0920eaa088d26fec6bfc39bd32cbea9c9a996ff7d6599abd4fe9a0e461263c5aa8a14fde67717344fe129f465384942615dc7f440d443660740969057142d4955ac936f0ab2b342d81e81180c713c5c4028f988d0b6f39ed1c42e79a2f59ba26c2cf50c4a4523269ff570af9bc1ba8b23e70ec8618717b65f073dcc82f627b4bfee879f8eb1008f6b547f8072205f97b385578c70f14ec6f5502169353e4647aef24bdc720486a56ab782c520de96925917e9cc671bc0e27656839c614e0e61ddb8c0153a7965bd05e3831126c729eab4ea24a96bb8ebdf54ba426c479e99e72c32bee007e477945e6fcfeabf77e1fc1513f0a68fee3ec740872335ade8cb57fd3aaa7b37dce84dfd9e3a89b4d52348740a3d76c029e112ef5b742c587dc9db091eaa54fadcbe8cd59244c51226e36af9da543e760322b6849315390949f457afa1c15afea2611a177551fe56b407b4b547bc954ae122f7a312d2b608ea088bd1b76bb31a4989495e22c5570c05ec75809d80d575233da4b9998c1cd9ca0ce088570554bf2e597c4643643d2f06e266867ab86e29cc935f2614f65e0b8109dad403311c3d551eca27016125505a079c3fe80106c17f243ff91a4facff1f38785f781931b9ca7654ebbba575f24cd29",
+    "private_keys": ["8a5e1abca252aefadec7cf0764f52c64b587cdbef900ea3d9046cbf51bc6ed97"]
+   },
+   "expected": {
+    "reject": {"error": "NOT_OPENED"}
+   }
+  },
+  {
+   "id": "keys/open/reject-a-plaintext-without-the-byte-80",
+   "op": "open",
+   "description": "reject a plaintext without the byte 80",
+   "refs": ["keys.md 4.5"],
+   "input": {
+    "sealed": "013dd710f230b496607aa74157f95116ff46b226c34f0c0a95c8d9c44a0d5d871cd0524ab9932f383ac2a70cc257335dd4550d5e6ad9027a790c56d23838ae70d01d16932ee8edffd3ac28b48ecf395f2e58eb0c7f3a665e08af5df9a65969a7b11f67d796d6d3907933b96be5860453a49c5b14f24970d5b9c71f7f8eb204fee6a81a41a63639078dac0fa483d4f411ea17d6439ff2ff046030badec1b0752dd001334c1de2b5b4639d84d26744a0fa802cede6148df7181910e33428d83ec801bb0a0ccb2d1182ae8f6c20637f4144dc6914e2198559641b4d57f1dbf2dd13b723e4ca6f96ce6f6fc4656cfa2f2d98a422a932a941f44f4b77220e5298da0c16d1668ba5a52af96a3af09de92d4d5c8a14f3e195f0790d8d042a690da252e1be037f5c21e4aef0bbe9c81b87573599a6fc84c06098327618e918c31b761711d9f96ce83ce52c316cada2ef357e8969aa40e7cf362f3de132a21a6552689192b4f28dc37c470de19bff46ed1c836ee71700c3cf984e5681f4187b74a7d886c069e36df36d2ed2609ce30c9b82da804937df3362099779681d9c870650eeb677889f1fa3e06f8a598e9328c254715f8984a0f8e6f9a4db9fa17c60225ec77ebfd9d73c2e4f142d4cbaf4c5ae8bc10021a1d307fa745cc912dffac670e23c8da5a621ac1550db59aadd896e917121dbdc83c7ea7ca2f647a30c96a9d89ea8e6c4af5439b912fb1869c534edaad9460b3e25ce90f3e6e71a5b465716009111e0a08dbe390ce6e3f1266ba32078f1ea7c134688e8223bdb36287d748878a024167f28841b64417773a622d2e7ba9acc631554b0895015a51aba153b76f877c4f58b29bf6421148558ade61c751f2d47d5ff463a8800a6a6b37599e0e2502ed7c9bb2e314e997e20f891ed8e8b77cbd4bb5634385d0ae1884fede706f8bb28c132a5a87735c81f43f41bf4366295822e6c1bc57f06a05701bdd25682fd0a1256b5890294a3cfa387563c57af827dd518eacdcc2a9b19a7a42474d918288da100ef328f71aa54edc644f02c2491ef217161184f326d05a10b8c6a7a6ed4532c22c676361d3a17ffc6219b8aab6f157892315726fda7cdfe8903c8ba760fa6e58d6408bdd7aafa19ee9a497ab006b963d882d9f5f3944c722a045784fb1b7e9c7eee04573bb548fd77e6d93267a2c76b4d63aadea68e84e8b08f0b64d3fb633edca5fbf853d3a61292f15988b0c7cde9b6517c5977898e1650031dfe90de51ab4a55102e402c0aba0bf7cf4f27cdfbe48029a6d36644423351597f92cb2c576af44cd6fd1d429a98d0c6b29a1e741c5225236e12d50d31e60c99b551bebbc22f3c7310694e4c702ee18ced64ccfb6da4a28efe6d272a45b79d62d69b6badb5ab5b8dbcf0ba00a6bd1ef897869ed19c13b283ff8fd31cf9daa9a75f925ef809e1be661fd0cd8921fa12ea6e1f6146a642326cced0a4994e7082af938a3f0af020d10fb68592c8d637706e51146decd7ef82ff0ed3",
+    "private_keys": ["8a5e1abca252aefadec7cf0764f52c64b587cdbef900ea3d9046cbf51bc6ed97"]
+   },
+   "expected": {
+    "reject": {"error": "PADDING_INVALID"}
+   }
+  },
+  {
+   "id": "keys/open/reject-a-plaintext-with-80-followed-by-a-byte-other-than-zero",
+   "op": "open",
+   "description": "reject a plaintext with 80 followed by a byte other than zero",
+   "refs": ["keys.md 4.5"],
+   "input": {
+    "sealed": "01a58d1d338188f7fe949565eb0514a4064006859cbbdfef6cb7992b649c9d32016ce5011231ddcb3456a5a66398ed827372710a2cef5e0a88b7548ac882eaba4d46c4e0d4d69186ce9dce5b64f4b141d90d3906cf4bdf7ba3be4c0966bb928791ae332e8d4eba09e4a3891072df2e05d5530606555c9857d3b1a2eb07cca68b315bab9789284f0caf34ffe980bcc294e2e3e4f432bc2fb7e8ad7c8927d83e8e46fabecd2d2d43c93668b7447197ba557a2946dc8e0862f6e79701a528a8773bd53192475aad0611659512f93307365c42628a2e72b2c16314d6516c73a1d8feadcb8cbac6cda65690c8df7f6833b3e775cc9badef0fa28a312eb8079c07eefa0e35d156fbaaed9397042db79c11643ae986a1a3b39c915c22121b4fc3fb6bf58820c8719d7861d370494184f6e141120b89555378c31fa610335b371a171e255a23867cffff7c36df2a32b6432ccffba9cd6192870f0e6a8dc7d04ed2f49ed64a7cb3ff44a18b2848a25fccb0f5c5a11de20f8f91d6af71f91081dc8d078dd92d483bd47d1655b65f9c9779752384134b90ddfcb4429fd641f4881a66ceac3e797f0dd3673e544d9c1e2a119c4333ad39a1b24d3100dddca81c744073a7a827fb7f1ca05c333d89885c79552f001bf3902790703450e56a60d23b30288b52493fc4111832fc1051912c75173042822bad9a5f07338a32d848b99d5c31376467755ff8f7e56405b397b871c93b717a7b45338631914eb0d11fde5136c14b0639c867a7cc9cebb7f57179aa8242161a09bd5578ff1904e0642db953bca6407836237f367a5b2543e089b38f78b8ee6dbce6a064c96e5974a29d0ce00d2006a0b98f6ee77b3a394d5508e53e5815308acff7143c1944b648da390c46e98dbf01e9571371557b32c29a2503e0c53102cb5b59a949e0583ea81900f46174e6fab151cc998b42eeb084e4566eb23282870b8899c4b54ae3d5df1831da0d19ae4bed4632c2f36724ed3248726c15d73cd242e2416827825328bbc19d0b92cc453e2deb4db55edb3dc37d58c5a3b31a16f43e59250c278166830d2aa5a65341120d541a8081fff1987616d58172d760762424735d7a278a059d7d3db78803991d08c2b3a60771f2d4578896e77a9ef533f1f8d8fcfd514f5886d6f536b43df791b4af2edcdcbeefb1ca5a2b88bc6d85d1c1eb9c546c8b41420bf4e422b6ba68cfa6de9463c955291c8960040eb2a11e7362be5999a50711e6d3861f18fb66946caaea75a15dbd4f80f9d1cb9ed0b331794f4f6767ae0f783bc645cc6355a62e8cd1f7fc6b095c5dc3ab846b3fb0bd4ddfecb1061e601b6fa4cad60b102bee9750ffb653fd17aa2b62ca75a6773b522acd52ccce32550d34a014fca1283c0398f06bb209ecb1e48bbb15d16a002b12dd499ff0b4da5d9f6fa73038cd85e6d0b1c42c0180e673fa252d977ee1d55e955da63d487d28be05a3955191618ab6607658574a120e98663a5fc504b50cb9df7ccdc8f3bab8",
+    "private_keys": ["8a5e1abca252aefadec7cf0764f52c64b587cdbef900ea3d9046cbf51bc6ed97"]
+   },
+   "expected": {
+    "reject": {"error": "PADDING_INVALID"}
+   }
+  },
+  {
+   "id": "keys/open/reject-a-plaintext-of-zero-bytes-only",
+   "op": "open",
+   "description": "reject a plaintext of zero bytes only",
+   "refs": ["keys.md 4.5"],
+   "input": {
+    "sealed": "014d2100c09ef17d09d223f1229ac6f848b9f648d2ee0dbce63f4b4d9741c38f342117ab30ac281d91bedbbd3ef76c436e5a2c671a53bd4dbc25c2b35c5ab0aa9773b5f868ec8547e4854c8ae1a3e3a94ccc66daaed67416f52edead02d63168ddc45e7cb4e51eace3d3d1ea6797b034dd8803225e1eb037a9791330453c7c14297fdd7970a3050871a7bfeebbb0eea1569d25187dec4f88f2b640dbec8d3380a28fe5f2be782999b562c644fd2d84ee032a3ed8120f4dc51affac6fa67747de48ba3d7a0728d997dfb35d2227cc3488a1e7b50571767e1ba8ac2051744911c996e77d5562b7b5c21adb9e63c60f256ef75e8cb67892be96b7207c07511ec63edb30f8c5669542e2fa4302dc26d2862f7e85eb0184f49f3a2583c66fa5f7f7e8bf02dc18d421c7c338c64dc869415257a9f3ab9719ac6d97d1f404a888213c1d0982d21f3ffed7138ff28517dc95004bb05f32b6bb2182b7f7a663c7c6dd25b2a49c4c0aa96a309eeb7553aa3affb64ac3744bde8fc4a58c549c6b83acbe21311b6a20ea2eca830258a2a27a74a00a90551eb074b32f2ec2a051e1336a6bd7d13a225f9ead3c43c5a601e929db230903489f43f66461ab42968540284be72a212b954cd68e543ec6547f92d86f1ac132103046bd4651f6357a975312f0bd893ab4ec4f2efbfeb7c6fef89b8329f32402ab0102975f2f31755587b79a4f85ed63e5f84339a8e3e2c1f9985acaba8d59cbad38301efb41a4b4245f60c6d0cfc6e4997077fe89e9e7dbaf7a85e7cf799bbbdaafda6a925a15766df790419748677652619a9389556058584a523a0a7a8a057b16da91bbe53366975f7ff11fe97b0d565ff328f52f7fbf63bfa74fd976d6b02221bbf6d52b431e56a4dd4a43cb003a24bc64560939a1a4fec2371defea12594976a6f396574d619af1993b9cce3cfc0db3431f003c9f2bdc5eea827bf7c52235402edbab3e8d8ac991a4f8178a2f8150bb2937b8e19ed3975ffa712fe1a6bfc12a2320c92ce96c7c5e93be24f6175f6cfe2c17019550d9ebe10bbe82c19277d5c9380375911062ed546c2665b6f4b24ddbd96ba4cbaa76e124633bc32309a8083083969c43c565e55f358d41eb2ff8b28b6d26204f49a5e4465072425a0a43f2eb1bed3e78b120e90d4920f101faddb54da6da66c71dd88d5953ce3e3b75c4f773ef38ab5dc2b50ae741080dea9369da0f2d0fa7f6ac5cd190916fd63473126f10d7db88aeb9b36ea3ea4af112e25a902a9974f5598112be4f1e43f517e84086342c8a719ae66b345bb8b884aeee937417e91aff4b903aa13b44428c3f5f9f461c04afe1b8d2e84406eb5603925b2c9712a8eaa9941281318c4b1ad818b86e1edf8043eb72a60ae7ef0c2ab9c10263033612c99e4510783d5232f9a88277dc4b9d067013b69acd28ae17e406db0a96eba875bb09b094c939ddf1c36de5039c53b27fb9df112cb7874fb0140eaad725aada982754d2e59cdf01947f7c3a9668d3",
+    "private_keys": ["8a5e1abca252aefadec7cf0764f52c64b587cdbef900ea3d9046cbf51bc6ed97"]
+   },
+   "expected": {
+    "reject": {"error": "PADDING_INVALID"}
+   }
+  }
+ ]
+}

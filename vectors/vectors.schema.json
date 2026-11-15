@@ -1,0 +1,801 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/paxel/axt/blob/summer/vectors/vectors.schema.json",
+ "title": "AXT test vector file",
+ "description": "One file of the AXT test vectors, vectors/<category>/<category>.json, as spec/conformance.md, section 3, defines it. CC0 1.0.",
+ "type": "object",
+ "required": ["format", "specification", "category", "description", "vectors"],
+ "additionalProperties": false,
+ "properties": {
+  "format": {"description": "The version of this file format.", "const": 1},
+  "specification": {
+   "description": "The version of the specification the vectors are for.",
+   "type": "string",
+   "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+  },
+  "category": {
+   "description": "The category of every vector in the file.",
+   "enum": [
+    "encoding",
+    "types",
+    "records",
+    "manifest",
+    "keys",
+    "protocol",
+    "file",
+    "qr",
+    "local",
+    "relay",
+    "relay-server"
+   ]
+  },
+  "description": {"type": "string"},
+  "vectors": {
+   "type": "array",
+   "minItems": 1,
+   "items": {"$ref": "#/$defs/vector"}
+  }
+ },
+ "$defs": {
+  "hex": {
+   "description": "Bytes as lower-case hexadecimal digits, two per byte.",
+   "type": "string",
+   "pattern": "^(?:[0-9a-f]{2})*$"
+  },
+  "deflate": {
+   "description": "Bytes as raw DEFLATE (RFC 1951), in lower-case hexadecimal, with the length and the SHA-256 of the bytes it inflates to.",
+   "type": "object",
+   "required": ["deflate", "length", "sha256"],
+   "additionalProperties": false,
+   "properties": {
+    "deflate": {"$ref": "#/$defs/hex"},
+    "length": {"type": "integer", "minimum": 0},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+   }
+  },
+  "bytes": {
+   "oneOf": [
+    {"$ref": "#/$defs/hex"},
+    {"$ref": "#/$defs/deflate"}
+   ]
+  },
+  "vector": {
+   "type": "object",
+   "required": ["id", "op", "description", "refs", "input", "expected"],
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "description": "Unique among all vectors: <category>/<op>/<name>.",
+     "type": "string",
+     "pattern": "^[a-z-]+/[a-z_]+/[a-z0-9-]+$"
+    },
+    "op": {
+     "description": "The operation, which section 5 of spec/conformance.md defines with its input and result.",
+     "type": "string",
+     "pattern": "^[a-z_]+$"
+    },
+    "description": {"type": "string"},
+    "refs": {
+     "description": "The sections of the specification the vector tests, as <document> <section>.",
+     "type": "array",
+     "minItems": 1,
+     "items": {"type": "string", "pattern": "^[a-z]+\\.md [0-9]+(\\.[0-9]+)*$"}
+    },
+    "input": {"type": "object"},
+    "expected": {"$ref": "#/$defs/result"}
+   },
+   "allOf": [
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "apply"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["policy", "events"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "check_encryption_key"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["encryption_key"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "check_manifest"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["body", "envelope_format"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "check_signing_key"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["public_key"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "choose_format"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["own", "theirs"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "connection"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["role", "certificate_sha256", "expected_key", "frames"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "decode_body"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["kind", "body"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "decode_message"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["message"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "decode_record"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["writer_schema", "reader_schema", "body"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "encode_message"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["format", "kind", "sender", "record", "body", "signature"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "fingerprint"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["schema"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "fit"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["manifest", "schema", "languages"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "hello_frame"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["seed", "role", "certificate_sha256"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "key_move"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["message"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "listing"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["body"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "mailbox_id"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["secret"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "open"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["sealed", "private_keys"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "padded_length"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["length"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "parse_qr"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["text"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "public_key"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["seed"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "qr_text"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["payload"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "reaction"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["request", "status", "retry_after", "attempt"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "read_file"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["file", "reader"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "relay"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["base_url", "quota_bytes", "requests"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "request"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["action", "base_url"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "seal"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["message", "encryption_key"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "session"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["app", "steps"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "short_fingerprint"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["public_key"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "sign"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["seed", "data"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "verify"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["public_key", "data", "signature"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "verify_message"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["message"]
+       }
+      }
+     }
+    }
+   ]
+  },
+  "result": {
+   "description": "What the library returns: accept with a value, reject with an error, or the results of the steps of a session.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": ["accept"],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {}
+     }
+    },
+    {
+     "type": "object",
+     "required": ["reject"],
+     "additionalProperties": false,
+     "properties": {
+      "reject": {"$ref": "#/$defs/rejection"}
+     }
+    },
+    {
+     "type": "object",
+     "required": ["steps"],
+     "additionalProperties": false,
+     "properties": {
+      "steps": {"type": "array", "minItems": 1}
+     }
+    }
+   ]
+  },
+  "rejection": {
+   "type": "object",
+   "required": ["error"],
+   "additionalProperties": false,
+   "properties": {
+    "error": {
+     "description": "The error code; spec/conformance.md, section 4, lists them.",
+     "type": "string",
+     "pattern": "^[A-Z][A-Z_]*$"
+    },
+    "note": {"description": "Why, for people; the runner does not compare it.", "type": "string"}
+   }
+  }
+ },
+ "allOf": [
+  {
+   "if": {
+    "properties": {
+     "category": {"const": "encoding"}
+    }
+   },
+   "then": {
+    "properties": {
+     "vectors": {
+      "items": {
+       "properties": {
+        "op": {
+         "enum": ["decode_body", "decode_message", "encode_message", "fingerprint"]
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "if": {
+    "properties": {
+     "category": {"const": "types"}
+    }
+   },
+   "then": {
+    "properties": {
+     "vectors": {
+      "items": {
+       "properties": {
+        "op": {
+         "enum": ["decode_record", "fingerprint"]
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "if": {
+    "properties": {
+     "category": {"const": "records"}
+    }
+   },
+   "then": {
+    "properties": {
+     "vectors": {
+      "items": {
+       "properties": {
+        "op": {
+         "enum": ["apply"]
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "if": {
+    "properties": {
+     "category": {"const": "manifest"}
+    }
+   },
+   "then": {
+    "properties": {
+     "vectors": {
+      "items": {
+       "properties": {
+        "op": {
+         "enum": ["check_manifest", "fit"]
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "if": {
+    "properties": {
+     "category": {"const": "keys"}
+    }
+   },
+   "then": {
+    "properties": {
+     "vectors": {
+      "items": {
+       "properties": {
+        "op": {
+         "enum": [
+          "check_encryption_key",
+          "check_signing_key",
+          "key_move",
+          "open",
+          "padded_length",
+          "public_key",
+          "seal",
+          "short_fingerprint",
+          "sign",
+          "verify",
+          "verify_message"
+         ]
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "if": {
+    "properties": {
+     "category": {"const": "protocol"}
+    }
+   },
+   "then": {
+    "properties": {
+     "vectors": {
+      "items": {
+       "properties": {
+        "op": {
+         "enum": ["choose_format", "session"]
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "if": {
+    "properties": {
+     "category": {"const": "file"}
+    }
+   },
+   "then": {
+    "properties": {
+     "vectors": {
+      "items": {
+       "properties": {
+        "op": {
+         "enum": ["read_file"]
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "if": {
+    "properties": {
+     "category": {"const": "qr"}
+    }
+   },
+   "then": {
+    "properties": {
+     "vectors": {
+      "items": {
+       "properties": {
+        "op": {
+         "enum": ["parse_qr", "qr_text"]
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "if": {
+    "properties": {
+     "category": {"const": "local"}
+    }
+   },
+   "then": {
+    "properties": {
+     "vectors": {
+      "items": {
+       "properties": {
+        "op": {
+         "enum": ["connection", "hello_frame"]
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "if": {
+    "properties": {
+     "category": {"const": "relay"}
+    }
+   },
+   "then": {
+    "properties": {
+     "vectors": {
+      "items": {
+       "properties": {
+        "op": {
+         "enum": ["listing", "mailbox_id", "reaction", "request"]
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "if": {
+    "properties": {
+     "category": {"const": "relay-server"}
+    }
+   },
+   "then": {
+    "properties": {
+     "vectors": {
+      "items": {
+       "properties": {
+        "op": {
+         "enum": ["relay"]
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ ]
+}

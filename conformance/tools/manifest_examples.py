@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: CC0-1.0
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Produce and check the examples of spec/manifest.md.
 
 Checks the manifest's schema, types/axt/Manifest.avsc, and writes the two
@@ -6,7 +6,7 @@ MANIFEST messages of the example, cat-a-log's and Old Brain Fix's, as
 annotated hex:
 
 - the schema rules of spec/types.md, section 5, with the checks of
-  vectors/tools/example_types.py: a doc everywhere, names in the required
+  conformance/tools/example_types.py: a doc everywhere, names in the required
   case, only ["null", T] unions with the default null, no recursion, the
   size and depth limits; and its names unique among the schemas of the
   specification. File name and namespace follow spec/manifest.md: the file
@@ -29,10 +29,13 @@ Neither library writes single-object framing, so the 10-byte headers
 
 Run from anywhere, with fastavro and avro (1.12) installed:
 
-    python3 vectors/tools/manifest_examples.py
+    python3 conformance/tools/manifest_examples.py
 
-The sender keys and the signatures are placeholders, so neither message
-verifies as signed; spec/keys.md shows signed messages.
+Both messages are signed with the test keys of spec/keys.md, section 7.1,
+and spec/protocol.md, section 17.1, with the Ed25519 implementation of
+conformance/tools/keys_examples.py; they are then the MANIFEST messages of
+spec/protocol.md, section 17.2, which the script checks by their SHA-256.
+The test keys are TEST KEYS and MUST NOT be used outside tests.
 """
 
 import copy
@@ -155,11 +158,24 @@ OLD_BRAIN_FIX = {
     "relay": None,
 }
 
-SENDERS = {
-    "cat-a-log": bytes(range(32)),  # placeholder; spec/keys.md shows signed messages
-    "Old Brain Fix": bytes(range(32, 64)),  # placeholder
+
+def test_secret(label):
+    return hashlib.sha256(b"AXT test key, not for use: " + label.encode()).digest()
+
+
+# The signing keys: the test keys of spec/keys.md, section 7.1, and spec/protocol.md, section 17.1. TEST KEYS.
+SEEDS = {
+    "cat-a-log": test_secret("cat-a-log, old phone, Ed25519"),
+    "Old Brain Fix": test_secret("Old Brain Fix, Ed25519"),
 }
-SIGNATURE = bytes(64)  # placeholder
+SENDERS = {name: keys.public_key(seed) for name, seed in SEEDS.items()}
+assert SENDERS["cat-a-log"].hex() == "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a"
+assert SENDERS["Old Brain Fix"].hex() == "da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7"
+# The messages of spec/protocol.md, section 17.2, by their SHA-256.
+PUBLISHED = {
+    "cat-a-log": "1ee7dfafb7a27b1ba7f1dd7fedb04e822d4cbc3f23033f8908b1b8691a163771",
+    "Old Brain Fix": "d8d61697a0189e3afe3b500901b634a356ac1af1986b42bdf9d62d358e59dcaf",
+}
 
 # --- schema -------------------------------------------------------------------
 
@@ -606,14 +622,19 @@ for m in (CAT_A_LOG, OLD_BRAIN_FIX):
         (envelope_fp.to_bytes(8, "little"), "fingerprint of axt.Envelope, format 1"),
         (zigzag(1), "format: int 1"),
         (zigzag(kinds.index("MANIFEST")), f"kind: enum index {kinds.index('MANIFEST')}, MANIFEST"),
-        (sender, "sender: fixed(32), placeholder"),
+        (sender, f"sender: fixed(32), {m['app_name']}'s test key"),
         (zigzag(0), "record: union index 0, null"),
         (zigzag(len(body)), f"body: bytes length {len(body)}"),
     ]
     parts += [(b, "body: " + meaning) for b, meaning in bparts]
-    parts.append((SIGNATURE, "signature: fixed(64), placeholder"))
-    message = b"".join(p[0] for p in parts)
-    datum = {"format": 1, "kind": "MANIFEST", "sender": sender, "record": None, "body": body, "signature": SIGNATURE}
+    unsigned = b"".join(p[0] for p in parts)
+    signature = keys.sign(SEEDS[m["app_name"]], keys.MESSAGE_PREFIX + unsigned[10:])
+    assert keys.verify_problem(sender, keys.MESSAGE_PREFIX + unsigned[10:], signature) is None
+    parts.append((signature, "signature: fixed(64)"))
+    message = unsigned + signature
+    assert hashlib.sha256(message).hexdigest() == PUBLISHED[m["app_name"]], \
+        f"{m['app_name']}: not the MANIFEST of spec/protocol.md, section 17.2"
+    datum = {"format": 1, "kind": "MANIFEST", "sender": sender, "record": None, "body": body, "signature": signature}
     assert message[10:] == library_binary(envelope_schema, datum), f"{m['app_name']}: envelope differs from fastavro"
     back = fastavro.schemaless_reader(io.BytesIO(message[10:]), envelope_schema, envelope_schema)
     assert back["kind"] == "MANIFEST" and back["record"] is None and back["body"] == body
@@ -629,16 +650,12 @@ def dump(parts):
     offset = 0
     lines = []
     for data, meaning in parts:
-        if data == SIGNATURE and meaning.startswith("signature"):
-            lines.append(f"{offset:04x}  {'00 ' * 8}".rstrip() + f"  {meaning}")
-            lines.append("      ... (64 bytes of 00 in all)")
-        else:
-            for i in range(0, len(data), 8):
-                hexs = data[i:i + 8].hex(" ")
-                if i == 0:
-                    lines.append(f"{offset:04x}  {hexs:<23}  {meaning}".rstrip())
-                else:
-                    lines.append(f"      {hexs}")
+        for i in range(0, len(data), 8):
+            hexs = data[i:i + 8].hex(" ")
+            if i == 0:
+                lines.append(f"{offset:04x}  {hexs:<23}  {meaning}".rstrip())
+            else:
+                lines.append(f"      {hexs}")
         offset += len(data)
     lines.append(f"{offset:04x}  end")
     return "\n".join(lines)

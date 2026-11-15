@@ -251,14 +251,15 @@ Its Parsing Canonical Form:
 | -------------- | --------------- | -------------------- | ------------------------- |
 | `axt.Manifest` | 1               | `0x6b08ecb5d38003b3` | `b3 03 80 d3 b5 ec 08 6b` |
 
-The fingerprint and the examples of section 10 were produced with [vectors/tools/manifest_examples.py](../vectors/tools/manifest_examples.py). The script:
+The fingerprint and the examples of section 10 were produced with [conformance/tools/manifest_examples.py](../conformance/tools/manifest_examples.py). The script:
 
-- checks the rules of [types.md](types.md), section 5, named above, with the checks of [vectors/tools/example_types.py](../vectors/tools/example_types.py), and that the schema's names are not also defined in [types/axt/Envelope.avsc](../types/axt/Envelope.avsc);
+- checks the rules of [types.md](types.md), section 5, named above, with the checks of [conformance/tools/example_types.py](../conformance/tools/example_types.py), and that the schema's names are not also defined in [types/axt/Envelope.avsc](../types/axt/Envelope.avsc);
 - computes the Parsing Canonical Form and the CRC-64-AVRO fingerprint, and compares them with those of the Python libraries fastavro 1.13.1 and `avro` 1.12.2;
 - uses every default of the schema once in schema resolution, with both libraries;
 - checks both example manifests against the rules of section 4, and checks that 43 manifests are invalid, each of which breaks one rule or limit and is reported for that alone, among them one within every count and length whose body exceeds 1 MiB;
 - checks which types fit (section 5.2), with the language lookup of section 3.6, for each case of section 10.2;
-- builds both messages field by field and compares them with fastavro's encoding, decodes both with fastavro and with `avro`, and checks that `avro` encodes the decoded manifests to the same bytes.
+- builds both messages field by field and compares them with fastavro's encoding, decodes both with fastavro and with `avro`, and checks that `avro` encodes the decoded manifests to the same bytes;
+- signs both messages with the Ed25519 implementation of [conformance/tools/keys_examples.py](../conformance/tools/keys_examples.py), verifies them, and checks them by their SHA-256 against the messages of [protocol.md](protocol.md), section 17.2.
 
 The test vectors of [conformance.md](conformance.md) take precedence over these values.
 
@@ -340,19 +341,19 @@ Had Old Brain Fix listed `axt.example.v1.Appointment` with `min_version` 2, cat-
 
 ### 10.3 The messages
 
-Both messages are `MANIFEST` messages in a live connection, in envelope format 1. `sender` and `signature` are placeholders, so neither message verifies as signed; [keys.md](keys.md), section 7, shows signed messages. Offsets are hexadecimal.
+Both messages are `MANIFEST` messages in a live connection, in envelope format 1. cat-a-log signs with its test key of [keys.md](keys.md), section 7.1, Old Brain Fix with its test key of [protocol.md](protocol.md), section 17.1; the messages are those of the exchange in [protocol.md](protocol.md), section 17.2. Offsets are hexadecimal.
 
-cat-a-log's manifest: 315 bytes, of which 204 are the body; SHA-256 `e8a4abd2bee9f35338e4c1bdaefbd13144b618af041f91c8d8cdb483d3ca1c69`.
+cat-a-log's manifest: 315 bytes, of which 204 are the body; SHA-256 `1ee7dfafb7a27b1ba7f1dd7fedb04e822d4cbc3f23033f8908b1b8691a163771`.
 
 ```text
 0000  c3 01                    single-object marker
 0002  7d 0c e4 e5 4f e8 e1 a2  fingerprint of axt.Envelope, format 1
 000a  02                       format: int 1
 000b  00                       kind: enum index 0, MANIFEST
-000c  00 01 02 03 04 05 06 07  sender: fixed(32), placeholder
-      08 09 0a 0b 0c 0d 0e 0f
-      10 11 12 13 14 15 16 17
-      18 19 1a 1b 1c 1d 1e 1f
+000c  1b 84 a6 00 f3 50 3e 22  sender: fixed(32), cat-a-log's test key
+      bb cc 99 e6 32 02 a7 19
+      4b f6 bd 69 af f1 47 1c
+      ce 64 10 d5 3c 26 ec 4a
 002c  00                       record: union index 0, null
 002d  98 03                    body: bytes length 204
 002f  c3 01                    body: single-object marker
@@ -416,22 +417,28 @@ cat-a-log's manifest: 315 bytes, of which 204 are the body; SHA-256 `e8a4abd2bee
 00f8  00                       body: sends: end of the array
 00f9  00                       body: encryption_key: union index 0, null
 00fa  00                       body: relay: union index 0, null
-00fb  00 00 00 00 00 00 00 00  signature: fixed(64), placeholder
-      ... (64 bytes of 00 in all)
+00fb  21 cc f8 c7 3d 1f f7 c7  signature: fixed(64)
+      56 20 75 68 0d 2d d2 8f
+      db d8 d7 2a 00 fa 89 f8
+      76 11 43 de 49 5a d5 bb
+      85 33 a6 b5 e5 45 99 2d
+      f2 0b a4 cd 86 b9 6e 53
+      32 44 54 56 7f fe 19 c2
+      f2 a6 f7 8c 46 2e 3a 0a
 013b  end
 ```
 
-Old Brain Fix's manifest: 549 bytes, of which 438 are the body; SHA-256 `3c5700b64a9284742f77368eb8095ae25e4fd6eae122397100663f2c2da0e517`.
+Old Brain Fix's manifest: 549 bytes, of which 438 are the body; SHA-256 `d8d61697a0189e3afe3b500901b634a356ac1af1986b42bdf9d62d358e59dcaf`.
 
 ```text
 0000  c3 01                    single-object marker
 0002  7d 0c e4 e5 4f e8 e1 a2  fingerprint of axt.Envelope, format 1
 000a  02                       format: int 1
 000b  00                       kind: enum index 0, MANIFEST
-000c  20 21 22 23 24 25 26 27  sender: fixed(32), placeholder
-      28 29 2a 2b 2c 2d 2e 2f
-      30 31 32 33 34 35 36 37
-      38 39 3a 3b 3c 3d 3e 3f
+000c  da 9e 54 c9 aa 2d b4 32  sender: fixed(32), Old Brain Fix's test key
+      44 df 99 88 9d 91 38 c1
+      ca 71 75 d4 ca 09 08 16
+      8f 63 53 0e 4a 7d ed b7
 002c  00                       record: union index 0, null
 002d  ec 06                    body: bytes length 438
 002f  c3 01                    body: single-object marker
@@ -534,8 +541,14 @@ Old Brain Fix's manifest: 549 bytes, of which 438 are the body; SHA-256 `3c5700b
 01e2  00                       body: sends: union index 0, null
 01e3  00                       body: encryption_key: union index 0, null
 01e4  00                       body: relay: union index 0, null
-01e5  00 00 00 00 00 00 00 00  signature: fixed(64), placeholder
-      ... (64 bytes of 00 in all)
+01e5  dc 24 c3 04 4b 0b 8d 06  signature: fixed(64)
+      cc 61 3b aa a7 43 6e 26
+      ff ca 67 f2 96 2c a1 d4
+      c8 46 d8 e1 d4 fc ec 5c
+      c5 3f ba e6 d0 3d 50 10
+      4d c1 56 38 fd f6 2c 61
+      a0 70 f3 41 83 7c 61 b1
+      6e b7 df 50 28 0a 95 00
 0225  end
 ```
 

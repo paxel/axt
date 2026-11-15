@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: CC0-1.0
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Produce and check the examples of spec/envelope.md.
 
 Writes one live data message (an axt.Envelope in Avro single-object
@@ -20,14 +20,18 @@ Neither library writes single-object framing, so the 10-byte header
 
 Run from anywhere, with fastavro and avro (1.12) installed:
 
-    python3 vectors/tools/envelope_examples.py
+    python3 conformance/tools/envelope_examples.py
 
-The sender key, the signature and the file's header signature are
-placeholders, so neither example verifies as signed; spec/keys.md and
-vectors/tools/keys_examples.py show the same message and file signed.
+The message and the file's header are signed with cat-a-log's test key of
+spec/keys.md, section 7.1, with the Ed25519 implementation of
+conformance/tools/keys_examples.py; importing that file runs none of its
+checks. The message and the file are then those of spec/keys.md, sections
+7.2 and 7.3, which the script checks by their SHA-256. The test key is a
+TEST KEY and MUST NOT be used outside tests.
 """
 
 import hashlib
+import importlib.util
 import io
 import json
 import uuid
@@ -40,8 +44,13 @@ import fastavro
 from fastavro.schema import fingerprint as fa_fingerprint
 from fastavro.schema import to_parsing_canonical_form
 
-REPO = Path(__file__).resolve().parents[2]
+HERE = Path(__file__).resolve().parent
+REPO = HERE.parents[1]
 ENVELOPE_AVSC = REPO / "types" / "axt" / "Envelope.avsc"
+
+_spec = importlib.util.spec_from_file_location("keys_examples", HERE / "keys_examples.py")
+keys = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(keys)
 
 MEMO_SCHEMA = {
     "type": "record",
@@ -58,9 +67,10 @@ MEMO_SCHEMA = {
     ],
 }
 
-# Values of the examples.
-SENDER = bytes(range(32))  # placeholder; spec/keys.md shows the message signed
-SIGNATURE = bytes(64)  # placeholder
+# Values of the examples. The seed is cat-a-log's test key (spec/keys.md, section 7.1): a TEST KEY.
+SEED = hashlib.sha256(b"AXT test key, not for use: cat-a-log, old phone, Ed25519").digest()
+SENDER = keys.public_key(SEED)
+assert SENDER.hex() == "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a", "not the key of spec/keys.md"
 RECORD_ID = "0b5a3c1e-4d2f-4a6b-9c8d-7e6f5a4b3c2d"
 RECORD_VERSION = 1
 MEMO = {"text": "Vet, Tuesday 10:00", "written": 1763200800000}  # 2025-11-15T10:00:00Z
@@ -169,6 +179,24 @@ body = b"".join(p[1] for p in memo_parts)
 assert body[10:] == library_binary(memo_schema, MEMO), "Memo encoding differs from fastavro"
 
 kinds = envelope_schema["fields"][1]["type"]["symbols"]
+message_parts = [
+    ("C3 01", b"\xc3\x01", "single-object marker"),
+    ("fingerprint", envelope_fp.to_bytes(8, "little"), f"CRC-64-AVRO of axt.Envelope, 0x{envelope_fp:016x}, little-endian"),
+    ("format", zigzag(1), "int 1"),
+    ("kind", zigzag(kinds.index("DATA")), f'enum index {kinds.index("DATA")}: DATA'),
+    ("sender", SENDER, "fixed(32): Ed25519 public key, cat-a-log's test key"),
+    ("record", zigzag(1), "union index 1: RecordRef"),
+    ("record.id", avro_bytes(RECORD_ID.encode()), f"string, length 36: {RECORD_ID}"),
+    ("record.version", zigzag(RECORD_VERSION), f"long {RECORD_VERSION}"),
+    ("body", zigzag(len(body)), f"bytes, length {len(body)}, followed by the body"),
+]
+message_parts += [("body: " + n, b, m) for n, b, m in memo_parts]
+# The signature of spec/keys.md, section 2.2: over the prefix and the envelope's bytes before it.
+unsigned = b"".join(p[1] for p in message_parts)
+SIGNATURE = keys.sign(SEED, keys.MESSAGE_PREFIX + unsigned[10:])
+assert keys.verify_problem(SENDER, keys.MESSAGE_PREFIX + unsigned[10:], SIGNATURE) is None
+message_parts.append(("signature", SIGNATURE, "fixed(64): Ed25519 signature"))
+message = b"".join(p[1] for p in message_parts)
 envelope_datum = {
     "format": 1,
     "kind": "DATA",
@@ -177,20 +205,8 @@ envelope_datum = {
     "body": body,
     "signature": SIGNATURE,
 }
-message_parts = [
-    ("C3 01", b"\xc3\x01", "single-object marker"),
-    ("fingerprint", envelope_fp.to_bytes(8, "little"), f"CRC-64-AVRO of axt.Envelope, 0x{envelope_fp:016x}, little-endian"),
-    ("format", zigzag(1), "int 1"),
-    ("kind", zigzag(kinds.index("DATA")), f'enum index {kinds.index("DATA")}: DATA'),
-    ("sender", SENDER, "fixed(32): Ed25519 public key (placeholder)"),
-    ("record", zigzag(1), "union index 1: RecordRef"),
-    ("record.id", avro_bytes(RECORD_ID.encode()), f"string, length 36: {RECORD_ID}"),
-    ("record.version", zigzag(RECORD_VERSION), f"long {RECORD_VERSION}"),
-    ("body", zigzag(len(body)), f"bytes, length {len(body)}, followed by the body"),
-]
-message_parts += [("body: " + n, b, m) for n, b, m in memo_parts]
-message_parts.append(("signature", SIGNATURE, "fixed(64): Ed25519 signature (placeholder)"))
-message = b"".join(p[1] for p in message_parts)
+assert hashlib.sha256(message).hexdigest() == "c6901788f627c534b72f85e50165db1ee77aa89549f9713d5cbb2a2119b1ee83", \
+    "not the message of spec/keys.md, section 7.2"
 
 # Check against the library and decode back.
 assert message[:10] == single_object_header(envelope_fp)
@@ -210,6 +226,9 @@ assert int(memo_back["written"].timestamp() * 1000) == MEMO["written"]
 # string hash seed, so the writer gets the schema as read from
 # Envelope.avsc, in the file's own order, and the file's bytes are the same
 # in every run.
+schemas_value = json.dumps([MEMO_SCHEMA], separators=(",", ":"))
+# The header signature of spec/keys.md, section 2.5.
+HEADER_SIGNATURE = keys.sign(SEED, keys.FILE_HEADER_PREFIX + SENDER + hashlib.sha256(schemas_value.encode()).digest())
 file_buf = io.BytesIO()
 fastavro.writer(
     file_buf,
@@ -217,13 +236,15 @@ fastavro.writer(
     [envelope_datum],
     codec="null",
     metadata={
-        "axt.schemas": json.dumps([MEMO_SCHEMA], separators=(",", ":")),
-        "axt.sender": SENDER.hex(),  # placeholder, as the message's sender
-        "axt.signature": SIGNATURE.hex(),  # placeholder for the header signature of spec/keys.md
+        "axt.schemas": schemas_value,
+        "axt.sender": SENDER.hex(),
+        "axt.signature": HEADER_SIGNATURE.hex(),
     },
     sync_marker=SYNC_MARKER,
 )
 axt_file = file_buf.getvalue()
+assert hashlib.sha256(axt_file).hexdigest() == "c19b87302bdea31721a5dc5247effbaa57feb1289f74a5d77ec233f0e6796fa4", \
+    "not the file of spec/keys.md, section 7.3"
 
 # Read back with fastavro.
 file_buf.seek(0)
@@ -244,7 +265,9 @@ apache_records = list(apache_reader)
 assert len(apache_records) == 1 and apache_records[0]["body"] == body
 assert apache_records[0]["signature"] == SIGNATURE
 assert apache_reader.get_meta("axt.sender") == SENDER.hex().encode()
-assert fa_reader.metadata["axt.signature"] == SIGNATURE.hex()
+assert fa_reader.metadata["axt.signature"] == HEADER_SIGNATURE.hex()
+assert keys.verify_problem(SENDER, keys.FILE_HEADER_PREFIX + SENDER + hashlib.sha256(
+    apache_reader.get_meta("axt.schemas")).digest(), bytes.fromhex(fa_reader.metadata["axt.signature"])) is None
 
 # The datum in the file is the message without its 10-byte single-object header.
 assert message[10:] in axt_file

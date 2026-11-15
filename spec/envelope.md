@@ -177,14 +177,15 @@ Messengers and file shares often change a file's name or drop its media type. A 
 
 ## 10. Examples
 
-The bytes below were produced with [vectors/tools/envelope_examples.py](../vectors/tools/envelope_examples.py). The script reads [types/axt/Envelope.avsc](../types/axt/Envelope.avsc), encodes with the Python library fastavro 1.13.1, and checks the result:
+The bytes below were produced with [conformance/tools/envelope_examples.py](../conformance/tools/envelope_examples.py). The script reads [types/axt/Envelope.avsc](../types/axt/Envelope.avsc), encodes with the Python library fastavro 1.13.1, and checks the result:
 
 - its CRC-64-AVRO implementation against the fingerprints published in the Avro repository's `share/test/data/schema-tests.txt`;
 - the fingerprints against fastavro's and the Python `avro` 1.12.2 package's own fingerprint functions;
 - the message, built field by field, against fastavro's binary encoding, and by decoding it again;
-- the file, by reading it back with both libraries.
+- the file, by reading it back with both libraries;
+- the signatures, made with the Ed25519 implementation of [conformance/tools/keys_examples.py](../conformance/tools/keys_examples.py), by verifying them, and the message and the file by their SHA-256 against those of [keys.md](keys.md), sections 7.2 and 7.3.
 
-The record type `com.example.Memo` is an illustration only, not an example type. `sender` and `signature`, and the file's `axt.sender` and `axt.signature`, are placeholders, so neither example verifies as signed; [keys.md](keys.md), section 7, shows the same message and the same file signed. The test vectors of [conformance.md](conformance.md) take precedence over these examples.
+The record type `com.example.Memo` is an illustration only, not an example type. Both examples are signed with cat-a-log's test key of [keys.md](keys.md), section 7.1, and are the message and the file of [keys.md](keys.md), sections 7.2 and 7.3, which show what the signatures cover. The test vectors of [conformance.md](conformance.md) take precedence over these examples.
 
 ### 10.1 Schemas and fingerprints
 
@@ -220,10 +221,10 @@ A `DATA` message in a live connection that carries the Memo `{"text": "Vet, Tues
 0002  7d 0c e4 e5 4f e8 e1 a2  fingerprint of axt.Envelope, format 1
 000a  02                       format: int 1
 000b  08                       kind: enum index 4, DATA
-000c  00 01 02 03 04 05 06 07  sender: fixed(32), placeholder
-      08 09 0a 0b 0c 0d 0e 0f
-      10 11 12 13 14 15 16 17
-      18 19 1a 1b 1c 1d 1e 1f
+000c  1b 84 a6 00 f3 50 3e 22  sender: fixed(32), cat-a-log's test key
+      bb cc 99 e6 32 02 a7 19
+      4b f6 bd 69 af f1 47 1c
+      ce 64 10 d5 3c 26 ec 4a
 002c  02                       record: union index 1, axt.RecordRef
 002d  48                       record.id: string length 36
 002e  30 62 35 61 33 63 31 65  "0b5a3c1e-4d2f-4a6b-9c8d-7e6f5a4b3c2d"
@@ -240,14 +241,20 @@ A `DATA` message in a live connection that carries the Memo `{"text": "Vet, Tues
       73 64 61 79 20 31 30 3a
       30 30
 0071  80 d4 a8 ef d0 66        body: written, long 1763200800000
-0077  00 00 00 00 00 00 00 00  signature: fixed(64), placeholder
-      ... (64 bytes of 00 in all)
+0077  33 87 5e 5e 5b 36 d7 df  signature: fixed(64)
+      ac ea 9f e1 83 e4 11 8b
+      2b ef f6 e6 1e b1 36 7e
+      53 a3 3c 74 d3 2e 20 53
+      9e 2e c5 15 ee 75 d9 66
+      52 8e b6 8f bc 88 d4 09
+      4c fa 1f 48 2f eb 6c 24
+      ce 1e 5c 2f f6 c1 50 03
 00b7  end
 ```
 
 ### 10.3 A file
 
-The same message in an AXT file with the codec `null`; 2,793 bytes, SHA-256 `3e788257990177cd65453db51b1fe367d30a4aa17ee9741802ffe37b13864ce2`. A writer picks the 16-byte sync marker at random; the example uses `00 01 … 0f` so that its bytes can be reproduced. The two JSON values are shown shortened; the first is the Memo schema of section 10.1, the second the envelope schema of [types/axt/Envelope.avsc](../types/axt/Envelope.avsc) with its keys in the file's order, as Python's `json.dumps` writes it. The two hexadecimal texts are shortened as well.
+The same message in an AXT file with the codec `null`; 2,793 bytes, SHA-256 `c19b87302bdea31721a5dc5247effbaa57feb1289f74a5d77ec233f0e6796fa4`. A writer picks the 16-byte sync marker at random; the example uses `00 01 … 0f` so that its bytes can be reproduced. The two JSON values are shown shortened; the first is the Memo schema of section 10.1, the second the envelope schema of [types/axt/Envelope.avsc](../types/axt/Envelope.avsc) with its keys in the file's order, as Python's `json.dumps` writes it. The two hexadecimal texts are shortened as well.
 
 ```text
 0000  4f 62 6a 01              magic "Obj" 01
@@ -261,12 +268,12 @@ The same message in an AXT file with the codec `null`; 2,793 bytes, SHA-256 `3e7
 0148  61 78 74 2e 73 65 6e 64  "axt.sender"
       65 72
 0152  80 01                    value: bytes length 64
-0154  30 30 30 31 ... 31 66    "000102...1e1f"  (64 hexadecimal digits, placeholder)
+0154  31 62 38 34 ... 34 61    "1b84a6...26ec4a"  (64 hexadecimal digits, cat-a-log's test key)
 0194  1a                       key: string length 13
 0195  61 78 74 2e 73 69 67 6e  "axt.signature"
       61 74 75 72 65
 01a2  80 02                    value: bytes length 128
-01a4  30 30 30 30 ... 30 30    "0000...0000"  (128 hexadecimal digits, placeholder)
+01a4  65 64 64 30 ... 30 36    "edd02e...355506"  (128 hexadecimal digits, the header signature)
 0224  14                       key: string length 10
 0225  61 76 72 6f 2e 63 6f 64  "avro.codec"
       65 63
@@ -282,7 +289,7 @@ The same message in an AXT file with the codec `null`; 2,793 bytes, SHA-256 `3e7
       08 09 0a 0b 0c 0d 0e 0f
 0a29  02                       block: 1 datum
 0a2a  da 02                    block: 173 bytes
-0a2c  02 08 00 01 02 ...       the datum: bytes 000a to 00b6 of the message in 10.2
+0a2c  02 08 1b 84 a6 ...       the datum: bytes 000a to 00b6 of the message in 10.2
 0ad9  00 01 02 03 04 05 06 07  sync marker
       08 09 0a 0b 0c 0d 0e 0f
 0ae9  end

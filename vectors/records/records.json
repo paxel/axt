@@ -1,0 +1,978 @@
+{
+ "format": 1,
+ "specification": "0.1.0",
+ "category": "records",
+ "description": "A receiver applying the record messages of one sender: the version rule, deletions and tombstones, and its user's own changes (spec/records.md).",
+ "vectors": [
+  {
+   "id": "records/apply/the-example-of-records-md-section-9-with-a-receiver-that-deletes",
+   "op": "apply",
+   "description": "the example of records.md, section 9, with a receiver that deletes",
+   "refs": ["records.md 5.2", "records.md 6.1", "records.md 9"],
+   "input": {
+    "policy": {"local_changes": "per_field", "delete_with_local_changes": "delete"},
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     },
+     {
+      "local_change": {
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "field": "location",
+       "value": "Dr. Weber, Hauptstr. 5"
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 3,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 3,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     },
+     {
+      "message": {"kind": "DELETE", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 4}
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 5,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+      }
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+     },
+     {},
+     {
+      "outcome": "MERGED",
+      "receiver_version": 3,
+      "kept_fields": ["location"],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": "2025-11-18T10:30",
+       "location": "Dr. Weber, Hauptstr. 5",
+       "notes": "Bring the vaccination card"
+      }
+     },
+     {
+      "outcome": "DUPLICATE",
+      "receiver_version": 3,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": "2025-11-18T10:30",
+       "location": "Dr. Weber, Hauptstr. 5",
+       "notes": "Bring the vaccination card"
+      }
+     },
+     {
+      "outcome": "STALE",
+      "receiver_version": 3,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": "2025-11-18T10:30",
+       "location": "Dr. Weber, Hauptstr. 5",
+       "notes": "Bring the vaccination card"
+      }
+     },
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 4,
+      "kept_fields": [],
+      "state": "tombstone",
+      "value": null
+     },
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 5,
+      "kept_fields": [],
+      "state": "there",
+      "value": {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+     }
+    ]
+   }
+  },
+  {
+   "id": "records/apply/the-example-of-records-md-section-9-with-a-receiver-that-keeps-its-user",
+   "op": "apply",
+   "description": "the example of records.md, section 9, with a receiver that keeps its user's changes against a deletion",
+   "refs": ["records.md 6.4", "records.md 9"],
+   "input": {
+    "policy": {"local_changes": "per_field", "delete_with_local_changes": "keep"},
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     },
+     {
+      "local_change": {
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "field": "location",
+       "value": "Dr. Weber, Hauptstr. 5"
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 3,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 3,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     },
+     {
+      "message": {"kind": "DELETE", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 4}
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 5,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+      }
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+     },
+     {},
+     {
+      "outcome": "MERGED",
+      "receiver_version": 3,
+      "kept_fields": ["location"],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": "2025-11-18T10:30",
+       "location": "Dr. Weber, Hauptstr. 5",
+       "notes": "Bring the vaccination card"
+      }
+     },
+     {
+      "outcome": "DUPLICATE",
+      "receiver_version": 3,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": "2025-11-18T10:30",
+       "location": "Dr. Weber, Hauptstr. 5",
+       "notes": "Bring the vaccination card"
+      }
+     },
+     {
+      "outcome": "STALE",
+      "receiver_version": 3,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": "2025-11-18T10:30",
+       "location": "Dr. Weber, Hauptstr. 5",
+       "notes": "Bring the vaccination card"
+      }
+     },
+     {
+      "outcome": "KEPT",
+      "receiver_version": 4,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": "2025-11-18T10:30",
+       "location": "Dr. Weber, Hauptstr. 5",
+       "notes": "Bring the vaccination card"
+      }
+     },
+     {
+      "outcome": "MERGED",
+      "receiver_version": 5,
+      "kept_fields": ["location"],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": "2025-11-18T10:30",
+       "location": "Dr. Weber, Hauptstr. 5",
+       "notes": "Bring the vaccination card"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "records/apply/a-delete-of-an-unchanged-record-is-applied-also-by-a-receiver-that-keeps",
+   "op": "apply",
+   "description": "a DELETE of an unchanged record is applied, also by a receiver that keeps changes",
+   "refs": ["records.md 6.4"],
+   "input": {
+    "policy": {"local_changes": "per_field", "delete_with_local_changes": "keep"},
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     },
+     {
+      "message": {"kind": "DELETE", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 2}
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+     },
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 2,
+      "kept_fields": [],
+      "state": "tombstone",
+      "value": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "records/apply/a-delete-of-an-unknown-id-leaves-a-tombstone-that-older-and-equal-versio",
+   "op": "apply",
+   "description": "a DELETE of an unknown id leaves a tombstone that older and equal versions do not pass",
+   "refs": ["records.md 5.2", "records.md 5.3"],
+   "input": {
+    "policy": {"local_changes": "per_field", "delete_with_local_changes": "delete"},
+    "events": [
+     {
+      "message": {"kind": "DELETE", "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7", "version": 4}
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+       "version": 3,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+       "version": 4,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+       "version": 5,
+       "type": "axt.example.v1.Task",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 4,
+      "kept_fields": [],
+      "state": "tombstone",
+      "value": null
+     },
+     {
+      "outcome": "STALE",
+      "receiver_version": 4,
+      "kept_fields": [],
+      "state": "tombstone",
+      "value": null
+     },
+     {
+      "outcome": "DUPLICATE",
+      "receiver_version": 4,
+      "kept_fields": [],
+      "state": "tombstone",
+      "value": null
+     },
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 5,
+      "kept_fields": [],
+      "state": "there",
+      "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+     }
+    ]
+   }
+  },
+  {
+   "id": "records/apply/a-record-its-user-deleted-stays-deleted-a-later-delete-turns-it-into-a-t",
+   "op": "apply",
+   "description": "a record its user deleted stays deleted; a later DELETE turns it into a tombstone",
+   "refs": ["records.md 6.3"],
+   "input": {
+    "policy": {"local_changes": "per_field", "delete_with_local_changes": "delete"},
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     },
+     {
+      "local_delete": {"id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80"}
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 2,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     },
+     {
+      "message": {"kind": "DELETE", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 3}
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+     },
+     {},
+     {
+      "outcome": "KEPT",
+      "receiver_version": 2,
+      "kept_fields": [],
+      "state": "deleted_by_user",
+      "value": null
+     },
+     {
+      "outcome": "STALE",
+      "receiver_version": 2,
+      "kept_fields": [],
+      "state": "deleted_by_user",
+      "value": null
+     },
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 3,
+      "kept_fields": [],
+      "state": "tombstone",
+      "value": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "records/apply/a-receiver-that-tracks-changes-of-the-whole-record-whole-record-keep",
+   "op": "apply",
+   "description": "a receiver that tracks changes of the whole record, whole record keep",
+   "refs": ["records.md 6.2"],
+   "input": {
+    "policy": {"local_changes": "whole_record_keep", "delete_with_local_changes": "delete"},
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 2,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     },
+     {
+      "local_change": {
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "field": "location",
+       "value": "Dr. Weber, Hauptstr. 5"
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 3,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+      }
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+     },
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 2,
+      "kept_fields": [],
+      "state": "there",
+      "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+     },
+     {},
+     {
+      "outcome": "KEPT",
+      "receiver_version": 3,
+      "kept_fields": [],
+      "state": "there",
+      "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "Dr. Weber, Hauptstr. 5", "notes": ""}
+     }
+    ]
+   }
+  },
+  {
+   "id": "records/apply/a-receiver-that-tracks-changes-of-the-whole-record-whole-record-take",
+   "op": "apply",
+   "description": "a receiver that tracks changes of the whole record, whole record take",
+   "refs": ["records.md 6.2"],
+   "input": {
+    "policy": {"local_changes": "whole_record_take", "delete_with_local_changes": "delete"},
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 2,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     },
+     {
+      "local_change": {
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "field": "location",
+       "value": "Dr. Weber, Hauptstr. 5"
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 3,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+      }
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+     },
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 2,
+      "kept_fields": [],
+      "state": "there",
+      "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+     },
+     {},
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 3,
+      "kept_fields": [],
+      "state": "there",
+      "value": {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+     }
+    ]
+   }
+  },
+  {
+   "id": "records/apply/only-the-kept-values-that-differ-from-the-message-are-named",
+   "op": "apply",
+   "description": "only the kept values that differ from the message are named",
+   "refs": ["records.md 6.1", "records.md 7"],
+   "input": {
+    "policy": {"local_changes": "per_field", "delete_with_local_changes": "delete"},
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {"a": 1, "b": 1, "c": 1}
+      }
+     },
+     {
+      "local_change": {"id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "field": "a", "value": 2}
+     },
+     {
+      "local_change": {"id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "field": "b", "value": 2}
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 2,
+       "type": "axt.example.v1.Appointment",
+       "value": {"a": 1, "b": 2, "c": 3}
+      }
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {"a": 1, "b": 1, "c": 1}
+     },
+     {},
+     {},
+     {
+      "outcome": "MERGED",
+      "receiver_version": 2,
+      "kept_fields": ["a"],
+      "state": "there",
+      "value": {"a": 2, "b": 2, "c": 3}
+     }
+    ]
+   }
+  },
+  {
+   "id": "records/apply/a-message-that-brings-the-value-its-user-set-is-applied",
+   "op": "apply",
+   "description": "a message that brings the value its user set is applied",
+   "refs": ["records.md 6.1"],
+   "input": {
+    "policy": {"local_changes": "per_field", "delete_with_local_changes": "delete"},
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     },
+     {
+      "local_change": {
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "field": "location",
+       "value": "Dr. Weber, Hauptstr. 5"
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 2,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": "2025-11-18T10:30",
+        "location": "Dr. Weber, Hauptstr. 5",
+        "notes": "Bring the vaccination card"
+       }
+      }
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+     },
+     {},
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 2,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": "2025-11-18T10:30",
+       "location": "Dr. Weber, Hauptstr. 5",
+       "notes": "Bring the vaccination card"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "records/apply/ids-compare-as-128-bit-values-whatever-the-case-of-their-digits",
+   "op": "apply",
+   "description": "ids compare as 128-bit values, whatever the case of their digits",
+   "refs": ["records.md 2", "envelope.md 7"],
+   "input": {
+    "policy": {"local_changes": "per_field", "delete_with_local_changes": "delete"},
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3F2C8A5E-9B1D-4C7E-8A6F-2D4B5C6E7F80",
+       "version": 2,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 2,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+      }
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+     },
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 2,
+      "kept_fields": [],
+      "state": "there",
+      "value": {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+     },
+     {
+      "outcome": "DUPLICATE",
+      "receiver_version": 2,
+      "kept_fields": [],
+      "state": "there",
+      "value": {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+     }
+    ]
+   }
+  },
+  {
+   "id": "records/apply/a-message-that-cannot-be-processed-changes-nothing",
+   "op": "apply",
+   "description": "a message that cannot be processed changes nothing",
+   "refs": ["records.md 2", "records.md 3", "records.md 7"],
+   "input": {
+    "policy": {"local_changes": "per_field", "delete_with_local_changes": "delete"},
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "vet-appointment",
+       "version": 2,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "00000000-0000-0000-0000-000000000000",
+       "version": 2,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "ffffffff-ffff-ffff-ffff-ffffffffffff",
+       "version": 2,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e9b1d4c7e8a6f2d4b5c6e7f80",
+       "version": 2,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 0,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": -1,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+      }
+     },
+     {
+      "message": {"kind": "DELETE", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 0}
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+     },
+     {"error": "RECORD_ID_INVALID"},
+     {"error": "RECORD_ID_INVALID"},
+     {"error": "RECORD_ID_INVALID"},
+     {"error": "RECORD_ID_INVALID"},
+     {"error": "VERSION_INVALID"},
+     {"error": "VERSION_INVALID"},
+     {"error": "VERSION_INVALID"},
+     {
+      "outcome": "DUPLICATE",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+     }
+    ]
+   }
+  },
+  {
+   "id": "records/apply/a-record-keeps-its-type-also-through-a-tombstone",
+   "op": "apply",
+   "description": "a record keeps its type, also through a tombstone",
+   "refs": ["records.md 4.3"],
+   "input": {
+    "policy": {"local_changes": "per_field", "delete_with_local_changes": "delete"},
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 2,
+       "type": "axt.example.v1.Task",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     },
+     {
+      "message": {"kind": "DELETE", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 2}
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 3,
+       "type": "axt.example.v1.Task",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 3,
+       "type": "axt.example.v1.Appointment",
+       "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+      }
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+     },
+     {"error": "TYPE_CHANGED"},
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 2,
+      "kept_fields": [],
+      "state": "tombstone",
+      "value": null
+     },
+     {"error": "TYPE_CHANGED"},
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 3,
+      "kept_fields": [],
+      "state": "there",
+      "value": {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
+     }
+    ]
+   }
+  }
+ ]
+}

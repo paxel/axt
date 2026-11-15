@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: CC0-1.0
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Produce and check the examples of spec/protocol.md.
 
 Checks the schemas of the protocol messages, types/axt/Offer.avsc,
@@ -7,7 +7,7 @@ exchange from cat-a-log to Old Brain Fix with signed messages and prints
 each as annotated hex:
 
 - the schema rules of spec/types.md, section 5, with the checks of
-  vectors/tools/example_types.py, as spec/manifest.md, section 9, applies
+  conformance/tools/example_types.py, as spec/manifest.md, section 9, applies
   them to a schema of the specification: a doc everywhere, names in the
   required case and beginning with the type's name, only ["null", T]
   unions with the default null, enum defaults, no recursion, the size and
@@ -39,7 +39,7 @@ checks only how a key move is acknowledged.
 Run from anywhere, with fastavro, avro (1.12), pynacl and cryptography
 installed:
 
-    python3 vectors/tools/protocol_examples.py
+    python3 conformance/tools/protocol_examples.py
 
 The script imports manifest_examples.py, which runs that script's checks
 with its output suppressed, and keys_examples.py, which runs none. Every

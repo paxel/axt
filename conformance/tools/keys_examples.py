@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: CC0-1.0
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Produce and check the examples of spec/keys.md.
 
 Signs, seals and moves keys with fixed test keys, prints the results as
@@ -21,7 +21,7 @@ annotated hex, and checks them:
   in an AXT file with a signed header, read back from the file's block
   bytes and verified, and read with fastavro and the avro package;
 - a KEY_MOVE message with the schema types/axt/KeyMove.avsc, checked with
-  the schema rules of vectors/tools/example_types.py, encoded field by field
+  the schema rules of conformance/tools/example_types.py, encoded field by field
   and compared with fastavro, decoded with fastavro and avro;
 - the short fingerprints of the test keys.
 
@@ -31,9 +31,9 @@ nothing and MUST NOT be used outside tests.
 Run from anywhere, with fastavro, avro (1.12), pynacl and cryptography
 installed:
 
-    python3 vectors/tools/keys_examples.py
+    python3 conformance/tools/keys_examples.py
 
-vectors/tools/manifest_examples.py imports the X25519 function from here;
+conformance/tools/manifest_examples.py imports the X25519 function from here;
 importing this file runs none of the checks.
 """
 
@@ -405,6 +405,69 @@ def file_datums(data):
     return meta, datums
 
 
+# --- the edges of verification (spec/keys.md, section 7.6) --------------------
+
+
+def small_order_points():
+    """The canonical encodings of the eight points of small order: [L] times a point of order 8L generates them."""
+    i = 0
+    while True:
+        candidate = decompress(hashlib.sha256(b"AXT torsion %d" % i).digest())
+        i += 1
+        if candidate is not None:
+            torsion = point_mul(L, candidate)
+            if not point_equal(point_mul(4, torsion), IDENTITY):
+                break
+    return sorted(compress(point_mul(k, torsion)) for k in range(8))
+
+
+def edge_cases(seed, other_key, msg, sig):
+    """The signatures of spec/keys.md, section 7.6: (label, key, message, signature, why the strict rule
+    rejects it or None), for the message msg signed as sig with seed; and the crafted points."""
+    pub = public_key(seed)
+    a_scalar = expand(seed)[0]
+    identity = compress(IDENTITY)  # 01 00 ... 00
+    identity_nc = (P + 1).to_bytes(32, "little")  # y = 1 + p: the identity, non-canonical
+    s_value = int.from_bytes(sig[32:], "little")
+    torsion8 = decompress(bytes.fromhex("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a"))
+    assert not point_equal(point_mul(4, torsion8), IDENTITY) and small_order(torsion8)
+
+    def crafted_r(r_bytes):
+        k = hash_mod_l(r_bytes + pub + msg)
+        return r_bytes + (k * a_scalar % L).to_bytes(32, "little")
+
+    # R with a component of order 8: R = [r]B + T, S = r + k*a.
+    r_nonce = hash_mod_l(b"AXT example: R with a component of order 8")
+    mixed_r = compress(point_add(point_mul(r_nonce, BASE), torsion8))
+    mixed_r_sig = mixed_r + ((r_nonce + hash_mod_l(mixed_r + pub + msg) * a_scalar) % L).to_bytes(32, "little")
+    # The key with a component of order 8: A = [a]B + T, R = [r]B, S = r + k*a, with k not a multiple of 8.
+    mixed_key = compress(point_add(point_mul(a_scalar, BASE), torsion8))
+    i = 0
+    while True:
+        r_nonce = hash_mod_l(b"AXT example: key with a component of order 8 %d" % i)
+        big_r = compress(point_mul(r_nonce, BASE))
+        k = hash_mod_l(big_r + mixed_key + msg)
+        if k % 8:
+            break
+        i += 1
+    mixed_key_sig = big_r + ((r_nonce + k * a_scalar) % L).to_bytes(32, "little")
+
+    cases = [
+        ("the signature of example 1", pub, msg, sig, None),
+        ("one byte of the message changed", pub, msg[:-1] + bytes([msg[-1] ^ 1]), sig, "equation does not hold"),
+        ("another key", other_key, msg, sig, "equation does not hold"),
+        ("S + L in place of S", pub, msg, sig[:32] + (s_value + L).to_bytes(32, "little"), "S not below L"),
+        ("R of small order (the identity), S = k*a", pub, msg, crafted_r(identity), "R not of order L"),
+        ("R with a component of order 8", pub, msg, mixed_r_sig, "R not of order L"),
+        ("R the identity, non-canonical, S = k*a", pub, msg, crafted_r(identity_nc), "R not a canonical encoding of a point"),
+        ("key the identity, R the identity, S = 0", identity, msg, identity + bytes(32), "key not of order L"),
+        ("key with a component of order 8", mixed_key, msg, mixed_key_sig, "key not of order L"),
+        ("key the identity, non-canonical, R the identity, S = 0", identity_nc, msg, identity + bytes(32),
+         "key not a canonical encoding of a point"),
+    ]
+    return cases, (identity, identity_nc, mixed_r, mixed_key)
+
+
 # --- output -------------------------------------------------------------------
 
 
@@ -760,60 +823,9 @@ def main():
 
     # --- the edges of verification --------------------------------------------
 
-    # The eight points of small order: [L] times a point of order 8L generates them.
-    i = 0
-    while True:
-        candidate = decompress(hashlib.sha256(b"AXT torsion %d" % i).digest())
-        i += 1
-        if candidate is not None:
-            torsion = point_mul(L, candidate)
-            if not point_equal(point_mul(4, torsion), IDENTITY):
-                break
-    small = sorted(compress(point_mul(k, torsion)) for k in range(8))
+    small = small_order_points()
     assert len(set(small)) == 8 and all(key_problem(e) == "key not of order L" for e in small)
-
-
-    a_scalar = expand(old["seed"])[0]
-    msg = data_signed
-    identity = compress(IDENTITY)  # 01 00 ... 00
-    identity_nc = (P + 1).to_bytes(32, "little")  # y = 1 + p: the identity, non-canonical
-    s_value = int.from_bytes(data_sig[32:], "little")
-    torsion8 = decompress(bytes.fromhex("c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a"))
-    assert not point_equal(point_mul(4, torsion8), IDENTITY) and small_order(torsion8)
-
-    def crafted_r(r_bytes):
-        k = hash_mod_l(r_bytes + old["pub"] + msg)
-        return r_bytes + (k * a_scalar % L).to_bytes(32, "little")
-
-    # R with a component of order 8: R = [r]B + T, S = r + k*a.
-    r_nonce = hash_mod_l(b"AXT example: R with a component of order 8")
-    mixed_r = compress(point_add(point_mul(r_nonce, BASE), torsion8))
-    mixed_r_sig = mixed_r + ((r_nonce + hash_mod_l(mixed_r + old["pub"] + msg) * a_scalar) % L).to_bytes(32, "little")
-    # The key with a component of order 8: A = [a]B + T, R = [r]B, S = r + k*a, with k not a multiple of 8.
-    mixed_key = compress(point_add(point_mul(a_scalar, BASE), torsion8))
-    i = 0
-    while True:
-        r_nonce = hash_mod_l(b"AXT example: key with a component of order 8 %d" % i)
-        big_r = compress(point_mul(r_nonce, BASE))
-        k = hash_mod_l(big_r + mixed_key + msg)
-        if k % 8:
-            break
-        i += 1
-    mixed_key_sig = big_r + ((r_nonce + k * a_scalar) % L).to_bytes(32, "little")
-
-    cases = [
-        ("the signature of example 1", old["pub"], msg, data_sig, None),
-        ("one byte of the message changed", old["pub"], msg[:-1] + bytes([msg[-1] ^ 1]), data_sig, "equation does not hold"),
-        ("another key", obf["pub"], msg, data_sig, "equation does not hold"),
-        ("S + L in place of S", old["pub"], msg, data_sig[:32] + (s_value + L).to_bytes(32, "little"), "S not below L"),
-        ("R of small order (the identity), S = k*a", old["pub"], msg, crafted_r(identity), "R not of order L"),
-        ("R with a component of order 8", old["pub"], msg, mixed_r_sig, "R not of order L"),
-        ("R the identity, non-canonical, S = k*a", old["pub"], msg, crafted_r(identity_nc), "R not a canonical encoding of a point"),
-        ("key the identity, R the identity, S = 0", identity, msg, identity + bytes(32), "key not of order L"),
-        ("key with a component of order 8", mixed_key, msg, mixed_key_sig, "key not of order L"),
-        ("key the identity, non-canonical, R the identity, S = 0", identity_nc, msg, identity + bytes(32),
-         "key not a canonical encoding of a point"),
-    ]
+    cases, (identity, identity_nc, mixed_r, mixed_key) = edge_cases(old["seed"], obf["pub"], data_signed, data_sig)
     edge_rows = []
     for label, key, message, sig, expected in cases:
         got = verify_problem(key, message, sig)

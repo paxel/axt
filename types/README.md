@@ -30,6 +30,6 @@ The namespace `axt` and every namespace beginning with `axt.` are reserved for t
 | [Measurement](axt/example/v1/Measurement.1.avsc) | One value or count at a point in time, with its unit                 |
 | [Document](axt/example/v1/Document.1.avsc)       | A file with a title, a media type and a date                         |
 
-[vectors/tools/example_types.py](../vectors/tools/example_types.py) checks every schema against the rules and prints its fingerprint.
+[conformance/tools/example_types.py](../conformance/tools/example_types.py) checks every schema against the rules and prints its fingerprint.
 
 Licence: CC0 1.0, see [LICENSING.md](../LICENSING.md).

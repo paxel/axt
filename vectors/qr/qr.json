@@ -1,0 +1,408 @@
+{
+ "format": 1,
+ "specification": "0.1.0",
+ "category": "qr",
+ "description": "The payload of the QR code and its text (spec/transports.md, section 3).",
+ "vectors": [
+  {
+   "id": "qr/parse_qr/the-qr-code-of-transports-md-section-7-2",
+   "op": "parse_qr",
+   "description": "the QR code of transports.md, section 7.2",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBAECGAVAARIAFA4MCQEPDIOR2HA4Z2F4XXEZLMMF4S4ZLYMFWXA3DFFZXXEZZPMF4HIL5TO5H77LUQLVLSDKNTTDGQJ5WUACX3BHFYZ7Z6EFWDUO5HPRQAMM"
+   },
+   "expected": {
+    "accept": {
+     "payload": {
+      "signing_key": "da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7",
+      "encryption_key": "34fa7e71770d8d94c76001ac8d575609f005981f80c115bb7a8fe312687ea40b",
+      "local": {
+       "addresses": ["c0a80114"],
+       "port": 47312
+      },
+      "relay": {
+       "url": "https://relay.example.org/axt/",
+       "mailbox": "b3774fffae905d5721a9b398cd04f6d400afb09cb8cff3e216c3a3ba77c60063"
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "qr/parse_qr/the-same-text-in-lower-case",
+   "op": "parse_qr",
+   "description": "the same text in lower case",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "axt:ahnj4vgjviw3imse36myrhmrhda4u4lv2tfascawr5rvgdskpxw3oaru7j7hc5ynrwkmoyabvsgvovqj6aczqh4ayek3w6up4mjgq7vebmbaecgavaariafa4mcqepdior2ha4z2f4xxezlmmf4s4zlymfwxa3dffzxxezzpmf4hil5to5h77luqlvlsdknttdgqj5wuacx3bhfyz7z6efwduo5hprqamm"
+   },
+   "expected": {
+    "accept": {
+     "payload": {
+      "signing_key": "da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7",
+      "encryption_key": "34fa7e71770d8d94c76001ac8d575609f005981f80c115bb7a8fe312687ea40b",
+      "local": {
+       "addresses": ["c0a80114"],
+       "port": 47312
+      },
+      "relay": {
+       "url": "https://relay.example.org/axt/",
+       "mailbox": "b3774fffae905d5721a9b398cd04f6d400afb09cb8cff3e216c3a3ba77c60063"
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "qr/parse_qr/the-same-text-in-mixed-case",
+   "op": "parse_qr",
+   "description": "the same text in mixed case",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "axt:AhNj4vGjViW3ImSe36MyRhMrHdA4U4Lv2tFaScAwR5RvGdSkPxW3OaRu7j7hC5YnRwKmOyAbVsGvOvQj6aCzQh4aYeK3W6Up4mJgQ7VeBmBaEcGaVaArIaFa4mCqEpDiOr2hA4Z2F4XxEzLmMf4s4zLyMfWxA3DfFzXxEzZpMf4hIl5tO5H77lUqLvLsDkNtTdGqJ5WuAcX3BhFyZ7Z6EfWdUo5hPrQaMm"
+   },
+   "expected": {
+    "accept": {
+     "payload": {
+      "signing_key": "da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7",
+      "encryption_key": "34fa7e71770d8d94c76001ac8d575609f005981f80c115bb7a8fe312687ea40b",
+      "local": {
+       "addresses": ["c0a80114"],
+       "port": 47312
+      },
+      "relay": {
+       "url": "https://relay.example.org/axt/",
+       "mailbox": "b3774fffae905d5721a9b398cd04f6d400afb09cb8cff3e216c3a3ba77c60063"
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "qr/parse_qr/a-code-with-the-signing-key-alone",
+   "op": "parse_qr",
+   "description": "a code with the signing key alone",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {"text": "AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OAAAAA"},
+   "expected": {
+    "accept": {
+     "payload": {
+      "signing_key": "da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7",
+      "encryption_key": null,
+      "local": null,
+      "relay": null
+     }
+    }
+   }
+  },
+  {
+   "id": "qr/parse_qr/the-largest-valid-payload-every-field-at-its-largest",
+   "op": "parse_qr",
+   "description": "the largest valid payload, every field at its largest",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBAQIAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAP57YHAKAAI2DUORYHGORPF5ZGK3DBPEXGK6DBNVYGYZJON5ZGOL3BMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCL5TO5H77LUQLVLSDKNTTDGQJ5WUACX3BHFYZ7Z6EFWDUO5HPRQAMM"
+   },
+   "expected": {
+    "accept": {
+     "payload": {
+      "signing_key": "da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7",
+      "encryption_key": "34fa7e71770d8d94c76001ac8d575609f005981f80c115bb7a8fe312687ea40b",
+      "local": {
+       "addresses": [
+        "00000000000000000000000000000000",
+        "00000000000000000000000000000000",
+        "00000000000000000000000000000000",
+        "00000000000000000000000000000000"
+       ],
+       "port": 65535
+      },
+      "relay": {
+       "url": "https://relay.example.org/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/",
+       "mailbox": "b3774fffae905d5721a9b398cd04f6d400afb09cb8cff3e216c3a3ba77c60063"
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "qr/parse_qr/reject-another-scheme",
+   "op": "parse_qr",
+   "description": "reject another scheme",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "HTTPS:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBAECGAVAARIAFA4MCQEPDIOR2HA4Z2F4XXEZLMMF4S4ZLYMFWXA3DFFZXXEZZPMF4HIL5TO5H77LUQLVLSDKNTTDGQJ5WUACX3BHFYZ7Z6EFWDUO5HPRQAMM"
+   },
+   "expected": {
+    "reject": {"error": "QR_INVALID", "note": "not the scheme AXT:"}
+   }
+  },
+  {
+   "id": "qr/parse_qr/reject-padding",
+   "op": "parse_qr",
+   "description": "reject padding",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBAECGAVAARIAFA4MCQEPDIOR2HA4Z2F4XXEZLMMF4S4ZLYMFWXA3DFFZXXEZZPMF4HIL5TO5H77LUQLVLSDKNTTDGQJ5WUACX3BHFYZ7Z6EFWDUO5HPRQAMM======"
+   },
+   "expected": {
+    "reject": {"error": "QR_INVALID", "note": "not base32 without padding"}
+   }
+  },
+  {
+   "id": "qr/parse_qr/reject-a-character-outside-base32",
+   "op": "parse_qr",
+   "description": "reject a character outside base32",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "AXT:AHNJ4V1JVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBAECGAVAARIAFA4MCQEPDIOR2HA4Z2F4XXEZLMMF4S4ZLYMFWXA3DFFZXXEZZPMF4HIL5TO5H77LUQLVLSDKNTTDGQJ5WUACX3BHFYZ7Z6EFWDUO5HPRQAMM"
+   },
+   "expected": {
+    "reject": {"error": "QR_INVALID", "note": "not base32 without padding"}
+   }
+  },
+  {
+   "id": "qr/parse_qr/reject-bits-in-the-last-character-that-are-not-zero",
+   "op": "parse_qr",
+   "description": "reject bits in the last character that are not zero",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBAECGAVAARIAFA4MCQEPDIOR2HA4Z2F4XXEZLMMF4S4ZLYMFWXA3DFFZXXEZZPMF4HIL5TO5H77LUQLVLSDKNTTDGQJ5WUACX3BHFYZ7Z6EFWDUO5HPRQAMN"
+   },
+   "expected": {
+    "reject": {"error": "QR_INVALID", "note": "the last character carries bits that are not zero"}
+   }
+  },
+  {
+   "id": "qr/parse_qr/reject-payload-version-2",
+   "op": "parse_qr",
+   "description": "reject payload version 2",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "AXT:ALNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBAECGAVAARIAFA4MCQEPDIOR2HA4Z2F4XXEZLMMF4S4ZLYMFWXA3DFFZXXEZZPMF4HIL5TO5H77LUQLVLSDKNTTDGQJ5WUACX3BHFYZ7Z6EFWDUO5HPRQAMM"
+   },
+   "expected": {
+    "reject": {"error": "QR_VERSION_UNSUPPORTED", "note": "a payload version this app does not know"}
+   }
+  },
+  {
+   "id": "qr/parse_qr/reject-bytes-left-over",
+   "op": "parse_qr",
+   "description": "reject bytes left over",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBAECGAVAARIAFA4MCQEPDIOR2HA4Z2F4XXEZLMMF4S4ZLYMFWXA3DFFZXXEZZPMF4HIL5TO5H77LUQLVLSDKNTTDGQJ5WUACX3BHFYZ7Z6EFWDUO5HPRQAMMAA"
+   },
+   "expected": {
+    "reject": {"error": "QR_INVALID", "note": "bytes left over"}
+   }
+  },
+  {
+   "id": "qr/parse_qr/reject-cut-short",
+   "op": "parse_qr",
+   "description": "reject cut short",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBAECGAVAARIAFA4MCQEPDIOR2HA4Z2F4XXEZLMMF4S4ZLYMFWXA3DFFZXXEZZPMF4HIL5TO5H77LUQLVLSDKNTTDGQJ5WUACX3BHFYZ7Z6EFWDUO5HPRQA"
+   },
+   "expected": {
+    "reject": {"error": "QR_INVALID", "note": "not an axt.QrPayload"}
+   }
+  },
+  {
+   "id": "qr/parse_qr/reject-a-text-above-the-longest",
+   "op": "parse_qr",
+   "description": "reject a text above the longest",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "AXT:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+   },
+   "expected": {
+    "reject": {"error": "QR_INVALID", "note": "longer than any valid text"}
+   }
+  },
+  {
+   "id": "qr/parse_qr/reject-the-largest-payload-with-its-addresses-in-four-array-blocks",
+   "op": "parse_qr",
+   "description": "reject the largest payload with its addresses in four array blocks",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBACIRAAAAAAAAAAAAAAAAAAAAAAAAAAAASEIAAAAAAAAAAAAAAAAAAAAAAAAAAAERCAAAAAAAAAAAAAAAAAAAAAAAAAAABEIQAAAAAAAAAAAAAAAAAAAAAAAAAAAH674DQFAAENB2HI4DTHIXS64TFNRQXSLTFPBQW24DMMUXG64THF5QWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBF6ZXOT77V2IF2VZBVGZZRTIE63KABL5QTS4M747CC3B2HOTXYYAGG"
+   },
+   "expected": {
+    "reject": {"error": "QR_INVALID", "note": "longer than any valid text"}
+   }
+  },
+  {
+   "id": "qr/parse_qr/reject-a-signing-key-of-small-order",
+   "op": "parse_qr",
+   "description": "reject a signing key of small order",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "AXT:AEAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBAECGAVAARIAFA4MCQEPDIOR2HA4Z2F4XXEZLMMF4S4ZLYMFWXA3DFFZXXEZZPMF4HIL5TO5H77LUQLVLSDKNTTDGQJ5WUACX3BHFYZ7Z6EFWDUO5HPRQAMM"
+   },
+   "expected": {
+    "reject": {"error": "QR_INVALID", "note": "signing_key: key not of order L"}
+   }
+  },
+  {
+   "id": "qr/parse_qr/reject-an-encryption-key-of-small-order",
+   "op": "parse_qr",
+   "description": "reject an encryption key of small order",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAECGAVAARIAFA4MCQEPDIOR2HA4Z2F4XXEZLMMF4S4ZLYMFWXA3DFFZXXEZZPMF4HIL5TO5H77LUQLVLSDKNTTDGQJ5WUACX3BHFYZ7Z6EFWDUO5HPRQAMM"
+   },
+   "expected": {
+    "reject": {"error": "QR_INVALID", "note": "encryption_key is an X25519 key of small order"}
+   }
+  },
+  {
+   "id": "qr/parse_qr/reject-a-relay-without-encryption-key",
+   "op": "parse_qr",
+   "description": "reject a relay without encryption key",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OAACAIEMBKABCQAKBYYFAI6GQ5DUOBZTULZPOJSWYYLZFZSXQYLNOBWGKLTPOJTS6YLYOQX3G52P76XJAXKXEGU3HGGNAT3NIAFPWCOLRT7T4ILMHI52O7DAAYY"
+   },
+   "expected": {
+    "reject": {"error": "QR_INVALID", "note": "relay and encryption_key are not both present or both null"}
+   }
+  },
+  {
+   "id": "qr/parse_qr/reject-an-encryption-key-without-relay",
+   "op": "parse_qr",
+   "description": "reject an encryption key without relay",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBAECGAVAARIAFA4MCQA"
+   },
+   "expected": {
+    "reject": {"error": "QR_INVALID", "note": "relay and encryption_key are not both present or both null"}
+   }
+  },
+  {
+   "id": "qr/parse_qr/reject-no-address",
+   "op": "parse_qr",
+   "description": "reject no address",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBABIHDAUBDY2DUORYHGORPF5ZGK3DBPEXGK6DBNVYGYZJON5ZGOL3BPB2C7M3XJ7725EC5K4Q2TM4YZUCPNVAAV6YJZOGP6PRBNQ5DXJ34MADD"
+   },
+   "expected": {
+    "reject": {"error": "QR_INVALID", "note": "local.addresses is not 1 to 4 addresses of 4 or 16 bytes"}
+   }
+  },
+  {
+   "id": "qr/parse_qr/reject-five-addresses",
+   "op": "parse_qr",
+   "description": "reject five addresses",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBAUCGAVAARICGAVAARICGAVAARICGAVAARICGAVAARIAFA4MCQEPDIOR2HA4Z2F4XXEZLMMF4S4ZLYMFWXA3DFFZXXEZZPMF4HIL5TO5H77LUQLVLSDKNTTDGQJ5WUACX3BHFYZ7Z6EFWDUO5HPRQAMM"
+   },
+   "expected": {
+    "reject": {"error": "QR_INVALID", "note": "local.addresses is not 1 to 4 addresses of 4 or 16 bytes"}
+   }
+  },
+  {
+   "id": "qr/parse_qr/reject-an-address-of-5-bytes",
+   "op": "parse_qr",
+   "description": "reject an address of 5 bytes",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBAECQAAAAAAAAAUDRQKAR4NB2HI4DTHIXS64TFNRQXSLTFPBQW24DMMUXG64THF5QXQ5BPWN3U775OSBOVOINJWOMM2BHW2QAK7ME4XDH7HYQWYOR3U56GABRQ"
+   },
+   "expected": {
+    "reject": {"error": "QR_INVALID", "note": "local.addresses is not 1 to 4 addresses of 4 or 16 bytes"}
+   }
+  },
+  {
+   "id": "qr/parse_qr/reject-port-0",
+   "op": "parse_qr",
+   "description": "reject port 0",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBAECGAVAARIAAAAI6GQ5DUOBZTULZPOJSWYYLZFZSXQYLNOBWGKLTPOJTS6YLYOQX3G52P76XJAXKXEGU3HGGNAT3NIAFPWCOLRT7T4ILMHI52O7DAAYY"
+   },
+   "expected": {
+    "reject": {"error": "QR_INVALID", "note": "local.port is not 1 to 65535"}
+   }
+  },
+  {
+   "id": "qr/parse_qr/reject-port-65536",
+   "op": "parse_qr",
+   "description": "reject port 65536",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBAECGAVAARIAEAQAEAEPDIOR2HA4Z2F4XXEZLMMF4S4ZLYMFWXA3DFFZXXEZZPMF4HIL5TO5H77LUQLVLSDKNTTDGQJ5WUACX3BHFYZ7Z6EFWDUO5HPRQAMM"
+   },
+   "expected": {
+    "reject": {"error": "QR_INVALID", "note": "local.port is not 1 to 65535"}
+   }
+  },
+  {
+   "id": "qr/parse_qr/reject-a-relay-url-with-http",
+   "op": "parse_qr",
+   "description": "reject a relay URL with http",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBAECGAVAARIAFA4MCQEMTIOR2HAORPF5ZGK3DBPEXGK6DBNVYGYZJON5ZGOL5TO5H77LUQLVLSDKNTTDGQJ5WUACX3BHFYZ7Z6EFWDUO5HPRQAMM"
+   },
+   "expected": {
+    "reject": {"error": "QR_INVALID", "note": "relay.url is not an absolute https base URL of up to 256 bytes"}
+   }
+  },
+  {
+   "id": "qr/parse_qr/reject-a-relay-url-without-a-slash-at-the-end",
+   "op": "parse_qr",
+   "description": "reject a relay URL without a slash at the end",
+   "refs": ["transports.md 3.1", "transports.md 3.2"],
+   "input": {
+    "text": "AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBAECGAVAARIAFA4MCQEMTIOR2HA4Z2F4XXEZLMMF4S4ZLYMFWXA3DFFZXXEZ5TO5H77LUQLVLSDKNTTDGQJ5WUACX3BHFYZ7Z6EFWDUO5HPRQAMM"
+   },
+   "expected": {
+    "reject": {"error": "QR_INVALID", "note": "relay.url is not an absolute https base URL of up to 256 bytes"}
+   }
+  },
+  {
+   "id": "qr/qr_text/the-payload-of-transports-md-section-7-2",
+   "op": "qr_text",
+   "description": "the payload of transports.md, section 7.2",
+   "refs": ["transports.md 3.2"],
+   "input": {
+    "payload": "01da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb70234fa7e71770d8d94c76001ac8d575609f005981f80c115bb7a8fe312687ea40b020208c0a8011400a0e305023c68747470733a2f2f72656c61792e6578616d706c652e6f72672f6178742fb3774fffae905d5721a9b398cd04f6d400afb09cb8cff3e216c3a3ba77c60063"
+   },
+   "expected": {
+    "accept": {
+     "text": "AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBAECGAVAARIAFA4MCQEPDIOR2HA4Z2F4XXEZLMMF4S4ZLYMFWXA3DFFZXXEZZPMF4HIL5TO5H77LUQLVLSDKNTTDGQJ5WUACX3BHFYZ7Z6EFWDUO5HPRQAMM"
+    }
+   }
+  },
+  {
+   "id": "qr/qr_text/a-payload-with-the-signing-key-alone",
+   "op": "qr_text",
+   "description": "a payload with the signing key alone",
+   "refs": ["transports.md 3.2"],
+   "input": {"payload": "01da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7000000"},
+   "expected": {
+    "accept": {"text": "AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OAAAAA"}
+   }
+  },
+  {
+   "id": "qr/qr_text/the-largest-valid-payload",
+   "op": "qr_text",
+   "description": "the largest valid payload",
+   "refs": ["transports.md 3.2"],
+   "input": {
+    "payload": "01da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb70234fa7e71770d8d94c76001ac8d575609f005981f80c115bb7a8fe312687ea40b0208200000000000000000000000000000000020000000000000000000000000000000002000000000000000000000000000000000200000000000000000000000000000000000feff0702800468747470733a2f2f72656c61792e6578616d706c652e6f72672f616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161612fb3774fffae905d5721a9b398cd04f6d400afb09cb8cff3e216c3a3ba77c60063"
+   },
+   "expected": {
+    "accept": {
+     "text": "AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBAQIAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAP57YHAKAAI2DUORYHGORPF5ZGK3DBPEXGK6DBNVYGYZJON5ZGOL3BMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCYLBMFQWCL5TO5H77LUQLVLSDKNTTDGQJ5WUACX3BHFYZ7Z6EFWDUO5HPRQAMM"
+    }
+   }
+  }
+ ]
+}

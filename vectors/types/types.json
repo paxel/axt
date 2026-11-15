@@ -1,0 +1,996 @@
+{
+ "format": 1,
+ "specification": "0.1.0",
+ "category": "types",
+ "description": "The example types: fingerprints, the bytes and meaning of a record of each, and schema resolution with defaults, unknown symbols, aliases and the data depth limit (spec/types.md).",
+ "vectors": [
+  {
+   "id": "types/fingerprint/axt-example-v1-appointment-version-1",
+   "op": "fingerprint",
+   "description": "axt.example.v1.Appointment, version 1",
+   "refs": ["types.md 3.4", "types.md 7.3"],
+   "input": {
+    "schema": "{\n  \"type\": \"record\",\n  \"name\": \"Appointment\",\n  \"namespace\": \"axt.example.v1\",\n  \"doc\": \"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\n  \"axt.version\": 1,\n  \"axt.title\": \"title\",\n  \"fields\": [\n    {\n      \"name\": \"title\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"What the appointment is, as plain text on one line.\"\n    },\n    {\n      \"name\": \"start\",\n      \"type\": {\n        \"type\": \"long\",\n        \"logicalType\": \"local-timestamp-millis\"\n      },\n      \"doc\": \"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"\n    },\n    {\n      \"name\": \"end\",\n      \"type\": [\n        \"null\",\n        {\n          \"type\": \"long\",\n          \"logicalType\": \"local-timestamp-millis\"\n        }\n      ],\n      \"default\": null,\n      \"doc\": \"When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day.\"\n    },\n    {\n      \"name\": \"time_zone\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null,\n      \"doc\": \"The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment.\"\n    },\n    {\n      \"name\": \"all_day\",\n      \"type\": \"boolean\",\n      \"default\": false,\n      \"doc\": \"True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day.\"\n    },\n    {\n      \"name\": \"location\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"\n    },\n    {\n      \"name\": \"notes\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"\n    },\n    {\n      \"name\": \"reminders\",\n      \"type\": {\n        \"type\": \"array\",\n        \"items\": \"int\"\n      },\n      \"default\": [],\n      \"doc\": \"When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.\",\n      \"axt.unit\": \"min\"\n    }\n  ]\n}\n"
+   },
+   "expected": {
+    "accept": {
+     "canonical_form": "{\"name\":\"axt.example.v1.Appointment\",\"type\":\"record\",\"fields\":[{\"name\":\"title\",\"type\":\"string\"},{\"name\":\"start\",\"type\":\"long\"},{\"name\":\"end\",\"type\":[\"null\",\"long\"]},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"]},{\"name\":\"all_day\",\"type\":\"boolean\"},{\"name\":\"location\",\"type\":\"string\"},{\"name\":\"notes\",\"type\":\"string\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":\"int\"}}]}",
+     "fingerprint": "591b44e939de571b"
+    }
+   }
+  },
+  {
+   "id": "types/fingerprint/axt-example-v1-car-version-1",
+   "op": "fingerprint",
+   "description": "axt.example.v1.Car, version 1",
+   "refs": ["types.md 3.4", "types.md 7.3"],
+   "input": {
+    "schema": "{\n  \"type\": \"record\",\n  \"name\": \"Car\",\n  \"namespace\": \"axt.example.v1\",\n  \"doc\": \"A car the user owns or drives.\",\n  \"axt.version\": 1,\n  \"axt.title\": \"model\",\n  \"fields\": [\n    {\n      \"name\": \"make\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"The manufacturer, such as Volkswagen. Empty when not known.\"\n    },\n    {\n      \"name\": \"model\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"The model, such as Golf. Empty when not known.\"\n    },\n    {\n      \"name\": \"year\",\n      \"type\": [\n        \"null\",\n        \"int\"\n      ],\n      \"default\": null,\n      \"doc\": \"The model year, such as 2019. Null when not known.\"\n    },\n    {\n      \"name\": \"plate\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"The licence plate number as written on the plate. Empty when the car has none or it is not known.\"\n    },\n    {\n      \"name\": \"vin\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"The vehicle identification number of ISO 3779, 17 characters. Empty when not known.\"\n    },\n    {\n      \"name\": \"odometer\",\n      \"type\": [\n        \"null\",\n        \"long\"\n      ],\n      \"default\": null,\n      \"doc\": \"The distance on the odometer, in odometer_unit. Null when not known.\"\n    },\n    {\n      \"name\": \"odometer_unit\",\n      \"type\": {\n        \"type\": \"enum\",\n        \"name\": \"CarDistanceUnit\",\n        \"doc\": \"A unit of distance. KILOMETRE: kilometres. MILE: international miles. UNKNOWN: a unit this version does not name; a symbol this version does not know is read as UNKNOWN.\",\n        \"symbols\": [\n          \"KILOMETRE\",\n          \"MILE\",\n          \"UNKNOWN\"\n        ],\n        \"default\": \"UNKNOWN\"\n      },\n      \"default\": \"KILOMETRE\",\n      \"doc\": \"The unit of odometer.\"\n    },\n    {\n      \"name\": \"notes\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"Free notes on the car, as plain text; lines are separated by LF. Empty when there are none.\"\n    }\n  ]\n}\n"
+   },
+   "expected": {
+    "accept": {
+     "canonical_form": "{\"name\":\"axt.example.v1.Car\",\"type\":\"record\",\"fields\":[{\"name\":\"make\",\"type\":\"string\"},{\"name\":\"model\",\"type\":\"string\"},{\"name\":\"year\",\"type\":[\"null\",\"int\"]},{\"name\":\"plate\",\"type\":\"string\"},{\"name\":\"vin\",\"type\":\"string\"},{\"name\":\"odometer\",\"type\":[\"null\",\"long\"]},{\"name\":\"odometer_unit\",\"type\":{\"name\":\"axt.example.v1.CarDistanceUnit\",\"type\":\"enum\",\"symbols\":[\"KILOMETRE\",\"MILE\",\"UNKNOWN\"]}},{\"name\":\"notes\",\"type\":\"string\"}]}",
+     "fingerprint": "8b3f501e00e27772"
+    }
+   }
+  },
+  {
+   "id": "types/fingerprint/axt-example-v1-document-version-1",
+   "op": "fingerprint",
+   "description": "axt.example.v1.Document, version 1",
+   "refs": ["types.md 3.4", "types.md 7.3"],
+   "input": {
+    "schema": "{\n  \"type\": \"record\",\n  \"name\": \"Document\",\n  \"namespace\": \"axt.example.v1\",\n  \"doc\": \"A document: a file with a title, such as a scanned invoice, a certificate or a photo.\",\n  \"axt.version\": 1,\n  \"axt.title\": \"title\",\n  \"fields\": [\n    {\n      \"name\": \"title\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"What the document is, as plain text on one line.\"\n    },\n    {\n      \"name\": \"file_name\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"The file's name with its extension, such as invoice-2026-11.pdf. Empty when not known.\"\n    },\n    {\n      \"name\": \"media_type\",\n      \"type\": \"string\",\n      \"default\": \"application/octet-stream\",\n      \"doc\": \"The media type of content as in RFC 6838, such as application/pdf or image/jpeg.\"\n    },\n    {\n      \"name\": \"content\",\n      \"type\": \"bytes\",\n      \"default\": \"\",\n      \"doc\": \"The file's content. The whole message, this record included, must stay within the message limit of the AXT envelope.\"\n    },\n    {\n      \"name\": \"dated\",\n      \"type\": [\n        \"null\",\n        {\n          \"type\": \"int\",\n          \"logicalType\": \"date\"\n        }\n      ],\n      \"default\": null,\n      \"doc\": \"The date the document bears, such as the date of an invoice. Null when it bears none.\"\n    },\n    {\n      \"name\": \"notes\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"Free notes on the document, as plain text; lines are separated by LF. Empty when there are none.\"\n    }\n  ]\n}\n"
+   },
+   "expected": {
+    "accept": {
+     "canonical_form": "{\"name\":\"axt.example.v1.Document\",\"type\":\"record\",\"fields\":[{\"name\":\"title\",\"type\":\"string\"},{\"name\":\"file_name\",\"type\":\"string\"},{\"name\":\"media_type\",\"type\":\"string\"},{\"name\":\"content\",\"type\":\"bytes\"},{\"name\":\"dated\",\"type\":[\"null\",\"int\"]},{\"name\":\"notes\",\"type\":\"string\"}]}",
+     "fingerprint": "d3c456b84feda74e"
+    }
+   }
+  },
+  {
+   "id": "types/fingerprint/axt-example-v1-measurement-version-1",
+   "op": "fingerprint",
+   "description": "axt.example.v1.Measurement, version 1",
+   "refs": ["types.md 3.4", "types.md 7.3"],
+   "input": {
+    "schema": "{\n  \"type\": \"record\",\n  \"name\": \"Measurement\",\n  \"namespace\": \"axt.example.v1\",\n  \"doc\": \"One measured value or count at a point in time, such as a weight, a blood pressure reading or a tally of glasses of water.\",\n  \"axt.version\": 1,\n  \"axt.title\": \"quantity\",\n  \"fields\": [\n    {\n      \"name\": \"quantity\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"What was measured or counted, as the user calls it, such as Weight or Glasses of water.\"\n    },\n    {\n      \"name\": \"value\",\n      \"type\": \"double\",\n      \"doc\": \"The measured value or the count, in unit.\"\n    },\n    {\n      \"name\": \"unit\",\n      \"type\": \"string\",\n      \"default\": \"1\",\n      \"doc\": \"The unit of value as a case-sensitive code of UCUM, such as kg, Cel or mm[Hg]. A count is 1, or an annotation in braces alone that names what is counted, such as {glass}.\"\n    },\n    {\n      \"name\": \"measured_at\",\n      \"type\": {\n        \"type\": \"long\",\n        \"logicalType\": \"timestamp-millis\"\n      },\n      \"doc\": \"When the value was measured or counted.\"\n    },\n    {\n      \"name\": \"subject\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"Who or what was measured, as text, such as the name of a pet. Empty when it is the user.\"\n    },\n    {\n      \"name\": \"notes\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"Free notes on the measurement, as plain text; lines are separated by LF. Empty when there are none.\"\n    }\n  ]\n}\n"
+   },
+   "expected": {
+    "accept": {
+     "canonical_form": "{\"name\":\"axt.example.v1.Measurement\",\"type\":\"record\",\"fields\":[{\"name\":\"quantity\",\"type\":\"string\"},{\"name\":\"value\",\"type\":\"double\"},{\"name\":\"unit\",\"type\":\"string\"},{\"name\":\"measured_at\",\"type\":\"long\"},{\"name\":\"subject\",\"type\":\"string\"},{\"name\":\"notes\",\"type\":\"string\"}]}",
+     "fingerprint": "d46e43004976c0cb"
+    }
+   }
+  },
+  {
+   "id": "types/fingerprint/axt-example-v1-note-version-1",
+   "op": "fingerprint",
+   "description": "axt.example.v1.Note, version 1",
+   "refs": ["types.md 3.4", "types.md 7.3"],
+   "input": {
+    "schema": "{\n  \"type\": \"record\",\n  \"name\": \"Note\",\n  \"namespace\": \"axt.example.v1\",\n  \"doc\": \"A note: a piece of text the user wrote down, with a title and tags.\",\n  \"axt.version\": 1,\n  \"axt.title\": \"title\",\n  \"fields\": [\n    {\n      \"name\": \"title\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"The note's title, as plain text on one line. Empty when the note has none.\"\n    },\n    {\n      \"name\": \"text\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"The note's content, written in the format named by the field format. Empty when the note has only a title.\"\n    },\n    {\n      \"name\": \"format\",\n      \"type\": {\n        \"type\": \"enum\",\n        \"name\": \"NoteFormat\",\n        \"doc\": \"How the text of a note is written. PLAIN: plain text, lines separated by LF. MARKDOWN: CommonMark. A symbol this version does not know is read as PLAIN.\",\n        \"symbols\": [\n          \"PLAIN\",\n          \"MARKDOWN\"\n        ],\n        \"default\": \"PLAIN\"\n      },\n      \"default\": \"PLAIN\",\n      \"doc\": \"How the field text is written.\"\n    },\n    {\n      \"name\": \"created\",\n      \"type\": [\n        \"null\",\n        {\n          \"type\": \"long\",\n          \"logicalType\": \"timestamp-millis\"\n        }\n      ],\n      \"default\": null,\n      \"doc\": \"When the note was written. Null when not known.\"\n    },\n    {\n      \"name\": \"updated\",\n      \"type\": [\n        \"null\",\n        {\n          \"type\": \"long\",\n          \"logicalType\": \"timestamp-millis\"\n        }\n      ],\n      \"default\": null,\n      \"doc\": \"When the note's content last changed. Null when not known.\"\n    },\n    {\n      \"name\": \"tags\",\n      \"type\": {\n        \"type\": \"array\",\n        \"items\": \"string\"\n      },\n      \"default\": [],\n      \"doc\": \"Tags the user gave the note, in the user's order and without duplicates; each a word or short phrase without a leading #. Empty when there are none.\"\n    }\n  ]\n}\n"
+   },
+   "expected": {
+    "accept": {
+     "canonical_form": "{\"name\":\"axt.example.v1.Note\",\"type\":\"record\",\"fields\":[{\"name\":\"title\",\"type\":\"string\"},{\"name\":\"text\",\"type\":\"string\"},{\"name\":\"format\",\"type\":{\"name\":\"axt.example.v1.NoteFormat\",\"type\":\"enum\",\"symbols\":[\"PLAIN\",\"MARKDOWN\"]}},{\"name\":\"created\",\"type\":[\"null\",\"long\"]},{\"name\":\"updated\",\"type\":[\"null\",\"long\"]},{\"name\":\"tags\",\"type\":{\"type\":\"array\",\"items\":\"string\"}}]}",
+     "fingerprint": "06b34fd8d4b07a62"
+    }
+   }
+  },
+  {
+   "id": "types/fingerprint/axt-example-v1-person-version-1",
+   "op": "fingerprint",
+   "description": "axt.example.v1.Person, version 1",
+   "refs": ["types.md 3.4", "types.md 7.3"],
+   "input": {
+    "schema": "{\n  \"type\": \"record\",\n  \"name\": \"Person\",\n  \"namespace\": \"axt.example.v1\",\n  \"doc\": \"A person: a contact with name, birthday, phone numbers, email addresses and postal addresses.\",\n  \"axt.version\": 1,\n  \"axt.title\": \"display_name\",\n  \"fields\": [\n    {\n      \"name\": \"display_name\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"The name to show for the person, as the user wrote it, such as Dr. Anna Maria Schmidt. When empty, a receiver may build a name from the name parts.\"\n    },\n    {\n      \"name\": \"prefix\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"Titles written before the name, such as Dr. Empty when there are none.\"\n    },\n    {\n      \"name\": \"given_name\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"The given name, such as Anna. Empty when not known.\"\n    },\n    {\n      \"name\": \"middle_name\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"Further given names, such as Maria. Empty when there are none.\"\n    },\n    {\n      \"name\": \"family_name\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"The family name, such as Schmidt. Empty when not known.\"\n    },\n    {\n      \"name\": \"suffix\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"Additions written after the name, such as Jr. Empty when there are none.\"\n    },\n    {\n      \"name\": \"birthday\",\n      \"type\": [\n        \"null\",\n        {\n          \"type\": \"int\",\n          \"logicalType\": \"date\"\n        }\n      ],\n      \"default\": null,\n      \"doc\": \"The day of birth; see birthday_year_known. Null when not known.\"\n    },\n    {\n      \"name\": \"birthday_year_known\",\n      \"type\": \"boolean\",\n      \"default\": true,\n      \"doc\": \"False when only the day and month of birthday are known; the year of birthday has no meaning then, and the sender writes a leap year, such as 2000, so that 29 February can be written.\"\n    },\n    {\n      \"name\": \"phones\",\n      \"type\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"type\": \"record\",\n          \"name\": \"PersonPhone\",\n          \"doc\": \"A phone number of a person.\",\n          \"fields\": [\n            {\n              \"name\": \"label\",\n              \"type\": \"string\",\n              \"default\": \"\",\n              \"doc\": \"What the number is for, as the user wrote it, such as home, work or mobile. Empty when not given.\"\n            },\n            {\n              \"name\": \"number\",\n              \"type\": \"string\",\n              \"default\": \"\",\n              \"doc\": \"The phone number as written, preferably in the international format of ITU-T E.164 with a leading +, such as +49 30 1234567.\"\n            }\n          ]\n        }\n      },\n      \"default\": [],\n      \"doc\": \"The person's phone numbers, in the user's order. Empty when there are none.\"\n    },\n    {\n      \"name\": \"emails\",\n      \"type\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"type\": \"record\",\n          \"name\": \"PersonEmail\",\n          \"doc\": \"An email address of a person.\",\n          \"fields\": [\n            {\n              \"name\": \"label\",\n              \"type\": \"string\",\n              \"default\": \"\",\n              \"doc\": \"What the address is for, as the user wrote it, such as home, work or mobile. Empty when not given.\"\n            },\n            {\n              \"name\": \"address\",\n              \"type\": \"string\",\n              \"default\": \"\",\n              \"doc\": \"The email address, such as anna@example.org.\"\n            }\n          ]\n        }\n      },\n      \"default\": [],\n      \"doc\": \"The person's email addresses, in the user's order. Empty when there are none.\"\n    },\n    {\n      \"name\": \"addresses\",\n      \"type\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"type\": \"record\",\n          \"name\": \"PersonAddress\",\n          \"doc\": \"A postal address of a person. Every part is empty when not given.\",\n          \"fields\": [\n            {\n              \"name\": \"label\",\n              \"type\": \"string\",\n              \"default\": \"\",\n              \"doc\": \"What the address is for, as the user wrote it, such as home, work or mobile. Empty when not given.\"\n            },\n            {\n              \"name\": \"street\",\n              \"type\": \"string\",\n              \"default\": \"\",\n              \"doc\": \"The street and house number, and further lines such as a flat or a c/o, separated by LF.\"\n            },\n            {\n              \"name\": \"postal_code\",\n              \"type\": \"string\",\n              \"default\": \"\",\n              \"doc\": \"The postal code, such as 10115.\"\n            },\n            {\n              \"name\": \"locality\",\n              \"type\": \"string\",\n              \"default\": \"\",\n              \"doc\": \"The city, town or village.\"\n            },\n            {\n              \"name\": \"region\",\n              \"type\": \"string\",\n              \"default\": \"\",\n              \"doc\": \"The state, province or county, where an address names one.\"\n            },\n            {\n              \"name\": \"country\",\n              \"type\": \"string\",\n              \"default\": \"\",\n              \"doc\": \"The country, as written in the address.\"\n            }\n          ]\n        }\n      },\n      \"default\": [],\n      \"doc\": \"The person's postal addresses, in the user's order. Empty when there are none.\"\n    },\n    {\n      \"name\": \"notes\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"Free notes on the person, as plain text; lines are separated by LF. Empty when there are none.\"\n    }\n  ]\n}\n"
+   },
+   "expected": {
+    "accept": {
+     "canonical_form": "{\"name\":\"axt.example.v1.Person\",\"type\":\"record\",\"fields\":[{\"name\":\"display_name\",\"type\":\"string\"},{\"name\":\"prefix\",\"type\":\"string\"},{\"name\":\"given_name\",\"type\":\"string\"},{\"name\":\"middle_name\",\"type\":\"string\"},{\"name\":\"family_name\",\"type\":\"string\"},{\"name\":\"suffix\",\"type\":\"string\"},{\"name\":\"birthday\",\"type\":[\"null\",\"int\"]},{\"name\":\"birthday_year_known\",\"type\":\"boolean\"},{\"name\":\"phones\",\"type\":{\"type\":\"array\",\"items\":{\"name\":\"axt.example.v1.PersonPhone\",\"type\":\"record\",\"fields\":[{\"name\":\"label\",\"type\":\"string\"},{\"name\":\"number\",\"type\":\"string\"}]}}},{\"name\":\"emails\",\"type\":{\"type\":\"array\",\"items\":{\"name\":\"axt.example.v1.PersonEmail\",\"type\":\"record\",\"fields\":[{\"name\":\"label\",\"type\":\"string\"},{\"name\":\"address\",\"type\":\"string\"}]}}},{\"name\":\"addresses\",\"type\":{\"type\":\"array\",\"items\":{\"name\":\"axt.example.v1.PersonAddress\",\"type\":\"record\",\"fields\":[{\"name\":\"label\",\"type\":\"string\"},{\"name\":\"street\",\"type\":\"string\"},{\"name\":\"postal_code\",\"type\":\"string\"},{\"name\":\"locality\",\"type\":\"string\"},{\"name\":\"region\",\"type\":\"string\"},{\"name\":\"country\",\"type\":\"string\"}]}}},{\"name\":\"notes\",\"type\":\"string\"}]}",
+     "fingerprint": "f158459e5ed2ed2b"
+    }
+   }
+  },
+  {
+   "id": "types/fingerprint/axt-example-v1-pet-version-1",
+   "op": "fingerprint",
+   "description": "axt.example.v1.Pet, version 1",
+   "refs": ["types.md 3.4", "types.md 7.3"],
+   "input": {
+    "schema": "{\n  \"type\": \"record\",\n  \"name\": \"Pet\",\n  \"namespace\": \"axt.example.v1\",\n  \"doc\": \"A pet: an animal the user keeps, such as a cat or a dog.\",\n  \"axt.version\": 1,\n  \"axt.title\": \"name\",\n  \"fields\": [\n    {\n      \"name\": \"name\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"The pet's name. Empty when it has none.\"\n    },\n    {\n      \"name\": \"species\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"The kind of animal, as the user wrote it, such as cat or dog. Empty when not given.\"\n    },\n    {\n      \"name\": \"breed\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"The breed, as the user wrote it, such as Maine Coon. Empty when not known.\"\n    },\n    {\n      \"name\": \"sex\",\n      \"type\": {\n        \"type\": \"enum\",\n        \"name\": \"PetSex\",\n        \"doc\": \"The sex of an animal. FEMALE, MALE: female and male. UNKNOWN: not known or not given; a symbol this version does not know is read as UNKNOWN.\",\n        \"symbols\": [\n          \"UNKNOWN\",\n          \"FEMALE\",\n          \"MALE\"\n        ],\n        \"default\": \"UNKNOWN\"\n      },\n      \"default\": \"UNKNOWN\",\n      \"doc\": \"The pet's sex.\"\n    },\n    {\n      \"name\": \"neutered\",\n      \"type\": [\n        \"null\",\n        \"boolean\"\n      ],\n      \"default\": null,\n      \"doc\": \"True when the pet is neutered or spayed, false when it is not. Null when not known.\"\n    },\n    {\n      \"name\": \"birthday\",\n      \"type\": [\n        \"null\",\n        {\n          \"type\": \"int\",\n          \"logicalType\": \"date\"\n        }\n      ],\n      \"default\": null,\n      \"doc\": \"The pet's day of birth. Null when not known.\"\n    },\n    {\n      \"name\": \"microchip\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"The number of the pet's microchip, as read from it; 15 digits for a chip of ISO 11784. Empty when it has none or it is not known.\"\n    },\n    {\n      \"name\": \"notes\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"Free notes on the pet, as plain text; lines are separated by LF. Empty when there are none.\"\n    }\n  ]\n}\n"
+   },
+   "expected": {
+    "accept": {
+     "canonical_form": "{\"name\":\"axt.example.v1.Pet\",\"type\":\"record\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"},{\"name\":\"species\",\"type\":\"string\"},{\"name\":\"breed\",\"type\":\"string\"},{\"name\":\"sex\",\"type\":{\"name\":\"axt.example.v1.PetSex\",\"type\":\"enum\",\"symbols\":[\"UNKNOWN\",\"FEMALE\",\"MALE\"]}},{\"name\":\"neutered\",\"type\":[\"null\",\"boolean\"]},{\"name\":\"birthday\",\"type\":[\"null\",\"int\"]},{\"name\":\"microchip\",\"type\":\"string\"},{\"name\":\"notes\",\"type\":\"string\"}]}",
+     "fingerprint": "61eb6912a7899f2d"
+    }
+   }
+  },
+  {
+   "id": "types/fingerprint/axt-example-v1-task-version-1",
+   "op": "fingerprint",
+   "description": "axt.example.v1.Task, version 1",
+   "refs": ["types.md 3.4", "types.md 7.3"],
+   "input": {
+    "schema": "{\n  \"type\": \"record\",\n  \"name\": \"Task\",\n  \"namespace\": \"axt.example.v1\",\n  \"doc\": \"A task: something the user wants to do, possibly by a due date, possibly repeating.\",\n  \"axt.version\": 1,\n  \"axt.title\": \"title\",\n  \"fields\": [\n    {\n      \"name\": \"title\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"What is to be done, as plain text on one line.\"\n    },\n    {\n      \"name\": \"notes\",\n      \"type\": \"string\",\n      \"default\": \"\",\n      \"doc\": \"Free notes on the task, as plain text; lines are separated by LF. Empty when there are none.\"\n    },\n    {\n      \"name\": \"due\",\n      \"type\": [\n        \"null\",\n        {\n          \"type\": \"long\",\n          \"logicalType\": \"local-timestamp-millis\"\n        }\n      ],\n      \"default\": null,\n      \"doc\": \"The day, and the time on the wall clock, by which the task is due; see due_all_day and time_zone. Null when the task has no due date.\"\n    },\n    {\n      \"name\": \"due_all_day\",\n      \"type\": \"boolean\",\n      \"default\": false,\n      \"doc\": \"True when the task is due on the day of due without a time of day; the time of due is then 00:00 and has no meaning.\"\n    },\n    {\n      \"name\": \"time_zone\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null,\n      \"doc\": \"The IANA time zone name, such as Europe/Berlin, in which due and the occurrences of repeat read on the wall clock. Null when due and the occurrences of repeat are meant in whatever time zone the user is in at that moment.\"\n    },\n    {\n      \"name\": \"repeat\",\n      \"type\": [\n        \"null\",\n        \"string\"\n      ],\n      \"default\": null,\n      \"doc\": \"How the task repeats: the value of an RFC 5545 RRULE property without the RRULE: prefix, such as FREQ=WEEKLY;BYDAY=TU. The occurrences start at due. Null when the task does not repeat.\"\n    },\n    {\n      \"name\": \"done\",\n      \"type\": \"boolean\",\n      \"default\": false,\n      \"doc\": \"True when the task is done. For a repeating task: the occurrence at due is done.\"\n    },\n    {\n      \"name\": \"done_at\",\n      \"type\": [\n        \"null\",\n        {\n          \"type\": \"long\",\n          \"logicalType\": \"timestamp-millis\"\n        }\n      ],\n      \"default\": null,\n      \"doc\": \"When the task was marked done. Null when it is not done or the time is not known.\"\n    },\n    {\n      \"name\": \"priority\",\n      \"type\": {\n        \"type\": \"enum\",\n        \"name\": \"TaskPriority\",\n        \"doc\": \"How important a task is. NONE: no priority given. LOW, MEDIUM, HIGH: low, medium and high priority. A symbol this version does not know is read as NONE.\",\n        \"symbols\": [\n          \"NONE\",\n          \"LOW\",\n          \"MEDIUM\",\n          \"HIGH\"\n        ],\n        \"default\": \"NONE\"\n      },\n      \"default\": \"NONE\",\n      \"doc\": \"How important the task is.\"\n    }\n  ]\n}\n"
+   },
+   "expected": {
+    "accept": {
+     "canonical_form": "{\"name\":\"axt.example.v1.Task\",\"type\":\"record\",\"fields\":[{\"name\":\"title\",\"type\":\"string\"},{\"name\":\"notes\",\"type\":\"string\"},{\"name\":\"due\",\"type\":[\"null\",\"long\"]},{\"name\":\"due_all_day\",\"type\":\"boolean\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"]},{\"name\":\"repeat\",\"type\":[\"null\",\"string\"]},{\"name\":\"done\",\"type\":\"boolean\"},{\"name\":\"done_at\",\"type\":[\"null\",\"long\"]},{\"name\":\"priority\",\"type\":{\"name\":\"axt.example.v1.TaskPriority\",\"type\":\"enum\",\"symbols\":[\"NONE\",\"LOW\",\"MEDIUM\",\"HIGH\"]}}]}",
+     "fingerprint": "63a48c28187aae88"
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/a-record-of-axt-example-v1-appointment",
+   "op": "decode_record",
+   "description": "a record of axt.example.v1.Appointment",
+   "refs": ["types.md 7", "envelope.md 2.3"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\"},{\"name\":\"start\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},\"doc\":\"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"},{\"name\":\"end\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day.\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":\"int\"},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.\",\"axt.unit\":\"min\"}]}",
+    "reader_schema": null,
+    "body": "c301591b44e939de571b205665743a2076616363696e6174696f6e80f4fbcfc1680280d1d7d1c168021a4575726f70652f4265726c696e003c5469657261727a747072617869732c20486175707473747261c39f652031444272696e67207468652076616363696e6174696f6e2063657274696669636174652e04c0167800"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "title": "Vet: vaccination",
+      "start": 1795514400000,
+      "end": 1795516200000,
+      "time_zone": "Europe/Berlin",
+      "all_day": false,
+      "location": "Tierarztpraxis, Hauptstraße 1",
+      "notes": "Bring the vaccination certificate.",
+      "reminders": [1440, 60]
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/axt-example-v1-appointment-written-without-its-fields-that-have-a-defaul",
+   "op": "decode_record",
+   "description": "axt.example.v1.Appointment written without its fields that have a default, read with every default",
+   "refs": ["types.md 5.4", "envelope.md 6"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"start\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},\"doc\":\"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"}]}",
+    "reader_schema": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\"},{\"name\":\"start\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},\"doc\":\"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"},{\"name\":\"end\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day.\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":\"int\"},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.\",\"axt.unit\":\"min\"}]}",
+    "body": "c301dccdd560001ccd2880f4fbcfc168"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "title": "",
+      "start": 1795514400000,
+      "end": null,
+      "time_zone": null,
+      "all_day": false,
+      "location": "",
+      "notes": "",
+      "reminders": []
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/a-record-of-axt-example-v1-car",
+   "op": "decode_record",
+   "description": "a record of axt.example.v1.Car",
+   "refs": ["types.md 7", "envelope.md 2.3"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Car\",\"namespace\":\"axt.example.v1\",\"doc\":\"A car the user owns or drives.\",\"axt.version\":1,\"axt.title\":\"model\",\"fields\":[{\"name\":\"make\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The manufacturer, such as Volkswagen. Empty when not known.\"},{\"name\":\"model\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The model, such as Golf. Empty when not known.\"},{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The model year, such as 2019. Null when not known.\"},{\"name\":\"plate\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The licence plate number as written on the plate. Empty when the car has none or it is not known.\"},{\"name\":\"vin\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The vehicle identification number of ISO 3779, 17 characters. Empty when not known.\"},{\"name\":\"odometer\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The distance on the odometer, in odometer_unit. Null when not known.\"},{\"name\":\"odometer_unit\",\"type\":{\"type\":\"enum\",\"name\":\"CarDistanceUnit\",\"doc\":\"A unit of distance. KILOMETRE: kilometres. MILE: international miles. UNKNOWN: a unit this version does not name; a symbol this version does not know is read as UNKNOWN.\",\"symbols\":[\"KILOMETRE\",\"MILE\",\"UNKNOWN\"],\"default\":\"UNKNOWN\"},\"default\":\"KILOMETRE\",\"doc\":\"The unit of odometer.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the car, as plain text; lines are separated by LF. Empty when there are none.\"}]}",
+    "reader_schema": null,
+    "body": "c3018b3f501e00e2777214566f6c6b73776167656e08476f6c6602c61f12422d41422031323334225756575a5a5a314b5a415730303030303002e4a30a0000"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "make": "Volkswagen",
+      "model": "Golf",
+      "year": 2019,
+      "plate": "B-AB 1234",
+      "vin": "WVWZZZ1KZAW000000",
+      "odometer": 84210,
+      "odometer_unit": "KILOMETRE",
+      "notes": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/axt-example-v1-car-written-without-its-fields-that-have-a-default-read-w",
+   "op": "decode_record",
+   "description": "axt.example.v1.Car written without its fields that have a default, read with every default",
+   "refs": ["types.md 5.4", "envelope.md 6"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Car\",\"namespace\":\"axt.example.v1\",\"doc\":\"A car the user owns or drives.\",\"axt.version\":1,\"axt.title\":\"model\",\"fields\":[]}",
+    "reader_schema": "{\"type\":\"record\",\"name\":\"Car\",\"namespace\":\"axt.example.v1\",\"doc\":\"A car the user owns or drives.\",\"axt.version\":1,\"axt.title\":\"model\",\"fields\":[{\"name\":\"make\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The manufacturer, such as Volkswagen. Empty when not known.\"},{\"name\":\"model\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The model, such as Golf. Empty when not known.\"},{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The model year, such as 2019. Null when not known.\"},{\"name\":\"plate\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The licence plate number as written on the plate. Empty when the car has none or it is not known.\"},{\"name\":\"vin\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The vehicle identification number of ISO 3779, 17 characters. Empty when not known.\"},{\"name\":\"odometer\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The distance on the odometer, in odometer_unit. Null when not known.\"},{\"name\":\"odometer_unit\",\"type\":{\"type\":\"enum\",\"name\":\"CarDistanceUnit\",\"doc\":\"A unit of distance. KILOMETRE: kilometres. MILE: international miles. UNKNOWN: a unit this version does not name; a symbol this version does not know is read as UNKNOWN.\",\"symbols\":[\"KILOMETRE\",\"MILE\",\"UNKNOWN\"],\"default\":\"UNKNOWN\"},\"default\":\"KILOMETRE\",\"doc\":\"The unit of odometer.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the car, as plain text; lines are separated by LF. Empty when there are none.\"}]}",
+    "body": "c301837ef176445a1de8"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "make": "",
+      "model": "",
+      "year": null,
+      "plate": "",
+      "vin": "",
+      "odometer": null,
+      "odometer_unit": "KILOMETRE",
+      "notes": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/axt-example-v1-car-an-unknown-symbol-of-odometer-unit-reads-as-the-defau",
+   "op": "decode_record",
+   "description": "axt.example.v1.Car: an unknown symbol of odometer_unit reads as the default UNKNOWN",
+   "refs": ["types.md 5.4", "envelope.md 6"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Car\",\"namespace\":\"axt.example.v1\",\"doc\":\"A car the user owns or drives.\",\"axt.version\":1,\"axt.title\":\"model\",\"fields\":[{\"name\":\"make\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The manufacturer, such as Volkswagen. Empty when not known.\"},{\"name\":\"model\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The model, such as Golf. Empty when not known.\"},{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The model year, such as 2019. Null when not known.\"},{\"name\":\"plate\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The licence plate number as written on the plate. Empty when the car has none or it is not known.\"},{\"name\":\"vin\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The vehicle identification number of ISO 3779, 17 characters. Empty when not known.\"},{\"name\":\"odometer\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The distance on the odometer, in odometer_unit. Null when not known.\"},{\"name\":\"odometer_unit\",\"type\":{\"type\":\"enum\",\"name\":\"CarDistanceUnit\",\"doc\":\"A unit of distance. KILOMETRE: kilometres. MILE: international miles. UNKNOWN: a unit this version does not name; a symbol this version does not know is read as UNKNOWN.\",\"symbols\":[\"KILOMETRE\",\"MILE\",\"UNKNOWN\",\"SYMBOL_OF_A_LATER_VERSION\"],\"default\":\"UNKNOWN\"},\"default\":\"KILOMETRE\",\"doc\":\"The unit of odometer.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the car, as plain text; lines are separated by LF. Empty when there are none.\"}]}",
+    "reader_schema": "{\"type\":\"record\",\"name\":\"Car\",\"namespace\":\"axt.example.v1\",\"doc\":\"A car the user owns or drives.\",\"axt.version\":1,\"axt.title\":\"model\",\"fields\":[{\"name\":\"make\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The manufacturer, such as Volkswagen. Empty when not known.\"},{\"name\":\"model\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The model, such as Golf. Empty when not known.\"},{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The model year, such as 2019. Null when not known.\"},{\"name\":\"plate\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The licence plate number as written on the plate. Empty when the car has none or it is not known.\"},{\"name\":\"vin\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The vehicle identification number of ISO 3779, 17 characters. Empty when not known.\"},{\"name\":\"odometer\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The distance on the odometer, in odometer_unit. Null when not known.\"},{\"name\":\"odometer_unit\",\"type\":{\"type\":\"enum\",\"name\":\"CarDistanceUnit\",\"doc\":\"A unit of distance. KILOMETRE: kilometres. MILE: international miles. UNKNOWN: a unit this version does not name; a symbol this version does not know is read as UNKNOWN.\",\"symbols\":[\"KILOMETRE\",\"MILE\",\"UNKNOWN\"],\"default\":\"UNKNOWN\"},\"default\":\"KILOMETRE\",\"doc\":\"The unit of odometer.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the car, as plain text; lines are separated by LF. Empty when there are none.\"}]}",
+    "body": "c301292c316479a091aa14566f6c6b73776167656e08476f6c6602c61f12422d41422031323334225756575a5a5a314b5a415730303030303002e4a30a0600"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "make": "Volkswagen",
+      "model": "Golf",
+      "year": 2019,
+      "plate": "B-AB 1234",
+      "vin": "WVWZZZ1KZAW000000",
+      "odometer": 84210,
+      "odometer_unit": "UNKNOWN",
+      "notes": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/a-record-of-axt-example-v1-document",
+   "op": "decode_record",
+   "description": "a record of axt.example.v1.Document",
+   "refs": ["types.md 7", "envelope.md 2.3"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Document\",\"namespace\":\"axt.example.v1\",\"doc\":\"A document: a file with a title, such as a scanned invoice, a certificate or a photo.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the document is, as plain text on one line.\"},{\"name\":\"file_name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The file's name with its extension, such as invoice-2026-11.pdf. Empty when not known.\"},{\"name\":\"media_type\",\"type\":\"string\",\"default\":\"application/octet-stream\",\"doc\":\"The media type of content as in RFC 6838, such as application/pdf or image/jpeg.\"},{\"name\":\"content\",\"type\":\"bytes\",\"default\":\"\",\"doc\":\"The file's content. The whole message, this record included, must stay within the message limit of the AXT envelope.\"},{\"name\":\"dated\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null,\"doc\":\"The date the document bears, such as the date of an invoice. Null when it bears none.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the document, as plain text; lines are separated by LF. Empty when there are none.\"}]}",
+    "reader_schema": null,
+    "body": "c301d3c456b84feda74e1656657420696e766f69636526696e766f6963652d323032362d31312e7064661e6170706c69636174696f6e2f7064662c255044462d312e370a25706c616365686f6c6465720a02dac40200"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "title": "Vet invoice",
+      "file_name": "invoice-2026-11.pdf",
+      "media_type": "application/pdf",
+      "content": "255044462d312e370a25706c616365686f6c6465720a",
+      "dated": 20781,
+      "notes": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/axt-example-v1-document-written-without-its-fields-that-have-a-default-r",
+   "op": "decode_record",
+   "description": "axt.example.v1.Document written without its fields that have a default, read with every default",
+   "refs": ["types.md 5.4", "envelope.md 6"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Document\",\"namespace\":\"axt.example.v1\",\"doc\":\"A document: a file with a title, such as a scanned invoice, a certificate or a photo.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[]}",
+    "reader_schema": "{\"type\":\"record\",\"name\":\"Document\",\"namespace\":\"axt.example.v1\",\"doc\":\"A document: a file with a title, such as a scanned invoice, a certificate or a photo.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the document is, as plain text on one line.\"},{\"name\":\"file_name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The file's name with its extension, such as invoice-2026-11.pdf. Empty when not known.\"},{\"name\":\"media_type\",\"type\":\"string\",\"default\":\"application/octet-stream\",\"doc\":\"The media type of content as in RFC 6838, such as application/pdf or image/jpeg.\"},{\"name\":\"content\",\"type\":\"bytes\",\"default\":\"\",\"doc\":\"The file's content. The whole message, this record included, must stay within the message limit of the AXT envelope.\"},{\"name\":\"dated\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null,\"doc\":\"The date the document bears, such as the date of an invoice. Null when it bears none.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the document, as plain text; lines are separated by LF. Empty when there are none.\"}]}",
+    "body": "c3013aa7a33cbad260da"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "title": "",
+      "file_name": "",
+      "media_type": "application/octet-stream",
+      "content": "",
+      "dated": null,
+      "notes": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/a-record-of-axt-example-v1-measurement",
+   "op": "decode_record",
+   "description": "a record of axt.example.v1.Measurement",
+   "refs": ["types.md 7", "envelope.md 2.3"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Measurement\",\"namespace\":\"axt.example.v1\",\"doc\":\"One measured value or count at a point in time, such as a weight, a blood pressure reading or a tally of glasses of water.\",\"axt.version\":1,\"axt.title\":\"quantity\",\"fields\":[{\"name\":\"quantity\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What was measured or counted, as the user calls it, such as Weight or Glasses of water.\"},{\"name\":\"value\",\"type\":\"double\",\"doc\":\"The measured value or the count, in unit.\"},{\"name\":\"unit\",\"type\":\"string\",\"default\":\"1\",\"doc\":\"The unit of value as a case-sensitive code of UCUM, such as kg, Cel or mm[Hg]. A count is 1, or an annotation in braces alone that names what is counted, such as {glass}.\"},{\"name\":\"measured_at\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"},\"doc\":\"When the value was measured or counted.\"},{\"name\":\"subject\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Who or what was measured, as text, such as the name of a pet. Empty when it is the user.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the measurement, as plain text; lines are separated by LF. Empty when there are none.\"}]}",
+    "reader_schema": null,
+    "body": "c301d46e43004976c0cb0c5765696768749a99999999991540046b6780d4ed85bc68084d696d6900"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "quantity": "Weight",
+      "value": 5.4,
+      "unit": "kg",
+      "measured_at": 1794765600000,
+      "subject": "Mimi",
+      "notes": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/axt-example-v1-measurement-written-without-its-fields-that-have-a-defaul",
+   "op": "decode_record",
+   "description": "axt.example.v1.Measurement written without its fields that have a default, read with every default",
+   "refs": ["types.md 5.4", "envelope.md 6"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Measurement\",\"namespace\":\"axt.example.v1\",\"doc\":\"One measured value or count at a point in time, such as a weight, a blood pressure reading or a tally of glasses of water.\",\"axt.version\":1,\"axt.title\":\"quantity\",\"fields\":[{\"name\":\"value\",\"type\":\"double\",\"doc\":\"The measured value or the count, in unit.\"},{\"name\":\"measured_at\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"},\"doc\":\"When the value was measured or counted.\"}]}",
+    "reader_schema": "{\"type\":\"record\",\"name\":\"Measurement\",\"namespace\":\"axt.example.v1\",\"doc\":\"One measured value or count at a point in time, such as a weight, a blood pressure reading or a tally of glasses of water.\",\"axt.version\":1,\"axt.title\":\"quantity\",\"fields\":[{\"name\":\"quantity\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What was measured or counted, as the user calls it, such as Weight or Glasses of water.\"},{\"name\":\"value\",\"type\":\"double\",\"doc\":\"The measured value or the count, in unit.\"},{\"name\":\"unit\",\"type\":\"string\",\"default\":\"1\",\"doc\":\"The unit of value as a case-sensitive code of UCUM, such as kg, Cel or mm[Hg]. A count is 1, or an annotation in braces alone that names what is counted, such as {glass}.\"},{\"name\":\"measured_at\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"},\"doc\":\"When the value was measured or counted.\"},{\"name\":\"subject\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Who or what was measured, as text, such as the name of a pet. Empty when it is the user.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the measurement, as plain text; lines are separated by LF. Empty when there are none.\"}]}",
+    "body": "c301faa12983e45e09969a9999999999154080d4ed85bc68"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "quantity": "",
+      "value": 5.4,
+      "unit": "1",
+      "measured_at": 1794765600000,
+      "subject": "",
+      "notes": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/a-record-of-axt-example-v1-note",
+   "op": "decode_record",
+   "description": "a record of axt.example.v1.Note",
+   "refs": ["types.md 7", "envelope.md 2.3"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Note\",\"namespace\":\"axt.example.v1\",\"doc\":\"A note: a piece of text the user wrote down, with a title and tags.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The note's title, as plain text on one line. Empty when the note has none.\"},{\"name\":\"text\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The note's content, written in the format named by the field format. Empty when the note has only a title.\"},{\"name\":\"format\",\"type\":{\"type\":\"enum\",\"name\":\"NoteFormat\",\"doc\":\"How the text of a note is written. PLAIN: plain text, lines separated by LF. MARKDOWN: CommonMark. A symbol this version does not know is read as PLAIN.\",\"symbols\":[\"PLAIN\",\"MARKDOWN\"],\"default\":\"PLAIN\"},\"default\":\"PLAIN\",\"doc\":\"How the field text is written.\"},{\"name\":\"created\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}],\"default\":null,\"doc\":\"When the note was written. Null when not known.\"},{\"name\":\"updated\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}],\"default\":null,\"doc\":\"When the note's content last changed. Null when not known.\"},{\"name\":\"tags\",\"type\":{\"type\":\"array\",\"items\":\"string\"},\"default\":[],\"doc\":\"Tags the user gave the note, in the user's order and without duplicates; each a word or short phrase without a leading #. Empty when there are none.\"}]}",
+    "reader_schema": null,
+    "body": "c30106b34fd8d4b07a621043617420666f6f645c4d696d69206561747320746865202a2a73616c6d6f6e2a2a206f6e652c206e6f742074686520636869636b656e2e020280a7d6e8bb680004066361741073686f7070696e6700"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "title": "Cat food",
+      "text": "Mimi eats the **salmon** one, not the chicken.",
+      "format": "MARKDOWN",
+      "created": 1794735000000,
+      "updated": null,
+      "tags": ["cat", "shopping"]
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/axt-example-v1-note-written-without-its-fields-that-have-a-default-read",
+   "op": "decode_record",
+   "description": "axt.example.v1.Note written without its fields that have a default, read with every default",
+   "refs": ["types.md 5.4", "envelope.md 6"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Note\",\"namespace\":\"axt.example.v1\",\"doc\":\"A note: a piece of text the user wrote down, with a title and tags.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[]}",
+    "reader_schema": "{\"type\":\"record\",\"name\":\"Note\",\"namespace\":\"axt.example.v1\",\"doc\":\"A note: a piece of text the user wrote down, with a title and tags.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The note's title, as plain text on one line. Empty when the note has none.\"},{\"name\":\"text\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The note's content, written in the format named by the field format. Empty when the note has only a title.\"},{\"name\":\"format\",\"type\":{\"type\":\"enum\",\"name\":\"NoteFormat\",\"doc\":\"How the text of a note is written. PLAIN: plain text, lines separated by LF. MARKDOWN: CommonMark. A symbol this version does not know is read as PLAIN.\",\"symbols\":[\"PLAIN\",\"MARKDOWN\"],\"default\":\"PLAIN\"},\"default\":\"PLAIN\",\"doc\":\"How the field text is written.\"},{\"name\":\"created\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}],\"default\":null,\"doc\":\"When the note was written. Null when not known.\"},{\"name\":\"updated\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}],\"default\":null,\"doc\":\"When the note's content last changed. Null when not known.\"},{\"name\":\"tags\",\"type\":{\"type\":\"array\",\"items\":\"string\"},\"default\":[],\"doc\":\"Tags the user gave the note, in the user's order and without duplicates; each a word or short phrase without a leading #. Empty when there are none.\"}]}",
+    "body": "c30178151701441e899d"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "title": "",
+      "text": "",
+      "format": "PLAIN",
+      "created": null,
+      "updated": null,
+      "tags": []
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/axt-example-v1-note-an-unknown-symbol-of-format-reads-as-the-default-pla",
+   "op": "decode_record",
+   "description": "axt.example.v1.Note: an unknown symbol of format reads as the default PLAIN",
+   "refs": ["types.md 5.4", "envelope.md 6"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Note\",\"namespace\":\"axt.example.v1\",\"doc\":\"A note: a piece of text the user wrote down, with a title and tags.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The note's title, as plain text on one line. Empty when the note has none.\"},{\"name\":\"text\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The note's content, written in the format named by the field format. Empty when the note has only a title.\"},{\"name\":\"format\",\"type\":{\"type\":\"enum\",\"name\":\"NoteFormat\",\"doc\":\"How the text of a note is written. PLAIN: plain text, lines separated by LF. MARKDOWN: CommonMark. A symbol this version does not know is read as PLAIN.\",\"symbols\":[\"PLAIN\",\"MARKDOWN\",\"SYMBOL_OF_A_LATER_VERSION\"],\"default\":\"PLAIN\"},\"default\":\"PLAIN\",\"doc\":\"How the field text is written.\"},{\"name\":\"created\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}],\"default\":null,\"doc\":\"When the note was written. Null when not known.\"},{\"name\":\"updated\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}],\"default\":null,\"doc\":\"When the note's content last changed. Null when not known.\"},{\"name\":\"tags\",\"type\":{\"type\":\"array\",\"items\":\"string\"},\"default\":[],\"doc\":\"Tags the user gave the note, in the user's order and without duplicates; each a word or short phrase without a leading #. Empty when there are none.\"}]}",
+    "reader_schema": "{\"type\":\"record\",\"name\":\"Note\",\"namespace\":\"axt.example.v1\",\"doc\":\"A note: a piece of text the user wrote down, with a title and tags.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The note's title, as plain text on one line. Empty when the note has none.\"},{\"name\":\"text\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The note's content, written in the format named by the field format. Empty when the note has only a title.\"},{\"name\":\"format\",\"type\":{\"type\":\"enum\",\"name\":\"NoteFormat\",\"doc\":\"How the text of a note is written. PLAIN: plain text, lines separated by LF. MARKDOWN: CommonMark. A symbol this version does not know is read as PLAIN.\",\"symbols\":[\"PLAIN\",\"MARKDOWN\"],\"default\":\"PLAIN\"},\"default\":\"PLAIN\",\"doc\":\"How the field text is written.\"},{\"name\":\"created\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}],\"default\":null,\"doc\":\"When the note was written. Null when not known.\"},{\"name\":\"updated\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}],\"default\":null,\"doc\":\"When the note's content last changed. Null when not known.\"},{\"name\":\"tags\",\"type\":{\"type\":\"array\",\"items\":\"string\"},\"default\":[],\"doc\":\"Tags the user gave the note, in the user's order and without duplicates; each a word or short phrase without a leading #. Empty when there are none.\"}]}",
+    "body": "c301568dce8cdf4510051043617420666f6f645c4d696d69206561747320746865202a2a73616c6d6f6e2a2a206f6e652c206e6f742074686520636869636b656e2e040280a7d6e8bb680004066361741073686f7070696e6700"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "title": "Cat food",
+      "text": "Mimi eats the **salmon** one, not the chicken.",
+      "format": "PLAIN",
+      "created": 1794735000000,
+      "updated": null,
+      "tags": ["cat", "shopping"]
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/a-record-of-axt-example-v1-person",
+   "op": "decode_record",
+   "description": "a record of axt.example.v1.Person",
+   "refs": ["types.md 7", "envelope.md 2.3"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Person\",\"namespace\":\"axt.example.v1\",\"doc\":\"A person: a contact with name, birthday, phone numbers, email addresses and postal addresses.\",\"axt.version\":1,\"axt.title\":\"display_name\",\"fields\":[{\"name\":\"display_name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The name to show for the person, as the user wrote it, such as Dr. Anna Maria Schmidt. When empty, a receiver may build a name from the name parts.\"},{\"name\":\"prefix\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Titles written before the name, such as Dr. Empty when there are none.\"},{\"name\":\"given_name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The given name, such as Anna. Empty when not known.\"},{\"name\":\"middle_name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Further given names, such as Maria. Empty when there are none.\"},{\"name\":\"family_name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The family name, such as Schmidt. Empty when not known.\"},{\"name\":\"suffix\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Additions written after the name, such as Jr. Empty when there are none.\"},{\"name\":\"birthday\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null,\"doc\":\"The day of birth; see birthday_year_known. Null when not known.\"},{\"name\":\"birthday_year_known\",\"type\":\"boolean\",\"default\":true,\"doc\":\"False when only the day and month of birthday are known; the year of birthday has no meaning then, and the sender writes a leap year, such as 2000, so that 29 February can be written.\"},{\"name\":\"phones\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"PersonPhone\",\"doc\":\"A phone number of a person.\",\"fields\":[{\"name\":\"label\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the number is for, as the user wrote it, such as home, work or mobile. Empty when not given.\"},{\"name\":\"number\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The phone number as written, preferably in the international format of ITU-T E.164 with a leading +, such as +49 30 1234567.\"}]}},\"default\":[],\"doc\":\"The person's phone numbers, in the user's order. Empty when there are none.\"},{\"name\":\"emails\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"PersonEmail\",\"doc\":\"An email address of a person.\",\"fields\":[{\"name\":\"label\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the address is for, as the user wrote it, such as home, work or mobile. Empty when not given.\"},{\"name\":\"address\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The email address, such as anna@example.org.\"}]}},\"default\":[],\"doc\":\"The person's email addresses, in the user's order. Empty when there are none.\"},{\"name\":\"addresses\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"PersonAddress\",\"doc\":\"A postal address of a person. Every part is empty when not given.\",\"fields\":[{\"name\":\"label\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the address is for, as the user wrote it, such as home, work or mobile. Empty when not given.\"},{\"name\":\"street\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The street and house number, and further lines such as a flat or a c/o, separated by LF.\"},{\"name\":\"postal_code\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The postal code, such as 10115.\"},{\"name\":\"locality\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The city, town or village.\"},{\"name\":\"region\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The state, province or county, where an address names one.\"},{\"name\":\"country\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The country, as written in the address.\"}]}},\"default\":[],\"doc\":\"The person's postal addresses, in the user's order. Empty when there are none.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the person, as plain text; lines are separated by LF. Empty when there are none.\"}]}",
+    "reader_schema": null,
+    "body": "c301f158459e5ed2ed2b2c44722e20416e6e61204d61726961205363686d6964740644722e08416e6e610a4d617269610e5363686d696474000290ac0100020c6d6f62696c651c2b34392033302031323334353637000208776f726b20616e6e61406578616d706c652e6f7267000208776f726b1c486175707473747261c39f6520310a31303131350c4265726c696e000e4765726d616e7900164d696d692773207665742e"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "display_name": "Dr. Anna Maria Schmidt",
+      "prefix": "Dr.",
+      "given_name": "Anna",
+      "middle_name": "Maria",
+      "family_name": "Schmidt",
+      "suffix": "",
+      "birthday": 11016,
+      "birthday_year_known": false,
+      "phones": [
+       {"label": "mobile", "number": "+49 30 1234567"}
+      ],
+      "emails": [
+       {"label": "work", "address": "anna@example.org"}
+      ],
+      "addresses": [
+       {
+        "label": "work",
+        "street": "Hauptstraße 1",
+        "postal_code": "10115",
+        "locality": "Berlin",
+        "region": "",
+        "country": "Germany"
+       }
+      ],
+      "notes": "Mimi's vet."
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/axt-example-v1-person-written-without-its-fields-that-have-a-default-rea",
+   "op": "decode_record",
+   "description": "axt.example.v1.Person written without its fields that have a default, read with every default",
+   "refs": ["types.md 5.4", "envelope.md 6"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Person\",\"namespace\":\"axt.example.v1\",\"doc\":\"A person: a contact with name, birthday, phone numbers, email addresses and postal addresses.\",\"axt.version\":1,\"axt.title\":\"display_name\",\"fields\":[]}",
+    "reader_schema": "{\"type\":\"record\",\"name\":\"Person\",\"namespace\":\"axt.example.v1\",\"doc\":\"A person: a contact with name, birthday, phone numbers, email addresses and postal addresses.\",\"axt.version\":1,\"axt.title\":\"display_name\",\"fields\":[{\"name\":\"display_name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The name to show for the person, as the user wrote it, such as Dr. Anna Maria Schmidt. When empty, a receiver may build a name from the name parts.\"},{\"name\":\"prefix\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Titles written before the name, such as Dr. Empty when there are none.\"},{\"name\":\"given_name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The given name, such as Anna. Empty when not known.\"},{\"name\":\"middle_name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Further given names, such as Maria. Empty when there are none.\"},{\"name\":\"family_name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The family name, such as Schmidt. Empty when not known.\"},{\"name\":\"suffix\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Additions written after the name, such as Jr. Empty when there are none.\"},{\"name\":\"birthday\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null,\"doc\":\"The day of birth; see birthday_year_known. Null when not known.\"},{\"name\":\"birthday_year_known\",\"type\":\"boolean\",\"default\":true,\"doc\":\"False when only the day and month of birthday are known; the year of birthday has no meaning then, and the sender writes a leap year, such as 2000, so that 29 February can be written.\"},{\"name\":\"phones\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"PersonPhone\",\"doc\":\"A phone number of a person.\",\"fields\":[{\"name\":\"label\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the number is for, as the user wrote it, such as home, work or mobile. Empty when not given.\"},{\"name\":\"number\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The phone number as written, preferably in the international format of ITU-T E.164 with a leading +, such as +49 30 1234567.\"}]}},\"default\":[],\"doc\":\"The person's phone numbers, in the user's order. Empty when there are none.\"},{\"name\":\"emails\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"PersonEmail\",\"doc\":\"An email address of a person.\",\"fields\":[{\"name\":\"label\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the address is for, as the user wrote it, such as home, work or mobile. Empty when not given.\"},{\"name\":\"address\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The email address, such as anna@example.org.\"}]}},\"default\":[],\"doc\":\"The person's email addresses, in the user's order. Empty when there are none.\"},{\"name\":\"addresses\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"PersonAddress\",\"doc\":\"A postal address of a person. Every part is empty when not given.\",\"fields\":[{\"name\":\"label\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the address is for, as the user wrote it, such as home, work or mobile. Empty when not given.\"},{\"name\":\"street\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The street and house number, and further lines such as a flat or a c/o, separated by LF.\"},{\"name\":\"postal_code\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The postal code, such as 10115.\"},{\"name\":\"locality\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The city, town or village.\"},{\"name\":\"region\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The state, province or county, where an address names one.\"},{\"name\":\"country\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The country, as written in the address.\"}]}},\"default\":[],\"doc\":\"The person's postal addresses, in the user's order. Empty when there are none.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the person, as plain text; lines are separated by LF. Empty when there are none.\"}]}",
+    "body": "c301148abd02201c1898"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "display_name": "",
+      "prefix": "",
+      "given_name": "",
+      "middle_name": "",
+      "family_name": "",
+      "suffix": "",
+      "birthday": null,
+      "birthday_year_known": true,
+      "phones": [],
+      "emails": [],
+      "addresses": [],
+      "notes": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/axt-example-v1-person-written-without-the-defaulted-fields-of-its-nested",
+   "op": "decode_record",
+   "description": "axt.example.v1.Person written without the defaulted fields of its nested records",
+   "refs": ["types.md 5.4", "envelope.md 6"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Person\",\"namespace\":\"axt.example.v1\",\"doc\":\"A person: a contact with name, birthday, phone numbers, email addresses and postal addresses.\",\"axt.version\":1,\"axt.title\":\"display_name\",\"fields\":[{\"name\":\"display_name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The name to show for the person, as the user wrote it, such as Dr. Anna Maria Schmidt. When empty, a receiver may build a name from the name parts.\"},{\"name\":\"prefix\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Titles written before the name, such as Dr. Empty when there are none.\"},{\"name\":\"given_name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The given name, such as Anna. Empty when not known.\"},{\"name\":\"middle_name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Further given names, such as Maria. Empty when there are none.\"},{\"name\":\"family_name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The family name, such as Schmidt. Empty when not known.\"},{\"name\":\"suffix\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Additions written after the name, such as Jr. Empty when there are none.\"},{\"name\":\"birthday\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null,\"doc\":\"The day of birth; see birthday_year_known. Null when not known.\"},{\"name\":\"birthday_year_known\",\"type\":\"boolean\",\"default\":true,\"doc\":\"False when only the day and month of birthday are known; the year of birthday has no meaning then, and the sender writes a leap year, such as 2000, so that 29 February can be written.\"},{\"name\":\"phones\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"PersonPhone\",\"doc\":\"A phone number of a person.\",\"fields\":[]}},\"default\":[],\"doc\":\"The person's phone numbers, in the user's order. Empty when there are none.\"},{\"name\":\"emails\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"PersonEmail\",\"doc\":\"An email address of a person.\",\"fields\":[]}},\"default\":[],\"doc\":\"The person's email addresses, in the user's order. Empty when there are none.\"},{\"name\":\"addresses\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"PersonAddress\",\"doc\":\"A postal address of a person. Every part is empty when not given.\",\"fields\":[]}},\"default\":[],\"doc\":\"The person's postal addresses, in the user's order. Empty when there are none.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the person, as plain text; lines are separated by LF. Empty when there are none.\"}]}",
+    "reader_schema": "{\"type\":\"record\",\"name\":\"Person\",\"namespace\":\"axt.example.v1\",\"doc\":\"A person: a contact with name, birthday, phone numbers, email addresses and postal addresses.\",\"axt.version\":1,\"axt.title\":\"display_name\",\"fields\":[{\"name\":\"display_name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The name to show for the person, as the user wrote it, such as Dr. Anna Maria Schmidt. When empty, a receiver may build a name from the name parts.\"},{\"name\":\"prefix\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Titles written before the name, such as Dr. Empty when there are none.\"},{\"name\":\"given_name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The given name, such as Anna. Empty when not known.\"},{\"name\":\"middle_name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Further given names, such as Maria. Empty when there are none.\"},{\"name\":\"family_name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The family name, such as Schmidt. Empty when not known.\"},{\"name\":\"suffix\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Additions written after the name, such as Jr. Empty when there are none.\"},{\"name\":\"birthday\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null,\"doc\":\"The day of birth; see birthday_year_known. Null when not known.\"},{\"name\":\"birthday_year_known\",\"type\":\"boolean\",\"default\":true,\"doc\":\"False when only the day and month of birthday are known; the year of birthday has no meaning then, and the sender writes a leap year, such as 2000, so that 29 February can be written.\"},{\"name\":\"phones\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"PersonPhone\",\"doc\":\"A phone number of a person.\",\"fields\":[{\"name\":\"label\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the number is for, as the user wrote it, such as home, work or mobile. Empty when not given.\"},{\"name\":\"number\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The phone number as written, preferably in the international format of ITU-T E.164 with a leading +, such as +49 30 1234567.\"}]}},\"default\":[],\"doc\":\"The person's phone numbers, in the user's order. Empty when there are none.\"},{\"name\":\"emails\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"PersonEmail\",\"doc\":\"An email address of a person.\",\"fields\":[{\"name\":\"label\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the address is for, as the user wrote it, such as home, work or mobile. Empty when not given.\"},{\"name\":\"address\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The email address, such as anna@example.org.\"}]}},\"default\":[],\"doc\":\"The person's email addresses, in the user's order. Empty when there are none.\"},{\"name\":\"addresses\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"PersonAddress\",\"doc\":\"A postal address of a person. Every part is empty when not given.\",\"fields\":[{\"name\":\"label\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the address is for, as the user wrote it, such as home, work or mobile. Empty when not given.\"},{\"name\":\"street\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The street and house number, and further lines such as a flat or a c/o, separated by LF.\"},{\"name\":\"postal_code\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The postal code, such as 10115.\"},{\"name\":\"locality\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The city, town or village.\"},{\"name\":\"region\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The state, province or county, where an address names one.\"},{\"name\":\"country\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The country, as written in the address.\"}]}},\"default\":[],\"doc\":\"The person's postal addresses, in the user's order. Empty when there are none.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the person, as plain text; lines are separated by LF. Empty when there are none.\"}]}",
+    "body": "c3015dc47319f2359a812c44722e20416e6e61204d61726961205363686d6964740644722e08416e6e610a4d617269610e5363686d696474000290ac0100020002000200164d696d692773207665742e"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "display_name": "Dr. Anna Maria Schmidt",
+      "prefix": "Dr.",
+      "given_name": "Anna",
+      "middle_name": "Maria",
+      "family_name": "Schmidt",
+      "suffix": "",
+      "birthday": 11016,
+      "birthday_year_known": false,
+      "phones": [
+       {"label": "", "number": ""}
+      ],
+      "emails": [
+       {"label": "", "address": ""}
+      ],
+      "addresses": [
+       {"label": "", "street": "", "postal_code": "", "locality": "", "region": "", "country": ""}
+      ],
+      "notes": "Mimi's vet."
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/a-record-of-axt-example-v1-pet",
+   "op": "decode_record",
+   "description": "a record of axt.example.v1.Pet",
+   "refs": ["types.md 7", "envelope.md 2.3"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Pet\",\"namespace\":\"axt.example.v1\",\"doc\":\"A pet: an animal the user keeps, such as a cat or a dog.\",\"axt.version\":1,\"axt.title\":\"name\",\"fields\":[{\"name\":\"name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The pet's name. Empty when it has none.\"},{\"name\":\"species\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The kind of animal, as the user wrote it, such as cat or dog. Empty when not given.\"},{\"name\":\"breed\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The breed, as the user wrote it, such as Maine Coon. Empty when not known.\"},{\"name\":\"sex\",\"type\":{\"type\":\"enum\",\"name\":\"PetSex\",\"doc\":\"The sex of an animal. FEMALE, MALE: female and male. UNKNOWN: not known or not given; a symbol this version does not know is read as UNKNOWN.\",\"symbols\":[\"UNKNOWN\",\"FEMALE\",\"MALE\"],\"default\":\"UNKNOWN\"},\"default\":\"UNKNOWN\",\"doc\":\"The pet's sex.\"},{\"name\":\"neutered\",\"type\":[\"null\",\"boolean\"],\"default\":null,\"doc\":\"True when the pet is neutered or spayed, false when it is not. Null when not known.\"},{\"name\":\"birthday\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null,\"doc\":\"The pet's day of birth. Null when not known.\"},{\"name\":\"microchip\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The number of the pet's microchip, as read from it; 15 digits for a chip of ISO 11784. Empty when it has none or it is not known.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the pet, as plain text; lines are separated by LF. Empty when there are none.\"}]}",
+    "reader_schema": null,
+    "body": "c30161eb6912a7899f2d084d696d6906636174144d61696e6520436f6f6e02020102fca4021e32373630393831303030303030303000"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "name": "Mimi",
+      "species": "cat",
+      "breed": "Maine Coon",
+      "sex": "FEMALE",
+      "neutered": true,
+      "birthday": 18750,
+      "microchip": "276098100000000",
+      "notes": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/axt-example-v1-pet-written-without-its-fields-that-have-a-default-read-w",
+   "op": "decode_record",
+   "description": "axt.example.v1.Pet written without its fields that have a default, read with every default",
+   "refs": ["types.md 5.4", "envelope.md 6"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Pet\",\"namespace\":\"axt.example.v1\",\"doc\":\"A pet: an animal the user keeps, such as a cat or a dog.\",\"axt.version\":1,\"axt.title\":\"name\",\"fields\":[]}",
+    "reader_schema": "{\"type\":\"record\",\"name\":\"Pet\",\"namespace\":\"axt.example.v1\",\"doc\":\"A pet: an animal the user keeps, such as a cat or a dog.\",\"axt.version\":1,\"axt.title\":\"name\",\"fields\":[{\"name\":\"name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The pet's name. Empty when it has none.\"},{\"name\":\"species\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The kind of animal, as the user wrote it, such as cat or dog. Empty when not given.\"},{\"name\":\"breed\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The breed, as the user wrote it, such as Maine Coon. Empty when not known.\"},{\"name\":\"sex\",\"type\":{\"type\":\"enum\",\"name\":\"PetSex\",\"doc\":\"The sex of an animal. FEMALE, MALE: female and male. UNKNOWN: not known or not given; a symbol this version does not know is read as UNKNOWN.\",\"symbols\":[\"UNKNOWN\",\"FEMALE\",\"MALE\"],\"default\":\"UNKNOWN\"},\"default\":\"UNKNOWN\",\"doc\":\"The pet's sex.\"},{\"name\":\"neutered\",\"type\":[\"null\",\"boolean\"],\"default\":null,\"doc\":\"True when the pet is neutered or spayed, false when it is not. Null when not known.\"},{\"name\":\"birthday\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null,\"doc\":\"The pet's day of birth. Null when not known.\"},{\"name\":\"microchip\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The number of the pet's microchip, as read from it; 15 digits for a chip of ISO 11784. Empty when it has none or it is not known.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the pet, as plain text; lines are separated by LF. Empty when there are none.\"}]}",
+    "body": "c301f489b0610dbec35d"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "name": "",
+      "species": "",
+      "breed": "",
+      "sex": "UNKNOWN",
+      "neutered": null,
+      "birthday": null,
+      "microchip": "",
+      "notes": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/axt-example-v1-pet-an-unknown-symbol-of-sex-reads-as-the-default-unknown",
+   "op": "decode_record",
+   "description": "axt.example.v1.Pet: an unknown symbol of sex reads as the default UNKNOWN",
+   "refs": ["types.md 5.4", "envelope.md 6"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Pet\",\"namespace\":\"axt.example.v1\",\"doc\":\"A pet: an animal the user keeps, such as a cat or a dog.\",\"axt.version\":1,\"axt.title\":\"name\",\"fields\":[{\"name\":\"name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The pet's name. Empty when it has none.\"},{\"name\":\"species\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The kind of animal, as the user wrote it, such as cat or dog. Empty when not given.\"},{\"name\":\"breed\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The breed, as the user wrote it, such as Maine Coon. Empty when not known.\"},{\"name\":\"sex\",\"type\":{\"type\":\"enum\",\"name\":\"PetSex\",\"doc\":\"The sex of an animal. FEMALE, MALE: female and male. UNKNOWN: not known or not given; a symbol this version does not know is read as UNKNOWN.\",\"symbols\":[\"UNKNOWN\",\"FEMALE\",\"MALE\",\"SYMBOL_OF_A_LATER_VERSION\"],\"default\":\"UNKNOWN\"},\"default\":\"UNKNOWN\",\"doc\":\"The pet's sex.\"},{\"name\":\"neutered\",\"type\":[\"null\",\"boolean\"],\"default\":null,\"doc\":\"True when the pet is neutered or spayed, false when it is not. Null when not known.\"},{\"name\":\"birthday\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null,\"doc\":\"The pet's day of birth. Null when not known.\"},{\"name\":\"microchip\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The number of the pet's microchip, as read from it; 15 digits for a chip of ISO 11784. Empty when it has none or it is not known.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the pet, as plain text; lines are separated by LF. Empty when there are none.\"}]}",
+    "reader_schema": "{\"type\":\"record\",\"name\":\"Pet\",\"namespace\":\"axt.example.v1\",\"doc\":\"A pet: an animal the user keeps, such as a cat or a dog.\",\"axt.version\":1,\"axt.title\":\"name\",\"fields\":[{\"name\":\"name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The pet's name. Empty when it has none.\"},{\"name\":\"species\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The kind of animal, as the user wrote it, such as cat or dog. Empty when not given.\"},{\"name\":\"breed\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The breed, as the user wrote it, such as Maine Coon. Empty when not known.\"},{\"name\":\"sex\",\"type\":{\"type\":\"enum\",\"name\":\"PetSex\",\"doc\":\"The sex of an animal. FEMALE, MALE: female and male. UNKNOWN: not known or not given; a symbol this version does not know is read as UNKNOWN.\",\"symbols\":[\"UNKNOWN\",\"FEMALE\",\"MALE\"],\"default\":\"UNKNOWN\"},\"default\":\"UNKNOWN\",\"doc\":\"The pet's sex.\"},{\"name\":\"neutered\",\"type\":[\"null\",\"boolean\"],\"default\":null,\"doc\":\"True when the pet is neutered or spayed, false when it is not. Null when not known.\"},{\"name\":\"birthday\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null,\"doc\":\"The pet's day of birth. Null when not known.\"},{\"name\":\"microchip\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The number of the pet's microchip, as read from it; 15 digits for a chip of ISO 11784. Empty when it has none or it is not known.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the pet, as plain text; lines are separated by LF. Empty when there are none.\"}]}",
+    "body": "c301724d2d2bce580a7c084d696d6906636174144d61696e6520436f6f6e06020102fca4021e32373630393831303030303030303000"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "name": "Mimi",
+      "species": "cat",
+      "breed": "Maine Coon",
+      "sex": "UNKNOWN",
+      "neutered": true,
+      "birthday": 18750,
+      "microchip": "276098100000000",
+      "notes": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/a-record-of-axt-example-v1-task",
+   "op": "decode_record",
+   "description": "a record of axt.example.v1.Task",
+   "refs": ["types.md 7", "envelope.md 2.3"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Task\",\"namespace\":\"axt.example.v1\",\"doc\":\"A task: something the user wants to do, possibly by a due date, possibly repeating.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What is to be done, as plain text on one line.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the task, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"due\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"The day, and the time on the wall clock, by which the task is due; see due_all_day and time_zone. Null when the task has no due date.\"},{\"name\":\"due_all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the task is due on the day of due without a time of day; the time of due is then 00:00 and has no meaning.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which due and the occurrences of repeat read on the wall clock. Null when due and the occurrences of repeat are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"repeat\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"How the task repeats: the value of an RFC 5545 RRULE property without the RRULE: prefix, such as FREQ=WEEKLY;BYDAY=TU. The occurrences start at due. Null when the task does not repeat.\"},{\"name\":\"done\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the task is done. For a repeating task: the occurrence at due is done.\"},{\"name\":\"done_at\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}],\"default\":null,\"doc\":\"When the task was marked done. Null when it is not done or the time is not known.\"},{\"name\":\"priority\",\"type\":{\"type\":\"enum\",\"name\":\"TaskPriority\",\"doc\":\"How important a task is. NONE: no priority given. LOW, MEDIUM, HIGH: low, medium and high priority. A symbol this version does not know is read as NONE.\",\"symbols\":[\"NONE\",\"LOW\",\"MEDIUM\",\"HIGH\"],\"default\":\"NONE\"},\"default\":\"NONE\",\"doc\":\"How important the task is.\"}]}",
+    "reader_schema": null,
+    "body": "c30163a48c28187aae883247697665204d696d692068657220776f726d207461626c657400028090f189c66800021a4575726f70652f4265726c696e022e465245513d4d4f4e54484c593b494e54455256414c3d33000006"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "title": "Give Mimi her worm tablet",
+      "notes": "",
+      "due": 1796112000000,
+      "due_all_day": false,
+      "time_zone": "Europe/Berlin",
+      "repeat": "FREQ=MONTHLY;INTERVAL=3",
+      "done": false,
+      "done_at": null,
+      "priority": "HIGH"
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/axt-example-v1-task-written-without-its-fields-that-have-a-default-read",
+   "op": "decode_record",
+   "description": "axt.example.v1.Task written without its fields that have a default, read with every default",
+   "refs": ["types.md 5.4", "envelope.md 6"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Task\",\"namespace\":\"axt.example.v1\",\"doc\":\"A task: something the user wants to do, possibly by a due date, possibly repeating.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[]}",
+    "reader_schema": "{\"type\":\"record\",\"name\":\"Task\",\"namespace\":\"axt.example.v1\",\"doc\":\"A task: something the user wants to do, possibly by a due date, possibly repeating.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What is to be done, as plain text on one line.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the task, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"due\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"The day, and the time on the wall clock, by which the task is due; see due_all_day and time_zone. Null when the task has no due date.\"},{\"name\":\"due_all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the task is due on the day of due without a time of day; the time of due is then 00:00 and has no meaning.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which due and the occurrences of repeat read on the wall clock. Null when due and the occurrences of repeat are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"repeat\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"How the task repeats: the value of an RFC 5545 RRULE property without the RRULE: prefix, such as FREQ=WEEKLY;BYDAY=TU. The occurrences start at due. Null when the task does not repeat.\"},{\"name\":\"done\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the task is done. For a repeating task: the occurrence at due is done.\"},{\"name\":\"done_at\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}],\"default\":null,\"doc\":\"When the task was marked done. Null when it is not done or the time is not known.\"},{\"name\":\"priority\",\"type\":{\"type\":\"enum\",\"name\":\"TaskPriority\",\"doc\":\"How important a task is. NONE: no priority given. LOW, MEDIUM, HIGH: low, medium and high priority. A symbol this version does not know is read as NONE.\",\"symbols\":[\"NONE\",\"LOW\",\"MEDIUM\",\"HIGH\"],\"default\":\"NONE\"},\"default\":\"NONE\",\"doc\":\"How important the task is.\"}]}",
+    "body": "c301dd43e1790837bf94"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "title": "",
+      "notes": "",
+      "due": null,
+      "due_all_day": false,
+      "time_zone": null,
+      "repeat": null,
+      "done": false,
+      "done_at": null,
+      "priority": "NONE"
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/axt-example-v1-task-an-unknown-symbol-of-priority-reads-as-the-default-n",
+   "op": "decode_record",
+   "description": "axt.example.v1.Task: an unknown symbol of priority reads as the default NONE",
+   "refs": ["types.md 5.4", "envelope.md 6"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Task\",\"namespace\":\"axt.example.v1\",\"doc\":\"A task: something the user wants to do, possibly by a due date, possibly repeating.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What is to be done, as plain text on one line.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the task, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"due\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"The day, and the time on the wall clock, by which the task is due; see due_all_day and time_zone. Null when the task has no due date.\"},{\"name\":\"due_all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the task is due on the day of due without a time of day; the time of due is then 00:00 and has no meaning.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which due and the occurrences of repeat read on the wall clock. Null when due and the occurrences of repeat are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"repeat\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"How the task repeats: the value of an RFC 5545 RRULE property without the RRULE: prefix, such as FREQ=WEEKLY;BYDAY=TU. The occurrences start at due. Null when the task does not repeat.\"},{\"name\":\"done\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the task is done. For a repeating task: the occurrence at due is done.\"},{\"name\":\"done_at\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}],\"default\":null,\"doc\":\"When the task was marked done. Null when it is not done or the time is not known.\"},{\"name\":\"priority\",\"type\":{\"type\":\"enum\",\"name\":\"TaskPriority\",\"doc\":\"How important a task is. NONE: no priority given. LOW, MEDIUM, HIGH: low, medium and high priority. A symbol this version does not know is read as NONE.\",\"symbols\":[\"NONE\",\"LOW\",\"MEDIUM\",\"HIGH\",\"SYMBOL_OF_A_LATER_VERSION\"],\"default\":\"NONE\"},\"default\":\"NONE\",\"doc\":\"How important the task is.\"}]}",
+    "reader_schema": "{\"type\":\"record\",\"name\":\"Task\",\"namespace\":\"axt.example.v1\",\"doc\":\"A task: something the user wants to do, possibly by a due date, possibly repeating.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What is to be done, as plain text on one line.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the task, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"due\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"The day, and the time on the wall clock, by which the task is due; see due_all_day and time_zone. Null when the task has no due date.\"},{\"name\":\"due_all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the task is due on the day of due without a time of day; the time of due is then 00:00 and has no meaning.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which due and the occurrences of repeat read on the wall clock. Null when due and the occurrences of repeat are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"repeat\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"How the task repeats: the value of an RFC 5545 RRULE property without the RRULE: prefix, such as FREQ=WEEKLY;BYDAY=TU. The occurrences start at due. Null when the task does not repeat.\"},{\"name\":\"done\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the task is done. For a repeating task: the occurrence at due is done.\"},{\"name\":\"done_at\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}],\"default\":null,\"doc\":\"When the task was marked done. Null when it is not done or the time is not known.\"},{\"name\":\"priority\",\"type\":{\"type\":\"enum\",\"name\":\"TaskPriority\",\"doc\":\"How important a task is. NONE: no priority given. LOW, MEDIUM, HIGH: low, medium and high priority. A symbol this version does not know is read as NONE.\",\"symbols\":[\"NONE\",\"LOW\",\"MEDIUM\",\"HIGH\"],\"default\":\"NONE\"},\"default\":\"NONE\",\"doc\":\"How important the task is.\"}]}",
+    "body": "c3017c2e64d7d7f777883247697665204d696d692068657220776f726d207461626c657400028090f189c66800021a4575726f70652f4265726c696e022e465245513d4d4f4e54484c593b494e54455256414c3d33000008"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "title": "Give Mimi her worm tablet",
+      "notes": "",
+      "due": 1796112000000,
+      "due_all_day": false,
+      "time_zone": "Europe/Berlin",
+      "repeat": "FREQ=MONTHLY;INTERVAL=3",
+      "done": false,
+      "done_at": null,
+      "priority": "NONE"
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/axt-example-v1-appointment-with-its-reminders-in-two-array-blocks-one-wi",
+   "op": "decode_record",
+   "description": "axt.example.v1.Appointment with its reminders in two array blocks, one with a negative count",
+   "refs": ["envelope.md 1"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\"},{\"name\":\"start\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},\"doc\":\"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"},{\"name\":\"end\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day.\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":\"int\"},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.\",\"axt.unit\":\"min\"}]}",
+    "reader_schema": null,
+    "body": "c301591b44e939de571b205665743a2076616363696e6174696f6e80f4fbcfc1680280d1d7d1c168021a4575726f70652f4265726c696e003c5469657261727a747072617869732c20486175707473747261c39f652031444272696e67207468652076616363696e6174696f6e2063657274696669636174652e0104c016027800"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "title": "Vet: vaccination",
+      "start": 1795514400000,
+      "end": 1795516200000,
+      "time_zone": "Europe/Berlin",
+      "all_day": false,
+      "location": "Tierarztpraxis, Hauptstraße 1",
+      "notes": "Bring the vaccination certificate.",
+      "reminders": [1440, 60]
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/reject-axt-example-v1-appointment-with-a-byte-left-over-after-the-record",
+   "op": "decode_record",
+   "description": "reject axt.example.v1.Appointment with a byte left over after the record",
+   "refs": ["types.md 5.7", "protocol.md 6.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\"},{\"name\":\"start\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},\"doc\":\"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"},{\"name\":\"end\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day.\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":\"int\"},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.\",\"axt.unit\":\"min\"}]}",
+    "reader_schema": null,
+    "body": "c301591b44e939de571b205665743a2076616363696e6174696f6e80f4fbcfc1680280d1d7d1c168021a4575726f70652f4265726c696e003c5469657261727a747072617869732c20486175707473747261c39f652031444272696e67207468652076616363696e6174696f6e2063657274696669636174652e04c016780000"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE"}
+   }
+  },
+  {
+   "id": "types/decode_record/reject-axt-example-v1-appointment-with-the-last-byte-missing",
+   "op": "decode_record",
+   "description": "reject axt.example.v1.Appointment with the last byte missing",
+   "refs": ["protocol.md 6.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\"},{\"name\":\"start\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},\"doc\":\"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"},{\"name\":\"end\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day.\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":\"int\"},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.\",\"axt.unit\":\"min\"}]}",
+    "reader_schema": null,
+    "body": "c301591b44e939de571b205665743a2076616363696e6174696f6e80f4fbcfc1680280d1d7d1c168021a4575726f70652f4265726c696e003c5469657261727a747072617869732c20486175707473747261c39f652031444272696e67207468652076616363696e6174696f6e2063657274696669636174652e04c01678"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE"}
+   }
+  },
+  {
+   "id": "types/decode_record/reject-axt-example-v1-appointment-with-a-title-that-is-not-utf-8",
+   "op": "decode_record",
+   "description": "reject axt.example.v1.Appointment with a title that is not UTF-8",
+   "refs": ["envelope.md 7"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\"},{\"name\":\"start\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},\"doc\":\"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"},{\"name\":\"end\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day.\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":\"int\"},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.\",\"axt.unit\":\"min\"}]}",
+    "reader_schema": null,
+    "body": "c301591b44e939de571b20ff65743a2076616363696e6174696f6e80f4fbcfc1680280d1d7d1c168021a4575726f70652f4265726c696e003c5469657261727a747072617869732c20486175707473747261c39f652031444272696e67207468652076616363696e6174696f6e2063657274696669636174652e04c0167800"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE"}
+   }
+  },
+  {
+   "id": "types/decode_record/reject-axt-example-v1-appointment-with-a-title-with-an-encoded-surrogate",
+   "op": "decode_record",
+   "description": "reject axt.example.v1.Appointment with a title with an encoded surrogate",
+   "refs": ["envelope.md 7"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\"},{\"name\":\"start\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},\"doc\":\"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"},{\"name\":\"end\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day.\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":\"int\"},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.\",\"axt.unit\":\"min\"}]}",
+    "reader_schema": null,
+    "body": "c301591b44e939de571b20edb0803a2076616363696e6174696f6e80f4fbcfc1680280d1d7d1c168021a4575726f70652f4265726c696e003c5469657261727a747072617869732c20486175707473747261c39f652031444272696e67207468652076616363696e6174696f6e2063657274696669636174652e04c0167800"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE"}
+   }
+  },
+  {
+   "id": "types/decode_record/reject-axt-example-v1-appointment-with-a-negative-string-length",
+   "op": "decode_record",
+   "description": "reject axt.example.v1.Appointment with a negative string length",
+   "refs": ["envelope.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\"},{\"name\":\"start\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},\"doc\":\"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"},{\"name\":\"end\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day.\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":\"int\"},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.\",\"axt.unit\":\"min\"}]}",
+    "reader_schema": null,
+    "body": "c301591b44e939de571b1f5665743a2076616363696e6174696f6e80f4fbcfc1680280d1d7d1c168021a4575726f70652f4265726c696e003c5469657261727a747072617869732c20486175707473747261c39f652031444272696e67207468652076616363696e6174696f6e2063657274696669636174652e04c0167800"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE"}
+   }
+  },
+  {
+   "id": "types/decode_record/reject-axt-example-v1-appointment-with-a-string-length-beyond-the-end",
+   "op": "decode_record",
+   "description": "reject axt.example.v1.Appointment with a string length beyond the end",
+   "refs": ["envelope.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\"},{\"name\":\"start\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},\"doc\":\"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"},{\"name\":\"end\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day.\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":\"int\"},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.\",\"axt.unit\":\"min\"}]}",
+    "reader_schema": null,
+    "body": "c301591b44e939de571b8080808080405665743a2076616363696e6174696f6e80f4fbcfc1680280d1d7d1c168021a4575726f70652f4265726c696e003c5469657261727a747072617869732c20486175707473747261c39f652031444272696e67207468652076616363696e6174696f6e2063657274696669636174652e04c0167800"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE"}
+   }
+  },
+  {
+   "id": "types/decode_record/reject-axt-example-v1-appointment-with-an-array-count-of-2-40-beyond-the",
+   "op": "decode_record",
+   "description": "reject axt.example.v1.Appointment with an array count of 2^40 beyond the end",
+   "refs": ["envelope.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\"},{\"name\":\"start\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},\"doc\":\"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"},{\"name\":\"end\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day.\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":\"int\"},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.\",\"axt.unit\":\"min\"}]}",
+    "reader_schema": null,
+    "body": "c301591b44e939de571b205665743a2076616363696e6174696f6e80f4fbcfc1680280d1d7d1c168021a4575726f70652f4265726c696e003c5469657261727a747072617869732c20486175707473747261c39f652031444272696e67207468652076616363696e6174696f6e2063657274696669636174652e808080808040c0167800"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE"}
+   }
+  },
+  {
+   "id": "types/decode_record/reject-axt-example-v1-appointment-with-a-body-whose-fingerprint-is-not-t",
+   "op": "decode_record",
+   "description": "reject axt.example.v1.Appointment with a body whose fingerprint is not that of the writer schema",
+   "refs": ["envelope.md 3.1"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\"},{\"name\":\"start\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},\"doc\":\"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"},{\"name\":\"end\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day.\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":\"int\"},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.\",\"axt.unit\":\"min\"}]}",
+    "reader_schema": null,
+    "body": "c30163a48c28187aae88205665743a2076616363696e6174696f6e80f4fbcfc1680280d1d7d1c168021a4575726f70652f4265726c696e003c5469657261727a747072617869732c20486175707473747261c39f652031444272696e67207468652076616363696e6174696f6e2063657274696669636174652e04c0167800"
+   },
+   "expected": {
+    "reject": {"error": "SCHEMA_UNKNOWN"}
+   }
+  },
+  {
+   "id": "types/decode_record/an-app-type-read-as-axt-example-v1-pet-through-an-alias-of-the-reader-sc",
+   "op": "decode_record",
+   "description": "an app type read as axt.example.v1.Pet through an alias of the reader schema",
+   "refs": ["types.md 4", "envelope.md 6"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Pet\",\"namespace\":\"org.example.catalog\",\"doc\":\"A pet: an animal the user keeps, such as a cat or a dog.\",\"axt.version\":1,\"axt.title\":\"name\",\"fields\":[{\"name\":\"name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The pet's name. Empty when it has none.\"},{\"name\":\"species\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The kind of animal, as the user wrote it, such as cat or dog. Empty when not given.\"},{\"name\":\"breed\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The breed, as the user wrote it, such as Maine Coon. Empty when not known.\"},{\"name\":\"sex\",\"type\":{\"type\":\"enum\",\"name\":\"PetSex\",\"doc\":\"The sex of an animal. FEMALE, MALE: female and male. UNKNOWN: not known or not given; a symbol this version does not know is read as UNKNOWN.\",\"symbols\":[\"UNKNOWN\",\"FEMALE\",\"MALE\"],\"default\":\"UNKNOWN\"},\"default\":\"UNKNOWN\",\"doc\":\"The pet's sex.\"},{\"name\":\"neutered\",\"type\":[\"null\",\"boolean\"],\"default\":null,\"doc\":\"True when the pet is neutered or spayed, false when it is not. Null when not known.\"},{\"name\":\"birthday\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null,\"doc\":\"The pet's day of birth. Null when not known.\"},{\"name\":\"microchip\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The number of the pet's microchip, as read from it; 15 digits for a chip of ISO 11784. Empty when it has none or it is not known.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the pet, as plain text; lines are separated by LF. Empty when there are none.\"}]}",
+    "reader_schema": "{\"type\":\"record\",\"name\":\"Pet\",\"namespace\":\"axt.example.v1\",\"doc\":\"A pet: an animal the user keeps, such as a cat or a dog.\",\"axt.version\":1,\"axt.title\":\"name\",\"fields\":[{\"name\":\"name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The pet's name. Empty when it has none.\"},{\"name\":\"species\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The kind of animal, as the user wrote it, such as cat or dog. Empty when not given.\"},{\"name\":\"breed\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The breed, as the user wrote it, such as Maine Coon. Empty when not known.\"},{\"name\":\"sex\",\"type\":{\"type\":\"enum\",\"name\":\"PetSex\",\"doc\":\"The sex of an animal. FEMALE, MALE: female and male. UNKNOWN: not known or not given; a symbol this version does not know is read as UNKNOWN.\",\"symbols\":[\"UNKNOWN\",\"FEMALE\",\"MALE\"],\"default\":\"UNKNOWN\"},\"default\":\"UNKNOWN\",\"doc\":\"The pet's sex.\"},{\"name\":\"neutered\",\"type\":[\"null\",\"boolean\"],\"default\":null,\"doc\":\"True when the pet is neutered or spayed, false when it is not. Null when not known.\"},{\"name\":\"birthday\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null,\"doc\":\"The pet's day of birth. Null when not known.\"},{\"name\":\"microchip\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The number of the pet's microchip, as read from it; 15 digits for a chip of ISO 11784. Empty when it has none or it is not known.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the pet, as plain text; lines are separated by LF. Empty when there are none.\"}],\"aliases\":[\"org.example.catalog.Pet\"]}",
+    "body": "c3015aabb8f8e21b5955084d696d6906636174144d61696e6520436f6f6e02020102fca4021e32373630393831303030303030303000"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "name": "Mimi",
+      "species": "cat",
+      "breed": "Maine Coon",
+      "sex": "FEMALE",
+      "neutered": true,
+      "birthday": 18750,
+      "microchip": "276098100000000",
+      "notes": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/reject-an-app-type-of-the-same-fields-under-another-name-without-an-alia",
+   "op": "decode_record",
+   "description": "reject an app type of the same fields under another name, without an alias",
+   "refs": ["types.md 4", "envelope.md 6"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Pet\",\"namespace\":\"org.example.catalog\",\"doc\":\"A pet: an animal the user keeps, such as a cat or a dog.\",\"axt.version\":1,\"axt.title\":\"name\",\"fields\":[{\"name\":\"name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The pet's name. Empty when it has none.\"},{\"name\":\"species\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The kind of animal, as the user wrote it, such as cat or dog. Empty when not given.\"},{\"name\":\"breed\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The breed, as the user wrote it, such as Maine Coon. Empty when not known.\"},{\"name\":\"sex\",\"type\":{\"type\":\"enum\",\"name\":\"PetSex\",\"doc\":\"The sex of an animal. FEMALE, MALE: female and male. UNKNOWN: not known or not given; a symbol this version does not know is read as UNKNOWN.\",\"symbols\":[\"UNKNOWN\",\"FEMALE\",\"MALE\"],\"default\":\"UNKNOWN\"},\"default\":\"UNKNOWN\",\"doc\":\"The pet's sex.\"},{\"name\":\"neutered\",\"type\":[\"null\",\"boolean\"],\"default\":null,\"doc\":\"True when the pet is neutered or spayed, false when it is not. Null when not known.\"},{\"name\":\"birthday\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null,\"doc\":\"The pet's day of birth. Null when not known.\"},{\"name\":\"microchip\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The number of the pet's microchip, as read from it; 15 digits for a chip of ISO 11784. Empty when it has none or it is not known.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the pet, as plain text; lines are separated by LF. Empty when there are none.\"}]}",
+    "reader_schema": "{\"type\":\"record\",\"name\":\"Pet\",\"namespace\":\"axt.example.v1\",\"doc\":\"A pet: an animal the user keeps, such as a cat or a dog.\",\"axt.version\":1,\"axt.title\":\"name\",\"fields\":[{\"name\":\"name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The pet's name. Empty when it has none.\"},{\"name\":\"species\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The kind of animal, as the user wrote it, such as cat or dog. Empty when not given.\"},{\"name\":\"breed\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The breed, as the user wrote it, such as Maine Coon. Empty when not known.\"},{\"name\":\"sex\",\"type\":{\"type\":\"enum\",\"name\":\"PetSex\",\"doc\":\"The sex of an animal. FEMALE, MALE: female and male. UNKNOWN: not known or not given; a symbol this version does not know is read as UNKNOWN.\",\"symbols\":[\"UNKNOWN\",\"FEMALE\",\"MALE\"],\"default\":\"UNKNOWN\"},\"default\":\"UNKNOWN\",\"doc\":\"The pet's sex.\"},{\"name\":\"neutered\",\"type\":[\"null\",\"boolean\"],\"default\":null,\"doc\":\"True when the pet is neutered or spayed, false when it is not. Null when not known.\"},{\"name\":\"birthday\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null,\"doc\":\"The pet's day of birth. Null when not known.\"},{\"name\":\"microchip\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The number of the pet's microchip, as read from it; 15 digits for a chip of ISO 11784. Empty when it has none or it is not known.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the pet, as plain text; lines are separated by LF. Empty when there are none.\"}]}",
+    "body": "c3015aabb8f8e21b5955084d696d6906636174144d61696e6520436f6f6e02020102fca4021e32373630393831303030303030303000"
+   },
+   "expected": {
+    "reject": {"error": "DOES_NOT_RESOLVE"}
+   }
+  },
+  {
+   "id": "types/decode_record/reject-a-reader-schema-with-a-field-that-has-no-default-and-that-the-wri",
+   "op": "decode_record",
+   "description": "reject a reader schema with a field that has no default and that the writer lacks",
+   "refs": ["envelope.md 6"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\"},{\"name\":\"start\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},\"doc\":\"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"},{\"name\":\"end\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day.\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":\"int\"},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.\",\"axt.unit\":\"min\"}]}",
+    "reader_schema": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\"},{\"name\":\"start\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},\"doc\":\"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"},{\"name\":\"end\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day.\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":\"int\"},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.\",\"axt.unit\":\"min\"},{\"name\":\"room\",\"type\":\"string\",\"doc\":\"A field without a default that the writer lacks.\"}]}",
+    "body": "c301591b44e939de571b205665743a2076616363696e6174696f6e80f4fbcfc1680280d1d7d1c168021a4575726f70652f4265726c696e003c5469657261727a747072617869732c20486175707473747261c39f652031444272696e67207468652076616363696e6174696f6e2063657274696669636174652e04c0167800"
+   },
+   "expected": {
+    "reject": {"error": "DOES_NOT_RESOLVE"}
+   }
+  },
+  {
+   "id": "types/decode_record/a-writer-field-the-reader-does-not-have-is-ignored",
+   "op": "decode_record",
+   "description": "a writer field the reader does not have is ignored",
+   "refs": ["envelope.md 6", "types.md 3.3"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Pet\",\"namespace\":\"axt.example.v1\",\"doc\":\"A pet: an animal the user keeps, such as a cat or a dog.\",\"axt.version\":1,\"axt.title\":\"name\",\"fields\":[{\"name\":\"name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The pet's name. Empty when it has none.\"},{\"name\":\"species\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The kind of animal, as the user wrote it, such as cat or dog. Empty when not given.\"},{\"name\":\"breed\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The breed, as the user wrote it, such as Maine Coon. Empty when not known.\"},{\"name\":\"sex\",\"type\":{\"type\":\"enum\",\"name\":\"PetSex\",\"doc\":\"The sex of an animal. FEMALE, MALE: female and male. UNKNOWN: not known or not given; a symbol this version does not know is read as UNKNOWN.\",\"symbols\":[\"UNKNOWN\",\"FEMALE\",\"MALE\"],\"default\":\"UNKNOWN\"},\"default\":\"UNKNOWN\",\"doc\":\"The pet's sex.\"},{\"name\":\"neutered\",\"type\":[\"null\",\"boolean\"],\"default\":null,\"doc\":\"True when the pet is neutered or spayed, false when it is not. Null when not known.\"},{\"name\":\"birthday\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null,\"doc\":\"The pet's day of birth. Null when not known.\"},{\"name\":\"microchip\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The number of the pet's microchip, as read from it; 15 digits for a chip of ISO 11784. Empty when it has none or it is not known.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the pet, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"colour\",\"type\":\"string\",\"default\":\"\",\"doc\":\"A field the reader does not have.\"}]}",
+    "reader_schema": "{\"type\":\"record\",\"name\":\"Pet\",\"namespace\":\"axt.example.v1\",\"doc\":\"A pet: an animal the user keeps, such as a cat or a dog.\",\"axt.version\":1,\"axt.title\":\"name\",\"fields\":[{\"name\":\"name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The pet's name. Empty when it has none.\"},{\"name\":\"species\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The kind of animal, as the user wrote it, such as cat or dog. Empty when not given.\"},{\"name\":\"breed\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The breed, as the user wrote it, such as Maine Coon. Empty when not known.\"},{\"name\":\"sex\",\"type\":{\"type\":\"enum\",\"name\":\"PetSex\",\"doc\":\"The sex of an animal. FEMALE, MALE: female and male. UNKNOWN: not known or not given; a symbol this version does not know is read as UNKNOWN.\",\"symbols\":[\"UNKNOWN\",\"FEMALE\",\"MALE\"],\"default\":\"UNKNOWN\"},\"default\":\"UNKNOWN\",\"doc\":\"The pet's sex.\"},{\"name\":\"neutered\",\"type\":[\"null\",\"boolean\"],\"default\":null,\"doc\":\"True when the pet is neutered or spayed, false when it is not. Null when not known.\"},{\"name\":\"birthday\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null,\"doc\":\"The pet's day of birth. Null when not known.\"},{\"name\":\"microchip\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The number of the pet's microchip, as read from it; 15 digits for a chip of ISO 11784. Empty when it has none or it is not known.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the pet, as plain text; lines are separated by LF. Empty when there are none.\"}]}",
+    "body": "c301e659d47bc90e4978084d696d6906636174144d61696e6520436f6f6e02020102fca4021e323736303938313030303030303030000a7461626279"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "name": "Mimi",
+      "species": "cat",
+      "breed": "Maine Coon",
+      "sex": "FEMALE",
+      "neutered": true,
+      "birthday": 18750,
+      "microchip": "276098100000000",
+      "notes": ""
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/a-recursive-app-type-at-data-depth-32",
+   "op": "decode_record",
+   "description": "a recursive app type at data depth 32",
+   "refs": ["types.md 5.7"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Outline\",\"namespace\":\"org.example.outline\",\"doc\":\"An outline item.\",\"fields\":[{\"name\":\"text\",\"type\":\"string\",\"doc\":\"The item's text.\"},{\"name\":\"children\",\"type\":{\"type\":\"array\",\"items\":\"Outline\"},\"doc\":\"The items below it.\"}]}",
+    "reader_schema": null,
+    "body": "c301d9177632fe38e3f9027802027802027802027802027802027802027802027802027802027802027802027802027802027802027802027800000000000000000000000000000000"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "text": "x",
+      "children": [
+       {
+        "text": "x",
+        "children": [
+         {
+          "text": "x",
+          "children": [
+           {
+            "text": "x",
+            "children": [
+             {
+              "text": "x",
+              "children": [
+               {
+                "text": "x",
+                "children": [
+                 {
+                  "text": "x",
+                  "children": [
+                   {
+                    "text": "x",
+                    "children": [
+                     {
+                      "text": "x",
+                      "children": [
+                       {
+                        "text": "x",
+                        "children": [
+                         {
+                          "text": "x",
+                          "children": [
+                           {
+                            "text": "x",
+                            "children": [
+                             {
+                              "text": "x",
+                              "children": [
+                               {
+                                "text": "x",
+                                "children": [
+                                 {
+                                  "text": "x",
+                                  "children": [
+                                   {
+                                    "text": "x",
+                                    "children": []
+                                   }
+                                  ]
+                                 }
+                                ]
+                               }
+                              ]
+                             }
+                            ]
+                           }
+                          ]
+                         }
+                        ]
+                       }
+                      ]
+                     }
+                    ]
+                   }
+                  ]
+                 }
+                ]
+               }
+              ]
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "types/decode_record/a-recursive-app-type-at-data-depth-34",
+   "op": "decode_record",
+   "description": "a recursive app type at data depth 34",
+   "refs": ["types.md 5.7"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Outline\",\"namespace\":\"org.example.outline\",\"doc\":\"An outline item.\",\"fields\":[{\"name\":\"text\",\"type\":\"string\",\"doc\":\"The item's text.\"},{\"name\":\"children\",\"type\":{\"type\":\"array\",\"items\":\"Outline\"},\"doc\":\"The items below it.\"}]}",
+    "reader_schema": null,
+    "body": "c301d9177632fe38e3f902780202780202780202780202780202780202780202780202780202780202780202780202780202780202780202780202780000000000000000000000000000000000"
+   },
+   "expected": {
+    "reject": {"error": "UNDECODABLE", "note": "data depth 34 above 32"}
+   }
+  }
+ ]
+}

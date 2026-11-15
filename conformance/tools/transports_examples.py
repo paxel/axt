@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: CC0-1.0
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Produce and check the examples of spec/transports.md.
 
 Checks the schema of the QR payload, types/axt/QrPayload.avsc, and
@@ -8,7 +8,7 @@ network and sends it a record, and later sends it a sealed message
 through its relay:
 
 - the schema rules of spec/types.md, section 5, with the checks of
-  vectors/tools/example_types.py, as spec/manifest.md, section 9, applies
+  conformance/tools/example_types.py, as spec/manifest.md, section 9, applies
   them to a schema of the specification, and its names unique among all
   schemas of the specification; its Parsing Canonical Form and CRC-64-AVRO
   fingerprint against fastavro and the Apache avro package; every default
@@ -42,7 +42,7 @@ through its relay:
 Run from anywhere, with fastavro, avro (1.12), pynacl and cryptography
 installed:
 
-    python3 vectors/tools/transports_examples.py
+    python3 conformance/tools/transports_examples.py
 
 The script imports protocol_examples.py, which runs that script's checks
 with its output suppressed. Every key, secret and certificate is a TEST

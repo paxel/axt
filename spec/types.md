@@ -203,7 +203,7 @@ Note, Task, Appointment, Person and Car are the example types named when the sco
 | `axt.example.v1.Pet`         | 1       | [Pet.1.avsc](../types/axt/example/v1/Pet.1.avsc)                 | `0x2d9f89a71269eb61` | `61 eb 69 12 a7 89 9f 2d` |
 | `axt.example.v1.Task`        | 1       | [Task.1.avsc](../types/axt/example/v1/Task.1.avsc)               | `0x88ae7a18288ca463` | `63 a4 8c 28 18 7a ae 88` |
 
-The fingerprints were computed with [vectors/tools/example_types.py](../vectors/tools/example_types.py). For every schema, the script:
+The fingerprints were computed with [conformance/tools/example_types.py](../conformance/tools/example_types.py). For every schema, the script:
 
 - checks the rules of section 5 that a program can check;
 - computes the Parsing Canonical Form and the CRC-64-AVRO fingerprint, and compares them with those of the Python libraries fastavro 1.13.1 and `avro` 1.12.2;

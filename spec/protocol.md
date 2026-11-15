@@ -472,13 +472,13 @@ Their Parsing Canonical Forms:
 | `axt.Ack`     | 1               | `0xee25c7cca8166ed8` | `d8 6e 16 a8 cc c7 25 ee` |
 | `axt.Error`   | 1               | `0x36d44a6df4e7ded4` | `d4 de e7 f4 6d 4a d4 36` |
 
-The fingerprints and the example of section 17 were produced with [vectors/tools/protocol_examples.py](../vectors/tools/protocol_examples.py). The script:
+The fingerprints and the example of section 17 were produced with [conformance/tools/protocol_examples.py](../conformance/tools/protocol_examples.py). The script:
 
-- checks the rules of [types.md](types.md), section 5, named above, with the checks of [vectors/tools/example_types.py](../vectors/tools/example_types.py), and that no name is defined twice among the schemas of the specification;
+- checks the rules of [types.md](types.md), section 5, named above, with the checks of [conformance/tools/example_types.py](../conformance/tools/example_types.py), and that no name is defined twice among the schemas of the specification;
 - computes the Parsing Canonical Forms and the CRC-64-AVRO fingerprints, compares them with those of the Python libraries fastavro 1.13.1 and `avro` 1.12.2, and checks that the fingerprints of the envelope, the manifest and the key move are those published;
 - uses every default of the schemas once in schema resolution, with both libraries, and for each enum a symbol the reader does not know, which fastavro reads as the default; the `avro` package 1.12.2 raises an error instead ([types.md](types.md), section 7.3);
 - builds every message of section 17 field by field, compares it with fastavro's encoding, decodes it with fastavro and with `avro`, and checks that `avro` encodes each body to the same bytes;
-- signs each message with the Ed25519 implementation of [vectors/tools/keys_examples.py](../vectors/tools/keys_examples.py), with PyNaCl 1.6.2 and with cryptography 50.0.2, which give the same signatures, and verifies them with all three by the strict rule of [keys.md](keys.md), section 2.3;
+- signs each message with the Ed25519 implementation of [conformance/tools/keys_examples.py](../conformance/tools/keys_examples.py), with PyNaCl 1.6.2 and with cryptography 50.0.2, which give the same signatures, and verifies them with all three by the strict rule of [keys.md](keys.md), section 2.3;
 - runs a model of both apps over the exchange and over 58 further cases: repeats, messages addressed to another key, the first answer standing, outcomes decided later and acknowledgements of a resend in either order, an error never answered with an error, and one case for each error code that a record message, an offer, a manifest or an envelope can cause, among them a recursive app type at data depth 32, which is taken, and at 34, which is rejected.
 
 The test vectors of [conformance.md](conformance.md) take precedence over these values.
@@ -521,7 +521,7 @@ The messages are live messages in envelope format 1. Offsets are hexadecimal. Ea
 
 ### 17.2 The manifests
 
-The bodies are those of [manifest.md](manifest.md), section 10.3, byte for byte, and are shown shortened. With real keys and signatures in place of the placeholders there, the messages keep their lengths.
+The messages are those of [manifest.md](manifest.md), section 10.3, byte for byte; their bodies are shown shortened here.
 
 cat-a-log's MANIFEST: 315 bytes, SHA-256 `1ee7dfafb7a27b1ba7f1dd7fedb04e822d4cbc3f23033f8908b1b8691a163771`.
 
@@ -821,7 +821,7 @@ Old Brain Fix's ACK: 197 bytes, SHA-256 `0f2d0004d3b42c9f4013e6e5ba3d4250dbaffa2
 
 ### 17.6 A record without an accepted offer
 
-The `DATA` of step 8 carries the Pet of [vectors/tools/example_types.py](../vectors/tools/example_types.py) as the record `5e8a1f3c-7b2d-4c6e-a9f0-3d5b7c9e1a2f`, version 1, written with the offered Pet schema. Old Brain Fix knows the fingerprint from the offer, but the Pet's answer was `DECLINE`, so step 5 of section 6.2 fails. The `ERROR` names the message by its hash, `8e31966111b293e62c848b999e1237f6b95795e2603140a2be0fed345932c57c`.
+The `DATA` of step 8 carries the Pet of [conformance/tools/example_types.py](../conformance/tools/example_types.py) as the record `5e8a1f3c-7b2d-4c6e-a9f0-3d5b7c9e1a2f`, version 1, written with the offered Pet schema. Old Brain Fix knows the fingerprint from the offer, but the Pet's answer was `DECLINE`, so step 5 of section 6.2 fails. The `ERROR` names the message by its hash, `8e31966111b293e62c848b999e1237f6b95795e2603140a2be0fed345932c57c`.
 
 Old Brain Fix's ERROR: 245 bytes, SHA-256 `ea9d029381d3ee27324b191ba8b3e43acf690e0b8ce1bcf6661e831ccae0e379`.
 

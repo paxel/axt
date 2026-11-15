@@ -179,7 +179,7 @@ A message through a relay is encrypted with HPKE, the Hybrid Public Key Encrypti
 
 The `info` is the 20 bytes of the ASCII text `AXT-v1 relay message`; the associated data is empty.
 
-- **HPKE.** It is X25519 key agreement, a key derivation with HKDF-SHA256 ([RFC 5869](https://www.rfc-editor.org/rfc/rfc5869)) and an AEAD, put together as a published standard with test vectors. Libraries that provide it include OpenSSL from 3.2, BoringSSL, Apple CryptoKit and the Python package cryptography. Where none is at hand, it is built from X25519, HKDF-SHA256 and ChaCha20-Poly1305 as RFC 9180, sections 4 and 5, describe, as [vectors/tools/keys_examples.py](../vectors/tools/keys_examples.py) does.
+- **HPKE.** It is X25519 key agreement, a key derivation with HKDF-SHA256 ([RFC 5869](https://www.rfc-editor.org/rfc/rfc5869)) and an AEAD, put together as a published standard with test vectors. Libraries that provide it include OpenSSL from 3.2, BoringSSL, Apple CryptoKit and the Python package cryptography. Where none is at hand, it is built from X25519, HKDF-SHA256 and ChaCha20-Poly1305 as RFC 9180, sections 4 and 5, describe, as [conformance/tools/keys_examples.py](../conformance/tools/keys_examples.py) does.
 - **Base mode, a sealed box.** Only the receiver's key goes into the encryption; the sender's key does not. The relay therefore learns nothing about the sender from the ciphertext, and the receiver learns the sender from the signature inside (section 4.3). HPKE's authenticated mode would bind the sender's X25519 key as well, which adds nothing to the signature, and the receiver would need to know which sender's key to use before it could open the message.
 - **ChaCha20-Poly1305** ([RFC 8439](https://www.rfc-editor.org/rfc/rfc8439)). HPKE derives the key and the nonce of every message from a fresh ephemeral key, so no nonce is chosen at random, and the 96-bit nonce of ChaCha20-Poly1305 is enough. XChaCha20-Poly1305, whose 192-bit nonce makes random nonces safe, is not an HPKE AEAD and is missing from several platform libraries, among them Apple CryptoKit and the Java standard library. ChaCha20-Poly1305 runs in constant time in software, also on phones without AES instructions, where AES-GCM does not.
 
@@ -354,14 +354,14 @@ Its Parsing Canonical Form:
 
 ## 7. Examples
 
-The values below were produced with [vectors/tools/keys_examples.py](../vectors/tools/keys_examples.py). The script:
+The values below were produced with [conformance/tools/keys_examples.py](../conformance/tools/keys_examples.py). The script:
 
 - implements Ed25519 with the verification of section 2.3, X25519 and HPKE in Python, and checks them against the test vectors of RFC 8032 (section 7.1, TEST 1), RFC 7748 (section 5.2) and RFC 9180 (appendix A.2.1);
 - signs every example with this implementation, with PyNaCl 1.6.2 (libsodium) and with cryptography 50.0.2 (OpenSSL), which give the same signatures, and verifies them with all three;
 - builds the messages field by field, compares them with fastavro 1.13.1, and decodes them with fastavro and the Python `avro` package 1.12.2;
 - writes the file with fastavro, reads the datum's bytes from its block by hand and verifies them, and reads the file with fastavro and with `avro`;
 - opens the sealed message with the HPKE of cryptography 50.0.2, and checks that another `info` or a changed byte does not open;
-- checks `axt.KeyMove` with the schema rules of [vectors/tools/example_types.py](../vectors/tools/example_types.py), and that its names are not defined in the envelope or the manifest schema.
+- checks `axt.KeyMove` with the schema rules of [conformance/tools/example_types.py](../conformance/tools/example_types.py), and that its names are not defined in the envelope or the manifest schema.
 
 The test vectors of [conformance.md](conformance.md) take precedence over these examples.
 

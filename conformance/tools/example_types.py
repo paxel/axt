@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: CC0-1.0
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Check the example types of spec/types.md and print their fingerprints.
 
 For every schema under types/axt/example/ this script:
@@ -25,9 +25,9 @@ For every schema under types/axt/example/ this script:
 
 Run from anywhere, with fastavro and avro (1.12) installed:
 
-    python3 vectors/tools/example_types.py
+    python3 conformance/tools/example_types.py
 
-vectors/tools/manifest_examples.py imports the checks below to apply them
+conformance/tools/manifest_examples.py imports the checks below to apply them
 to the manifest's schema, types/axt/Manifest.avsc; importing this file
 runs only the self-test of the CRC-64-AVRO implementation, none of the
 checks of the example types.
