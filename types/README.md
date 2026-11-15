@@ -6,4 +6,6 @@ The example types may be evolved or replaced at any time, at the cost of compati
 
 The rules for the types are in [spec/types.md](../spec/types.md); the schemas are added in [axt-1002](https://github.com/paxel/axt/issues/3).
 
+The schemas of the specification itself, such as the envelope every message is wrapped in, live in [axt/](axt/) under the Avro namespace `axt`, which is reserved for them. They are not example types and change only with the specification; the envelope is defined in [spec/envelope.md](../spec/envelope.md).
+
 Licence: CC0 1.0, see [LICENSING.md](../LICENSING.md).
