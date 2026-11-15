@@ -144,6 +144,20 @@
       ],
       "default": null,
       "doc": "The types the app may send, each full name at most once; for display only. Null when the app does not say; empty when it sends no type."
+    },
+    {
+      "name": "encryption_key",
+      "type": [
+        "null",
+        {
+          "type": "fixed",
+          "name": "ManifestEncryptionKey",
+          "size": 32,
+          "doc": "An X25519 public key in the encoding of RFC 7748. Defined in spec/keys.md."
+        }
+      ],
+      "default": null,
+      "doc": "The X25519 public key of this installation with which other apps encrypt messages to it through a relay, as spec/keys.md defines. Null when the app takes no messages through a relay."
     }
   ]
 }

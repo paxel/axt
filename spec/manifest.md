@@ -28,17 +28,18 @@ A `MANIFEST` message is signed like every message, as [keys.md](keys.md) defines
 
 ## 3. Content
 
-| Field      | Avro type                             | Content                                                                        | Section |
-| ---------- | ------------------------------------- | ------------------------------------------------------------------------------ | ------- |
-| `revision` | `long`                                | The revision of the manifest, rising with every change                         | 3.8     |
-| `app_name` | `string`                              | The name the app gives itself                                                  | 3.1     |
-| `app_url`  | `["null", "string"]`                  | An https URL of a page about the app, or `null`                                | 3.1     |
-| `formats`  | array of `int`                        | The envelope formats the app reads                                             | 3.2     |
-| `takes`    | array of `axt.ManifestTake`           | The types the app takes: full name, version range, purpose sentence            | 3.3     |
-| `any_type` | `null` or `axt.ManifestAnyType`       | Whether the app takes every type not in `takes`, with its own purpose sentence | 3.5     |
-| `sends`    | `null` or array of `axt.ManifestSend` | The types the app may send, for display; `null` when the app does not say      | 3.7     |
+| Field            | Avro type                             | Content                                                                        | Section |
+| ---------------- | ------------------------------------- | ------------------------------------------------------------------------------ | ------- |
+| `revision`       | `long`                                | The revision of the manifest, rising with every change                         | 3.8     |
+| `app_name`       | `string`                              | The name the app gives itself                                                  | 3.1     |
+| `app_url`        | `["null", "string"]`                  | An https URL of a page about the app, or `null`                                | 3.1     |
+| `formats`        | array of `int`                        | The envelope formats the app reads                                             | 3.2     |
+| `takes`          | array of `axt.ManifestTake`           | The types the app takes: full name, version range, purpose sentence            | 3.3     |
+| `any_type`       | `null` or `axt.ManifestAnyType`       | Whether the app takes every type not in `takes`, with its own purpose sentence | 3.5     |
+| `sends`          | `null` or array of `axt.ManifestSend` | The types the app may send, for display; `null` when the app does not say      | 3.7     |
+| `encryption_key` | `null` or `axt.ManifestEncryptionKey` | The X25519 public key for messages through a relay, or `null`                  | 3.9     |
 
-`axt.ManifestTake` has the fields `type`, `min_version`, `max_version`, `purpose` and `purpose_translations`; `axt.ManifestAnyType` has `purpose` and `purpose_translations`; `axt.ManifestSend` has `type`, `min_version` and `max_version`. Each field's meaning is also in its `doc` in the schema.
+`axt.ManifestTake` has the fields `type`, `min_version`, `max_version`, `purpose` and `purpose_translations`; `axt.ManifestAnyType` has `purpose` and `purpose_translations`; `axt.ManifestSend` has `type`, `min_version` and `max_version`; `axt.ManifestEncryptionKey` is a `fixed` of 32 bytes. Each field's meaning is also in its `doc` in the schema.
 
 ### 3.1 The app
 
@@ -113,6 +114,13 @@ The app name and the sentences are plain text. An app MUST show them as text and
 
 Section 6 says how an app uses the revisions of the manifests it receives.
 
+### 3.9 Encryption key
+
+`encryption_key` is the X25519 public key of the installation, with which other apps encrypt the messages they send to it through a relay ([keys.md](keys.md), section 4). It is `null` when the app takes no messages through a relay.
+
+- An app that takes messages through a relay MUST put its current encryption key in its manifest. A new encryption key is a change of the manifest's content and takes a higher revision (section 3.8).
+- The manifest is signed with the sender's signing key (section 2), and this binds the encryption key to it. An app takes the encryption key of another app from its manifest, from a QR code, or from a key move, as [keys.md](keys.md), section 4.2, says.
+
 ## 4. Validity and limits
 
 A manifest is valid when it meets the rules of sections 2 and 3 and these limits:
@@ -138,11 +146,12 @@ The limits of lengths are in bytes of UTF-8, except the language tag, which is A
 - `formats` has at least one entry; its entries are distinct and at least 1, and include the format of the carrying envelope (section 3.2).
 - Every `type` in `takes` and `sends` is an Avro full name: names of the form `[A-Za-z_][A-Za-z0-9_]*` joined by dots. No full name appears twice in `takes`, nor twice in `sends`.
 - Every `min_version` is at least 1, and every `max_version` is `null` or at least its `min_version`.
+- `encryption_key` is `null` or an X25519 key that is not of small order ([keys.md](keys.md), section 4.2).
 - The keys of every `purpose_translations` meet section 3.6.
 
 An app MUST reject an invalid manifest it receives, as [protocol.md](protocol.md) describes for a message it cannot process, and MUST NOT use any part of it. It keeps the manifest it had of the other app before, if any. It MAY check the length of the body before it decodes the body.
 
-The limits are rules of a manifest's content. [envelope.md](envelope.md), section 8, sets the size up to which every message is received and decoded, 16 MiB; this section sets which manifests are valid. A sentence is shown in a list, so 512 bytes are enough for one sentence in any script. The body limit keeps what an app holds of the other apps' manifests small; the manifests of section 10 have bodies of 202 and 436 bytes, and 256 types with ten translations of 100 bytes each come to about 300 KB.
+The limits are rules of a manifest's content. [envelope.md](envelope.md), section 8, sets the size up to which every message is received and decoded, 16 MiB; this section sets which manifests are valid. A sentence is shown in a list, so 512 bytes are enough for one sentence in any script. The body limit keeps what an app holds of the other apps' manifests small; the manifests of section 10 have bodies of 203 and 437 bytes, and 256 types with ten translations of 100 bytes each come to about 300 KB.
 
 ## 5. Using a manifest
 
@@ -177,7 +186,7 @@ A receiver judges each offer by the manifest it has at that moment, not by the o
 
 An app's manifest changes when what the app takes changes: an update of the app adds a type, its user turns a type off, or the app adds a language.
 
-A sender MAY keep the last valid manifest it has of each app, under that app's key, to use it outside a live connection: to show its user what the other app takes, to write a file for it, or to offer through a relay. A kept manifest follows the moves of its key ([keys.md](keys.md)) until the new installation sends a manifest of its own.
+A sender MAY keep the last valid manifest it has of each app, under that app's key, to use it outside a live connection: to show its user what the other app takes, to write a file for it, or to offer through a relay. A kept manifest follows the moves of its key ([keys.md](keys.md), section 5) until the new installation sends a manifest of its own; its `encryption_key` is then the one the key move carries ([keys.md](keys.md), section 4.2).
 
 Which manifest applies:
 
@@ -212,7 +221,7 @@ A file without a `MANIFEST` is complete as far as this document is concerned. A 
 ## 8. What other documents define
 
 - [protocol.md](protocol.md): the order of the first messages of a connection, how a manifest that cannot be read or is invalid is reported, the `OFFER`, `ACCEPT` and `DECLINE` messages, and the choice of the envelope format from the two apps' `formats`.
-- [keys.md](keys.md): the signature of the `MANIFEST` message, and the key moves a kept manifest follows.
+- [keys.md](keys.md): the signature of the `MANIFEST` message, the key moves a kept manifest follows, and the use of the encryption key.
 - [transports.md](transports.md): whether and where a file holds a `MANIFEST`, and when an app sends one through a relay beyond the cases of section 5.1.
 
 ## 9. Schema and fingerprint
@@ -222,19 +231,19 @@ The schema is [types/axt/Manifest.avsc](../types/axt/Manifest.avsc). It follows 
 Its Parsing Canonical Form:
 
 ```json
-{"name":"axt.Manifest","type":"record","fields":[{"name":"revision","type":"long"},{"name":"app_name","type":"string"},{"name":"app_url","type":["null","string"]},{"name":"formats","type":{"type":"array","items":"int"}},{"name":"takes","type":{"type":"array","items":{"name":"axt.ManifestTake","type":"record","fields":[{"name":"type","type":"string"},{"name":"min_version","type":"int"},{"name":"max_version","type":["null","int"]},{"name":"purpose","type":"string"},{"name":"purpose_translations","type":{"type":"map","values":"string"}}]}}},{"name":"any_type","type":["null",{"name":"axt.ManifestAnyType","type":"record","fields":[{"name":"purpose","type":"string"},{"name":"purpose_translations","type":{"type":"map","values":"string"}}]}]},{"name":"sends","type":["null",{"type":"array","items":{"name":"axt.ManifestSend","type":"record","fields":[{"name":"type","type":"string"},{"name":"min_version","type":"int"},{"name":"max_version","type":["null","int"]}]}}]}]}
+{"name":"axt.Manifest","type":"record","fields":[{"name":"revision","type":"long"},{"name":"app_name","type":"string"},{"name":"app_url","type":["null","string"]},{"name":"formats","type":{"type":"array","items":"int"}},{"name":"takes","type":{"type":"array","items":{"name":"axt.ManifestTake","type":"record","fields":[{"name":"type","type":"string"},{"name":"min_version","type":"int"},{"name":"max_version","type":["null","int"]},{"name":"purpose","type":"string"},{"name":"purpose_translations","type":{"type":"map","values":"string"}}]}}},{"name":"any_type","type":["null",{"name":"axt.ManifestAnyType","type":"record","fields":[{"name":"purpose","type":"string"},{"name":"purpose_translations","type":{"type":"map","values":"string"}}]}]},{"name":"sends","type":["null",{"type":"array","items":{"name":"axt.ManifestSend","type":"record","fields":[{"name":"type","type":"string"},{"name":"min_version","type":"int"},{"name":"max_version","type":["null","int"]}]}}]},{"name":"encryption_key","type":["null",{"name":"axt.ManifestEncryptionKey","type":"fixed","size":32}]}]}
 ```
 
 | Schema         | Envelope format | CRC-64-AVRO          | As bytes                  |
 | -------------- | --------------- | -------------------- | ------------------------- |
-| `axt.Manifest` | 1               | `0xea9132559e91c16d` | `6d c1 91 9e 55 32 91 ea` |
+| `axt.Manifest` | 1               | `0x23d471f564dee5cb` | `cb e5 de 64 f5 71 d4 23` |
 
 The fingerprint and the examples of section 10 were produced with [vectors/tools/manifest_examples.py](../vectors/tools/manifest_examples.py). The script:
 
 - checks the rules of [types.md](types.md), section 5, named above, with the checks of [vectors/tools/example_types.py](../vectors/tools/example_types.py), and that the schema's names are not also defined in [types/axt/Envelope.avsc](../types/axt/Envelope.avsc);
 - computes the Parsing Canonical Form and the CRC-64-AVRO fingerprint, and compares them with those of the Python libraries fastavro 1.13.1 and `avro` 1.12.2;
 - uses every default of the schema once in schema resolution, with both libraries;
-- checks both example manifests against the rules of section 4, and checks that 35 manifests are invalid, each of which breaks one rule or limit and is reported for that alone, among them one within every count and length whose body exceeds 1 MiB;
+- checks both example manifests against the rules of section 4, and checks that 36 manifests are invalid, each of which breaks one rule or limit and is reported for that alone, among them one within every count and length whose body exceeds 1 MiB;
 - checks which types fit (section 5.2), with the language lookup of section 3.6, for each case of section 10.2;
 - builds both messages field by field and compares them with fastavro's encoding, decodes both with fastavro and with `avro`, and checks that `avro` encodes the decoded manifests to the same bytes.
 
@@ -264,7 +273,8 @@ cat-a-log takes Pets from other apps and says what it sends. It names no URL and
     {"type": "axt.example.v1.Appointment", "min_version": 1, "max_version": 1},
     {"type": "axt.example.v1.Measurement", "min_version": 1, "max_version": 1},
     {"type": "axt.example.v1.Document", "min_version": 1, "max_version": 1}
-  ]
+  ],
+  "encryption_key": null
 }
 ```
 
@@ -291,7 +301,8 @@ Old Brain Fix takes Appointments, Tasks and Notes by name, and any other type. I
     "purpose": "Any other type becomes a searchable Note.",
     "purpose_translations": {"de": "Jeder andere Typ wird zu einer durchsuchbaren Notiz."}
   },
-  "sends": null
+  "sends": null,
+  "encryption_key": null
 }
 ```
 
@@ -314,9 +325,9 @@ Had Old Brain Fix listed `axt.example.v1.Appointment` with `min_version` 2, cat-
 
 ### 10.3 The messages
 
-Both messages are `MANIFEST` messages in a live connection, in envelope format 1. `sender` and `signature` are placeholders until [keys.md](keys.md) defines them, so neither message verifies as signed. Offsets are hexadecimal.
+Both messages are `MANIFEST` messages in a live connection, in envelope format 1. `sender` and `signature` are placeholders, so neither message verifies as signed; [keys.md](keys.md), section 7, shows signed messages. Offsets are hexadecimal.
 
-cat-a-log's manifest: 313 bytes, of which 202 are the body; SHA-256 `23aa421e6b033f3002741d79555669b2c67d8f7fd66e81641b12b178d9bdd165`.
+cat-a-log's manifest: 314 bytes, of which 203 are the body; SHA-256 `d0d93e2e809b856b2b12c9c91fa35ccce4f1e126f51b7018db5581ebd632bd40`.
 
 ```text
 0000  c3 01                    single-object marker
@@ -328,9 +339,9 @@ cat-a-log's manifest: 313 bytes, of which 202 are the body; SHA-256 `23aa421e6b0
       10 11 12 13 14 15 16 17
       18 19 1a 1b 1c 1d 1e 1f
 002c  00                       record: union index 0, null
-002d  94 03                    body: bytes length 202
+002d  96 03                    body: bytes length 203
 002f  c3 01                    body: single-object marker
-0031  6d c1 91 9e 55 32 91 ea  body: fingerprint of axt.Manifest, format 1
+0031  cb e5 de 64 f5 71 d4 23  body: fingerprint of axt.Manifest, format 1
 0039  02                       body: revision: long 1
 003a  12                       body: app_name: string length 9
 003b  63 61 74 2d 61 2d 6c 6f  body: "cat-a-log"
@@ -388,12 +399,13 @@ cat-a-log's manifest: 313 bytes, of which 202 are the body; SHA-256 `23aa421e6b0
 00f6  02                       body: sends[3].max_version: union index 1, int
 00f7  02                       body: sends[3].max_version: int 1
 00f8  00                       body: sends: end of the array
-00f9  00 00 00 00 00 00 00 00  signature: fixed(64), placeholder
+00f9  00                       body: encryption_key: union index 0, null
+00fa  00 00 00 00 00 00 00 00  signature: fixed(64), placeholder
       ... (64 bytes of 00 in all)
-0139  end
+013a  end
 ```
 
-Old Brain Fix's manifest: 547 bytes, of which 436 are the body; SHA-256 `a45743c8f8f298468e6342f98b7c39d6d8a9094c7737578f7be80e39dcf482f0`.
+Old Brain Fix's manifest: 548 bytes, of which 437 are the body; SHA-256 `efd806b3527648b6b0edaf0071f3560549733fa12ec74509ca7b30af0a1a66bb`.
 
 ```text
 0000  c3 01                    single-object marker
@@ -405,9 +417,9 @@ Old Brain Fix's manifest: 547 bytes, of which 436 are the body; SHA-256 `a45743c
       30 31 32 33 34 35 36 37
       38 39 3a 3b 3c 3d 3e 3f
 002c  00                       record: union index 0, null
-002d  e8 06                    body: bytes length 436
+002d  ea 06                    body: bytes length 437
 002f  c3 01                    body: single-object marker
-0031  6d c1 91 9e 55 32 91 ea  body: fingerprint of axt.Manifest, format 1
+0031  cb e5 de 64 f5 71 d4 23  body: fingerprint of axt.Manifest, format 1
 0039  02                       body: revision: long 1
 003a  1a                       body: app_name: string length 13
 003b  4f 6c 64 20 42 72 61 69  body: "Old Brain Fix"
@@ -504,9 +516,10 @@ Old Brain Fix's manifest: 547 bytes, of which 436 are the body; SHA-256 `a45743c
       74 69 7a 2e
 01e1  00                       body: any_type.purpose_translations: end of the map
 01e2  00                       body: sends: union index 0, null
-01e3  00 00 00 00 00 00 00 00  signature: fixed(64), placeholder
+01e3  00                       body: encryption_key: union index 0, null
+01e4  00 00 00 00 00 00 00 00  signature: fixed(64), placeholder
       ... (64 bytes of 00 in all)
-0223  end
+0224  end
 ```
 
 ## References

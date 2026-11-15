@@ -31,8 +31,8 @@ Run from anywhere, with fastavro and avro (1.12) installed:
 
     python3 vectors/tools/manifest_examples.py
 
-The sender keys and the signatures are placeholders until spec/keys.md
-defines them.
+The sender keys and the signatures are placeholders, so neither message
+verifies as signed; spec/keys.md shows signed messages.
 """
 
 import copy
@@ -56,10 +56,14 @@ REPO = HERE.parents[1]
 MANIFEST_AVSC = REPO / "types" / "axt" / "Manifest.avsc"
 ENVELOPE_AVSC = REPO / "types" / "axt" / "Envelope.avsc"
 
-# The checks of example_types.py; importing it runs none of them.
+# The checks of example_types.py and the X25519 check of keys_examples.py;
+# importing them runs none of their checks.
 _spec = importlib.util.spec_from_file_location("example_types", HERE / "example_types.py")
 rules = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(rules)
+_spec = importlib.util.spec_from_file_location("keys_examples", HERE / "keys_examples.py")
+keys = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(keys)
 
 # --- the limits of spec/manifest.md, section 4 --------------------------------
 
@@ -109,6 +113,7 @@ CAT_A_LOG = {
         {"type": "axt.example.v1.Measurement", "min_version": 1, "max_version": 1},
         {"type": "axt.example.v1.Document", "min_version": 1, "max_version": 1},
     ],
+    "encryption_key": None,
 }
 
 OLD_BRAIN_FIX = {
@@ -144,13 +149,14 @@ OLD_BRAIN_FIX = {
         "purpose_translations": {"de": "Jeder andere Typ wird zu einer durchsuchbaren Notiz."},
     },
     "sends": None,
+    "encryption_key": None,
 }
 
 SENDERS = {
-    "cat-a-log": bytes(range(32)),  # placeholder until spec/keys.md
-    "Old Brain Fix": bytes(range(32, 64)),  # placeholder until spec/keys.md
+    "cat-a-log": bytes(range(32)),  # placeholder; spec/keys.md shows signed messages
+    "Old Brain Fix": bytes(range(32, 64)),  # placeholder
 }
-SIGNATURE = bytes(64)  # placeholder until spec/keys.md
+SIGNATURE = bytes(64)  # placeholder
 
 # --- schema -------------------------------------------------------------------
 
@@ -317,6 +323,9 @@ def manifest_problems(datum, body_length, envelope_format=1):
         check_sentences("any_type", datum["any_type"], problems)
     if datum["sends"] is not None:
         check_types("sends", datum["sends"], problems)
+    key = datum["encryption_key"]
+    if key is not None and keys.encryption_key_problem(key):
+        problems.append("encryption_key is an X25519 key of small order")
     return problems
 
 
@@ -389,6 +398,7 @@ NEGATIVE = [
     ("sends min_version 0", lambda d: d.update(sends=note_sends(min_version=0)), "min_version"),
     ("sends max below min", lambda d: d.update(sends=note_sends(min_version=2, max_version=1)), "max_version"),
     ("257 types sent", lambda d: d.update(sends=[dict(note_sends()[0], type=f"org.example.T{i}") for i in range(257)]), "more than 256"),
+    ("encryption key of small order", lambda d: d.update(encryption_key=bytes(32)), "encryption_key"),
     ("body above the limit", big, "body of"),
 ]
 for label, change, expected in NEGATIVE:
@@ -534,6 +544,8 @@ def body_parts(m):
         return out + end("sends", "array")
 
     parts += null_or("sends", m["sends"], "array", sends_parts)
+    parts += null_or("encryption_key", m["encryption_key"], "ManifestEncryptionKey",
+                     lambda k: [(k, "encryption_key: fixed(32)")])
     return parts
 
 

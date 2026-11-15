@@ -65,7 +65,7 @@ For `DATA`, the writer schema is the record type's schema as offered. For every 
 - `signature` is the last field and has a fixed length, so the last 64 bytes of an encoded envelope are the signature, and all bytes before them are the rest of the message.
 - The body is carried as bytes, so the record inside it is never encoded again on the way.
 
-What the signature covers, and how a receiver verifies it, is defined in [keys.md](keys.md). keys.md MUST define the signed bytes as bytes of the message as it was received, not as an encoding the receiver produces again from decoded values: a decoded value can encode differently, for example a UUID received with upper-case digits (section 7). keys.md MUST also choose the signed bytes so that they are the same in a live message and in a file (section 4).
+What the signature covers, and how a receiver verifies it, is defined in [keys.md](keys.md), sections 2.2 and 2.3: the signed bytes are a fixed prefix and the envelope's bytes before `signature`, as the message was received, not as an encoding the receiver produces again from decoded values, since a decoded value can encode differently, for example a UUID received with upper-case digits (section 7). These bytes are the same in a live message and in a file (section 4).
 
 ## 3. Live connection
 
@@ -79,7 +79,7 @@ The envelope carries no length and no terminator; the transport supplies the bou
 
 An offer carries each writer schema as its full JSON text, including `doc` attributes, so that a receiver can show fields it does not know by name and description ([types.md](types.md)). The Parsing Canonical Form is used only to compute the fingerprint. The receiver keeps the offered schemas by fingerprint for as long as [protocol.md](protocol.md) says the offer is valid.
 
-Through a relay, the end-to-end encryption defined in [keys.md](keys.md) wraps the complete encoded message. No envelope field, not even `kind`, is visible to the relay ([relay.md](relay.md)).
+Through a relay, the end-to-end encryption defined in [keys.md](keys.md), section 4, wraps the complete encoded message. No envelope field, not even `kind`, is visible to the relay ([relay.md](relay.md)).
 
 ### 3.1 Unknown fingerprints
 
@@ -93,17 +93,19 @@ An AXT file is an Avro object container file: the magic `Obj` followed by the by
 
 ### 4.1 Metadata
 
-| Key           | Value                                                                                                         | Required                            |
-| ------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| `avro.schema` | The envelope schema as JSON; its Parsing Canonical Form MUST be that of a published envelope format           | yes                                 |
-| `avro.codec`  | `null` or `deflate` (section 4.2); if the key is absent, the codec is `null`, as in the Avro specification    | no                                  |
-| `axt.schemas` | A JSON array of the full writer schemas, `doc` attributes included, of the records in the file, as UTF-8 JSON | when the file holds `DATA` messages |
+| Key             | Value                                                                                                         | Required                            |
+| --------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `avro.schema`   | The envelope schema as JSON; its Parsing Canonical Form MUST be that of a published envelope format           | yes                                 |
+| `avro.codec`    | `null` or `deflate` (section 4.2); if the key is absent, the codec is `null`, as in the Avro specification    | no                                  |
+| `axt.schemas`   | A JSON array of the full writer schemas, `doc` attributes included, of the records in the file, as UTF-8 JSON | when the file holds `DATA` messages |
+| `axt.sender`    | The Ed25519 public key of the file's sender, as lower-case hexadecimal ([keys.md](keys.md), section 2.5)      | yes                                 |
+| `axt.signature` | The sender's signature over the header, as lower-case hexadecimal ([keys.md](keys.md), section 2.5)           | yes                                 |
 
 `axt.schemas` takes the place of the offer: a file is read without a connection, so the record schemas travel in its header. The fingerprints of the schemas in it MUST be distinct, and every `DATA` body in the file MUST name one of them. `avro.schema` holds the envelope schema rather than a record schema, because every record in a file needs the envelope's id, version, key and signature.
 
-A reader identifies the envelope format by the fingerprint of `avro.schema` and MUST reject a file whose envelope fingerprint it does not support. It MUST NOT depend on the exact text of `avro.schema`, since Avro libraries write it in different ways. Metadata keys that start with `axt.` are reserved for this specification. A reader MUST ignore metadata keys it does not know.
+A reader identifies the envelope format by the fingerprint of `avro.schema` and MUST reject a file whose envelope fingerprint it does not support. It MUST NOT depend on the exact text of `avro.schema`, since Avro libraries write it in different ways. It MUST compare the Parsing Canonical Form of `avro.schema` byte for byte with that of the format, and MUST decode the file's messages with its own copy of the format's schema, not with the schema from the file ([keys.md](keys.md), section 2.5). Metadata keys that start with `axt.` are reserved for this specification. A reader MUST ignore metadata keys it does not know.
 
-The metadata is not part of any message, so no message signature covers it. [keys.md](keys.md) defines how the schemas in `axt.schemas` are bound to the sender's key. Until then, the fingerprint alone does not protect them (section 5).
+The metadata is not part of any message, so no message signature covers it. `axt.signature` signs the value of `axt.schemas` with the key in `axt.sender`, and every message of a file has that sender, apart from key moves at its start ([keys.md](keys.md), sections 2.5 and 5.2). The fingerprint alone would not protect the schemas (section 5).
 
 Which kinds a file may hold is defined in [transports.md](transports.md).
 
@@ -182,7 +184,7 @@ The bytes below were produced with [vectors/tools/envelope_examples.py](../vecto
 - the message, built field by field, against fastavro's binary encoding, and by decoding it again;
 - the file, by reading it back with both libraries.
 
-The record type `com.example.Memo` is an illustration only, not an example type. `sender` and `signature` are placeholders until [keys.md](keys.md) defines them, so neither example verifies as signed. The test vectors of [conformance.md](conformance.md) take precedence over these examples.
+The record type `com.example.Memo` is an illustration only, not an example type. `sender` and `signature`, and the file's `axt.sender` and `axt.signature`, are placeholders, so neither example verifies as signed; [keys.md](keys.md), section 7, shows the same message and the same file signed. The test vectors of [conformance.md](conformance.md) take precedence over these examples.
 
 ### 10.1 Schemas and fingerprints
 
@@ -245,35 +247,45 @@ A `DATA` message in a live connection that carries the Memo `{"text": "Vet, Tues
 
 ### 10.3 A file
 
-The same message in an AXT file with the codec `null`; 2,572 bytes, SHA-256 `e962195bb0b42b1c97ec34d93a56eb061584f4ac7f11e25fcfda9c1c8092c612`. A writer picks the 16-byte sync marker at random; the example uses `00 01 … 0f` so that its bytes can be reproduced. The two JSON values are shown shortened; the first is the Memo schema of section 10.1, the second the envelope schema of [types/axt/Envelope.avsc](../types/axt/Envelope.avsc) with its keys in the file's order, as Python's `json.dumps` writes it.
+The same message in an AXT file with the codec `null`; 2,793 bytes, SHA-256 `3e788257990177cd65453db51b1fe367d30a4aa17ee9741802ffe37b13864ce2`. A writer picks the 16-byte sync marker at random; the example uses `00 01 … 0f` so that its bytes can be reproduced. The two JSON values are shown shortened; the first is the Memo schema of section 10.1, the second the envelope schema of [types/axt/Envelope.avsc](../types/axt/Envelope.avsc) with its keys in the file's order, as Python's `json.dumps` writes it. The two hexadecimal texts are shortened as well.
 
 ```text
 0000  4f 62 6a 01              magic "Obj" 01
-0004  06                       metadata: map block of 3 entries
+0004  0a                       metadata: map block of 5 entries
 0005  16                       key: string length 11
 0006  61 78 74 2e 73 63 68 65  "axt.schemas"
       6d 61 73
 0011  e8 04                    value: bytes length 308
 0013  5b 7b 22 74 ... 7d 5d    [{"type":"record","name":"Memo", ...}]  (308 bytes of UTF-8 JSON)
 0147  14                       key: string length 10
-0148  61 76 72 6f 2e 63 6f 64  "avro.codec"
+0148  61 78 74 2e 73 65 6e 64  "axt.sender"
+      65 72
+0152  80 01                    value: bytes length 64
+0154  30 30 30 31 ... 31 66    "000102...1e1f"  (64 hexadecimal digits, placeholder)
+0194  1a                       key: string length 13
+0195  61 78 74 2e 73 69 67 6e  "axt.signature"
+      61 74 75 72 65
+01a2  80 02                    value: bytes length 128
+01a4  30 30 30 30 ... 30 30    "0000...0000"  (128 hexadecimal digits, placeholder)
+0224  14                       key: string length 10
+0225  61 76 72 6f 2e 63 6f 64  "avro.codec"
       65 63
-0152  08                       value: bytes length 4
-0153  6e 75 6c 6c              "null"
-0157  16                       key: string length 11
-0158  61 76 72 6f 2e 73 63 68  "avro.schema"
+022f  08                       value: bytes length 4
+0230  6e 75 6c 6c              "null"
+0234  16                       key: string length 11
+0235  61 76 72 6f 2e 73 63 68  "avro.schema"
       65 6d 61
-0163  ac 1f                    value: bytes length 2006
-0165  7b 22 74 79 ... 5d 7d    {"type": "record", "name": "Envelope", "namespace": "axt", ...}  (2006 bytes of UTF-8 JSON)
-093b  00                       end of the metadata map
-093c  00 01 02 03 04 05 06 07  sync marker
+0240  ac 1f                    value: bytes length 2006
+0242  7b 22 74 79 ... 5d 7d    {"type": "record", "name": "Envelope", "namespace": "axt", ...}  (2006 bytes of UTF-8 JSON)
+0a18  00                       end of the metadata map
+0a19  00 01 02 03 04 05 06 07  sync marker
       08 09 0a 0b 0c 0d 0e 0f
-094c  02                       block: 1 datum
-094d  da 02                    block: 173 bytes
-094f  02 08 00 01 02 ...       the datum: bytes 000a to 00b6 of the message in 10.2
-09fc  00 01 02 03 04 05 06 07  sync marker
+0a29  02                       block: 1 datum
+0a2a  da 02                    block: 173 bytes
+0a2c  02 08 00 01 02 ...       the datum: bytes 000a to 00b6 of the message in 10.2
+0ad9  00 01 02 03 04 05 06 07  sync marker
       08 09 0a 0b 0c 0d 0e 0f
-0a0c  end
+0ae9  end
 ```
 
 ## References

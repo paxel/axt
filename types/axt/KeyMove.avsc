@@ -1,0 +1,42 @@
+{
+  "type": "record",
+  "name": "KeyMove",
+  "namespace": "axt",
+  "doc": "The body of a KEY_MOVE message: the sender's key moves to a new installation. Defined in spec/keys.md. The message is signed with the old key, which is its sender.",
+  "fields": [
+    {
+      "name": "new_sender",
+      "type": {
+        "type": "fixed",
+        "name": "KeyMoveSigningKey",
+        "size": 32,
+        "doc": "An Ed25519 public key in the encoding of RFC 8032. Defined in spec/keys.md."
+      },
+      "doc": "The Ed25519 public key of the new installation, which signs every later message of the sender."
+    },
+    {
+      "name": "new_encryption_key",
+      "type": [
+        "null",
+        {
+          "type": "fixed",
+          "name": "KeyMoveEncryptionKey",
+          "size": 32,
+          "doc": "An X25519 public key in the encoding of RFC 7748. Defined in spec/keys.md."
+        }
+      ],
+      "default": null,
+      "doc": "The X25519 public key with which other apps encrypt messages to the new installation through a relay. Null when the new installation takes no messages through a relay."
+    },
+    {
+      "name": "proof",
+      "type": {
+        "type": "fixed",
+        "name": "KeyMoveProof",
+        "size": 64,
+        "doc": "An Ed25519 signature. Defined in spec/keys.md."
+      },
+      "doc": "The signature of the new key over the old key and the new key, as spec/keys.md defines; it shows that the new installation holds the new key."
+    }
+  ]
+}

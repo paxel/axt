@@ -22,8 +22,9 @@ Run from anywhere, with fastavro and avro (1.12) installed:
 
     python3 vectors/tools/envelope_examples.py
 
-The sender key and the signature are placeholders until spec/keys.md
-defines them.
+The sender key, the signature and the file's header signature are
+placeholders, so neither example verifies as signed; spec/keys.md and
+vectors/tools/keys_examples.py show the same message and file signed.
 """
 
 import hashlib
@@ -58,8 +59,8 @@ MEMO_SCHEMA = {
 }
 
 # Values of the examples.
-SENDER = bytes(range(32))  # placeholder until spec/keys.md
-SIGNATURE = bytes(64)  # placeholder until spec/keys.md
+SENDER = bytes(range(32))  # placeholder; spec/keys.md shows the message signed
+SIGNATURE = bytes(64)  # placeholder
 RECORD_ID = "0b5a3c1e-4d2f-4a6b-9c8d-7e6f5a4b3c2d"
 RECORD_VERSION = 1
 MEMO = {"text": "Vet, Tuesday 10:00", "written": 1763200800000}  # 2025-11-15T10:00:00Z
@@ -215,7 +216,11 @@ fastavro.writer(
     json.loads(envelope_json),
     [envelope_datum],
     codec="null",
-    metadata={"axt.schemas": json.dumps([MEMO_SCHEMA], separators=(",", ":"))},
+    metadata={
+        "axt.schemas": json.dumps([MEMO_SCHEMA], separators=(",", ":")),
+        "axt.sender": SENDER.hex(),  # placeholder, as the message's sender
+        "axt.signature": SIGNATURE.hex(),  # placeholder for the header signature of spec/keys.md
+    },
     sync_marker=SYNC_MARKER,
 )
 axt_file = file_buf.getvalue()
@@ -238,6 +243,8 @@ for entry in json.loads(apache_reader.get_meta("axt.schemas").decode()):
 apache_records = list(apache_reader)
 assert len(apache_records) == 1 and apache_records[0]["body"] == body
 assert apache_records[0]["signature"] == SIGNATURE
+assert apache_reader.get_meta("axt.sender") == SENDER.hex().encode()
+assert fa_reader.metadata["axt.signature"] == SIGNATURE.hex()
 
 # The datum in the file is the message without its 10-byte single-object header.
 assert message[10:] in axt_file
