@@ -204,10 +204,15 @@ assert int(memo_back["written"].timestamp() * 1000) == MEMO["written"]
 
 # --- the file -----------------------------------------------------------------
 
+# fastavro writes as avro.schema the json.dumps of the schema it is given. A
+# parsed schema has its field attributes in an order that depends on the
+# string hash seed, so the writer gets the schema as read from
+# Envelope.avsc, in the file's own order, and the file's bytes are the same
+# in every run.
 file_buf = io.BytesIO()
 fastavro.writer(
     file_buf,
-    envelope_schema,
+    json.loads(envelope_json),
     [envelope_datum],
     codec="null",
     metadata={"axt.schemas": json.dumps([MEMO_SCHEMA], separators=(",", ":"))},
@@ -226,6 +231,7 @@ assert len(fa_records) == 1 and fa_records[0]["body"] == body
 # Read back with the Apache avro package.
 apache_reader = avro.datafile.DataFileReader(io.BytesIO(axt_file), avro.io.DatumReader())
 header_schema = apache_reader.get_meta("avro.schema").decode()
+assert header_schema == json.dumps(json.loads(envelope_json)), "avro.schema is not Envelope.avsc in its own order"
 assert apache_fingerprint(header_schema) == envelope_fp.to_bytes(8, "little")
 for entry in json.loads(apache_reader.get_meta("axt.schemas").decode()):
     assert apache_fingerprint(json.dumps(entry)) == memo_fp.to_bytes(8, "little")

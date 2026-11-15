@@ -245,7 +245,7 @@ A `DATA` message in a live connection that carries the Memo `{"text": "Vet, Tues
 
 ### 10.3 A file
 
-The same message in an AXT file with the codec `null`; 2,572 bytes, SHA-256 `2cdaecf3520837e3ba3399cfdd6afd264a3ba7dc792cb37c71b80c47f24f3376`. A writer picks the 16-byte sync marker at random; the example uses `00 01 … 0f` so that its bytes can be reproduced. The two JSON values are shown shortened; the first is the Memo schema of section 10.1, the second the envelope schema as fastavro writes it.
+The same message in an AXT file with the codec `null`; 2,572 bytes, SHA-256 `e962195bb0b42b1c97ec34d93a56eb061584f4ac7f11e25fcfda9c1c8092c612`. A writer picks the 16-byte sync marker at random; the example uses `00 01 … 0f` so that its bytes can be reproduced. The two JSON values are shown shortened; the first is the Memo schema of section 10.1, the second the envelope schema of [types/axt/Envelope.avsc](../types/axt/Envelope.avsc) with its keys in the file's order, as Python's `json.dumps` writes it.
 
 ```text
 0000  4f 62 6a 01              magic "Obj" 01
@@ -264,7 +264,7 @@ The same message in an AXT file with the codec `null`; 2,572 bytes, SHA-256 `2cd
 0158  61 76 72 6f 2e 73 63 68  "avro.schema"
       65 6d 61
 0163  ac 1f                    value: bytes length 2006
-0165  7b 22 74 79 ... 5d 7d    {"type": "record", ..., "name": "axt.Envelope", ...}  (2006 bytes of UTF-8 JSON)
+0165  7b 22 74 79 ... 5d 7d    {"type": "record", "name": "Envelope", "namespace": "axt", ...}  (2006 bytes of UTF-8 JSON)
 093b  00                       end of the metadata map
 093c  00 01 02 03 04 05 06 07  sync marker
       08 09 0a 0b 0c 0d 0e 0f
