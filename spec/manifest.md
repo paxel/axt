@@ -49,9 +49,9 @@ A `MANIFEST` message is signed like every message, as [keys.md](keys.md) defines
 
 ### 3.2 Formats
 
-`formats` lists the envelope formats ([envelope.md](envelope.md), section 2.1) in which the app reads messages. It MUST include the format of the envelope that carries the manifest. The other app writes every further message to this app in one of the listed formats; which one is defined in [protocol.md](protocol.md).
+`formats` lists the envelope formats ([envelope.md](envelope.md), section 2.1) in which the app reads messages. It MUST include the format of the envelope that carries the manifest. The other app writes every further message to this app in one of the listed formats; which one is defined in [protocol.md](protocol.md), section 3.2.
 
-A `MANIFEST` is written before the app knows the other's formats. It SHOULD be written in the lowest format the app supports. [protocol.md](protocol.md) defines what happens when the other app cannot read it.
+A `MANIFEST` is written before the app knows the other's formats. It SHOULD be written in the lowest format the app supports. [protocol.md](protocol.md), section 3.2, defines what happens when the other app cannot read it.
 
 ### 3.3 Types taken
 
@@ -149,7 +149,7 @@ The limits of lengths are in bytes of UTF-8, except the language tag, which is A
 - `encryption_key` is `null` or an X25519 key that is not of small order ([keys.md](keys.md), section 4.2).
 - The keys of every `purpose_translations` meet section 3.6.
 
-An app MUST reject an invalid manifest it receives, as [protocol.md](protocol.md) describes for a message it cannot process, and MUST NOT use any part of it. It keeps the manifest it had of the other app before, if any. It MAY check the length of the body before it decodes the body.
+An app MUST reject an invalid manifest it receives, with the error `MANIFEST_INVALID` ([protocol.md](protocol.md), section 8.2), and MUST NOT use any part of it. It keeps the manifest it had of the other app before, if any. It MAY check the length of the body before it decodes the body.
 
 The limits are rules of a manifest's content. [envelope.md](envelope.md), section 8, sets the size up to which every message is received and decoded, 16 MiB; this section sets which manifests are valid. A sentence is shown in a list, so 512 bytes are enough for one sentence in any script. The body limit keeps what an app holds of the other apps' manifests small; the manifests of section 10 have bodies of 203 and 437 bytes, and 256 types with ten translations of 100 bytes each come to about 300 KB.
 
@@ -157,8 +157,8 @@ The limits are rules of a manifest's content. [envelope.md](envelope.md), sectio
 
 ### 5.1 When an app sends its manifest
 
-- **Live connection.** Each app MUST send its `MANIFEST` in every live connection, also an app that takes no type: its manifest then has an empty `takes` and `any_type` `null`, and still carries its formats. A sender MUST NOT send an `OFFER` in a connection before it has received a valid `MANIFEST` of the other app in that connection. An app MAY send a new `MANIFEST` with a higher revision during the connection when what it takes changes; it applies from its arrival on. [protocol.md](protocol.md) defines the order of the first messages of a connection.
-- **Relay.** Through a relay there is no live connection. An app SHOULD send a `MANIFEST` through the relay whenever its manifest changes, and when [protocol.md](protocol.md) asks for one. A sender offers through the relay by the manifest it keeps of the receiver (section 6).
+- **Live connection.** Each app MUST send its `MANIFEST` in every live connection, also an app that takes no type: its manifest then has an empty `takes` and `any_type` `null`, and still carries its formats. A sender MUST NOT send an `OFFER` in a connection before it has received a valid `MANIFEST` of the other app in that connection. An app MAY send a new `MANIFEST` with a higher revision during the connection when what it takes changes; it applies from its arrival on. [protocol.md](protocol.md), section 3.1, defines the order of the first messages of a connection.
+- **Relay.** Through a relay there is no live connection. An app SHOULD send a `MANIFEST` through the relay whenever its manifest changes, and when [protocol.md](protocol.md), section 15.1, asks for one. A sender offers through the relay by the manifest it keeps of the receiver (section 6).
 - **File.** Section 7.
 
 ### 5.2 Which types fit
@@ -171,14 +171,14 @@ A type with the full name N, in a writer schema of version V (section 3.4), fits
 
 ### 5.3 Offering only what fits
 
-- A sender MUST NOT offer a type in a version that does not fit the receiver's manifest. Updates and deletions follow the same steps as new records ([protocol.md](protocol.md)), so this holds for them as well.
+- A sender MUST NOT offer a type in a version that does not fit the receiver's manifest. Updates and deletions follow the same steps as new records ([protocol.md](protocol.md), section 4.3), so this holds for them as well.
 - A sender that has several writer schemas of a type's full name MAY pick one whose version fits, such as an older version for a receiver whose `max_version` is below the sender's own. [records.md](records.md), section 3, allows a record to be encoded with another compatible writer schema of the same full name; the fields that version does not have are then not sent.
 - A sender SHOULD show its user, for each type it would send, the receiver's purpose sentence in the user's language (section 3.6), before the user chooses what to send.
 - What fits is the most a sender may offer. It MAY offer less, for example only the types its user chose.
 
 ### 5.4 The receiver confirms each offer
 
-A fit is not an acceptance. The receiver confirms or declines each offer ([protocol.md](protocol.md)). It MAY decline an offer that fits, for example when the schemas do not resolve ([envelope.md](envelope.md), section 6) or when its user does not want the records.
+A fit is not an acceptance. The receiver confirms or declines each offer ([protocol.md](protocol.md), section 5). It MAY decline an offer that fits, for example when the schemas do not resolve ([envelope.md](envelope.md), section 6) or when its user does not want the records.
 
 A receiver judges each offer by the manifest it has at that moment, not by the one it sent: through a relay an offer can arrive after the receiver's manifest has changed. It MUST decline an offer whose type, in the offered version, does not fit its current manifest.
 
@@ -197,7 +197,7 @@ A relay may deliver messages late or out of order, and a user may open an old fi
 
 When the manifest of the receiver changes, the sender compares the types that fit before and after:
 
-- **A type no longer fits.** The sender stops offering it, updates and deletions included. The records it has sent stay at the receiver, and [records.md](records.md) still applies to them; what the receiver does with records of a type it no longer takes is up to the receiver. When the type fits again, the sender SHOULD send the current state of each record of the type that it sent before: a `DATA` with the current version of a record that exists, a `DELETE` with the version of the deletion of one it deleted in between. The version rule ([records.md](records.md), section 5.2) then brings the receiver to the current state.
+- **A type no longer fits.** The sender stops offering it, updates and deletions included. The records it has sent stay at the receiver, and [records.md](records.md) still applies to them; what the receiver does with records of a type it no longer takes is up to the receiver. When the type fits again and a new offer of it is accepted ([protocol.md](protocol.md), section 11), the sender SHOULD send the current state of each record of the type that it sent before: a `DATA` with the current version of a record that exists, a `DELETE` with the version of the deletion of one it deleted in between. The version rule ([records.md](records.md), section 5.2) then brings the receiver to the current state.
 - **A type now fits.** The sender MAY offer it, as section 5.3 says.
 - **A purpose sentence changed.** The sender SHOULD show the new sentence the next time its user chooses what to send.
 - **The formats changed.** The sender writes its further messages in a format of the new list ([envelope.md](envelope.md), section 2.1).
@@ -220,7 +220,7 @@ A file without a `MANIFEST` is complete as far as this document is concerned. A 
 
 ## 8. What other documents define
 
-- [protocol.md](protocol.md): the order of the first messages of a connection, how a manifest that cannot be read or is invalid is reported, the `OFFER`, `ACCEPT` and `DECLINE` messages, and the choice of the envelope format from the two apps' `formats`.
+- [protocol.md](protocol.md): the order of the first messages of a connection (section 3.1 there), how a manifest that cannot be read or is invalid is reported (sections 3.2 and 8.2 there), the `OFFER`, `ACCEPT` and `DECLINE` messages (sections 4 and 5 there), and the choice of the envelope format from the two apps' `formats` (section 3.2 there).
 - [keys.md](keys.md): the signature of the `MANIFEST` message, the key moves a kept manifest follows, and the use of the encryption key.
 - [transports.md](transports.md): whether and where a file holds a `MANIFEST`, and when an app sends one through a relay beyond the cases of section 5.1.
 

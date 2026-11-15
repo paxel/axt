@@ -43,7 +43,7 @@ The prefix separates signatures over AXT messages from every other signature the
 
 ### 2.3 Verification
 
-A receiver MUST verify the signature of every message before it uses any field of the message, except to find the message's format and its end. It MUST reject a message whose signature does not verify, as [protocol.md](protocol.md) describes for a message it cannot process, and MUST NOT apply any part of it.
+A receiver MUST verify the signature of every message before it uses any field of the message, except to find the message's format and its end. It MUST reject a message whose signature does not verify, reported as [protocol.md](protocol.md), section 8.3, describes, and MUST NOT apply any part of it.
 
 Verification is strict. With A the 32 bytes of `sender`, R the first and S the last 32 bytes of `signature`, M the signed bytes of section 2.2, B the base point, L the order of the base point and p = 2^255 − 19, as in [RFC 8032, section 5.1](https://www.rfc-editor.org/rfc/rfc8032#section-5.1):
 
@@ -78,7 +78,7 @@ Step 3 costs one scalar multiplication for each point. For A it is needed once, 
 
 ### 2.4 The schemas of a connection
 
-A `DATA` message names its writer schema only by fingerprint, and a fingerprint is not collision resistant ([envelope.md](envelope.md), section 5); it also leaves out `doc` and every other attribute a receiver shows its user. The schemas themselves are therefore bound to the sender by a signature. In a live connection and through a relay, the `OFFER` ([protocol.md](protocol.md)) is that signature. This document requires of it:
+A `DATA` message names its writer schema only by fingerprint, and a fingerprint is not collision resistant ([envelope.md](envelope.md), section 5); it also leaves out `doc` and every other attribute a receiver shows its user. The schemas themselves are therefore bound to the sender by a signature. In a live connection and through a relay, the `OFFER` ([protocol.md](protocol.md), section 4) is that signature. This document requires of it:
 
 - An `OFFER` MUST carry each writer schema as its full JSON text in its body, so that the offer's signature covers every attribute of the schema, its `doc` attributes and `axt.version` included ([envelope.md](envelope.md), section 3).
 - A receiver MUST keep the schemas it was offered per sender, and MUST decode the body of a `DATA` message only with a schema that the same sender offered. It looks up the body's fingerprint among that sender's schemas alone; a schema with the same fingerprint that another sender offered MUST NOT be used.
@@ -115,8 +115,8 @@ The values are hexadecimal text because Avro libraries handle metadata values di
 
 ### 2.6 What a signature does not say
 
-- **Whom a message is for.** A signature names the sender, not the receiver. A receiver can pass a signed message on, and the third app then holds a genuine message of the sender. For records this is intended: a sender sends a record under the same id to every receiver, and a file can be forwarded. [protocol.md](protocol.md) MUST bind to their receiver or their connection, in their body, the messages whose replay to another app would matter, such as `ACCEPT`, `DECLINE`, `ACK` and `ERROR`.
-- **When it was sent.** A message carries no time. A relay or a user can deliver a message again. Record messages and manifests are safe to repeat by their versions and revisions ([records.md](records.md), section 5.2; [manifest.md](manifest.md), section 6); [protocol.md](protocol.md) MUST make every other kind safe to repeat.
+- **Whom a message is for.** A signature names the sender, not the receiver. A receiver can pass a signed message on, and the third app then holds a genuine message of the sender. For records this is intended: a sender sends a record under the same id to every receiver, and a file can be forwarded. [protocol.md](protocol.md) MUST bind to their receiver or their connection, in their body, the messages whose replay to another app would matter, such as `ACCEPT`, `DECLINE`, `ACK` and `ERROR`. It does so with the field `to` in their bodies ([protocol.md](protocol.md), section 9.1).
+- **When it was sent.** A message carries no time. A relay or a user can deliver a message again. Record messages and manifests are safe to repeat by their versions and revisions ([records.md](records.md), section 5.2; [manifest.md](manifest.md), section 6); [protocol.md](protocol.md) MUST make every other kind safe to repeat, and does so in its section 9.2.
 - **Secrecy.** A signature hides nothing. A live connection is encrypted by its transport ([transports.md](transports.md)), a message through a relay as section 4 says, and a file is readable by whoever holds it.
 
 ## 3. Trust
@@ -251,7 +251,7 @@ A receiver opens a sealed message as follows:
 3. It removes the zero bytes at the end and the byte `80` before them. It MUST reject a plaintext that does not end with `80` followed only by zero bytes. It need not check the padded length.
 4. It processes the result as a live message ([envelope.md](envelope.md), section 3), with the signature verification of section 2.3 and the rules of section 3.
 
-A message that cannot be opened has no sender a receiver could report to; a message that opens but fails later is reported as [protocol.md](protocol.md) describes.
+A message that cannot be opened has no sender a receiver could report to; a message that opens but fails later is reported as [protocol.md](protocol.md), section 8.3, describes.
 
 ### 4.6 What the relay sees
 
@@ -291,7 +291,7 @@ When its user moves the app to a new installation, such as a new phone:
 2. The old installation signs the `KEY_MOVE` with its key and hands it to the new installation together with the app's data. How the data moves, such as through a backup or a transfer between the devices, is up to the app. The data includes the highest version of every record and the highest manifest revision ([records.md](records.md), section 3; [manifest.md](manifest.md), section 3.8), and the known senders with their keys.
 3. After it has signed the `KEY_MOVE`, the old installation MUST NOT sign any further message with the old key, MUST NOT sign a second `KEY_MOVE`, and MUST delete its private keys.
 
-The new installation sends the `KEY_MOVE` to every app it exchanges with, before any other message signed with the new key: in a live connection where [protocol.md](protocol.md) puts it, and through a relay as the first message. Through a relay it SHOULD send the `KEY_MOVE` again until the receiver has acknowledged it ([protocol.md](protocol.md)).
+The new installation sends the `KEY_MOVE` to every app it exchanges with, before any other message signed with the new key: in a live connection as its first messages, before its `MANIFEST`, and through a relay as the first message. It SHOULD send the `KEY_MOVE` again until the receiver has acknowledged or rejected it, within the bounds of [protocol.md](protocol.md), section 3.3.
 
 A key that has moved more than once has a chain of `KEY_MOVE` messages, each signed with the key before. A file signed with the new key SHOULD begin with the chain, oldest first, so that a reader that knows any earlier key can follow it. These `KEY_MOVE` messages are the exception to one sender per file (section 2.5): each is signed with a key of the chain, and the last moves to the key in `axt.sender`. A file MUST NOT hold a `KEY_MOVE` anywhere but at its start, and its chain MUST end at `axt.sender`. Whether a file may hold `KEY_MOVE` messages at all is for [transports.md](transports.md) to decide.
 
@@ -300,7 +300,7 @@ A key that has moved more than once has a chain of `KEY_MOVE` messages, each sig
 A receiver that gets a `KEY_MOVE`:
 
 1. verifies its signature with its `sender`, the old key (section 2.3);
-2. if the old key is a moved-from key of a known sender and `new_sender` is the key that sender moved to from it, the message repeats a move the receiver has applied: it ignores the message, without asking its user and without reporting an error, and does not reject a file for it. It rejects a `KEY_MOVE` from a moved-from key to any other key;
+2. if the old key is a moved-from key of a known sender and `new_sender` is the key that sender moved to from it, the message repeats a move the receiver has applied: it does not apply the message again, does not ask its user and reports no error, but acknowledges it again ([protocol.md](protocol.md), section 3.3); it does not reject a file for it. It rejects a `KEY_MOVE` from a moved-from key to any other key;
 3. if the old key is not a key of any known sender, ignores the message: a key move from a key it does not know introduces no one;
 4. checks the new key and verifies the proof with it over the bytes of section 5.1, both by section 2.3, and checks the encryption key (section 4.2); it rejects the message if one of them fails;
 5. rejects the message if the new key is a moved-from key of any sender, or the current key of a known sender that has moved-from keys of its own. If the new key is the current key of a known sender without moved-from keys, the move joins the two senders (below);
@@ -310,7 +310,7 @@ When the user confirms, the new key becomes the sender's current key and the old
 
 From then on, the receiver MUST reject every message signed with the old key, except the repeat of the move itself (step 2). A message the old installation sent before the move and that arrives after it is rejected as well; section 5.4 says how the new installation makes up for it.
 
-When the user declines, nothing changes: the sender keeps the old key, and messages signed with the new key are a first contact (section 3.2), which the receiver MAY decline without asking again.
+In a live connection, the receiver reports a move its user declines, and one it rejects by steps 2, 4 or 5, with the error `KEY_MOVE_REJECTED`, addressed to the old key ([protocol.md](protocol.md), section 3.3). When the user declines, nothing changes: the sender keeps the old key, and messages signed with the new key are a first contact (section 3.2), which the receiver MAY decline without asking again.
 
 - **A chain.** A reader of a file that begins with a chain of `KEY_MOVE` messages (section 5.2) checks each move by steps 1 to 5 as if the moves before it were applied, and asks its user once, for the move from the key it knows to the last key of the chain. If no move of the chain starts from a key of a known sender, it meets the file's sender as a first contact (section 3.2).
 - **Order through a relay.** A relay can deliver messages signed with the new key before the `KEY_MOVE`. A receiver SHOULD keep messages from a key it does not know that arrive through a relay for a while before it asks its user about a first contact, so that a `KEY_MOVE` that arrives later is applied first; once the move is confirmed, it processes them as the sender's.
@@ -567,7 +567,7 @@ The two signatures with the neutral element as key verify for every message unde
 
 ## 8. What other documents define
 
-- [protocol.md](protocol.md): the `OFFER` as section 2.4 requires it; the binding of `ACCEPT`, `DECLINE`, `ACK` and `ERROR` to their receiver, and how every kind is made safe to repeat (section 2.6); how a message whose signature does not verify is reported; where a `KEY_MOVE` stands in a connection, and its acknowledgement (section 5.2).
+- [protocol.md](protocol.md): the `OFFER` as section 2.4 requires it (section 4 there); the binding of `ACCEPT`, `DECLINE`, `ACK` and `ERROR` to their receiver, and how every kind is made safe to repeat (section 2.6; section 9 there); how a message whose signature does not verify is reported (section 8.3 there); where a `KEY_MOVE` stands in a connection, and its acknowledgement (section 5.2; section 3.3 there).
 - [transports.md](transports.md): the QR payload with the signing key and the encryption key (section 3.2); the TLS connection on the local network with the pinned key, and whether its certificate uses the signing key (section 2.2); whether a file may hold `KEY_MOVE` messages (section 5.2).
 - [relay.md](relay.md): the mailbox, and whether it is bound to an encryption key (section 4.6); the size limit, which accepts sealed messages up to 17,301,553 bytes (section 4.4); how long the relay holds messages (section 4.2).
 

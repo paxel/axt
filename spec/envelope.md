@@ -29,21 +29,21 @@ Every AXT message is one datum of the record `axt.Envelope`. Its schema is [type
 
 Every later envelope schema MUST keep `format` as its first field, of type `int`. A receiver that does not know an envelope's fingerprint can therefore still read the format number: in a live message it is the zig-zag varint that starts at byte offset 10. A receiver MAY use it only to report that the message has a format it does not support; it MUST NOT decode the rest.
 
-A sender MUST write each message in a format the receiver supports. In a live connection, [protocol.md](protocol.md) defines how the two apps learn each other's formats. A file has no such step, so a writer SHOULD write a file in the lowest format that can carry its content.
+A sender MUST write each message in a format the receiver supports. In a live connection, the two apps learn each other's formats from their manifests, and [protocol.md](protocol.md), section 3.2, defines the format each writes in. A file has no such step, so a writer SHOULD write a file in the lowest format that can carry its content.
 
 ### 2.2 Kind
 
-| Kind       | Purpose                                                 | Defined in                                           |
-| ---------- | ------------------------------------------------------- | ---------------------------------------------------- |
-| `MANIFEST` | The types an app takes and what it does with them       | [manifest.md](manifest.md)                           |
-| `OFFER`    | Types and their writer schemas the sender wants to send | [protocol.md](protocol.md)                           |
-| `ACCEPT`   | The receiver takes an offered type                      | [protocol.md](protocol.md)                           |
-| `DECLINE`  | The receiver does not take an offered type              | [protocol.md](protocol.md)                           |
-| `DATA`     | One record, new or updated                              | [records.md](records.md), [protocol.md](protocol.md) |
-| `DELETE`   | The deletion of one record                              | [records.md](records.md), [protocol.md](protocol.md) |
-| `ACK`      | The receiver confirms what it applied                   | [protocol.md](protocol.md)                           |
-| `ERROR`    | The receiver reports a message it could not process     | [protocol.md](protocol.md)                           |
-| `KEY_MOVE` | The sender's key moves to a new installation            | [keys.md](keys.md)                                   |
+| Kind       | Purpose                                                    | Defined in                                                       |
+| ---------- | ---------------------------------------------------------- | ---------------------------------------------------------------- |
+| `MANIFEST` | The types an app takes and what it does with them          | [manifest.md](manifest.md)                                       |
+| `OFFER`    | Types and their writer schemas the sender wants to send    | [protocol.md](protocol.md), section 4                            |
+| `ACCEPT`   | The receiver takes offered types                           | [protocol.md](protocol.md), section 5                            |
+| `DECLINE`  | The receiver does not take offered types                   | [protocol.md](protocol.md), section 5                            |
+| `DATA`     | One record, new or updated                                 | [records.md](records.md), [protocol.md](protocol.md), section 6  |
+| `DELETE`   | The deletion of one record                                 | [records.md](records.md), [protocol.md](protocol.md), section 6  |
+| `ACK`      | The receiver reports what it did with record messages      | [protocol.md](protocol.md), section 7                            |
+| `ERROR`    | The receiver reports a message it could not process        | [protocol.md](protocol.md), section 8                            |
+| `KEY_MOVE` | The sender's key moves to a new installation               | [keys.md](keys.md)                                               |
 
 The document that defines a kind also defines whether its messages carry `record` and which schema their body has. Two rules hold already:
 
@@ -69,7 +69,7 @@ What the signature covers, and how a receiver verifies it, is defined in [keys.m
 
 ## 3. Live connection
 
-In a live connection, the schema of each record type is sent once, in the offer ([protocol.md](protocol.md)). Every message, the offer included, is one envelope in single-object encoding:
+In a live connection, the schema of each record type is sent in the offer that starts each exchange ([protocol.md](protocol.md), section 4), not with each record. Every message, the offer included, is one envelope in single-object encoding:
 
 1. the marker `C3 01`;
 2. the 8-byte little-endian CRC-64-AVRO fingerprint of the envelope schema, which for format 1 is `7d 0c e4 e5 4f e8 e1 a2` (section 10.1);
@@ -77,14 +77,14 @@ In a live connection, the schema of each record type is sent once, in the offer 
 
 The envelope carries no length and no terminator; the transport supplies the boundaries of each message ([transports.md](transports.md)). A receiver MUST reject a message with bytes left over after the envelope.
 
-An offer carries each writer schema as its full JSON text, including `doc` attributes, so that a receiver can show fields it does not know by name and description ([types.md](types.md)). The Parsing Canonical Form is used only to compute the fingerprint. The receiver keeps the offered schemas by fingerprint for as long as [protocol.md](protocol.md) says the offer is valid.
+An offer carries each writer schema as its full JSON text, including `doc` attributes, so that a receiver can show fields it does not know by name and description ([types.md](types.md)). The Parsing Canonical Form is used only to compute the fingerprint. The receiver keeps the offered schemas by fingerprint for as long as the offer stays open ([protocol.md](protocol.md), section 4.3).
 
 Through a relay, the end-to-end encryption defined in [keys.md](keys.md), section 4, wraps the complete encoded message. No envelope field, not even `kind`, is visible to the relay ([relay.md](relay.md)).
 
 ### 3.1 Unknown fingerprints
 
 - **Envelope.** A message whose envelope fingerprint is not one of the formats the receiver supports MUST be rejected without decoding it; section 2.1 says how the format number can still be read for the report.
-- **Data.** A receiver that gets a `DATA` message whose body fingerprint is not among the schemas offered to it MUST NOT decode the body, and MUST NOT try other schemas in its place. It MUST either ask the sender for the schema, using the step [protocol.md](protocol.md) defines for that, or reject the message as [protocol.md](protocol.md) describes.
+- **Data.** A receiver that gets a `DATA` message whose body fingerprint is not among the schemas offered to it MUST NOT decode the body, and MUST NOT try other schemas in its place. It MUST reject the message with the error `SCHEMA_UNKNOWN`, which also asks the sender for the schema ([protocol.md](protocol.md), sections 6.2 and 8.2).
 - **Other kinds.** A message of another kind whose body fingerprint is not the one the defining document publishes for that kind and format MUST be rejected.
 
 ## 4. File
@@ -135,7 +135,7 @@ A receiver decodes a record with the writer schema it got from the offer or the 
 - Fields are matched by name. A writer field the reader does not have is ignored. A reader field the writer does not have takes the reader's default; if it has no default, the schemas do not resolve.
 - An enum symbol the reader does not know takes the reader enum's default; if it has none, the schemas do not resolve.
 
-A receiver SHOULD resolve the schemas once, when it gets the writer schema, rather than for each record. If they do not resolve, the receiver declines the type in a live connection ([protocol.md](protocol.md)) and does not apply the type's records from a file. A receiver that takes any type and has no schema of its own for it ([manifest.md](manifest.md)) reads the record with the writer schema alone.
+A receiver SHOULD resolve the schemas once, when it gets the writer schema, rather than for each record. If they do not resolve, the receiver declines the type with `DOES_NOT_RESOLVE` in a live connection and through a relay ([protocol.md](protocol.md), section 5.2), and does not apply the type's records from a file. A receiver that takes any type and has no schema of its own for it ([manifest.md](manifest.md)) reads the record with the writer schema alone.
 
 ## 7. Bytes, strings, times and ids
 
@@ -161,7 +161,7 @@ A receiver SHOULD resolve the schemas once, when it gets the writer schema, rath
 
 A sender MUST NOT produce a message, a schema or a file above these limits. A receiver MUST NOT reject a message, a schema or a file for its size while it is within them.
 
-- **Above a limit in a live connection.** A receiver MUST reject a message above the message limit without decoding it, as [protocol.md](protocol.md) describes. If the transport cannot skip the message, the receiver MAY close the connection. An offer with a schema above the schema limits is rejected in the same way.
+- **Above a limit in a live connection.** A receiver MUST reject a message above the message limit without decoding it, and reports it with the error `TOO_LARGE` ([protocol.md](protocol.md), section 8.2). If the transport cannot skip the message, the receiver MAY close the connection. An offer with a schema above the schema limits is rejected in the same way.
 - **Above a limit in a file.** A reader MUST check the size of a file before reading it, and MUST stop decompressing a block as soon as it exceeds the block limit or the total exceeds the file limit. It MUST then reject the whole file. A reader MUST NOT apply any record from a file it rejects, whatever the reason for the rejection.
 - **Declared lengths.** Avro data declares the lengths of strings and bytes and the counts of array and map items before their content. A decoder MUST NOT allocate memory for a declared length or count before it has checked that the remaining input can hold it, and MUST reject a negative length.
 

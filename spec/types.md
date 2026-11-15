@@ -75,7 +75,7 @@ The example types may be evolved or replaced at any time, at the cost of compati
 - An app MAY use a type of its own for the same thing as an example type, under its own namespace, such as `org.example.catalog.Pet` in place of `axt.example.v1.Pet`. It MAY start from a copy of an example type; the copy is then an app type under the app's namespace, with its own `axt.version` from 1 on, and is no longer the example type.
 - A receiver MUST identify a type by its full name alone. It MUST NOT treat two types as the same because their names without namespace, their fields or their documentation are alike: `org.example.catalog.Pet` is not `axt.example.v1.Pet`, even with the same fields.
 - A receiver that wants to take an app type as a type it already knows MUST map it on purpose: either with the app type's full name among the aliases of its own reader schema, so that Avro schema resolution matches the names ([envelope.md](envelope.md), section 6), or with code of its own that converts the records.
-- A receiver that has no mapping for a type either declines it ([protocol.md](protocol.md)) or, if it takes any type ([manifest.md](manifest.md)), shows its records as section 6 describes.
+- A receiver that has no mapping for a type either declines it ([protocol.md](protocol.md), section 5.2) or, if it takes any type ([manifest.md](manifest.md)), shows its records as section 6 describes.
 - Types that only one app uses belong under that app's namespace and are not added to this repository ([CONTRIBUTING.md](../CONTRIBUTING.md)).
 
 ## 5. Rules for every type
@@ -138,7 +138,7 @@ These rules hold for every example type that has the fields named:
 The data depth of a value counts the records, arrays and maps it is nested in: the record itself is at depth 1, an array in one of its fields at depth 2, and a record inside that array at depth 3.
 
 - An example type MUST NOT be recursive, that is, it MUST NOT contain itself or one of its nested types inside itself. The deepest example type, Person, reaches depth 3.
-- An app type MAY be recursive. A sender MUST NOT send a record whose data depth exceeds 32. A receiver MUST decode records up to depth 32 and MUST stop decoding and reject a record that goes deeper, as [protocol.md](protocol.md) describes for a record that cannot be decoded. A recursive schema has no limit of its own, so without this rule a small message could exhaust a decoder's stack.
+- An app type MAY be recursive. A sender MUST NOT send a record whose data depth exceeds 32. A receiver MUST decode records up to depth 32 and MUST stop decoding and reject a record that goes deeper, with the error `UNDECODABLE` ([protocol.md](protocol.md), section 8.2). A recursive schema has no limit of its own, so without this rule a small message could exhaust a decoder's stack.
 
 The schema itself also stays within the size and nesting limits of [envelope.md](envelope.md), section 8.
 

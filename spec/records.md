@@ -26,7 +26,7 @@ The id of a record is a UUID, carried as a `string` with the logical type `uuid`
 - An id MUST be unique among all records of the sender, of all types. A sender MUST NOT use an id for a second record, also not after the first one was deleted.
 - A sender MUST send a record under the same id to every receiver.
 - A receiver MUST identify a record by its sender and its id together. A message from another sender that carries the same id is about another record; it is neither an update nor a deletion of the first. A receiver therefore never applies a message from one sender to a record of another, as [keys.md](keys.md) requires.
-- A receiver MUST accept ids of every UUID version and variant. It MUST reject a record message whose id is not a UUID in the text form, or is the nil UUID or the max UUID, as [protocol.md](protocol.md) describes for a message it cannot process.
+- A receiver MUST accept ids of every UUID version and variant. It MUST reject a record message whose id is not a UUID in the text form, or is the nil UUID or the max UUID, with the error `RECORD_ID_INVALID` ([protocol.md](protocol.md), section 8.2).
 
 Random ids let every installation create records without a counter or coordination. Ids of different senders do not collide in practice either; a receiver does not rely on that, because it keeps every sender's records apart.
 
@@ -40,9 +40,9 @@ The version of a record is a `long`. It names one state of the record at its sen
 - Versions MAY have gaps. A sender that changes a record several times before it can send sends only the last state, under its last version.
 - One id and version MUST always stand for the same message: the same kind and, for `DATA`, the same record. A sender MAY encode that record with another compatible writer schema of the same full name.
 - A sender SHOULD count the versions of each record and add one for every change it sends. Any rising value meets the rules above, but a clock time used as a version goes back when the clock does.
-- A receiver MUST accept a first version above 1: a receiver that is connected later, or misses messages, sees a record first at a later version. A receiver MUST reject a record message whose version is below 1, as [protocol.md](protocol.md) describes.
+- A receiver MUST accept a first version above 1: a receiver that is connected later, or misses messages, sees a record first at a later version. A receiver MUST reject a record message whose version is below 1, with the error `VERSION_INVALID` ([protocol.md](protocol.md), section 8.2).
 
-The highest version of each record that a sender has sent MUST survive whatever the sender's data goes through, including a restore from a backup and a key move to a new installation ([keys.md](keys.md)). A sender whose versions went back can learn it from the outcome `STALE` (section 7), but not in every case: a new version that happens to equal the receiver's version is taken for a duplicate, and the change is lost at that receiver.
+The highest version of each record that a sender has sent MUST survive whatever the sender's data goes through, including a restore from a backup and a key move to a new installation ([keys.md](keys.md)). A sender whose versions went back can learn it from the outcome `STALE` (section 7), but not in every case: a new version that happens to equal the receiver's version is taken for a duplicate, and the change is lost at that receiver. [protocol.md](protocol.md), section 10, therefore makes a sender that may have lost versions, such as after a restore from a backup, continue them above a random jump.
 
 ## 4. Sending records
 
@@ -58,7 +58,7 @@ A `DELETE` message carries the record's id and the version of the deletion in `r
 
 ### 4.3 The type of a record
 
-A record keeps the full name of its type for its whole life ([types.md](types.md), section 1). A sender MUST send every version of a record with a writer schema of the same full name; a compatible later version of the type ([types.md](types.md), section 3.3) has the same full name. A receiver MUST NOT apply a `DATA` message whose type has another full name than the one it keeps for that id (section 5.1), also when the message brings the record back from a tombstone, and rejects it as [protocol.md](protocol.md) describes.
+A record keeps the full name of its type for its whole life ([types.md](types.md), section 1). A sender MUST send every version of a record with a writer schema of the same full name; a compatible later version of the type ([types.md](types.md), section 3.3) has the same full name. A receiver MUST NOT apply a `DATA` message whose type has another full name than the one it keeps for that id (section 5.1), also when the message brings the record back from a tombstone, and rejects it with the error `TYPE_CHANGED` ([protocol.md](protocol.md), section 8.2).
 
 ## 5. Applying records
 
@@ -122,7 +122,7 @@ A record the receiver's user deleted stays deleted: a `DATA` with a higher versi
 
 ### 6.4 A deletion meets local changes
 
-When a `DELETE` with a higher version reaches a record that the receiver's user has changed, the receiver either deletes it, outcome `APPLIED`, or keeps it with the user's changes, outcome `KEPT`. A receiver MAY ask its user. A record kept against a deletion stays a record of the sender under the same id: the receiver's version is the deletion's, and a later `DATA` with a higher version is merged into it as sections 6.1 and 6.2 say.
+When a `DELETE` with a higher version reaches a record that the receiver's user has changed, the receiver either deletes it, outcome `APPLIED`, or keeps it with the user's changes, outcome `KEPT`. A receiver MAY ask its user; [protocol.md](protocol.md), section 7.3, says how it reports the outcome while the user has not decided. A record kept against a deletion stays a record of the sender under the same id: the receiver's version is the deletion's, and a later `DATA` with a higher version is merged into it as sections 6.1 and 6.2 say.
 
 A receiver whose user has not changed the record MUST delete it.
 
@@ -138,9 +138,9 @@ Every record message a receiver processes has one of these outcomes:
 | `DUPLICATE` | The receiver already had this version and changed nothing                                                        |
 | `STALE`     | The receiver already had a higher version and changed nothing                                                    |
 
-A message the receiver cannot process, such as one with an invalid id or version, a changed type or a body it cannot decode, has no outcome; the receiver reports it as an error ([protocol.md](protocol.md)) and does not change its version of the record.
+A message the receiver cannot process, such as one with an invalid id or version, a changed type or a body it cannot decode, has no outcome; the receiver reports it as an error ([protocol.md](protocol.md), section 8) and does not change its version of the record.
 
-A reader of a file applies the same rules and reaches the same outcomes, but a file has no way back to the sender, so nothing is reported. In a live connection and through a relay, the receiver reports each outcome in an `ACK` message. [protocol.md](protocol.md) defines the `ACK`: its body schema, when it is sent, and whether one `ACK` reports several records. For each record message, the `ACK` MUST carry:
+A reader of a file applies the same rules and reaches the same outcomes, but a file has no way back to the sender, so nothing is reported. In a live connection and through a relay, the receiver reports each outcome in an `ACK` message. [protocol.md](protocol.md), section 7, defines the `ACK`: its body schema `axt.Ack`, when it is sent, and that one `ACK` reports up to 4,096 record messages. For each record message, the `ACK` MUST carry:
 
 - the record's id and the version of the message it acknowledges. These are the sender's id and version, although the `ACK`'s own `sender` is the receiver: an `ACK` is about a record of the party it goes to;
 - the outcome;
@@ -155,7 +155,7 @@ A reference is a field whose value is the id of another record of the same sende
 
 - A reference MUST name a record of the same sender. A sender MUST NOT put the id of a record it received from another app into a reference. References across senders are not defined in 0.1.0.
 - A receiver resolves a reference by the sender of the record that holds it and the id in it, among that sender's records of all types.
-- A reference may be unresolved: the record it names may not have arrived yet, may be of a type the receiver declined ([protocol.md](protocol.md)), or may be deleted. A receiver MUST NOT reject a record, or hold it back, because a reference in it is unresolved. It keeps the id and resolves it when the record arrives or comes back. It MAY show an unresolved reference as missing.
+- A reference may be unresolved: the record it names may not have arrived yet, may be of a type the receiver declined ([protocol.md](protocol.md), section 5), or may be deleted. A receiver MUST NOT reject a record, or hold it back, because a reference in it is unresolved. It keeps the id and resolves it when the record arrives or comes back. It MAY show an unresolved reference as missing.
 - The deletion of a record does not change the records that refer to it. If their meaning changes with it, the sender sends new versions of them.
 - A reference is a field like any other when the receiver merges (section 6.1).
 
