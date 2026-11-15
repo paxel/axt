@@ -26,6 +26,11 @@ For every schema under types/axt/example/ this script:
 Run from anywhere, with fastavro and avro (1.12) installed:
 
     python3 vectors/tools/example_types.py
+
+vectors/tools/manifest_examples.py imports the checks below to apply them
+to the manifest's schema, types/axt/Manifest.avsc; importing this file
+runs only the self-test of the CRC-64-AVRO implementation, none of the
+checks of the example types.
 """
 
 import copy
@@ -402,60 +407,66 @@ def check_defaults(name, schema, parsed):
 
 # --- run ----------------------------------------------------------------------
 
-rows = []
-all_defined = {}
-named_schemas = {}
-for path in sorted(EXAMPLES.rglob("*.avsc")):
-    text = path.read_text(encoding="utf-8")
-    schema = json.loads(text)
-    name = schema["name"]
-    defined, depth = check_schema(path, schema, text)
-    for full in defined:
-        if full in all_defined:
-            fail(str(path.relative_to(REPO)), f"{full} is also defined in {all_defined[full]}")
-        all_defined[full] = path.name
 
-    # All files into one set of named types, as an app that knows them all would.
-    parsed = fastavro.parse_schema(schema, named_schemas=named_schemas)
+def main():
+    rows = []
+    all_defined = {}
+    named_schemas = {}
+    for path in sorted(EXAMPLES.rglob("*.avsc")):
+        text = path.read_text(encoding="utf-8")
+        schema = json.loads(text)
+        name = schema["name"]
+        defined, depth = check_schema(path, schema, text)
+        for full in defined:
+            if full in all_defined:
+                fail(str(path.relative_to(REPO)), f"{full} is also defined in {all_defined[full]}")
+            all_defined[full] = path.name
 
-    pcf = to_parsing_canonical_form(parsed)
-    assert avro.schema.parse(pcf).canonical_form == pcf, f"{name}: the two libraries disagree on the canonical form"
-    fp = crc64_avro(pcf.encode())
-    assert fa_fingerprint(pcf, "CRC-64-AVRO") == fp.to_bytes(8, "little").hex(), f"{name}: fastavro fingerprint differs"
-    assert apache_fingerprint(text) == fp.to_bytes(8, "little"), f"{name}: avro fingerprint differs"
+        # All files into one set of named types, as an app that knows them all would.
+        parsed = fastavro.parse_schema(schema, named_schemas=named_schemas)
 
-    # The example datum: fastavro round trip, then the same bytes through avro.
-    buf = io.BytesIO()
-    fastavro.schemaless_writer(buf, parsed, DATA[name])
-    data = buf.getvalue()
-    back = fastavro.schemaless_reader(io.BytesIO(data), parsed, parsed)
-    if back != DATA[name]:
-        fail(name, f"fastavro decoded {back!r}")
-    apache_schema = avro.schema.parse(text)
-    apache_datum = avro.io.DatumReader(apache_schema).read(avro.io.BinaryDecoder(io.BytesIO(data)))
-    out = io.BytesIO()
-    avro.io.DatumWriter(apache_schema).write(apache_datum, avro.io.BinaryEncoder(out))
-    if out.getvalue() != data:
-        fail(name, "avro encodes the decoded datum to other bytes")
+        pcf = to_parsing_canonical_form(parsed)
+        assert avro.schema.parse(pcf).canonical_form == pcf, f"{name}: the two libraries disagree on the canonical form"
+        fp = crc64_avro(pcf.encode())
+        assert fa_fingerprint(pcf, "CRC-64-AVRO") == fp.to_bytes(8, "little").hex(), f"{name}: fastavro fingerprint differs"
+        assert apache_fingerprint(text) == fp.to_bytes(8, "little"), f"{name}: avro fingerprint differs"
 
-    required, defaults = check_defaults(name, schema, parsed)
-    rows.append((schema["namespace"], name, schema["axt.version"], path, pcf, fp, len(data), required, depth, defaults))
+        # The example datum: fastavro round trip, then the same bytes through avro.
+        buf = io.BytesIO()
+        fastavro.schemaless_writer(buf, parsed, DATA[name])
+        data = buf.getvalue()
+        back = fastavro.schemaless_reader(io.BytesIO(data), parsed, parsed)
+        if back != DATA[name]:
+            fail(name, f"fastavro decoded {back!r}")
+        apache_schema = avro.schema.parse(text)
+        apache_datum = avro.io.DatumReader(apache_schema).read(avro.io.BinaryDecoder(io.BytesIO(data)))
+        out = io.BytesIO()
+        avro.io.DatumWriter(apache_schema).write(apache_datum, avro.io.BinaryEncoder(out))
+        if out.getvalue() != data:
+            fail(name, "avro encodes the decoded datum to other bytes")
 
-if failures:
-    raise SystemExit("\n".join(["checks failed:"] + failures))
+        required, defaults = check_defaults(name, schema, parsed)
+        rows.append((schema["namespace"], name, schema["axt.version"], path, pcf, fp, len(data), required, depth, defaults))
 
-for namespace, name, version, path, pcf, fp, size, required, depth, defaults in rows:
-    print(f"{namespace}.{name} {version}: {path.relative_to(REPO)}")
-    print(f"  canonical form: {pcf}")
-    print(f"  CRC-64-AVRO 0x{fp:016x}, bytes {fp.to_bytes(8, 'little').hex(' ')}")
-    print(f"  example datum: {size} bytes; data depth {depth}; defaults resolved: {defaults}; "
-          f"fields without a default: {', '.join(required) or 'none'}")
-print()
-print("| Type | Version | Schema | CRC-64-AVRO | As bytes |")
-print("| --- | --- | --- | --- | --- |")
-for namespace, name, version, path, pcf, fp, size, required, depth, defaults in rows:
-    link = "../" + path.relative_to(REPO).as_posix()  # relative to spec/types.md
-    print(f"| `{namespace}.{name}` | {version} | [{path.name}]({link}) | `0x{fp:016x}` | `{fp.to_bytes(8, 'little').hex(' ')}` |")
-for finding in sorted(findings):
-    print(f"library finding: {finding}")
-print("all checks passed")
+    if failures:
+        raise SystemExit("\n".join(["checks failed:"] + failures))
+
+    for namespace, name, version, path, pcf, fp, size, required, depth, defaults in rows:
+        print(f"{namespace}.{name} {version}: {path.relative_to(REPO)}")
+        print(f"  canonical form: {pcf}")
+        print(f"  CRC-64-AVRO 0x{fp:016x}, bytes {fp.to_bytes(8, 'little').hex(' ')}")
+        print(f"  example datum: {size} bytes; data depth {depth}; defaults resolved: {defaults}; "
+              f"fields without a default: {', '.join(required) or 'none'}")
+    print()
+    print("| Type | Version | Schema | CRC-64-AVRO | As bytes |")
+    print("| --- | --- | --- | --- | --- |")
+    for namespace, name, version, path, pcf, fp, size, required, depth, defaults in rows:
+        link = "../" + path.relative_to(REPO).as_posix()  # relative to spec/types.md
+        print(f"| `{namespace}.{name}` | {version} | [{path.name}]({link}) | `0x{fp:016x}` | `{fp.to_bytes(8, 'little').hex(' ')}` |")
+    for finding in sorted(findings):
+        print(f"library finding: {finding}")
+    print("all checks passed")
+
+
+if __name__ == "__main__":
+    main()
