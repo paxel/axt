@@ -28,6 +28,8 @@ python3 conformance/run.py -- python3 conformance/reference/adapter.py
 | [tools/envelope_examples.py](tools/envelope_examples.py)     | Produces and checks the examples of [spec/envelope.md](../spec/envelope.md)                                              |
 | [tools/example_types.py](tools/example_types.py)             | Checks the example types of [spec/types.md](../spec/types.md) and prints their fingerprints                              |
 | [tools/time_examples.py](tools/time_examples.py)             | Produces and checks the examples of [spec/time.md](../spec/time.md), with zone rules from Python's `zoneinfo`            |
+| [tools/metadata_rules.py](tools/metadata_rules.py)           | The rules of [spec/metadata.md](../spec/metadata.md): attributes, formats, I-Regexp and checks; imports no other script  |
+| [tools/metadata_examples.py](tools/metadata_examples.py)     | Produces and checks the examples of [spec/metadata.md](../spec/metadata.md)                                              |
 | [tools/keys_examples.py](tools/keys_examples.py)             | Produces and checks the examples of [spec/keys.md](../spec/keys.md), with Ed25519, X25519 and HPKE in Python             |
 | [tools/manifest_examples.py](tools/manifest_examples.py)     | Produces and checks the examples of [spec/manifest.md](../spec/manifest.md)                                              |
 | [tools/protocol_examples.py](tools/protocol_examples.py)     | Produces and checks the examples of [spec/protocol.md](../spec/protocol.md), with a model of an app                      |

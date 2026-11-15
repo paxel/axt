@@ -187,7 +187,9 @@ The steps keep a wall clock where people expect it: 10:00 on 2026-10-24 in Berli
 
 ## 8. Invalid values
 
-A record that holds a time value that is not valid by sections 4, 5, 6.2 or 7.1 cannot be read as this document defines it. A receiver MUST treat it as a body that does not decode ([protocol.md](protocol.md), section 6.2, step 8): in a live connection and through a relay it rejects the message with `UNDECODABLE`, and from a file it does not apply that record ([transports.md](transports.md), section 2.2). A sender MUST NOT send such a record.
+A record that holds a time value that is not valid by sections 4, 5, 6.2 or 7.1 cannot be read as this document defines it. A receiver MUST reject it ([protocol.md](protocol.md), section 6.2, step 9): in a live connection and through a relay it rejects the message with `VALUE_INVALID`, whose `field` names the time value, such as `end` ([metadata.md](metadata.md), section 7.2), and from a file it does not apply that record ([transports.md](transports.md), section 2.2). A sender MUST NOT send such a record.
+
+The bytes of such a record decode with its schema; what is wrong is the value. It is therefore `VALUE_INVALID`, which names the value, and not `UNDECODABLE`, which is for bytes that are not a value of the schema at all ([metadata.md](metadata.md), section 7.3).
 
 A value that is valid by these sections is not rejected for its zone or its offset: a zone the receiver's rules do not know, and an offset they do not give, are handled by section 6.4.
 
@@ -197,7 +199,7 @@ The values below were produced with [conformance/tools/time_examples.py](../conf
 
 - the rules of [types.md](types.md), section 5, with the code of [conformance/tools/example_types.py](../conformance/tools/example_types.py), and that each type is a record of primitives and unions of `null` and a primitive, without logical types and named types inside;
 - the canonical forms and fingerprints against fastavro's and the Python `avro` 1.12.2 package's own;
-- each example and 13 edges, such as 29 February 2000, a negative instant and an offset with seconds, by encoding it with fastavro, decoding it again with both libraries, and encoding it again with `avro` to the same bytes; and 29 values that each break one rule of sections 4 to 7, such as 29 February 1900, the second 60 and a duration with parts of both signs;
+- each example and 13 edges, such as 29 February 2000, a negative instant and an offset with seconds, by encoding it with fastavro, decoding it again with both libraries, and encoding it again with `avro` to the same bytes; and 29 values that each break one rule of sections 4 to 7, such as 29 February 1900, the second 60 and a duration with parts of both signs, with the field path a receiver reports for each, also inside the host type of section 9.3;
 - the zoned examples against the time zone database 2026e of the system with Python's `zoneinfo`: the offset is that of the zone at the instant, and 02:30 on 2026-10-25 occurs in Berlin with the offsets 7200 and 3600; and that every name of the database has the syntax of section 6.1;
 - section 6.4 on a value written with rules that gave Berlin no summer time in 2026, under both anchors, and on a zone the database does not have;
 - 16 additions of section 7.2, over the ends of months, across the change of offset in Berlin on 2026-10-25 and into the gap of 2027-03-28, and of floating times, against Python's `datetime` and `zoneinfo`; and that an addition past the year 9999 fails;

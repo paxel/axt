@@ -54,7 +54,8 @@
     "protocol.md 7",
     "protocol.md 8",
     "protocol.md 9.2",
-    "protocol.md 17"
+    "protocol.md 17",
+    "time.md 8"
    ],
    "input": {
     "app": {
@@ -64,7 +65,12 @@
      "readers": {
       "axt.example.v1.Appointment": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\"},{\"name\":\"start\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},\"doc\":\"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"},{\"name\":\"end\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day.\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":\"int\"},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.\",\"axt.unit\":\"min\"}]}"
      },
-     "user_takes": ["axt.example.v1.Appointment", "axt.example.v1.Task", "org.example.outline.Outline"],
+     "user_takes": [
+      "axt.example.v1.Appointment",
+      "axt.example.v1.Task",
+      "com.example.Visit",
+      "org.example.outline.Outline"
+     ],
      "peer": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a"
     },
     "steps": [
@@ -147,6 +153,12 @@
       "receive": "c3017d0ce4e54fe8e1a202081b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024833663430353136322d376338642d346539662d393061312d633264336534663530363137029a01c301d9177632fe38e3f902780202780202780202780202780202780202780202780202780202780202780202780202780202780202780202780202780000000000000000000000000000000000beeea201107b96faac86c429caf4420c397f3c8f08a1f17897694e5c7c762802e64a324c60bd2c0d7fb4bba4eb105fb5c7bd43045f7799cd8d5cfb6e9423dc03"
      },
      {
+      "receive": "c3017d0ce4e54fe8e1a202021b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a00d843c3017d687acaca635441da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb74837653866396130622d316332642d346533662d386134622d35633664376538663961306202b0427b2274797065223a227265636f7264222c226e616d65223a225669736974222c226e616d657370616365223a22636f6d2e6578616d706c65222c22646f63223a22416e20696c6c757374726174696f6e20666f7220737065632f74696d652e6d643b206e6f7420616e20415854206578616d706c6520747970652e222c226669656c6473223a5b7b226e616d65223a227374617274222c2274797065223a7b2274797065223a227265636f7264222c226e616d65223a224461746554696d65222c226e616d657370616365223a22617874222c22646f63223a2241206461746520616e642074696d65206f6e207468652077616c6c20636c6f636b2c20746f20746865206d696c6c697365636f6e642c2065697468657220696e20612074696d65207a6f6e65206f66207468652049414e412074696d65207a6f6e652064617461626173652c207769746820746865206f66667365742066726f6d2055544320616e642074686520696e7374616e7420617320746865207772697465722773207a6f6e652072756c65732067617665207468656d2c206f7220666c6f6174696e672c206f6e207468652077616c6c20636c6f636b206f662077686572657665722074686520757365722069732c20776974686f7574207a6f6e652c206f666673657420616e6420696e7374616e742e20446566696e656420696e20737065632f74696d652e6d642e2049747320736368656d61206e65766572206368616e6765732e222c226669656c6473223a5b7b226e616d65223a2279656172222c2274797065223a22696e74222c22646f63223a225468652079656172206f66207468652070726f6c657074696320477265676f7269616e2063616c656e6461722c203120746f20393939392e227d2c7b226e616d65223a226d6f6e7468222c2274797065223a22696e74222c22646f63223a22546865206d6f6e74682c203120284a616e756172792920746f2031322028446563656d626572292e227d2c7b226e616d65223a22646179222c2274797065223a22696e74222c22646f63223a2254686520646179206f6620746865206d6f6e74682c203120746f20746865206e756d626572206f662064617973206f662074686174206d6f6e746820696e207468617420796561722e227d2c7b226e616d65223a22686f7572222c2274797065223a22696e74222c22646f63223a2254686520686f7572206f6e207468652077616c6c20636c6f636b2c203020746f2032332e227d2c7b226e616d65223a226d696e757465222c2274797065223a22696e74222c22646f63223a22546865206d696e7574652c203020746f2035392e227d2c7b226e616d65223a227365636f6e64222c2274797065223a22696e74222c22646f63223a22546865207365636f6e642c203020746f2035393b2061206c656170207365636f6e64206973206e6f74207772697474656e2061732036302e227d2c7b226e616d65223a226d696c6c697365636f6e64222c2274797065223a22696e74222c22646f63223a22546865206d696c6c697365636f6e642c203020746f203939392e227d2c7b226e616d65223a227a6f6e65222c2274797065223a5b226e756c6c222c22737472696e67225d2c2264656661756c74223a6e756c6c2c22646f63223a22546865206e616d65206f66207468652074696d65207a6f6e6520696e207468652049414e412074696d65207a6f6e652064617461626173652c2073756368206173204575726f70652f4265726c696e2e204e756c6c20666f72206120666c6f6174696e672074696d653b207468656e206f66667365745f7365636f6e647320616e6420696e7374616e745f6d7320617265206e756c6c2061732077656c6c2e227d2c7b226e616d65223a226f66667365745f7365636f6e6473222c2274797065223a5b226e756c6c222c22696e74225d2c2264656661756c74223a6e756c6c2c22646f63223a22546865206f6666736574206f66207468652077616c6c20636c6f636b2066726f6d205554432c20696e207365636f6e64732c202d363438303020746f2036343830302c206173207468652077726974657227732072756c6573206f6620746865207a6f6e6520676176652069742061742074686520696e7374616e742c2073756368206173203336303020666f722030313a30302065617374206f66205554432e204e756c6c20666f72206120666c6f6174696e672074696d652c20616e64206f6e6c79207468656e2e227d2c7b226e616d65223a22696e7374616e745f6d73222c2274797065223a5b226e756c6c222c226c6f6e67225d2c2264656661756c74223a6e756c6c2c22646f63223a2254686520696e7374616e742c20696e206d696c6c697365636f6e64732073696e636520313937302d30312d30315430303a30303a30305a20776974686f7574206c656170207365636f6e64733a207468652077616c6c20636c6f636b20726561642061732069662069742077657265205554432c206d696e7573206f66667365745f7365636f6e64732e204e756c6c20666f72206120666c6f6174696e672074696d652c20616e64206f6e6c79207468656e2e227d5d7d2c22646f63223a225768656e20746865207669736974207374617274732e222c226178742e616e63686f72223a226c6f63616c227d2c7b226e616d65223a22656e64222c2274797065223a5b226e756c6c222c226178742e4461746554696d65225d2c2264656661756c74223a6e756c6c2c22646f63223a225768656e2074686520766973697420656e64733b206e756c6c207768656e206f70656e2e222c226178742e616e63686f72223a226c6f63616c227d2c7b226e616d65223a22626f6f6b6564222c2274797065223a7b2274797065223a227265636f7264222c226e616d65223a2244617465222c226e616d657370616365223a22617874222c22646f63223a22412063616c656e6461722064617465206f66207468652070726f6c657074696320477265676f7269616e2063616c656e6461722c206f6620776869636820612070617274206d617920626520756e6b6e6f776e2c2073756368206173206120626972746864617920776974686f75742061207965617220286e756c6c2c20352c2033292c2061207965617220616c6f6e652028323031392c206e756c6c2c206e756c6c29206f722061206d6f6e7468206f66206120796561722028323032372c20332c206e756c6c292e204174206c65617374206f6e652070617274206973206e6f74206e756c6c2c20616e642061206461792068617320697473206d6f6e74682e20446566696e656420696e20737065632f74696d652e6d642e2049747320736368656d61206e65766572206368616e6765732e222c226669656c6473223a5b7b226e616d65223a2279656172222c2274797065223a5b226e756c6c222c22696e74225d2c2264656661756c74223a6e756c6c2c22646f63223a2254686520796561722c203120746f20393939392e204e756c6c207768656e207468652079656172206973206e6f74206b6e6f776e206f7220646f6573206e6f74206d61747465722e227d2c7b226e616d65223a226d6f6e7468222c2274797065223a5b226e756c6c222c22696e74225d2c2264656661756c74223a6e756c6c2c22646f63223a22546865206d6f6e7468206f662074686520796561722c203120284a616e756172792920746f2031322028446563656d626572292e204e756c6c207768656e20746865206d6f6e7468206973206e6f74206b6e6f776e3b207468656e20646179206973206e756c6c2061732077656c6c2e227d2c7b226e616d65223a22646179222c2274797065223a5b226e756c6c222c22696e74225d2c2264656661756c74223a6e756c6c2c22646f63223a2254686520646179206f6620746865206d6f6e74682c203120746f20746865206e756d626572206f662064617973206f6620746865206d6f6e74683a206f6620746861742079656172207768656e207468652079656172206973206b6e6f776e2c206f7468657277697365206f662061206c65617020796561722c20736f20746861742032392046656272756172792069732076616c696420776974686f7574206120796561722e204e756c6c207768656e2074686520646179206973206e6f74206b6e6f776e2e227d5d7d2c22646f63223a2254686520646179207468652076697369742077617320626f6f6b65642e227d2c7b226e616d65223a2272656d696e64222c2274797065223a7b2274797065223a226172726179222c226974656d73223a7b2274797065223a227265636f7264222c226e616d65223a224475726174696f6e222c226e616d657370616365223a22617874222c22646f63223a2241206c656e677468206f662074696d6520696e207468726565207061727473207468617420617265206e6f7420636f6e76657274656420696e746f2065616368206f746865723a2063616c656e646172206d6f6e7468732c2063616c656e646172206461797320616e6420656c6170736564206d696c6c697365636f6e64732c20617320616e20494e54455256414c206f662053514c2e2050314d32445433482069732031206d6f6e74682c2032206461797320616e64203130383030303030206d696c6c697365636f6e64733b202d505431354d206973202d393030303030206d696c6c697365636f6e64732e20546865207061727473207468617420617265206e6f74203020616c6c2068617665207468652073616d65207369676e2e20416464656420746f2061206461746520616e642074696d652c20746865206d6f6e74687320636f6d652066697273742c207468656e2074686520646179732c207468656e20746865206d696c6c697365636f6e64732e20446566696e656420696e20737065632f74696d652e6d642e2049747320736368656d61206e65766572206368616e6765732e222c226669656c6473223a5b7b226e616d65223a226d6f6e746873222c2274797065223a22696e74222c22646f63223a22546865206e756d626572206f662063616c656e646172206d6f6e7468732c206e6567617469766520666f722061206c656e677468206261636b20696e2074696d652e20412079656172206973203132206d6f6e7468732e227d2c7b226e616d65223a2264617973222c2274797065223a22696e74222c22646f63223a22546865206e756d626572206f662063616c656e64617220646179732c206e6567617469766520666f722061206c656e677468206261636b20696e2074696d652e204120646179206f6e207468652077616c6c20636c6f636b2c207768696368206d6179206c617374203233206f7220323520686f75727320776865726520746865206f6666736574206368616e6765733b2061207765656b206973203720646179732e227d2c7b226e616d65223a226d696c6c6973222c2274797065223a226c6f6e67222c22646f63223a22546865206e756d626572206f6620656c6170736564206d696c6c697365636f6e64732c206e6567617469766520666f722061206c656e677468206261636b20696e2074696d652e20486f7572732c206d696e7574657320616e64207365636f6e647320617265206361727269656420686572653a20616e20686f75722069732033363030303030206d696c6c697365636f6e64732c20616e6420323420686f75727320617265206e6f7420636f6e76657274656420696e746f2061206461792e227d5d7d7d2c2264656661756c74223a5b5d2c22646f63223a225768656e20746f2072656d696e642c2065616368206265666f72652073746172742e227d5d7d0200046d9f019f2176f7ef8e1417d739a395e95f6998f8404fe1d36b6b294c8450ec167f8d21d5b44b4d7915d97c2e48cc268e95504129e88861c2e15459fc118d0a"
+     },
+     {
+      "receive": "c3017d0ce4e54fe8e1a202081b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024834623563366437652d386639302d346131622d386332642d33653466356136623763386402be01c30190a9bb8bd45c3e0ed41f163014000000021a4575726f70652f4265726c696e02a0380280bac4ccc16802d41f1630143c0000021a4575726f70652f4265726c696e02a038028297a0cec16802d41f0216021e040001000000ffb9b70300a393ab0a56722b5ddc2e5b71c056faaa1e508c57c359253010ec042042c7c730640862b43a4a4e0fa70b0f9720417b9c450999371aad5546d9afe0e0a7f72709"
+     },
+     {
       "receive": "c3017d0ce4e54fe8e1a202021b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a00a001c3017d687acaca635441da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb74834613562366337642d386539662d346130622d396331642d32653366346135623663376400d28bf749a494eb8dd2157360a1e8e88fa5d26bbdf093dd9f996ae0cbe36b1f4eba1675cfc7b554cfecf1072a2b5077d11623a9ad9c9d87348b85de03fdf9400f"
      },
      {
@@ -210,7 +222,8 @@
         "code": "NOT_ACCEPTED",
         "message_hash": "8e31966111b293e62c848b999e1237f6b95795e2603140a2be0fed345932c57c",
         "record": {"id": "5e8a1f3c-7b2d-4c6e-a9f0-3d5b7c9e1a2f", "version": 1},
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      },
@@ -260,7 +273,8 @@
         "code": "VERSION_INVALID",
         "message_hash": "d6c6972733388609e70ad0df382ab614b8d7906439e84db8349dd588be9fa3b7",
         "record": {"id": "a2d4f6b8-1c3e-4a5b-9d7f-0e2c4a6b8d1f", "version": 0},
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      },
@@ -273,7 +287,8 @@
         "code": "RECORD_ID_INVALID",
         "message_hash": "48e58d7eb0ebbe273850f550fb03bcf4b3e5a72a438ae142ccbdc4ca8af1f747",
         "record": {"id": "00000000-0000-0000-0000-000000000000", "version": 1},
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      },
@@ -286,7 +301,8 @@
         "code": "RECORD_ID_INVALID",
         "message_hash": "3b094f18aa7f8914783e58190c1b891816758a4830dd0b2cd606ef031a701c97",
         "record": {"id": "vet-appointment", "version": 1},
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      },
@@ -299,7 +315,8 @@
         "code": "SCHEMA_UNKNOWN",
         "message_hash": "44013c5eae886c96a82b327c1e1032c51f00abbe05fcc27d961f025e945c8426",
         "record": {"id": "c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f", "version": 1},
-        "fingerprint": "06b34fd8d4b07a62"
+        "fingerprint": "06b34fd8d4b07a62",
+        "field": null
        }
       ]
      },
@@ -345,7 +362,8 @@
         "code": "UNDECODABLE",
         "message_hash": "5432482165666345f5be96f36b2c3b759383b998a5a9fce1efeda79d61f815c3",
         "record": {"id": "a2d4f6b8-1c3e-4a5b-9d7f-0e2c4a6b8d1f", "version": 3},
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      },
@@ -358,7 +376,8 @@
         "code": "UNDECODABLE",
         "message_hash": "46dd670c8290df78a372ef3180e228a0124705d29c2c54abdcdead055832cacf",
         "record": {"id": "a2d4f6b8-1c3e-4a5b-9d7f-0e2c4a6b8d1f", "version": 3},
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      },
@@ -371,7 +390,8 @@
         "code": "FORMAT_UNSUPPORTED",
         "message_hash": "00579c622eef85d5d00f886b9e571eceee7ead1397580e2c62cf72bc53d782e8",
         "record": null,
-        "fingerprint": "0000000000000000"
+        "fingerprint": "0000000000000000",
+        "field": null
        }
       ]
      },
@@ -401,7 +421,8 @@
         "code": "TYPE_CHANGED",
         "message_hash": "f91de564a55411bf389fa71770b45085557fdb3c80774e17fc77fbb8ee3258e6",
         "record": {"id": "a2d4f6b8-1c3e-4a5b-9d7f-0e2c4a6b8d1f", "version": 9},
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      },
@@ -428,7 +449,30 @@
         "code": "UNDECODABLE",
         "message_hash": "1006762d7329243d2da1f98e9c4ee01a8281b7e26c739e2d635a9bb3378449f2",
         "record": {"id": "3f405162-7c8d-4e9f-90a1-c2d3e4f50617", "version": 1},
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
+       }
+      ]
+     },
+     {
+      "outcome": null,
+      "close": false,
+      "answers": {
+       "7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b": {"com.example.Visit": "ACCEPT"}
+      },
+      "errors": []
+     },
+     {
+      "outcome": null,
+      "close": false,
+      "answers": {},
+      "errors": [
+       {
+        "code": "VALUE_INVALID",
+        "message_hash": "4a814bb03c6aa8b69633b5446486a7c1d882f44d0408a72fb78bba7e52f76fa8",
+        "record": {"id": "4b5c6d7e-8f90-4a1b-8c2d-3e4f5a6b7c8d", "version": 1},
+        "fingerprint": null,
+        "field": "end"
        }
       ]
      },
@@ -441,7 +485,8 @@
         "code": "OFFER_INVALID",
         "message_hash": "a88afc4099e107c362a58438c57e5685e5f48ff5c8637af0fd6792e4c9fd1ccc",
         "record": null,
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      },
@@ -454,7 +499,8 @@
         "code": "OFFER_INVALID",
         "message_hash": "ad6f406ae22e0ea00cc8ffe8f386504250b18945c82c13bc16ae745e464eab8d",
         "record": null,
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      },
@@ -467,7 +513,8 @@
         "code": "OFFER_INVALID",
         "message_hash": "ec573132d54357e7c33fb956c9155fb47c1eb519cdefba975becfb359d1fd68b",
         "record": null,
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      },
@@ -480,7 +527,8 @@
         "code": "OFFER_INVALID",
         "message_hash": "e567f8546b79aa370f90b97b7069a019ccb9c623877fda52d3d0016575ed1924",
         "record": null,
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      },
@@ -518,7 +566,8 @@
         "code": "SCHEMA_UNKNOWN",
         "message_hash": "88aff90eb1c20d480aab8509fd917557a262abc4ced21c40c68932ba95b8f593",
         "record": {"id": "a2d4f6b8-1c3e-4a5b-9d7f-0e2c4a6b8d1f", "version": 10},
-        "fingerprint": "591b44e939de571b"
+        "fingerprint": "591b44e939de571b",
+        "field": null
        }
       ]
      }
@@ -538,7 +587,12 @@
      "readers": {
       "axt.example.v1.Appointment": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\"},{\"name\":\"start\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},\"doc\":\"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"},{\"name\":\"end\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day.\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":\"int\"},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.\",\"axt.unit\":\"min\"}]}"
      },
-     "user_takes": ["axt.example.v1.Appointment", "axt.example.v1.Task", "org.example.outline.Outline"],
+     "user_takes": [
+      "axt.example.v1.Appointment",
+      "axt.example.v1.Task",
+      "com.example.Visit",
+      "org.example.outline.Outline"
+     ],
      "peer": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a"
     },
     "steps": [
@@ -569,7 +623,8 @@
         "code": "SIGNATURE_INVALID",
         "message_hash": "289ef15f1523575089056501cfdbf391a51228e9789af1c72536960335e34bd4",
         "record": null,
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      }
@@ -589,7 +644,12 @@
      "readers": {
       "axt.example.v1.Appointment": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\"},{\"name\":\"start\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},\"doc\":\"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"},{\"name\":\"end\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day.\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":\"int\"},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.\",\"axt.unit\":\"min\"}]}"
      },
-     "user_takes": ["axt.example.v1.Appointment", "axt.example.v1.Task", "org.example.outline.Outline"],
+     "user_takes": [
+      "axt.example.v1.Appointment",
+      "axt.example.v1.Task",
+      "com.example.Visit",
+      "org.example.outline.Outline"
+     ],
      "peer": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a"
     },
     "steps": [
@@ -620,7 +680,8 @@
         "code": "INVALID_MESSAGE",
         "message_hash": "9731c96c7768bbb4492a5d7994670fddcfd2be5eee57092297eb42e83af95133",
         "record": null,
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      }
@@ -640,7 +701,12 @@
      "readers": {
       "axt.example.v1.Appointment": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\"},{\"name\":\"start\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},\"doc\":\"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"},{\"name\":\"end\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day.\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":\"int\"},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.\",\"axt.unit\":\"min\"}]}"
      },
-     "user_takes": ["axt.example.v1.Appointment", "axt.example.v1.Task", "org.example.outline.Outline"],
+     "user_takes": [
+      "axt.example.v1.Appointment",
+      "axt.example.v1.Task",
+      "com.example.Visit",
+      "org.example.outline.Outline"
+     ],
      "peer": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a"
     },
     "steps": [
@@ -670,7 +736,8 @@
        {
         "code": "INVALID_MESSAGE",
         "message_hash": "1e96277ab7ea1161a1d9523b7a8b506bab9391927ac66fada36b6d4e9dd55b7a",
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      }
@@ -690,7 +757,12 @@
      "readers": {
       "axt.example.v1.Appointment": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\"},{\"name\":\"start\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},\"doc\":\"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"},{\"name\":\"end\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day.\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":\"int\"},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.\",\"axt.unit\":\"min\"}]}"
      },
-     "user_takes": ["axt.example.v1.Appointment", "axt.example.v1.Task", "org.example.outline.Outline"],
+     "user_takes": [
+      "axt.example.v1.Appointment",
+      "axt.example.v1.Task",
+      "com.example.Visit",
+      "org.example.outline.Outline"
+     ],
      "peer": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a"
     },
     "steps": [
@@ -725,7 +797,8 @@
         "code": "TOO_LARGE",
         "message_hash": "a089844acb2ca9641510ba2441f36dfcd96f0426be7765b8b7312ce1aa7f3bb2",
         "record": null,
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      }
@@ -745,7 +818,12 @@
      "readers": {
       "axt.example.v1.Appointment": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\"},{\"name\":\"start\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},\"doc\":\"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"},{\"name\":\"end\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day.\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":\"int\"},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.\",\"axt.unit\":\"min\"}]}"
      },
-     "user_takes": ["axt.example.v1.Appointment", "axt.example.v1.Task", "org.example.outline.Outline"],
+     "user_takes": [
+      "axt.example.v1.Appointment",
+      "axt.example.v1.Task",
+      "com.example.Visit",
+      "org.example.outline.Outline"
+     ],
      "peer": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a"
     },
     "steps": [
@@ -775,7 +853,8 @@
        {
         "code": "INVALID_MESSAGE",
         "message_hash": "0372abd5b3603848e60e889ed8bb74a47ba98f0bc7ff4c39c853edf8068abffd",
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      }
@@ -795,7 +874,12 @@
      "readers": {
       "axt.example.v1.Appointment": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\"},{\"name\":\"start\",\"type\":{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"},\"doc\":\"When the appointment starts, as a date and time on the wall clock; see time_zone. For an all-day appointment, 00:00 of its first day.\"},{\"name\":\"end\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"local-timestamp-millis\"}],\"default\":null,\"doc\":\"When the appointment ends, as a date and time on the wall clock in the time zone of start; the end itself is not part of the appointment. For an all-day appointment, 00:00 of the day after its last day. Null when no end is given; an all-day appointment without an end takes one day.\"},{\"name\":\"time_zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The IANA time zone name, such as Europe/Berlin, in which start and end read on the wall clock. Null when start and end are meant in whatever time zone the user is in at that moment.\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; the times of start and end are then 00:00 and have no meaning beyond the day.\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":\"int\"},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a number of minutes before start; 0 is at start. No value is negative. Empty when there are no reminders.\",\"axt.unit\":\"min\"}]}"
      },
-     "user_takes": ["axt.example.v1.Appointment", "axt.example.v1.Task", "org.example.outline.Outline"],
+     "user_takes": [
+      "axt.example.v1.Appointment",
+      "axt.example.v1.Task",
+      "com.example.Visit",
+      "org.example.outline.Outline"
+     ],
      "peer": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a"
     },
     "steps": [
@@ -830,7 +914,8 @@
         "code": "TOO_LARGE",
         "message_hash": "c431e2188553f8190fd5d27b0ee8e4ef9884cd93f5c0e18bcf6de394f01ab9d9",
         "record": null,
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      }
@@ -899,7 +984,7 @@
       }
      },
      {
-      "receive": "c3017d0ce4e54fe8e1a2020eda9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7008c02c301d4dee7f46d4ad4361b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a128e31966111b293e62c848b999e1237f6b95795e2603140a2be0fed345932c57c024835653861316633632d376232642d346336652d613966302d3364356237633965316132660200246178742e6578616d706c652e76312e5065746f4cafb5bbbf2d01de48c12cdf56c3279804411c0ea40ffe45480bf25f1ed477b5e4382df9322fc9cd3502b7c3b5fae3bf7259882803aff48ec65a1b89dd3b0c"
+      "receive": "c3017d0ce4e54fe8e1a2020eda9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7008e02c3011d9af936519206151b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a128e31966111b293e62c848b999e1237f6b95795e2603140a2be0fed345932c57c024835653861316633632d376232642d346336652d613966302d336435623763396531613266020000246178742e6578616d706c652e76312e5065744d57b36fc1984edce575f17eaae347de5001907cbf4cf828743dfa6edc459106a54cfa123ce0507654e0c65f75b9f949de15c211c06f7b562635546638117908"
      },
      {
       "query": {"errors": true}
@@ -924,7 +1009,7 @@
       }
      },
      {
-      "receive": "c3017d0ce4e54fe8e1a2020eda9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb700e801c301d4dee7f46d4ad4361b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a160000000000000000000000000000000000000000000000000000000000000000024861326434663662382d316333652d346135622d396437662d306532633461366238643166020000a7f828acc4178d1358bd1e1bd2f197bf64eb468ea4bee2befecebeafd5b45e4521b5640602d99cfafb63e043cdd1059b8ae8a2a866f80d2ec64108682dbfdd0a"
+      "receive": "c3017d0ce4e54fe8e1a2020eda9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb700ea01c3011d9af936519206151b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a160000000000000000000000000000000000000000000000000000000000000000024861326434663662382d316333652d346135622d396437662d306532633461366238643166020000009ac3bb551f9c880cab8de98b7d2f608421a2bbf0c41b9f4ca4368d26dbcbc5a2cb6323f5c7ca9f2a7a29d7a2b729c3a8721e4d7f8f364d38abf9f18b8ab9f705"
      },
      {
       "query": {"errors": true}
@@ -1130,7 +1215,8 @@
         "code": "INVALID_MESSAGE",
         "message_hash": "987bb4fddcfac0a4af60c1ec2f555762bc3efa59f2272bc212292d04ac1f6919",
         "record": null,
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      }
@@ -1210,7 +1296,8 @@
         "code": "INVALID_MESSAGE",
         "message_hash": "6d9cc1f6c9e643a1a53cbbe3943abc926093518ac956dd31de3cb0689d2e0813",
         "record": null,
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      }
@@ -1290,7 +1377,8 @@
         "code": "INVALID_MESSAGE",
         "message_hash": "334da17dcbf5116bea9bb243f936ce1e72abe7fdd01ee2f20e8502969a18865a",
         "record": null,
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      }
@@ -1370,7 +1458,8 @@
         "code": "INVALID_MESSAGE",
         "message_hash": "e9855269f71b28d4ae7533d287b59db39b00ad92f0e8b4d23f30916750db5e63",
         "record": null,
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      }
@@ -1450,7 +1539,8 @@
         "code": "INVALID_MESSAGE",
         "message_hash": "22728b222cf2e6ee9d401ef14b0e02ab0870a8153c4588e34b8a718fafe1a863",
         "record": null,
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      }
@@ -1530,7 +1620,8 @@
         "code": "INVALID_MESSAGE",
         "message_hash": "aba99a3857a63dd69f518d0d0284df45dbaa10dd9dfebaabe0f8f5ad3f10f8b6",
         "record": null,
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      }
@@ -1556,7 +1647,7 @@
       "receive": "c3017d0ce4e54fe8e1a20200da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb700ec06c301b30380d3b5ec086b021a4f6c6420427261696e204669780002020006346178742e6578616d706c652e76312e4170706f696e746d656e74020044416e204170706f696e746d656e74206265636f6d657320612052656d696e6465722e020464654845696e205465726d696e2077697264207a752065696e6572204572696e6e6572756e672e00266178742e6578616d706c652e76312e5461736b02004c41205461736b206265636f6d65732061204e6f7465207769746820612052656d696e6465722e020464656045696e6520417566676162652077697264207a752065696e6572204e6f74697a206d6974204572696e6e6572756e672e00266178742e6578616d706c652e76312e4e6f746502002c41204e6f7465206265636f6d65732061204e6f74652e020464653e45696e65204e6f74697a2077697264207a752065696e6572204e6f74697a2e00000252416e79206f746865722074797065206265636f6d657320612073656172636861626c65204e6f74652e02046465684a6564657220616e64657265205479702077697264207a752065696e657220647572636873756368626172656e204e6f74697a2e00000000dc24c3044b0b8d06cc613baaa7436e26ffca67f2962ca1d4c846d8e1d4fcec5cc53fbae6d03d50104dc15638fdf62c61a070f341837c61b16eb7df50280a9500"
      },
      {
-      "receive": "c3017d0ce4e54fe8e1a2020eda9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb70016c301d4dee7f46d4ad43600a76e0bfd0e20d0568a17b79720823af037bc8f5130d04e77fdcc7099c79750055afdb9733973608a2f4df5d7640c436493750b17fb7259c54d50480cac2ec902"
+      "receive": "c3017d0ce4e54fe8e1a2020eda9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb70016c3011d9af9365192061500f3031f0a82e9a267af92180a2e68e11a83444b1c1b403f75d8fe1150c16ed53484b29d3f32cc88badaf0163e32052528b1e67752fdfca75c9513891628822701"
      }
     ]
    },
@@ -1708,7 +1799,8 @@
         "code": "MANIFEST_INVALID",
         "message_hash": "34120414b4af6f43a51628e15efff70e14d279ffaf86013096ee7b2c5f9e23c8",
         "record": null,
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      },
@@ -1722,7 +1814,8 @@
        {
         "code": "INVALID_MESSAGE",
         "message_hash": "b1fa5d2b91aadc0209213d0200a0eab2467a7214dbcca52667bf570e6cda76d4",
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      }
@@ -1769,7 +1862,8 @@
         "code": "NOT_ACCEPTED",
         "message_hash": "62a1bb5a5674b89d6d3ebe86e305760a2fb186389c5af22855b5264d2123cea2",
         "record": {"id": "d4c3b2a1-0f9e-4d8c-b7a6-5f4e3d2c1b0a", "version": 4},
-        "fingerprint": null
+        "fingerprint": null,
+        "field": null
        }
       ]
      }

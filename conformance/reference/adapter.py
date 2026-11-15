@@ -8,7 +8,8 @@ conformance/tools/, which check the examples of the specification: the Avro
 encoding and the schema checks of example_types.py and manifest_examples.py,
 the Ed25519, X25519 and HPKE of keys_examples.py, the model of an app of
 protocol_examples.py, the QR code, frames and relay of
-transports_examples.py, and the time types of time_examples.py. Where those scripts have no model, for a receiver's
+transports_examples.py, the time types of time_examples.py, and the attributes of spec/metadata.md of
+metadata_rules.py. Where those scripts have no model, for a receiver's
 own changes to records (spec/records.md, section 6) and for reading a file
 (spec/transports.md, section 2.2), it has its own code below. That it passes
 every vector shows that the vectors agree with the scripts' checks; it is a
@@ -43,11 +44,13 @@ def load(name):
 tx = load("transports_examples")
 pe, me, keys, rules = tx.pe, tx.me, tx.keys, tx.rules
 tm = load("time_examples")
+mr = rules.mr
 
 import fastavro  # noqa: E402
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305  # noqa: E402
 
-CATEGORIES = ["encoding", "types", "time", "records", "manifest", "keys", "protocol", "file", "qr", "local", "relay", "relay-server"]
+CATEGORIES = ["encoding", "types", "time", "metadata", "records", "manifest", "keys", "protocol", "file", "qr", "local", "relay",
+              "relay-server"]
 OUT_INLINE = 1 << 20  # bytes above which an answer carries raw DEFLATE rather than hex
 
 
@@ -78,8 +81,8 @@ def ok(value=None):
     return {"accept": {} if value is None else value}
 
 
-def no(error, note=None):
-    return {"reject": {"error": error} if note is None else {"error": error, "note": note}}
+def no(error, note=None, **members):
+    return {"reject": dict({"error": error}, **({} if note is None else {"note": note}), **members)}
 
 
 # --- a strict Avro decoder ----------------------------------------------------------------
@@ -170,13 +173,7 @@ def read(t, r, names, namespace="", depth=0):
     if kind == "record":
         if depth + 1 > MAX_DATA_DEPTH:
             raise Undecodable("a data depth above 32")
-        value = {f["name"]: read(f["type"], r, names, namespace, depth + 1) for f in t["fields"]}
-        full = t["name"] if "." in t["name"] else ".".join(x for x in (namespace, t["name"]) if x)
-        if full in tm.FULL:
-            broken = tm.problems(tm.FULL[full], value)
-            if broken:
-                raise Undecodable(f"{full}: {broken[0]} (spec/time.md, section 8)")
-        return value
+        return {f["name"]: read(f["type"], r, names, namespace, depth + 1) for f in t["fields"]}
     if kind == "enum":
         i = r.long()
         if not 0 <= i < len(t["symbols"]):
@@ -327,6 +324,11 @@ def op_decode_record(i):
         value = decode_all(pe.without_logical_types(writer), body[10:])
     except Undecodable as e:
         return no("UNDECODABLE", str(e))
+    # Step 9 of spec/protocol.md, section 6.2: a value that decodes but holds a time value that is not valid.
+    broken = tm.value_breaches(pe.without_logical_types(writer), value)
+    if broken:
+        path, rule, why = broken[0]
+        return no("VALUE_INVALID", f"{rule}: {why} (spec/time.md, section 8)", field=mr.error_field(path))
     if reader_text is None:
         return ok({"value": value})
     w, r = pe.without_logical_types(writer), pe.without_logical_types(reader)
@@ -336,6 +338,26 @@ def op_decode_record(i):
     except Exception as e:
         return no("DOES_NOT_RESOLVE", str(e))
     return ok({"value": json_of(r, resolved)})
+
+
+# --- metadata (spec/metadata.md) ------------------------------------------------------------
+
+
+def op_describe(i):
+    return ok(mr.describe(json.loads(i["schema"]), i["field"], i["languages"]))
+
+
+def op_check_record(i):
+    """A receiver that checks the attributes: the first value, in the order of the encoding, that breaks a rule."""
+    got = op_decode_record({"writer_schema": i["schema"], "reader_schema": None, "body": i["body"]})
+    if "reject" in got:
+        return got
+    writer = pe.without_logical_types(json.loads(i["schema"]))
+    broken = mr.breaches(writer, got["accept"]["value"], tm.time_check)
+    if broken:
+        path, rule, why = broken[0]
+        return no("VALUE_INVALID", f"{rule}: {why}", field=mr.error_field(path))
+    return ok()
 
 
 # --- manifest (spec/manifest.md) ------------------------------------------------------------
@@ -719,7 +741,8 @@ def read_file(data, reader):
             got = op_decode_record({"writer_schema": text, "reader_schema": None if name not in readers else json.dumps(readers[name]),
                                     "body": body.hex()})
             if "reject" in got:
-                out["result"] = "DOES_NOT_RESOLVE" if got["reject"]["error"] == "DOES_NOT_RESOLVE" else "UNDECODABLE"
+                error = got["reject"]["error"]
+                out["result"] = error if error in ("DOES_NOT_RESOLVE", "VALUE_INVALID") else "UNDECODABLE"
                 continue
             kept[key] = {"type": name, "version": version}
         else:
@@ -900,6 +923,8 @@ OPS = {
     "decode_message": op_decode_message,
     "encode_message": op_encode_message,
     "decode_record": op_decode_record,
+    "describe": op_describe,
+    "check_record": op_check_record,
     "check_manifest": op_check_manifest,
     "fit": op_fit,
     "resolve_date_time": lambda i: ok({"date_time": tm.resolve(i["date_time"], i["anchor"])}),

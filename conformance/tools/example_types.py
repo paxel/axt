@@ -8,7 +8,9 @@ For every schema under types/axt/example/ this script:
   axt.version matching the file's path; names in the required case; only
   ["null", T] unions with the default null; an enum default; only the
   logical types of spec/envelope.md; axt.title naming a string field;
-  axt.unit only on numbers; no recursion; the schema size and depth limits
+  axt.unit only on numbers; every axt.* attribute known, in its place and
+  keeping its rules, with the code of metadata_rules.py (spec/metadata.md),
+  axt.anchor among them; no recursion; the schema size and depth limits
   of spec/envelope.md; nested type names unique across all files;
 - computes the Parsing Canonical Form and the CRC-64-AVRO fingerprint, and
   checks both against fastavro and the Apache avro package;
@@ -35,6 +37,7 @@ checks of the example types.
 
 import copy
 import datetime
+import importlib.util
 import io
 import json
 import re
@@ -50,6 +53,11 @@ from fastavro.schema import to_parsing_canonical_form
 
 REPO = Path(__file__).resolve().parents[2]
 EXAMPLES = REPO / "types" / "axt" / "example"
+
+# The rules of the attributes of spec/metadata.md; a module that imports none of the other scripts.
+_spec = importlib.util.spec_from_file_location("metadata_rules", Path(__file__).resolve().parent / "metadata_rules.py")
+mr = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(mr)
 
 # avro 1.12.2 for Python does not know local-timestamp-millis and warns that
 # it reads it as a long; spec/envelope.md, section 7, allows that.
@@ -214,6 +222,10 @@ def json_depth(value, depth=1):
 
 def check_type(t, where, top, path, defined):
     """Check a schema node; return the data depth it adds (record, array, map count 1)."""
+    if t is top:
+        # The axt.* attributes of the whole schema (spec/metadata.md; spec/types.md, section 5.9).
+        for here, message in mr.schema_problems(top):
+            fail(f"{where}.{here}" if here else where, message)
     if isinstance(t, str):
         if t in path or f"{top['namespace']}.{t}" in path:
             fail(where, f"recursive reference to {t}")

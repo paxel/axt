@@ -55,6 +55,9 @@ tx = load("transports_examples")
 pe, me, keys, rules = tx.pe, tx.me, tx.keys, tx.rules
 env = load("envelope_examples")
 tm = load("time_examples")
+mx = load("metadata_examples")
+mr = mx.mr
+assert mr.LANGTAG.pattern == me.LANGTAG.pattern and mr.LANGTAG.flags == me.LANGTAG.flags, "two language tag rules"
 
 import fastavro  # noqa: E402  (after the scripts, which check the library versions they were written with)
 
@@ -79,10 +82,11 @@ def accept(value=None):
     return {"accept": {} if value is None else value}
 
 
-def reject(error, note=None):
+def reject(error, note=None, **members):
     out = {"error": error}
     if note:
         out["note"] = note
+    out.update(members)  # field, for VALUE_INVALID (spec/conformance.md, section 4)
     return {"reject": out}
 
 
@@ -435,7 +439,7 @@ def encoding_category():
           {"schema": memo_text}, accept({"canonical_form": pcf, "fingerprint": H(pe.fp8(fp))}))
     published = {"Envelope": 0xA2E1E84FE5E40C7D, "Manifest": 0x6B08ECB5D38003B3, "KeyMove": 0xA9E20AFEA72F2876,
                  "Offer": 0x415463CACA7A687D, "Accept": 0x6B244FC3913D82AB, "Decline": 0x22D2BD11845492C0,
-                 "Ack": 0xEE25C7CCA8166ED8, "Error": 0x36D44A6DF4E7DED4, "QrPayload": 0x6BBD68FE56640B90}
+                 "Ack": 0xEE25C7CCA8166ED8, "Error": 0x1506925136F99A1D, "QrPayload": 0x6BBD68FE56640B90}
     sections = {"Envelope": "envelope.md 10.1", "Manifest": "manifest.md 9", "KeyMove": "keys.md 6", "QrPayload": "transports.md 6"}
     for name, want in published.items():
         text = (REPO / "types" / "axt" / f"{name}.avsc").read_text(encoding="utf-8")
@@ -678,7 +682,8 @@ def time_category():
     for label, n, v, rule in tm.INVALID:
         assert tm.problems(n, v) == [rule], label
         text = tm.compact(n)
-        record_vector(f"reject {label}", [refs[n], "time.md 8"], text, single_object(text, v), reject("UNDECODABLE", rule))
+        assert tm.value_breaches(json.loads(text), v) == [("", f"axt.{n}", rule)], label
+        record_vector(f"reject {label}", [refs[n], "time.md 8"], text, single_object(text, v), reject("VALUE_INVALID", rule, field=""))
     host = json.loads(tm.HOST_TEXT)
     body = single_object(tm.HOST_TEXT, tm.HOST_VALUE)
     assert body[10:] == tm.HOST_DATA and pe.canonical_fp(tm.HOST_TEXT) == tm.HOST_FP
@@ -687,8 +692,10 @@ def time_category():
     broken = dict(tm.HOST_VALUE, end=dict(tm.HOST_VALUE["end"], instant_ms=tm.HOST_VALUE["end"]["instant_ms"] + 1))
     problems = tm.time_problems(host, broken)
     assert problems == ["axt.DateTime: instant_ms is not the wall clock minus offset_seconds"]
-    record_vector("reject that type when its second DateTime has an instant a millisecond off", ["time.md 3.1", "time.md 8"],
-                  tm.HOST_TEXT, single_object(tm.HOST_TEXT, broken), reject("UNDECODABLE", problems[0]))
+    assert tm.value_breaches(host, broken)[0][0] == "end"
+    record_vector("reject that type when its second DateTime has an instant a millisecond off",
+                  ["time.md 3.1", "time.md 8", "metadata.md 7.2"], tm.HOST_TEXT, single_object(tm.HOST_TEXT, broken),
+                  reject("VALUE_INVALID", problems[0], field="end"))
 
     for label, v, anchor, want in tm.RESOLUTIONS:
         assert tm.resolve(v, anchor) == want, label
@@ -697,6 +704,87 @@ def time_category():
     for label, v, d, want in tm.ADDITIONS:
         assert tm.add(v, d) == want, label
         c.add("add_duration", label, ["time.md 7.2"], {"date_time": v, "duration": d}, accept({"date_time": want}))
+    return c
+
+
+# --- metadata (spec/metadata.md) --------------------------------------------------------
+
+
+def metadata_category():
+    c = Category("metadata", "The attributes of a schema that tell a receiver how to show and check a field: labels, help "
+                             "and emoji in a language, the order and groups of fields, formats, patterns and limits, and the "
+                             "field a check names (spec/metadata.md).")
+    vet, loose = mx.VET_TEXT, mx.LOOSE_TEXT
+
+    def describe(label, text, path, languages, refs):
+        got = mr.describe(json.loads(text), path, languages)
+        c.add("describe", label, refs, {"schema": text, "field": path, "languages": languages}, accept(got))
+
+    # The type and its fields, in English, German and a language the type has no text in.
+    assert mr.describe(mx.VET, None, ["en"])["fields"] == mx.VET_ORDER
+    for languages in (["en"], ["de-AT", "en"], ["fr-CH", "fr"]):
+        describe(f"com.example.Vet for a user who reads {', '.join(languages)}", vet, None, languages,
+                 ["metadata.md 4", "metadata.md 5.1", "metadata.md 5.2"])
+    for path, languages, refs in [
+        ("name", ["de"], ["metadata.md 4", "metadata.md 5.3"]),
+        ("kind", ["de"], ["metadata.md 4.4"]),
+        ("kind", ["en-GB"], ["metadata.md 4.4"]),
+        ("phone", ["en"], ["metadata.md 5.3", "metadata.md 6.3"]),
+        ("address", ["de"], ["metadata.md 4", "metadata.md 5.1"]),
+        ("address.postal_code", ["de"], ["metadata.md 4.2", "metadata.md 5.3"]),
+        ("visit_minutes", ["en"], ["metadata.md 2", "types.md 6"]),
+        ("iban", ["de"], ["metadata.md 5.4"]),
+        ("notes", ["en"], ["metadata.md 5.3", "metadata.md 6.3"]),
+        ("website", ["de"], ["metadata.md 5.2"]),
+    ]:
+        describe(f"com.example.Vet, the field {path}, for {', '.join(languages)}", vet, path, languages, refs)
+    # Attributes that break their rules are ignored, each on its own.
+    assert len(mx.LOOSE_PROBLEMS) == 20
+    describe("attributes that break their rules are ignored: the type", loose, None, ["de"], ["metadata.md 3.3", "metadata.md 5.1"])
+    for path, why in [("code", "a pattern outside I-Regexp"), ("count", "a format on a number, and a minimum above the maximum"),
+                      ("title", "translations under the tag en"), ("mood", "an emoji that is a word, an unknown format and a bad group"),
+                      ("address", "a format on the field's type and a multiline that is not a boolean"),
+                      ("size", "an unknown attribute and a maximum that is not a number"),
+                      ("rank", "a pattern that is not a string"),
+                      ("level", "entries of symbols with a member that breaks its rules each")]:
+        describe(f"attributes that break their rules are ignored: {path}, {why}", loose, path, ["de"], ["metadata.md 3.3"])
+
+    def check(label, text, datum, refs):
+        schema = json.loads(text)
+        found = mr.breaches(schema, datum, tm.time_check)
+        expected = reject("VALUE_INVALID", found[0][2], field=mr.error_field(found[0][0])) if found else accept()
+        c.add("check_record", label, refs, {"schema": text, "body": B(single_object(text, datum))}, expected)
+
+    # The counts of spec/metadata.md, section 9.
+    assert (len(mx.CHECKS), len(mx.FORMAT_VALUES), len(mx.PATTERNS), len(mx.BAD_PATTERNS)) == (35, 14, 11, 13)
+    for label, how, path, attribute in mx.CHECKS:
+        datum = how(copy.deepcopy(mx.VET_VALUE))
+        assert mx.first(mx.VET, datum) == (path, attribute), label
+        check(label, vet, datum, ["metadata.md 6", "metadata.md 7.2"])
+    check("a value of attributes that break their rules is not checked by them", loose, mx.LOOSE_VALUE, ["metadata.md 3.3"])
+    for name, (good, bad) in mx.FORMAT_VALUES.items():
+        text = mx.compact(mx.with_format(name))
+        for k, v in enumerate(good, 1):
+            check(f"the format {name}, value {k}: {json.dumps(v, ensure_ascii=False)}", text, {"value": v}, ["metadata.md 6.3"])
+        for k, v in enumerate(bad, 1):
+            check(f"the format {name}, broken value {k}: {json.dumps(v, ensure_ascii=False)}", text, {"value": v}, ["metadata.md 6.3"])
+    unknown = mx.compact(mx.with_format("zip-code"))
+    check("a format the receiver does not know is plain text", unknown, {"value": "any text"}, ["metadata.md 6.3"])
+    for n, (pattern, good, bad) in enumerate(mx.PATTERNS, 1):
+        text = mx.compact(mx.with_pattern(pattern))
+        for k, v in enumerate(good + bad, 1):
+            check(f"pattern {n}, value {k}: {json.dumps(pattern, ensure_ascii=False)} and {json.dumps(v, ensure_ascii=False)}", text,
+                  {"code": v}, ["metadata.md 6.4"])
+    for pattern, why in mx.BAD_PATTERNS:
+        check(f"a pattern that is not an I-Regexp, {why}, is ignored", mx.compact(mx.with_pattern(pattern)), {"code": "?"},
+              ["metadata.md 6.4", "metadata.md 3.3"])
+    # Field paths into a map and above 1,024 bytes, and time values next to the checks.
+    due = mx.compact(mx.DUE)
+    check("a time value that is not valid in a map is named by its key", due, mx.DUE_VALUE, ["metadata.md 7.2", "time.md 8"])
+    long_name = "f" * 1100
+    long = {"type": "record", "name": "Long", "namespace": "com.example", "doc": "A field with a long name.",
+            "fields": [{"name": long_name, "type": "string", "default": "", "doc": "A field.", "axt.min_length": 1}]}
+    check("a path above 1,024 bytes is reported as null", mx.compact(long), {long_name: ""}, ["metadata.md 7.2", "protocol.md 8.1"])
     return c
 
 
@@ -803,7 +891,7 @@ def normalize_replies(replies):
                 answers.setdefault(b["offer_id"], {})[name] = verdict
         elif kind == "ERROR":
             errors.append({"code": b["code"], "message_hash": H(b["message_hash"]), "record": b["record"],
-                           "fingerprint": None if b["fingerprint"] is None else H(b["fingerprint"])})
+                           "fingerprint": None if b["fingerprint"] is None else H(b["fingerprint"]), "field": b["field"]})
         else:
             raise AssertionError(f"a reply of kind {kind}")
     return answers, errors
@@ -887,18 +975,18 @@ def run_session(c, label, refs, seed, manifest, readers, takes, peer, steps):
 def protocol_category():
     c = Category("protocol", "The steps of an exchange in a live connection, played against one app: manifests, "
                              "offers, answers, record messages, acknowledgements and errors (spec/protocol.md).")
-    assert len(pe.checks) == 58, "spec/protocol.md, section 16, names 58 cases besides the exchange"
+    assert len(pe.checks) == 60, "spec/protocol.md, section 16, names 60 cases besides the exchange"
     for label, own, theirs, want in [("the highest common format", [1, 2], [2, 3], 2), ("no common format", [1], [2], None),
                                      ("format 1 between two apps of 0.1.0", [1], [1], 1)]:
         assert pe.choose_format(own, theirs) == want
         c.add("choose_format", label, ["protocol.md 3.2"], {"own": own, "theirs": theirs}, accept({"format": want}))
 
     A, T, P_, N = "axt.example.v1.Appointment", "axt.example.v1.Task", "axt.example.v1.Pet", "axt.example.v1.Note"
-    OUT = "org.example.outline.Outline"
+    OUT, VISIT = "org.example.outline.Outline", "com.example.Visit"
     AID, PID, OID = pe.APPOINTMENT_ID, pe.PET_ID, pe.OFFER_ID
     ap, ap_text = pe.APPOINTMENT, pe.APPOINTMENT_TEXT
     obf_readers = {A: pe.APPOINTMENT_READER}
-    obf_takes = {A, T, OUT}
+    obf_takes = {A, T, OUT, VISIT}
     nil_id, del_id = "00000000-0000-0000-0000-000000000000", "d4c3b2a1-0f9e-4d8c-b7a6-5f4e3d2c1b0a"
     note_id = "c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f"
     oversized = pe.data_msg + bytes(pe.MAX_MESSAGE)
@@ -937,6 +1025,8 @@ def protocol_category():
         r(pe.outline_offer, "answers", answers={"1d2e3f40-5a6b-4c7d-9e8f-a0b1c2d3e4f5": {OUT: "ACCEPT"}}),
         r(pe.obf_data("2e3f4051-6b7c-4d8e-8f90-b1c2d3e4f506", 1, pe.OUTLINE_TEXT, pe.outline(16)), "APPLIED"),
         r(pe.obf_data("3f405162-7c8d-4e9f-90a1-c2d3e4f50617", 1, pe.OUTLINE_TEXT, pe.outline(17)), "ERROR UNDECODABLE"),
+        r(pe.visit_offer, "answers", answers={"7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b": {VISIT: "ACCEPT"}}),
+        r(pe.visit_broken, "ERROR VALUE_INVALID"),
         r(bad_offer([]), "ERROR OFFER_INVALID"),
         r(bad_offer([{"schema": pe.PET_TEXT, "count": 0}] * 2), "ERROR OFFER_INVALID"),
         r(bad_offer([{"schema": pe.PET_TEXT, "count": 0}], oid="offer-1"), "ERROR OFFER_INVALID"),
@@ -950,7 +1040,7 @@ def protocol_category():
     ]
     run_session(c, "Old Brain Fix receives the exchange of protocol.md, section 17, its repeats and the messages it rejects",
                 ["protocol.md 3.1", "protocol.md 5.2", "protocol.md 6.2", "protocol.md 7", "protocol.md 8", "protocol.md 9.2",
-                 "protocol.md 17"], OBF_SEED, me.OLD_BRAIN_FIX, obf_readers, obf_takes, CAT, obf_steps)
+                 "protocol.md 17", "time.md 8"], OBF_SEED, me.OLD_BRAIN_FIX, obf_readers, obf_takes, CAT, obf_steps)
     # The rejections after which an app MAY close the connection (spec/protocol.md, section 8.3), each last in a session.
     for label, m, want, opts in [
         ("a signature that does not verify", pe.bad_sig, "ERROR SIGNATURE_INVALID", {}),
@@ -974,7 +1064,8 @@ def protocol_category():
         r(pe.ack_msg, "taken"), ("query", "outcome", (AID, 1), {"outcome": "APPLIED"}),
         r(pe.dup_ack, "taken"), ("query", "outcome", (AID, 1), {"outcome": "APPLIED"}),
         r(pe.obf_app.reply("ERROR", {"to": CAT, "code": "UNDECODABLE", "message_hash": bytes(32),
-                                     "record": {"id": AID, "version": 1}, "fingerprint": None, "detail": ""}), "ignored"),
+                                     "record": {"id": AID, "version": 1}, "fingerprint": None, "field": None, "detail": ""}),
+          "ignored"),
         ("query", "errors", True, {"errors": ["NOT_ACCEPTED"]}),
         r(pe.late_accept, "taken"), ("query", "accepted", P_, {"accepted": False}),
         r(pe.obf_app.reply("ACCEPT", {"to": pe.OTHER, "offer_id": OID, "types": [A]}), "ignored"),
@@ -1506,6 +1597,11 @@ def file_category():
         read(CAT, [rec(0, 1, "RECORD_ID_INVALID", "00000000-0000-0000-0000-000000000000"), rec(6, 0, "VERSION_INVALID"),
                    rec(7, 1, "APPLIED"), rec(7, 2, "TYPE_CHANGED"), rec(9, 1, "UNDECODABLE"), rec(8, 1, "APPLIED")]),
         ["protocol.md 6.2", "protocol.md 15.2"])
+    visit = json.loads(tm.HOST_TEXT)
+    late = dict(tm.HOST_VALUE, end=dict(tm.HOST_VALUE["end"], instant_ms=tm.HOST_VALUE["end"]["instant_ms"] + 1))
+    add("a record with a time value that is not valid is not applied, the others are",
+        container([pe.obf_data(rid(13), 1, tm.HOST_TEXT, tm.HOST_VALUE), pe.obf_data(rid(14), 1, tm.HOST_TEXT, late)], [visit]),
+        read(CAT, [rec(13, 1, "APPLIED"), rec(14, 1, "VALUE_INVALID")]), ["time.md 8", "protocol.md 6.2"])
     cat_reader = {"manifest": B(me.encode_body(me.CAT_A_LOG)), "readers": {}}
     add("a record whose type does not fit the reader's manifest is not applied", container([D(10, t=NT), D(11, t=PT)], [schema(NT), schema(PT)]),
         read(CAT, [rec(10, 1, "DOES_NOT_FIT"), rec(11, 1, "APPLIED")]), ["manifest.md 7"], reader=cat_reader)
@@ -1577,8 +1673,8 @@ def file_category():
 
 # --- output ---------------------------------------------------------------------
 
-CATEGORIES = [encoding_category, types_category, time_category, records_category, manifest_category, keys_category, protocol_category,
-              file_category, qr_category, local_category, relay_category, relay_server_category]
+CATEGORIES = [encoding_category, types_category, time_category, metadata_category, records_category, manifest_category, keys_category,
+              protocol_category, file_category, qr_category, local_category, relay_category, relay_server_category]
 
 
 def render(value, indent=0):

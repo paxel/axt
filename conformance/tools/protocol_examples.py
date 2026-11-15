@@ -74,7 +74,12 @@ me = importlib.util.module_from_spec(_spec)
 with contextlib.redirect_stdout(io.StringIO()):
     _spec.loader.exec_module(me)
 rules, keys = me.rules, me.keys
+mr = rules.mr
 zigzag = keys.zigzag
+# The validity rules of the time types, which a receiver checks in step 9 of spec/protocol.md, section 6.2.
+_spec = importlib.util.spec_from_file_location("time_examples", HERE / "time_examples.py")
+tm = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(tm)
 
 PROTOCOL = ["Offer", "Accept", "Decline", "Ack", "Error"]
 ALL_SPEC = ["Envelope", "Manifest", "KeyMove"] + PROTOCOL
@@ -249,6 +254,7 @@ def body_parts(name, d):
                 + null_or("record", d["record"], "ErrorRecord", lambda r: string_parts("record.id", r["id"]) + [
                     (zigzag(r["version"]), f"record.version: long {r['version']}")])
                 + null_or("fingerprint", d["fingerprint"], "ErrorFingerprint", lambda f: [(f, "fingerprint: fixed(8)")])
+                + null_or("field", d["field"], "string", lambda f: string_parts("field", f))
                 + string_parts("detail", d["detail"]))
     raise ValueError(name)
 
@@ -360,9 +366,10 @@ def data_depth(value):
 
 
 class Rejected(Exception):
-    def __init__(self, code, detail="", record=None, fingerprint=None, report=True):
+    def __init__(self, code, detail="", record=None, fingerprint=None, report=True, field=None):
         super().__init__(code)
         self.code, self.detail, self.record, self.fingerprint, self.report = code, detail, record, fingerprint, report
+        self.field = field
 
 
 class App:
@@ -442,7 +449,7 @@ class App:
             else:
                 record = e.record
             d = {"to": self.peer, "code": e.code, "message_hash": hashlib.sha256(message).digest(),
-                 "record": record, "fingerprint": e.fingerprint, "detail": e.detail}
+                 "record": record, "fingerprint": e.fingerprint, "field": e.field, "detail": e.detail}
             return (f"rejected {e.code}", [self.reply("ERROR", d)])
 
     def _receive(self, m):
@@ -628,6 +635,12 @@ class App:
                 raise Rejected("UNDECODABLE", "bytes left over after the record", record)
             if data_depth(value) > MAX_DATA_DEPTH:
                 raise Rejected("UNDECODABLE", "data depth above 32", record)
+            # Step 9: every time value is valid; checked on the value as the offered schema writes it.
+            written = fastavro.schemaless_reader(io.BytesIO(body[10:]), writer, writer)
+            broken = tm.value_breaches(schema, written)
+            if broken:
+                path, rule, why = broken[0]
+                raise Rejected("VALUE_INVALID", f"{rule}: {why}", record, field=mr.error_field(path))
             self.records[key] = {"type": name, "version": version, "state": "there", "value": value}
         else:
             self.records[key] = {"type": name, "version": version, "state": "tombstone", "value": None}
@@ -798,7 +811,7 @@ assert what == "rejected NOT_ACCEPTED" and len(replies) == 1
 error_msg = replies[0]
 e_parts, e_check = make_message("ERROR", OBF_SEED, None, make_body("Error", {
     "to": CAT, "code": "NOT_ACCEPTED", "message_hash": hashlib.sha256(pet_msg).digest(),
-    "record": {"id": PET_ID, "version": 1}, "fingerprint": None, "detail": "axt.example.v1.Pet"})[0])
+    "record": {"id": PET_ID, "version": 1}, "fingerprint": None, "field": None, "detail": "axt.example.v1.Pet"})[0])
 assert error_msg == e_check
 assert cat_app.receive(error_msg) == ("error NOT_ACCEPTED noted", [])
 assert PET_ID not in obf_app.records
@@ -853,7 +866,8 @@ expect("an ACK of a duplicate keeps the outcome", (cat_app.receive(dup_ack), cat
 expect("a repeated MANIFEST is taken again", obf_app.receive(m1), ("manifest taken", []))
 expect("an ERROR about an acknowledged record is ignored",
        cat_app.receive(obf_app.reply("ERROR", {"to": CAT, "code": "UNDECODABLE", "message_hash": bytes(32),
-                                               "record": {"id": APPOINTMENT_ID, "version": 1}, "fingerprint": None, "detail": ""})),
+                                               "record": {"id": APPOINTMENT_ID, "version": 1}, "fingerprint": None, "field": None,
+                                               "detail": ""})),
        ("ignored: the message was acknowledged", []))
 
 # The first answer for a type of an offer stands.
@@ -946,6 +960,21 @@ expect("a record of data depth 32 is taken", (data_depth(outline(16)), obf_app.r
 expect("a record of data depth 34 is rejected", (data_depth(outline(17)), code_of(obf_app.receive(obf_data(
     "3f405162-7c8d-4e9f-90a1-c2d3e4f50617", 1, OUTLINE_TEXT, outline(17))))), (34, "ERROR UNDECODABLE"))
 
+# A type that holds time values, with one that is not valid (spec/time.md, section 8).
+VISIT_ID = "4b5c6d7e-8f90-4a1b-8c2d-3e4f5a6b7c8d"
+visit_offer = cat_app.reply("OFFER", {"to": OBF, "offer_id": "7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b",
+                                      "types": [{"schema": tm.HOST_TEXT, "count": 1}]})
+obf_decide["com.example.Visit"] = True
+expect("an offer of a type that holds time values is accepted", [m[11] for m in obf_app.receive(visit_offer)[1]],
+       [zigzag(KINDS.index("ACCEPT"))[0]])
+visit_broken = obf_data(VISIT_ID, 1, tm.HOST_TEXT, dict(tm.HOST_VALUE, end=dict(tm.HOST_VALUE["end"],
+                                                                            instant_ms=tm.HOST_VALUE["end"]["instant_ms"] + 1)))
+what, replies = obf_app.receive(visit_broken)
+err = plain(fastavro.schemaless_reader(io.BytesIO(fastavro.schemaless_reader(
+    io.BytesIO(replies[0][10:]), parsed["Envelope"], parsed["Envelope"])["body"][10:]), parsed["Error"], parsed["Error"]))
+expect("DATA with a time value that is not valid names the field", (what, err["field"], err["record"]),
+       ("rejected VALUE_INVALID", "end", {"id": VISIT_ID, "version": 1}))
+
 # Offers that are invalid, and types that do not fit or do not resolve.
 bad = lambda types, oid="4a5b6c7d-8e9f-4a0b-9c1d-2e3f4a5b6c7d": cat_app.reply("OFFER", {"to": OBF, "offer_id": oid, "types": types})
 expect("an offer without types", code_of(obf_app.receive(bad([]))), "ERROR OFFER_INVALID")
@@ -1032,7 +1061,7 @@ DATA = {
     "Ack": {"to": CAT, "records": [{"id": APPOINTMENT_ID, "version": 3, "outcome": "MERGED", "receiver_version": 3,
                                     "kept_fields": ["location"]}], "moved_from": OTHER},
     "Error": {"to": CAT, "code": "SCHEMA_UNKNOWN", "message_hash": bytes(range(32)), "record": {"id": APPOINTMENT_ID, "version": 3},
-              "fingerprint": fp8(0x1B57DE39E9441B59), "detail": "no schema with this fingerprint"},
+              "fingerprint": fp8(0x1B57DE39E9441B59), "field": None, "detail": "no schema with this fingerprint"},
 }
 library_findings = set()
 defaults_resolved = {}

@@ -13,7 +13,8 @@ axt.Duration) this script:
   decodes them back, decodes the same bytes with avro, encodes them again with
   avro and checks that the bytes are the same;
 - checks the validity rules of spec/time.md, which need no time zone database,
-  against values that keep them and values that break each of them;
+  against values that keep them and values that break each of them, and the
+  field path a receiver reports for a value that is not valid;
 - checks the zoned examples against this system's time zone database with
   Python's zoneinfo: the offset is that of the zone at the instant, and the
   two readings of 02:30 on 2026-10-25 in Europe/Berlin have the two offsets;
@@ -209,6 +210,21 @@ def time_problems(t, value, names=None, namespace=""):
     if kind == "map":
         return [p for v in value.values() for p in time_problems(t["values"], v, names, namespace)]
     return []
+
+
+mr = rules.mr  # the field paths of spec/metadata.md, section 7.2
+
+
+def time_check(full, v):
+    """The first rule the value v of the time type full breaks, or None."""
+    broken = problems(FULL[full], v)
+    return broken[0] if broken else None
+
+
+def value_breaches(schema, value):
+    """The time values inside a value of the schema that are not valid, as (field path, time type, rule), in the
+    order of the encoding: what a receiver reports with VALUE_INVALID (spec/time.md, section 8)."""
+    return mr.breaches(schema, value, time_check, attributes=False)
 
 
 # --- zone rules (spec/time.md, section 6) ---------------------------------------------------
@@ -643,6 +659,18 @@ def check():
     avro.schema.make_avsc_object(json.loads(json.dumps(trip)), avro.name.Names())
     broken = dict(HOST_VALUE, end=dict(HOST_VALUE["end"], instant_ms=HOST_VALUE["end"]["instant_ms"] + 1))
     assert time_problems(host, broken) == ["axt.DateTime: instant_ms is not the wall clock minus offset_seconds"]
+    assert value_breaches(host, broken) == [("end", "axt.DateTime", "instant_ms is not the wall clock minus offset_seconds")]
+    # axt.anchor (section 6.4; spec/metadata.md, section 2): on a field that holds axt.DateTime, local or instant.
+    assert mr.schema_problems(host) == []
+    other = json.loads(HOST_TEXT)
+    other["fields"][0]["axt.anchor"] = "utc"
+    other["fields"][2]["axt.anchor"] = "instant"
+    assert mr.schema_problems(other) == [("start", "axt.anchor: neither local nor instant"),
+                                         ("booked", "axt.anchor: on a field that holds no axt.DateTime")], mr.schema_problems(other)
+    late = dict(HOST_VALUE, remind=[duration(days=-1), duration(days=1, millis=-HOUR)])
+    assert value_breaches(host, late) == [("remind[1]", "axt.Duration", "parts of both signs")]
+    for label, n, v, rule in INVALID:
+        assert value_breaches(jsons[n], v) == [("", f"axt.{n}", rule)], label  # the record itself: the empty path
     return pcf, rules.crc64_avro(pcf.encode()), data
 
 

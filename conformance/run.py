@@ -29,8 +29,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 FILE_FORMAT = 1
-CATEGORIES = ["encoding", "types", "time", "records", "manifest", "keys", "protocol", "file", "qr", "local", "relay",
-              "relay-server"]
+CATEGORIES = ["encoding", "types", "time", "metadata", "records", "manifest", "keys", "protocol", "file", "qr", "local",
+              "relay", "relay-server"]
 HEX = re.compile(r"^(?:[0-9a-f]{2})*$")
 
 _spec = importlib.util.spec_from_file_location("keys_examples", HERE / "tools" / "keys_examples.py")
@@ -270,7 +270,7 @@ def schema(name):
 
 ENVELOPE_FP = bytes.fromhex("7d0ce4e54fe8e1a2")
 BODY_FPS = {"Offer": "7d687acaca635441", "Accept": "ab823d91c34f246b", "Decline": "c092548411bdd222",
-            "Ack": "d86e16a8ccc725ee", "Error": "d4dee7f46d4ad436"}
+            "Ack": "d86e16a8ccc725ee", "Error": "1d9af93651920615"}
 BODY_OF = {"OFFER": "Offer", "ACCEPT": "Accept", "DECLINE": "Decline", "ACK": "Ack", "ERROR": "Error"}
 
 
@@ -333,7 +333,8 @@ def check_step(step, w, g, own, peer, where):
                     answers.setdefault(body["offer_id"], {})[name] = verdict
             elif kind == "ERROR":
                 errors.append({"code": body["code"], "message_hash": body["message_hash"].hex(), "record": body["record"],
-                               "fingerprint": None if body["fingerprint"] is None else body["fingerprint"].hex()})
+                               "fingerprint": None if body["fingerprint"] is None else body["fingerprint"].hex(),
+                               "field": body["field"]})
             else:
                 return f"{where}: a reply of kind {kind}"
         d = diff({k: w[k] for k in ("outcome", "close", "answers")},

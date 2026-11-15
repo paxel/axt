@@ -55,9 +55,10 @@ A new version within the same major version MUST make only these changes against
 1. add a field that has a default (section 5.4), under a name that no earlier version of the major version used;
 2. remove a field that had a default in every earlier version of the major version; its name is not used again within the major version;
 3. add a symbol to an enum, which has a default symbol (section 5.4);
-4. change `doc` texts, or add, change or remove `axt.title` (section 6), without changing the meaning of any value.
+4. change `doc` texts, or add, change or remove `axt.title` or a hint of [metadata.md](metadata.md) other than `axt.unit` and `axt.anchor`, such as a label, a translation or the order of the fields, without changing the meaning of any value;
+5. remove a check of [metadata.md](metadata.md), section 6, or widen it so that every value that kept it still does: a lower `axt.min_length` or `axt.min`, a higher `axt.max_length` or `axt.max`.
 
-Each of these changes keeps schema resolution working in both directions: a receiver with the new version reads records of the old one, filling added fields with their defaults, and a receiver with the old version reads records of the new one, ignoring added fields, filling removed ones with its defaults, and reading unknown symbols as the enum's default. A removed field's name is not used again because a receiver with a version that still has the field would read the new field under the old field's type and meaning. Every other change, such as changing a field's type, logical type, default, `axt.unit` or `axt.anchor`, renaming a field, adding a branch to a union or removing an enum symbol, MUST be published under the next major version. A change that keeps the Avro encoding but changes what a value means is incompatible as well.
+Each of these changes keeps schema resolution working in both directions: a receiver with the new version reads records of the old one, filling added fields with their defaults, and a receiver with the old version reads records of the new one, ignoring added fields, filling removed ones with its defaults, and reading unknown symbols as the enum's default. A removed field's name is not used again because a receiver with a version that still has the field would read the new field under the old field's type and meaning. Every other change, such as changing a field's type, logical type, default, `axt.unit` or `axt.anchor`, renaming a field, adding a branch to a union or removing an enum symbol, MUST be published under the next major version. A change that keeps the Avro encoding but changes what a value means is incompatible as well. So is adding a check or narrowing one, including any change of `axt.format` or `axt.pattern` other than its removal: a sender that holds records of the earlier version could not send them all under the new one, since it MUST NOT send a value that breaks a check ([metadata.md](metadata.md), section 7.1).
 
 ### 3.4 Fingerprints and the Parsing Canonical Form
 
@@ -130,7 +131,7 @@ These rules hold for every example type that has the fields named:
 - **All day.** A boolean field `all_day`, or `<name>_all_day` for the single field `<name>`, set to `true` means that only the day of the times counts; their time of day is then 00:00 and has no meaning.
 - **End.** A field `end` is the first moment after the event, as the `DTEND` property of [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545) is. For an all-day event it is 00:00 of the day after the last day.
 - **Repetition.** A repetition rule is a `string` with the value of an RFC 5545 `RRULE` property without the `RRULE:` prefix, such as `FREQ=WEEKLY;BYDAY=TU`.
-- **Text.** Text fields hold plain text, with lines separated by LF (U+000A), unless their `doc` says otherwise. Note's `format` names [CommonMark](https://spec.commonmark.org/) as the only other format.
+- **Text.** Text fields hold plain text, with lines separated by LF (U+000A), unless their `axt.format` ([metadata.md](metadata.md), section 6.3) or their `doc` says otherwise. Note's field `format` names [CommonMark](https://spec.commonmark.org/) as the only other format, for each record on its own.
 
 ### 5.7 Nesting and recursion
 
@@ -145,11 +146,20 @@ The schema itself also stays within the size and nesting limits of [envelope.md]
 
 A type MUST NOT carry the id or the version of its records in fields of its own: the envelope carries both ([envelope.md](envelope.md), section 2; [records.md](records.md)). How one record refers to another, such as a Measurement to the Pet it was taken of, is defined in [records.md](records.md), section 8: a reference is a `uuid` string that holds the id of another record of the same sender. The example types of version 1 carry no references.
 
+### 5.9 Metadata
+
+The attributes of a type keep the rules of [metadata.md](metadata.md), and a type uses no attribute name beginning with `axt.` and no format that [metadata.md](metadata.md) does not define (section 3.3 there). In addition, an example type MUST carry:
+
+- `axt.label` and `axt.emoji` on its record, on each nested record and on each field, except the time types and their fields, which keep their published schemas ([time.md](time.md), sections 3.1 and 3.3);
+- `axt.symbols` on each enum, with a `label` for each symbol.
+
+A receiver that does not know the type can then show it with a name and an emoji for each part, and each label can be translated (section 4.2 there).
+
 ## 6. Display hints
 
-A receiver that does not know a type, or does not know some of its fields, can still show its records from the schema JSON it received with them. It MAY show the record's `doc`, then each field in schema order by its name, with underscores read as spaces, its `doc` and its value. It SHOULD show values of logical types as dates and times, and an enum value by its symbol. It SHOULD NOT show `bytes` as text.
+A receiver that does not know a type, or does not know some of its fields, can still show its records from the schema JSON it received with them. It MAY show the record's label or `doc`, then each field in the order of [metadata.md](metadata.md), section 5.1, by its label or, without one, by its name with underscores read as spaces, with its help text or `doc`, and its value. It SHOULD show the time types ([time.md](time.md)) and values of logical types as dates and times, and an enum value by the label of its symbol or by the symbol. It SHOULD NOT show `bytes` as text.
 
-Avro permits attributes that its specification does not define, as long as they do not change the serialized data. AXT defines these:
+Avro permits attributes that its specification does not define, as long as they do not change the serialized data. AXT defines the attributes of [metadata.md](metadata.md), which tell a receiver how to show and check each field: labels, help texts and emoji in several languages, the order and groups of fields, formats, patterns and limits. [metadata.md](metadata.md), section 2, lists every attribute. This section defines these four:
 
 | Attribute     | Where                  | Value                                                                                                                                                                                                                     |
 | ------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -159,7 +169,7 @@ Avro permits attributes that its specification does not define, as long as they 
 | `axt.anchor`  | A field (not its type) | For a field of `axt.DateTime` values, what a receiver keeps when its zone rules differ from the writer's: `local`, the wall clock, or `instant`, the instant ([time.md](time.md), section 6.4). Absent means `local`      |
 
 - Attribute names beginning with `axt.` are reserved for this specification. An app MAY add attributes of its own to its types; their names SHOULD begin with its namespace, such as `org.example.catalog.colour`.
-- A receiver MUST ignore attributes it does not know, and MUST NOT reject a schema because of them. A receiver MUST also ignore an `axt.title` that does not name a string field of the record, an `axt.unit` on a field that is not a number, and an `axt.anchor` on a field that holds no `axt.DateTime`.
+- A receiver MUST ignore attributes it does not know, and MUST NOT reject a schema because of them. A receiver MUST also ignore an `axt.title` that does not name a string field of the record, an `axt.unit` on a field that is not a number, an `axt.anchor` on a field that holds no `axt.DateTime`, and every other attribute that breaks its rules ([metadata.md](metadata.md), section 3.3).
 - `axt.unit` and `axt.anchor` sit on the field, not on the field's type, so that they describe that field only; `axt.anchor` cannot sit on the type, since the same `axt.DateTime` serves both anchors. Where the unit differs from record to record, as for an odometer reading or a measurement, it is a field of its own, not an attribute.
 - No attribute is part of the fingerprint (section 3.4).
 
@@ -205,7 +215,7 @@ Note, Task, Appointment, Person and Car are the example types named when the sco
 
 The fingerprints were computed with [conformance/tools/example_types.py](../conformance/tools/example_types.py). For every schema, the script:
 
-- checks the rules of section 5 that a program can check;
+- checks the rules of section 5 that a program can check, among them the rules of every attribute it carries, with the code of [conformance/tools/metadata_rules.py](../conformance/tools/metadata_rules.py);
 - computes the Parsing Canonical Form and the CRC-64-AVRO fingerprint, and compares them with those of the Python libraries fastavro 1.13.1 and `avro` 1.12.2;
 - encodes one example datum with fastavro, decodes it back, and checks that `avro` decodes the same bytes and encodes them to the same bytes again;
 - uses every default once in schema resolution, with both libraries: it writes a datum with the schema without its defaulted fields, and one with the schema whose nested records lack their defaulted fields, and reads both with the full schema;

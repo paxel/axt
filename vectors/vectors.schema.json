@@ -19,6 +19,7 @@
     "encoding",
     "types",
     "time",
+    "metadata",
     "records",
     "manifest",
     "keys",
@@ -145,6 +146,20 @@
     {
      "if": {
       "properties": {
+       "op": {"const": "check_record"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["schema", "body"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
        "op": {"const": "check_signing_key"}
       }
      },
@@ -222,6 +237,20 @@
       "properties": {
        "input": {
         "required": ["writer_schema", "reader_schema", "body"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "describe"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["schema", "field", "languages"]
        }
       }
      }
@@ -589,7 +618,11 @@
      "type": "string",
      "pattern": "^[A-Z][A-Z_]*$"
     },
-    "note": {"description": "Why, for people; the runner does not compare it.", "type": "string"}
+    "note": {"description": "Why, for people; the runner does not compare it.", "type": "string"},
+    "field": {
+     "description": "For VALUE_INVALID, the path of the value that breaks a rule (spec/metadata.md, section 7.2), or null; compared.",
+     "type": ["string", "null"]
+    }
    }
   }
  },
@@ -647,6 +680,26 @@
        "properties": {
         "op": {
          "enum": ["add_duration", "decode_record", "fingerprint", "resolve_date_time"]
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "if": {
+    "properties": {
+     "category": {"const": "metadata"}
+    }
+   },
+   "then": {
+    "properties": {
+     "vectors": {
+      "items": {
+       "properties": {
+        "op": {
+         "enum": ["check_record", "describe"]
         }
        }
       }
