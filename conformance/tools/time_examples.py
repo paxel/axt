@@ -413,6 +413,27 @@ INVALID = [
      "zone is not a time zone name"),
     ("a Duration of plus a month and minus a day", "Duration", duration(1, -1), "parts of both signs"),
     ("a Duration of minus a day and plus an hour", "Duration", duration(0, -1, HOUR), "parts of both signs"),
+    ("a Date with the day 32 in January", "Date", date(2026, 1, 32), "day out of range for the month"),
+    ("a Time with a negative millisecond", "Time", time(10, 0, 0, -1), "millisecond out of range"),
+    ("a DateTime in the month 13", "DateTime", floating(2026, 13, 1, 10, 0), "month out of range"),
+    ("a DateTime on the day 0", "DateTime", floating(2026, 1, 0, 10, 0), "day out of range for the month"),
+    ("a DateTime on 29 February 2027, not a leap year", "DateTime", floating(2027, 2, 29, 10, 0), "day out of range for the month"),
+    ("a DateTime in the year 10000", "DateTime", floating(10000, 1, 1, 0, 0), "year out of range"),
+    ("a DateTime at 24:00", "DateTime", floating(2026, 11, 24, 24, 0), "hour out of range"),
+    ("a DateTime with the minute 60", "DateTime", floating(2026, 11, 24, 10, 60), "minute out of range"),
+    ("a DateTime with the millisecond 1000", "DateTime", floating(2026, 11, 24, 10, 0, 0, 1000), "millisecond out of range"),
+    ("a DateTime with an offset below -18 hours", "DateTime", zoned(2026, 11, 16, 7, 0, "Example/Far_West", -MAX_OFFSET - 1),
+     "offset_seconds out of range"),
+    ("a DateTime with a zone name of 65 bytes", "DateTime", zoned(2026, 11, 16, 7, 0, "Example/" + "A" * 57, 0),
+     "zone is not a time zone name"),
+    ("a DateTime with a part of its zone name that begins with -", "DateTime", zoned(2026, 11, 16, 7, 0, "Example/-West", 0),
+     "zone is not a time zone name"),
+    ("a DateTime with an empty part of its zone name", "DateTime", zoned(2026, 11, 16, 7, 0, "Europe//Berlin", CET),
+     "zone is not a time zone name"),
+    ("a DateTime with an offset and an instant but no zone", "DateTime", dict(zoned(2026, 11, 16, 7, 0, BERLIN, CET), zone=None),
+     "zone, offset_seconds and instant_ms not all null or all set"),
+    ("a Duration of plus a month and minus a millisecond", "Duration", duration(1, 0, -1), "parts of both signs"),
+    ("a Duration of minus a month and plus a day", "Duration", duration(-1, 1), "parts of both signs"),
 ]
 
 # Valid edges, kept apart from the examples of section 9.
@@ -431,6 +452,16 @@ EDGES = [
     ("the zero Duration", "Duration", duration()),
     ("a Duration back by a month, two days and three hours", "Duration", duration(-1, -2, -3 * HOUR)),
     ("36 hours, not converted into days", "Duration", duration(millis=36 * HOUR)),
+    ("an all-day time: floating at 00:00", "DateTime", floating(2026, 11, 24, 0, 0)),
+    ("29 February 2028 in a DateTime, a leap year", "DateTime", zoned(2028, 2, 29, 9, 0, BERLIN, CET)),
+    ("a negative offset, America/New_York in winter", "DateTime", zoned(2026, 11, 24, 10, 0, "America/New_York", -18000)),
+    ("the smallest offset", "DateTime", zoned(2026, 1, 1, 0, 0, "Example/Far_West", -MAX_OFFSET)),
+    ("a zone name of 64 bytes", "DateTime", zoned(2026, 11, 16, 7, 0, "Example/" + "A" * 56, 0)),
+    ("the last millisecond of the year 9999, floating", "DateTime", floating(9999, 12, 31, 23, 59, 59, 999)),
+    ("a Duration back by a week, in days only", "Duration", duration(days=-7)),
+    ("the largest months and days of an int", "Duration", duration(INT_MAX, INT_MAX)),
+    ("the smallest months and days of an int, and -(2^53 - 1) milliseconds", "Duration",
+     duration(INT_MIN, INT_MIN, -(2**53 - 1))),
 ]
 
 # Additions of spec/time.md, section 7.2: (label, DateTime, Duration, expected DateTime).
@@ -464,6 +495,19 @@ ADDITIONS = [
      duration(millis=24 * HOUR), floating(2026, 10, 25, 10, 0)),
     ("a floating 2026-11-16 00:05, -PT15M, is 23:50 the day before", floating(2026, 11, 16, 0, 5),
      duration(millis=-15 * MINUTE), floating(2026, 11, 15, 23, 50)),
+    ("Europe/Berlin 2027-03-27 10:00 + 1 day is 10:00 the next day, 23 hours later",
+     zoned(2027, 3, 27, 10, 0, BERLIN, CET), duration(days=1), zoned(2027, 3, 28, 10, 0, BERLIN, CEST)),
+    ("Europe/Berlin 2026-10-26 10:00 - 1 day is 10:00 the day before, 25 hours earlier",
+     zoned(2026, 10, 26, 10, 0, BERLIN, CET), duration(days=-1), zoned(2026, 10, 25, 10, 0, BERLIN, CET)),
+    ("Europe/Berlin 2026-12-31 23:30 + 1 hour is 00:30 on 1 January 2027",
+     zoned(2026, 12, 31, 23, 30, BERLIN, CET), duration(millis=HOUR), zoned(2027, 1, 1, 0, 30, BERLIN, CET)),
+    ("a zone these rules do not have + 1 day keeps its offset",
+     zoned(2026, 11, 16, 7, 0, "Mars/Olympus_Mons", 3600), duration(days=1), zoned(2026, 11, 17, 7, 0, "Mars/Olympus_Mons", 3600)),
+    ("a zone these rules do not have + 90 minutes moves the wall clock with the instant",
+     zoned(2026, 11, 16, 23, 0, "Mars/Olympus_Mons", 3600), duration(millis=90 * MINUTE),
+     zoned(2026, 11, 17, 0, 30, "Mars/Olympus_Mons", 3600)),
+    ("a floating 2028-02-29 + 12 months is 28 February 2029", floating(2028, 2, 29, 9, 0), duration(12),
+     floating(2029, 2, 28, 9, 0)),
 ]
 
 # A writer whose rules for Europe/Berlin had no summer time in 2026 wrote this value; this system's
@@ -482,6 +526,9 @@ RESOLUTIONS = [
      zoned(2026, 10, 25, 2, 30, BERLIN, 0), "local", zoned(2026, 10, 25, 2, 30, BERLIN, CEST)),
     ("a wall clock in the gap with an offset these rules do not give moves later by the gap",
      zoned(2027, 3, 28, 2, 30, BERLIN, CET), "local", zoned(2027, 3, 28, 3, 30, BERLIN, CEST)),
+    ("a wall clock in the overlap with an offset these rules do not give keeps its instant",
+     zoned(2026, 10, 25, 2, 30, BERLIN, 0), "instant", zoned(2026, 10, 25, 3, 30, BERLIN, CET)),
+    ("a zone these rules do not have keeps every field, also for the instant", EDGES[7][2], "instant", EDGES[7][2]),
 ]
 
 # A type that holds two DateTimes and a Date (spec/time.md, section 3); not an example type.
@@ -602,10 +649,14 @@ def check():
         y, m = divmod(v["year"] * 12 + v["month"] - 1 + d["months"], 12)
         wall = datetime.datetime(y, m + 1, min(v["day"], calendar.monthrange(y, m + 1)[1]), v["hour"], v["minute"])
         wall += datetime.timedelta(days=d["days"])
-        if v["zone"] is None:
+        if v["zone"] is None or not known_zone(v["zone"]):
+            # A floating time, and a zone these rules do not have, which keeps its offset: the wall clock moves alone.
             wall += datetime.timedelta(milliseconds=d["millis"])
             assert (wall.year, wall.month, wall.day, wall.hour, wall.minute) == \
                    (got["year"], got["month"], got["day"], got["hour"], got["minute"]), label
+            if v["zone"] is not None:
+                assert got["offset_seconds"] == v["offset_seconds"], label
+                assert got["instant_ms"] == local_ms(got) - got["offset_seconds"] * 1000, label
         else:
             z = zoneinfo.ZoneInfo(v["zone"])
             if d["months"] or d["days"]:

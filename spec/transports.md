@@ -487,7 +487,7 @@ A `PING`:
 
 ### 7.5 Through the relay
 
-Old Brain Fix creates its mailbox. cat-a-log puts the sealed message of [keys.md](keys.md), section 7.4, 1,073 bytes with the SHA-256 `6be58e45f035eed7f4e3feb8fec0b59f00f74f93122015d22e6133bc65d187e7`, into it. Old Brain Fix lists its mailbox, fetches the message and deletes it. The requests are shown in HTTP/1.1 with the headers this document names; the body of the put and of the fetch is shown as a note.
+Old Brain Fix creates its mailbox. cat-a-log puts the sealed message of [keys.md](keys.md), section 7.4, 1,073 bytes with the SHA-256 `7cbe47862344527d93735c97159cc8cf4d3631647233cac735553c968e6c2bc8`, into it. Old Brain Fix lists its mailbox, fetches the message and deletes it. The requests are shown in HTTP/1.1 with the headers this document names; the body of the put and of the fetch is shown as a note.
 
 Old Brain Fix creates its mailbox:
 
@@ -506,7 +506,7 @@ Content-Length: 0
 cat-a-log puts the sealed message:
 
 ```text
-PUT /axt/v1/mailboxes/b3774fffae905d5721a9b398cd04f6d400afb09cb8cff3e216c3a3ba77c60063/messages/6be58e45f035eed7f4e3feb8fec0b59f00f74f93122015d22e6133bc65d187e7 HTTP/1.1
+PUT /axt/v1/mailboxes/b3774fffae905d5721a9b398cd04f6d400afb09cb8cff3e216c3a3ba77c60063/messages/7cbe47862344527d93735c97159cc8cf4d3631647233cac735553c968e6c2bc8 HTTP/1.1
 Host: relay.example.org
 Content-Type: application/octet-stream
 Content-Length: 1073
@@ -532,13 +532,13 @@ HTTP/1.1 200 OK
 Content-Type: application/json
 Content-Length: 100
 
-{"messages":[{"id":"6be58e45f035eed7f4e3feb8fec0b59f00f74f93122015d22e6133bc65d187e7","size":1073}]}
+{"messages":[{"id":"7cbe47862344527d93735c97159cc8cf4d3631647233cac735553c968e6c2bc8","size":1073}]}
 ```
 
 It fetches the message:
 
 ```text
-GET /axt/v1/mailboxes/b3774fffae905d5721a9b398cd04f6d400afb09cb8cff3e216c3a3ba77c60063/messages/6be58e45f035eed7f4e3feb8fec0b59f00f74f93122015d22e6133bc65d187e7 HTTP/1.1
+GET /axt/v1/mailboxes/b3774fffae905d5721a9b398cd04f6d400afb09cb8cff3e216c3a3ba77c60063/messages/7cbe47862344527d93735c97159cc8cf4d3631647233cac735553c968e6c2bc8 HTTP/1.1
 Host: relay.example.org
 Authorization: Bearer 72a36fdb88d435e53e3576b0c25662e14c9e4fba632cdda6019acbb851861441
 ```
@@ -554,7 +554,7 @@ Content-Length: 1073
 It deletes the message:
 
 ```text
-DELETE /axt/v1/mailboxes/b3774fffae905d5721a9b398cd04f6d400afb09cb8cff3e216c3a3ba77c60063/messages/6be58e45f035eed7f4e3feb8fec0b59f00f74f93122015d22e6133bc65d187e7 HTTP/1.1
+DELETE /axt/v1/mailboxes/b3774fffae905d5721a9b398cd04f6d400afb09cb8cff3e216c3a3ba77c60063/messages/7cbe47862344527d93735c97159cc8cf4d3631647233cac735553c968e6c2bc8 HTTP/1.1
 Host: relay.example.org
 Authorization: Bearer 72a36fdb88d435e53e3576b0c25662e14c9e4fba632cdda6019acbb851861441
 ```

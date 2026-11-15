@@ -122,7 +122,8 @@ ENVELOPE_FP = pe.fp8(pe.fingerprints["Envelope"][1])
 # The DATA message of spec/keys.md, section 7.2 (and spec/envelope.md, section 10.2) and its signed bytes.
 MEMO_MSG = env.message
 MEMO_SIGNED = keys.MESSAGE_PREFIX + MEMO_MSG[10:-64]
-assert hashlib.sha256(MEMO_MSG).hexdigest() == "c6901788f627c534b72f85e50165db1ee77aa89549f9713d5cbb2a2119b1ee83"
+assert MEMO_MSG[0x53] < 0x80 and MEMO_MSG[0x54:0x56] == b"\xc3\x01", "the body begins at 0x54, as the slices below assume"
+assert hashlib.sha256(MEMO_MSG).hexdigest() == "23fdfeb720ae7a368b936ce9f990039b7472fe7128927da9c3648e9b9ea67f07"
 assert MEMO_MSG == tx.memo_msg
 
 # --- keys (spec/keys.md) --------------------------------------------------------
@@ -285,8 +286,8 @@ def keys_category():
           {"message": B(bad_sig)}, reject("SIGNATURE_INVALID"))
 
     # Padding (spec/keys.md, section 4.4).
-    table = {183: 1024, 1023: 1024, 1024: 1088, 4000: 4096, 100000: 100352, 16777216: 17301504}
-    for n in [1, 183, 1022, 1023, 1024, 1087, 1088, 4000, 100000, 16777216]:
+    table = {len(MEMO_MSG): 1024, 1023: 1024, 1024: 1088, 4000: 4096, 100000: 100352, 16777216: 17301504}
+    for n in [1, len(MEMO_MSG), 1022, 1023, 1024, 1087, 1088, 4000, 100000, 16777216]:
         got = keys.padded_length(n)
         assert table.get(n, got) == got
         c.add("padded_length", f"the padded length of a message of {n} bytes", ["keys.md 4.4"],
@@ -303,7 +304,7 @@ def keys_category():
 
     # Opening (spec/keys.md, section 4.5).
     published = tx.SEALED
-    assert hashlib.sha256(published).hexdigest() == "6be58e45f035eed7f4e3feb8fec0b59f00f74f93122015d22e6133bc65d187e7"
+    assert hashlib.sha256(published).hexdigest() == "7cbe47862344527d93735c97159cc8cf4d3631647233cac735553c968e6c2bc8"
     other_sk = test_secret("cat-a-log, new phone, X25519")
     opens = [
         ("the sealed message of keys.md, section 7.4", published, [OBF_X25519_SK], MEMO_MSG, None),
@@ -313,10 +314,10 @@ def keys_category():
         ("one byte of the ciphertext changed", published[:-1] + bytes([published[-1] ^ 1]), [OBF_X25519_SK], None, "NOT_OPENED"),
         ("one byte of enc changed", published[:5] + bytes([published[5] ^ 1]) + published[6:], [OBF_X25519_SK], None, "NOT_OPENED"),
         ("an enc of small order, whose X25519 output is all zero", b"\x01" + bytes(32) + published[33:], [OBF_X25519_SK], None, "NOT_OPENED"),
-        ("a plaintext without the byte 80", sealed(MEMO_MSG, OBF_X25519, "padding case 1", MEMO_MSG + bytes(841)),
+        ("a plaintext without the byte 80", sealed(MEMO_MSG, OBF_X25519, "padding case 1", MEMO_MSG + bytes(1024 - len(MEMO_MSG))),
          [OBF_X25519_SK], None, "PADDING_INVALID"),
         ("a plaintext with 80 followed by a byte other than zero",
-         sealed(MEMO_MSG, OBF_X25519, "padding case 2", MEMO_MSG + b"\x80" + bytes(839) + b"\x01"), [OBF_X25519_SK], None, "PADDING_INVALID"),
+         sealed(MEMO_MSG, OBF_X25519, "padding case 2", MEMO_MSG + b"\x80" + bytes(1022 - len(MEMO_MSG)) + b"\x01"), [OBF_X25519_SK], None, "PADDING_INVALID"),
         ("a plaintext of zero bytes only", sealed(MEMO_MSG, OBF_X25519, "padding case 3", bytes(1024)), [OBF_X25519_SK], None, "PADDING_INVALID"),
     ]
     for label, data, sks, message, error in opens:
@@ -434,7 +435,7 @@ def encoding_category():
               {"schema": text}, accept({"canonical_form": pcf, "fingerprint": H(pe.fp8(fp))}))
     memo_text = json.dumps(env.MEMO_SCHEMA)
     pcf, fp = me.fingerprint(memo_text)
-    assert fp == 0xB71CE40C6856B368
+    assert fp == 0x37F20E16CADCAC73
     c.add("fingerprint", "com.example.Memo of envelope.md, section 10.1", ["envelope.md 5", "envelope.md 10.1"],
           {"schema": memo_text}, accept({"canonical_form": pcf, "fingerprint": H(pe.fp8(fp))}))
     published = {"Envelope": 0xA2E1E84FE5E40C7D, "Manifest": 0x6B08ECB5D38003B3, "KeyMove": 0xA9E20AFEA72F2876,
@@ -493,7 +494,7 @@ def encoding_category():
         ("a negative kind index", m[:11] + keys.zigzag(-1) + m[12:], "INVALID_MESSAGE", ["envelope.md 2.2"]),
         ("record union index 2", m[:0x2c] + keys.zigzag(2) + m[0x2d:], "INVALID_MESSAGE", ["envelope.md 2"]),
         ("a negative length of the record id", m[:0x2d] + keys.zigzag(-36) + m[0x2e:], "INVALID_MESSAGE", ["envelope.md 8"]),
-        ("a negative length of the body", envelope("DATA", CAT, (env.RECORD_ID, 1), b"", sig)[:0x53] + keys.zigzag(-35) + m[0x54:],
+        ("a negative length of the body", envelope("DATA", CAT, (env.RECORD_ID, 1), b"", sig)[:0x53] + keys.zigzag(-(len(m) - 0x54 - 64)) + m[0x54:],
          "INVALID_MESSAGE", ["envelope.md 8"]),
         ("a body length of 2^40, beyond the end", m[:0x53] + keys.zigzag(1 << 40) + m[0x54:], "INVALID_MESSAGE", ["envelope.md 8"]),
         ("a record id that is not UTF-8 (byte ff)", envelope("DATA", CAT, (b"\xff" + env.RECORD_ID.encode()[1:], 1), m[0x54:-64], sig),
@@ -597,6 +598,20 @@ def types_category():
                 record_vector(f"axt.example.v1.{name}: an unknown symbol of {f['name']} reads as the default {f['type']['default']}",
                               ["types.md 5.4", "envelope.md 6"], wtext, texts[name], data)
 
+    # All-day and floating times, and values that break a rule (example_types.py). decode_record rejects a time value
+    # that is not valid; a value that only breaks a check of an attribute is taken (spec/conformance.md, section 5.2).
+    assert (len(rules.VALID), len(rules.BREACHES)) == (10, 17)
+    for label, name, datum in rules.VALID:
+        record_vector(f"axt.example.v1.{name}: {label}", ["types.md 5.6", "time.md 6", "time.md 8"], texts[name], None,
+                      single_object(texts[name], datum))
+    for label, name, datum, path, rule in rules.BREACHES:
+        schema = json.loads(texts[name])
+        found = tm.value_breaches(schema, datum)
+        expected = reject("VALUE_INVALID", found[0][2], field=found[0][0]) if found else None
+        record_vector(f"{'reject' if found else 'take'} axt.example.v1.{name}: {label}",
+                      ["time.md 8", "metadata.md 7.2"] if found else ["metadata.md 7.1", "conformance.md 5.13"],
+                      texts[name], None, single_object(texts[name], datum), expected)
+
     ap_text, ap = texts["Appointment"], rules.DATA["Appointment"]
     ap_body = single_object(ap_text, ap)
     # The reminders, two axt.Duration, in two array blocks, the first with a negative count and its size (Avro 1.12, Arrays).
@@ -667,7 +682,7 @@ def time_category():
         c.add("fingerprint", f"axt.{n}", ["time.md 2", "time.md 9.1"], {"schema": text},
               accept({"canonical_form": pcf, "fingerprint": H(pe.fp8(fp))}))
     # The counts of spec/time.md, section 9.
-    assert (len(tm.EDGES), len(tm.INVALID), len(tm.ADDITIONS)) == (13, 29, 16)
+    assert (len(tm.EDGES), len(tm.INVALID), len(tm.ADDITIONS), len(tm.RESOLUTIONS)) == (22, 45, 22, 10)
     refs = {"Date": "time.md 4", "Time": "time.md 5", "DateTime": "time.md 6.2", "Duration": "time.md 7.1"}
 
     def record_vector(label, refs_, text, data, expected):
@@ -778,6 +793,17 @@ def metadata_category():
     for pattern, why in mx.BAD_PATTERNS:
         check(f"a pattern that is not an I-Regexp, {why}, is ignored", mx.compact(mx.with_pattern(pattern)), {"code": "?"},
               ["metadata.md 6.4", "metadata.md 3.3"])
+    # The example types: every example datum and the further valid records keep their checks; each record of
+    # example_types.py with a value that breaks a rule names the first such value.
+    examples = {n: pe.compact(EXAMPLES / f"{n}.1.avsc") for n in TYPE_FPS}
+    for name in TYPE_FPS:
+        check(f"the record of axt.example.v1.{name} of types.md keeps every check", examples[name], rules.DATA[name],
+              ["metadata.md 6", "types.md 5.9"])
+    for label, name, datum in rules.VALID:
+        check(f"axt.example.v1.{name}: {label}", examples[name], datum, ["metadata.md 6", "time.md 6"])
+    for label, name, datum, path, rule in rules.BREACHES:
+        assert mr.breaches(json.loads(examples[name]), datum, tm.time_check)[0][:2] == (path, rule), label
+        check(f"reject axt.example.v1.{name}: {label}", examples[name], datum, ["metadata.md 7.1", "metadata.md 7.2"])
     # Field paths into a map and above 1,024 bytes, and time values next to the checks.
     due = mx.compact(mx.DUE)
     check("a time value that is not valid in a map is named by its key", due, mx.DUE_VALUE, ["metadata.md 7.2", "time.md 8"])
@@ -1402,8 +1428,12 @@ def records_category():
 
     per_field_delete = {"local_changes": "per_field", "delete_with_local_changes": "delete"}
     per_field_keep = {"local_changes": "per_field", "delete_with_local_changes": "keep"}
-    v1 = {"title": "Vet", "start": "2025-11-18T10:00", "location": "", "notes": ""}
-    v3 = {"title": "Vet", "start": "2025-11-18T10:30", "location": "", "notes": "Bring the vaccination card"}
+    # The appointment of spec/records.md, section 9, as complete values of axt.example.v1.Appointment: start is an
+    # axt.DateTime in Europe/Berlin, the other fields keep their defaults. Version 3 moves start to 10:30.
+    v1 = {"title": "Vet", "start": tm.zoned(2025, 11, 18, 10, 0, tm.BERLIN, tm.CET), "end": None, "all_day": False,
+          "location": "", "notes": "", "reminders": []}
+    v3 = dict(v1, start=tm.zoned(2025, 11, 18, 10, 30, tm.BERLIN, tm.CET), notes="Bring the vaccination card")
+    task = json.loads(json.dumps(rules.DATA["Task"]))  # a record of axt.example.v1.Task, for the steps of another type
     mine = "Dr. Weber, Hauptstr. 5"
     merged = dict(v3, location=mine)
     head = [
@@ -1430,7 +1460,7 @@ def records_category():
                  (delete(4, other), done("APPLIED", 4, "tombstone", None)),
                  (data(3, v1, other), done("STALE", 4, "tombstone", None)),
                  (data(4, v1, other), done("DUPLICATE", 4, "tombstone", None)),
-                 (data(5, v1, other, TASK_T), done("APPLIED", 5, "there", v1))])
+                 (data(5, task, other, TASK_T), done("APPLIED", 5, "there", task))])
     scenario("a record its user deleted stays deleted; a later DELETE turns it into a tombstone", ["records.md 6.3"],
              per_field_delete, [
                  (data(1, v1), done("APPLIED", 1, "there", v1)),
@@ -1445,12 +1475,19 @@ def records_category():
                      (data(2, v1), done("APPLIED", 2, "there", v1)),
                      (change("location", mine), None),
                      (data(3, v3), done(outcome, 3, "there", value))])
-    a1 = {"a": 1, "b": 1, "c": 1}
+    card = "Bring the vaccination card"
+    v2 = dict(v1, title="Vet: vaccination", notes=card)
     scenario("only the kept values that differ from the message are named", ["records.md 6.1", "records.md 7"],
              per_field_delete, [
-                 (data(1, a1), done("APPLIED", 1, "there", a1)),
-                 (change("a", 2), None), (change("b", 2), None),
-                 (data(2, {"a": 1, "b": 2, "c": 3}), done("MERGED", 2, "there", {"a": 2, "b": 2, "c": 3}, ["a"]))])
+                 (data(1, v1), done("APPLIED", 1, "there", v1)),
+                 (change("location", mine), None), (change("notes", card), None),
+                 (data(2, v2), done("MERGED", 2, "there", dict(v2, location=mine), ["location"]))])
+    eleven = tm.zoned(2025, 11, 18, 11, 0, tm.BERLIN, tm.CET)
+    scenario("a nested record is one value: the start its user set is kept as a whole", ["records.md 6.1", "time.md 6"],
+             per_field_delete, [
+                 (data(1, v1), done("APPLIED", 1, "there", v1)),
+                 (change("start", eleven), None),
+                 (data(3, v3), done("MERGED", 3, "there", dict(v3, start=eleven), ["start"]))])
     scenario("a message that brings the value its user set is applied", ["records.md 6.1"], per_field_delete, [
         (data(1, v1), done("APPLIED", 1, "there", v1)),
         (change("location", mine), None),
@@ -1473,10 +1510,24 @@ def records_category():
                  (data(1, v1), done("DUPLICATE", 1, "there", v1))])
     scenario("a record keeps its type, also through a tombstone", ["records.md 4.3"], per_field_delete, [
         (data(1, v1), done("APPLIED", 1, "there", v1)),
-        (data(2, v1, REC_ID, TASK_T), failed("TYPE_CHANGED")),
+        (data(2, task, REC_ID, TASK_T), failed("TYPE_CHANGED")),
         (delete(2), done("APPLIED", 2, "tombstone", None)),
-        (data(3, v1, REC_ID, TASK_T), failed("TYPE_CHANGED")),
+        (data(3, task, REC_ID, TASK_T), failed("TYPE_CHANGED")),
         (data(3, v1), done("APPLIED", 3, "there", v1))])
+
+    # Every value in the sessions is a valid record of its type: it encodes with the type's schema, and its time
+    # values and the checks of its schema hold (spec/time.md, section 8; spec/metadata.md, section 6).
+    schemas = {f"axt.example.v1.{n}": json.loads((EXAMPLES / f"{n}.1.avsc").read_text(encoding="utf-8")) for n in TYPE_FPS}
+    for v in c.vectors:
+        for event, result in zip(v["input"]["events"], v["expected"]["steps"]):
+            m = event.get("message", {})
+            if m.get("kind") != "DATA":
+                continue
+            for value in (m["value"], result.get("value")):
+                if value is not None:
+                    schema = schemas[m["type"]]
+                    assert decode_meaning(json.dumps(schema), None, avro_encode(schema, value)) == value, v["id"]
+                    assert mr.breaches(schema, value, tm.time_check) == [], v["id"]
     return c
 
 
@@ -1701,6 +1752,36 @@ def same_values(v):
     return v
 
 
+# The vectors of each category by operation, and of them the rejected ones, as the table of spec/conformance.md,
+# section 7.4, counts them.
+COUNTS = {
+    "encoding": ({"fingerprint": 16, "decode_message": 30, "decode_body": 14, "encode_message": 5},
+                 {"decode_message": 17, "decode_body": 6}),
+    "types": ({"fingerprint": 8, "decode_record": 63}, {"decode_record": 21}),
+    "time": ({"fingerprint": 4, "decode_record": 81, "resolve_date_time": 10, "add_duration": 22}, {"decode_record": 46}),
+    "metadata": ({"describe": 22, "check_record": 209}, {"check_record": 113}),
+    "records": ({"apply": 13}, {}),
+    "manifest": ({"check_manifest": 52, "fit": 19}, {"check_manifest": 46}),
+    "keys": ({"public_key": 4, "sign": 4, "verify": 11, "check_signing_key": 15, "check_encryption_key": 10,
+              "short_fingerprint": 3, "verify_message": 8, "key_move": 8, "padded_length": 10, "seal": 2, "open": 10},
+             {"verify": 9, "check_signing_key": 12, "check_encryption_key": 8, "verify_message": 3, "key_move": 6, "open": 8}),
+    "protocol": ({"choose_format": 3, "session": 23}, {}),
+    "file": ({"read_file": 46}, {"read_file": 31}),
+    "qr": ({"parse_qr": 25, "qr_text": 3}, {"parse_qr": 20}),
+    "local": ({"hello_frame": 2, "connection": 19}, {}),
+    "relay": ({"mailbox_id": 2, "request": 7, "reaction": 28, "listing": 3}, {}),
+    "relay-server": ({"relay": 2}, {}),
+}
+
+
+def op_counts(vectors, rejected=False):
+    out = {}
+    for v in vectors:
+        if not rejected or "reject" in v["expected"]:
+            out[v["op"]] = out.get(v["op"], 0) + 1
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--check", action="store_true", help="compare with the files under vectors/ instead of writing")
@@ -1712,6 +1793,8 @@ def main():
         text = render(c.document()) + "\n"
         path = (VECTORS if args.check else args.out) / c.name / f"{c.name}.json"
         counts.append((c.name, len(c.vectors)))
+        assert (op_counts(c.vectors), op_counts(c.vectors, rejected=True)) == COUNTS[c.name], \
+            f"{c.name}: {op_counts(c.vectors)}, rejected {op_counts(c.vectors, rejected=True)}; not the counts of spec/conformance.md, section 7.4"
         if args.check:
             # The DEFLATE of a large value depends on the zlib that writes it; its length and SHA-256 do not.
             if not path.exists() or same_values(json.loads(path.read_text(encoding="utf-8"))) != same_values(json.loads(text)):

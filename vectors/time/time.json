@@ -553,6 +553,216 @@
    }
   },
   {
+   "id": "time/decode_record/axt-datetime-an-all-day-time-floating-at-00-00",
+   "op": "decode_record",
+   "description": "axt.DateTime: an all-day time: floating at 00:00",
+   "refs": ["time.md 6.2", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f163000000000000000"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "year": 2026,
+      "month": 11,
+      "day": 24,
+      "hour": 0,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": null,
+      "offset_seconds": null,
+      "instant_ms": null
+     }
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-datetime-29-february-2028-in-a-datetime-a-leap-year",
+   "op": "decode_record",
+   "description": "axt.DateTime: 29 February 2028 in a DateTime, a leap year",
+   "refs": ["time.md 6.2", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d81f043a12000000021a4575726f70652f4265726c696e02a0380280a0ddfcea6a"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "year": 2028,
+      "month": 2,
+      "day": 29,
+      "hour": 9,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1835424000000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-datetime-a-negative-offset-america-new-york-in-winter",
+   "op": "decode_record",
+   "description": "axt.DateTime: a negative offset, America/New_York in winter",
+   "refs": ["time.md 6.2", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f1630140000000220416d65726963612f4e65775f596f726b029f990202809691e1c168"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "year": 2026,
+      "month": 11,
+      "day": 24,
+      "hour": 10,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "America/New_York",
+      "offset_seconds": -18000,
+      "instant_ms": 1795532400000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-datetime-the-smallest-offset",
+   "op": "decode_record",
+   "description": "axt.DateTime: the smallest offset",
+   "refs": ["time.md 6.2", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f02020000000002204578616d706c652f4661725f5765737402bff4070280b4bbabef66"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "year": 2026,
+      "month": 1,
+      "day": 1,
+      "hour": 0,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Example/Far_West",
+      "offset_seconds": -64800,
+      "instant_ms": 1767290400000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-datetime-a-zone-name-of-64-bytes",
+   "op": "decode_record",
+   "description": "axt.DateTime: a zone name of 64 bytes",
+   "refs": ["time.md 6.2", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f16200e0000000280014578616d706c652f414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414102000280c6beb2bc68"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "year": 2026,
+      "month": 11,
+      "day": 16,
+      "hour": 7,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Example/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "offset_seconds": 0,
+      "instant_ms": 1794812400000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-datetime-the-last-millisecond-of-the-year-9999-floating",
+   "op": "decode_record",
+   "description": "axt.DateTime: the last millisecond of the year 9999, floating",
+   "refs": ["time.md 6.2", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b599e9c01183e2e7676ce0f000000"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "year": 9999,
+      "month": 12,
+      "day": 31,
+      "hour": 23,
+      "minute": 59,
+      "second": 59,
+      "millisecond": 999,
+      "zone": null,
+      "offset_seconds": null,
+      "instant_ms": null
+     }
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-duration-a-duration-back-by-a-week-in-days-only",
+   "op": "decode_record",
+   "description": "axt.Duration: a Duration back by a week, in days only",
+   "refs": ["time.md 7.1", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Duration\",\"namespace\":\"axt\",\"doc\":\"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"months\",\"type\":\"int\",\"doc\":\"The number of calendar months, negative for a length back in time. A year is 12 months.\"},{\"name\":\"days\",\"type\":\"int\",\"doc\":\"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\"},{\"name\":\"millis\",\"type\":\"long\",\"doc\":\"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\"}]}",
+    "reader_schema": null,
+    "body": "c30185f0b37354d1ddff000d00"
+   },
+   "expected": {
+    "accept": {
+     "value": {"months": 0, "days": -7, "millis": 0}
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-duration-the-largest-months-and-days-of-an-int",
+   "op": "decode_record",
+   "description": "axt.Duration: the largest months and days of an int",
+   "refs": ["time.md 7.1", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Duration\",\"namespace\":\"axt\",\"doc\":\"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"months\",\"type\":\"int\",\"doc\":\"The number of calendar months, negative for a length back in time. A year is 12 months.\"},{\"name\":\"days\",\"type\":\"int\",\"doc\":\"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\"},{\"name\":\"millis\",\"type\":\"long\",\"doc\":\"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\"}]}",
+    "reader_schema": null,
+    "body": "c30185f0b37354d1ddfffeffffff0ffeffffff0f00"
+   },
+   "expected": {
+    "accept": {
+     "value": {"months": 2147483647, "days": 2147483647, "millis": 0}
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/axt-duration-the-smallest-months-and-days-of-an-int-and-2-53-1-milliseco",
+   "op": "decode_record",
+   "description": "axt.Duration: the smallest months and days of an int, and -(2^53 - 1) milliseconds",
+   "refs": ["time.md 7.1", "time.md 9.2"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Duration\",\"namespace\":\"axt\",\"doc\":\"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"months\",\"type\":\"int\",\"doc\":\"The number of calendar months, negative for a length back in time. A year is 12 months.\"},{\"name\":\"days\",\"type\":\"int\",\"doc\":\"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\"},{\"name\":\"millis\",\"type\":\"long\",\"doc\":\"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\"}]}",
+    "reader_schema": null,
+    "body": "c30185f0b37354d1ddffffffffff0fffffffff0ffdffffffffffff1f"
+   },
+   "expected": {
+    "accept": {
+     "value": {"months": -2147483648, "days": -2147483648, "millis": -9007199254740991}
+    }
+   }
+  },
+  {
    "id": "time/decode_record/reject-a-date-without-any-part",
    "op": "decode_record",
    "description": "reject a Date without any part",
@@ -975,6 +1185,234 @@
    }
   },
   {
+   "id": "time/decode_record/reject-a-date-with-the-day-32-in-january",
+   "op": "decode_record",
+   "description": "reject a Date with the day 32 in January",
+   "refs": ["time.md 4", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}",
+    "reader_schema": null,
+    "body": "c3016b79ae7dc89383f202d41f02020240"
+   },
+   "expected": {
+    "reject": {"error": "VALUE_INVALID", "note": "day out of range for the month", "field": ""}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-time-with-a-negative-millisecond",
+   "op": "decode_record",
+   "description": "reject a Time with a negative millisecond",
+   "refs": ["time.md 5", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Time\",\"namespace\":\"axt\",\"doc\":\"A time of day on the wall clock, to the millisecond, without a date and without a time zone, such as 07:30 for an alarm. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60. 0 when the time is given to the minute.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999. 0 when the time is given to the second or the minute.\"}]}",
+    "reader_schema": null,
+    "body": "c301ef1499f0aba0786f14000001"
+   },
+   "expected": {
+    "reject": {"error": "VALUE_INVALID", "note": "millisecond out of range", "field": ""}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-in-the-month-13",
+   "op": "decode_record",
+   "description": "reject a DateTime in the month 13",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f1a0214000000000000"
+   },
+   "expected": {
+    "reject": {"error": "VALUE_INVALID", "note": "month out of range", "field": ""}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-on-the-day-0",
+   "op": "decode_record",
+   "description": "reject a DateTime on the day 0",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f020014000000000000"
+   },
+   "expected": {
+    "reject": {"error": "VALUE_INVALID", "note": "day out of range for the month", "field": ""}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-on-29-february-2027-not-a-leap-year",
+   "op": "decode_record",
+   "description": "reject a DateTime on 29 February 2027, not a leap year",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d61f043a14000000000000"
+   },
+   "expected": {
+    "reject": {"error": "VALUE_INVALID", "note": "day out of range for the month", "field": ""}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-in-the-year-10000",
+   "op": "decode_record",
+   "description": "reject a DateTime in the year 10000",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59a09c01020200000000000000"
+   },
+   "expected": {
+    "reject": {"error": "VALUE_INVALID", "note": "year out of range", "field": ""}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-at-24-00",
+   "op": "decode_record",
+   "description": "reject a DateTime at 24:00",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f163030000000000000"
+   },
+   "expected": {
+    "reject": {"error": "VALUE_INVALID", "note": "hour out of range", "field": ""}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-with-the-minute-60",
+   "op": "decode_record",
+   "description": "reject a DateTime with the minute 60",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f163014780000000000"
+   },
+   "expected": {
+    "reject": {"error": "VALUE_INVALID", "note": "minute out of range", "field": ""}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-with-the-millisecond-1000",
+   "op": "decode_record",
+   "description": "reject a DateTime with the millisecond 1000",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f1630140000d00f000000"
+   },
+   "expected": {
+    "reject": {"error": "VALUE_INVALID", "note": "millisecond out of range", "field": ""}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-with-an-offset-below-18-hours",
+   "op": "decode_record",
+   "description": "reject a DateTime with an offset below -18 hours",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f16200e00000002204578616d706c652f4661725f5765737402c1f40702d0e9a4f0bc68"
+   },
+   "expected": {
+    "reject": {"error": "VALUE_INVALID", "note": "offset_seconds out of range", "field": ""}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-with-a-zone-name-of-65-bytes",
+   "op": "decode_record",
+   "description": "reject a DateTime with a zone name of 65 bytes",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f16200e0000000282014578616d706c652f41414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414141414102000280c6beb2bc68"
+   },
+   "expected": {
+    "reject": {"error": "VALUE_INVALID", "note": "zone is not a time zone name", "field": ""}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-with-a-part-of-its-zone-name-that-begins-with",
+   "op": "decode_record",
+   "description": "reject a DateTime with a part of its zone name that begins with -",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f16200e000000021a4578616d706c652f2d5765737402000280c6beb2bc68"
+   },
+   "expected": {
+    "reject": {"error": "VALUE_INVALID", "note": "zone is not a time zone name", "field": ""}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-with-an-empty-part-of-its-zone-name",
+   "op": "decode_record",
+   "description": "reject a DateTime with an empty part of its zone name",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f16200e000000021c4575726f70652f2f4265726c696e02a03802808c87afbc68"
+   },
+   "expected": {
+    "reject": {"error": "VALUE_INVALID", "note": "zone is not a time zone name", "field": ""}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-datetime-with-an-offset-and-an-instant-but-no-zone",
+   "op": "decode_record",
+   "description": "reject a DateTime with an offset and an instant but no zone",
+   "refs": ["time.md 6.2", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}",
+    "reader_schema": null,
+    "body": "c3013789a6b1c38b8b59d41f16200e0000000002a03802808c87afbc68"
+   },
+   "expected": {
+    "reject": {
+     "error": "VALUE_INVALID",
+     "note": "zone, offset_seconds and instant_ms not all null or all set",
+     "field": ""
+    }
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-duration-of-plus-a-month-and-minus-a-millisecond",
+   "op": "decode_record",
+   "description": "reject a Duration of plus a month and minus a millisecond",
+   "refs": ["time.md 7.1", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Duration\",\"namespace\":\"axt\",\"doc\":\"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"months\",\"type\":\"int\",\"doc\":\"The number of calendar months, negative for a length back in time. A year is 12 months.\"},{\"name\":\"days\",\"type\":\"int\",\"doc\":\"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\"},{\"name\":\"millis\",\"type\":\"long\",\"doc\":\"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\"}]}",
+    "reader_schema": null,
+    "body": "c30185f0b37354d1ddff020001"
+   },
+   "expected": {
+    "reject": {"error": "VALUE_INVALID", "note": "parts of both signs", "field": ""}
+   }
+  },
+  {
+   "id": "time/decode_record/reject-a-duration-of-minus-a-month-and-plus-a-day",
+   "op": "decode_record",
+   "description": "reject a Duration of minus a month and plus a day",
+   "refs": ["time.md 7.1", "time.md 8"],
+   "input": {
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Duration\",\"namespace\":\"axt\",\"doc\":\"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"months\",\"type\":\"int\",\"doc\":\"The number of calendar months, negative for a length back in time. A year is 12 months.\"},{\"name\":\"days\",\"type\":\"int\",\"doc\":\"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\"},{\"name\":\"millis\",\"type\":\"long\",\"doc\":\"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\"}]}",
+    "reader_schema": null,
+    "body": "c30185f0b37354d1ddff010200"
+   },
+   "expected": {
+    "reject": {"error": "VALUE_INVALID", "note": "parts of both signs", "field": ""}
+   }
+  },
+  {
    "id": "time/decode_record/a-type-that-defines-axt-datetime-in-place-and-refers-to-it-by-its-full-n",
    "op": "decode_record",
    "description": "a type that defines axt.DateTime in place and refers to it by its full name",
@@ -1330,6 +1768,80 @@
       "zone": "Europe/Berlin",
       "offset_seconds": 7200,
       "instant_ms": 1806197400000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/resolve_date_time/instant-a-wall-clock-in-the-overlap-with-an-offset-these-rules-do-not-gi",
+   "op": "resolve_date_time",
+   "description": "instant: a wall clock in the overlap with an offset these rules do not give keeps its instant",
+   "refs": ["time.md 6.4"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 10,
+     "day": 25,
+     "hour": 2,
+     "minute": 30,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Europe/Berlin",
+     "offset_seconds": 0,
+     "instant_ms": 1792895400000
+    },
+    "anchor": "instant"
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 10,
+      "day": 25,
+      "hour": 3,
+      "minute": 30,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1792895400000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/resolve_date_time/instant-a-zone-these-rules-do-not-have-keeps-every-field-also-for-the-in",
+   "op": "resolve_date_time",
+   "description": "instant: a zone these rules do not have keeps every field, also for the instant",
+   "refs": ["time.md 6.4"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 11,
+     "day": 16,
+     "hour": 7,
+     "minute": 0,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Mars/Olympus_Mons",
+     "offset_seconds": 0,
+     "instant_ms": 1794812400000
+    },
+    "anchor": "instant"
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 11,
+      "day": 16,
+      "hour": 7,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Mars/Olympus_Mons",
+      "offset_seconds": 0,
+      "instant_ms": 1794812400000
      }
     }
    }
@@ -1917,6 +2429,228 @@
       "day": 15,
       "hour": 23,
       "minute": 50,
+      "second": 0,
+      "millisecond": 0,
+      "zone": null,
+      "offset_seconds": null,
+      "instant_ms": null
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/europe-berlin-2027-03-27-10-00-1-day-is-10-00-the-next-day-23-hours-late",
+   "op": "add_duration",
+   "description": "Europe/Berlin 2027-03-27 10:00 + 1 day is 10:00 the next day, 23 hours later",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2027,
+     "month": 3,
+     "day": 27,
+     "hour": 10,
+     "minute": 0,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Europe/Berlin",
+     "offset_seconds": 3600,
+     "instant_ms": 1806138000000
+    },
+    "duration": {"months": 0, "days": 1, "millis": 0}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2027,
+      "month": 3,
+      "day": 28,
+      "hour": 10,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 7200,
+      "instant_ms": 1806220800000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/europe-berlin-2026-10-26-10-00-1-day-is-10-00-the-day-before-25-hours-ea",
+   "op": "add_duration",
+   "description": "Europe/Berlin 2026-10-26 10:00 - 1 day is 10:00 the day before, 25 hours earlier",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 10,
+     "day": 26,
+     "hour": 10,
+     "minute": 0,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Europe/Berlin",
+     "offset_seconds": 3600,
+     "instant_ms": 1793005200000
+    },
+    "duration": {"months": 0, "days": -1, "millis": 0}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 10,
+      "day": 25,
+      "hour": 10,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1792918800000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/europe-berlin-2026-12-31-23-30-1-hour-is-00-30-on-1-january-2027",
+   "op": "add_duration",
+   "description": "Europe/Berlin 2026-12-31 23:30 + 1 hour is 00:30 on 1 January 2027",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 12,
+     "day": 31,
+     "hour": 23,
+     "minute": 30,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Europe/Berlin",
+     "offset_seconds": 3600,
+     "instant_ms": 1798756200000
+    },
+    "duration": {"months": 0, "days": 0, "millis": 3600000}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2027,
+      "month": 1,
+      "day": 1,
+      "hour": 0,
+      "minute": 30,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1798759800000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/a-zone-these-rules-do-not-have-1-day-keeps-its-offset",
+   "op": "add_duration",
+   "description": "a zone these rules do not have + 1 day keeps its offset",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 11,
+     "day": 16,
+     "hour": 7,
+     "minute": 0,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Mars/Olympus_Mons",
+     "offset_seconds": 3600,
+     "instant_ms": 1794808800000
+    },
+    "duration": {"months": 0, "days": 1, "millis": 0}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 11,
+      "day": 17,
+      "hour": 7,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Mars/Olympus_Mons",
+      "offset_seconds": 3600,
+      "instant_ms": 1794895200000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/a-zone-these-rules-do-not-have-90-minutes-moves-the-wall-clock-with-the",
+   "op": "add_duration",
+   "description": "a zone these rules do not have + 90 minutes moves the wall clock with the instant",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2026,
+     "month": 11,
+     "day": 16,
+     "hour": 23,
+     "minute": 0,
+     "second": 0,
+     "millisecond": 0,
+     "zone": "Mars/Olympus_Mons",
+     "offset_seconds": 3600,
+     "instant_ms": 1794866400000
+    },
+    "duration": {"months": 0, "days": 0, "millis": 5400000}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2026,
+      "month": 11,
+      "day": 17,
+      "hour": 0,
+      "minute": 30,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Mars/Olympus_Mons",
+      "offset_seconds": 3600,
+      "instant_ms": 1794871800000
+     }
+    }
+   }
+  },
+  {
+   "id": "time/add_duration/a-floating-2028-02-29-12-months-is-28-february-2029",
+   "op": "add_duration",
+   "description": "a floating 2028-02-29 + 12 months is 28 February 2029",
+   "refs": ["time.md 7.2"],
+   "input": {
+    "date_time": {
+     "year": 2028,
+     "month": 2,
+     "day": 29,
+     "hour": 9,
+     "minute": 0,
+     "second": 0,
+     "millisecond": 0,
+     "zone": null,
+     "offset_seconds": null,
+     "instant_ms": null
+    },
+    "duration": {"months": 12, "days": 0, "millis": 0}
+   },
+   "expected": {
+    "accept": {
+     "date_time": {
+      "year": 2029,
+      "month": 2,
+      "day": 28,
+      "hour": 9,
+      "minute": 0,
       "second": 0,
       "millisecond": 0,
       "zone": null,

@@ -199,10 +199,10 @@ The values below were produced with [conformance/tools/time_examples.py](../conf
 
 - the rules of [types.md](types.md), section 5, with the code of [conformance/tools/example_types.py](../conformance/tools/example_types.py), and that each type is a record of primitives and unions of `null` and a primitive, without logical types and named types inside;
 - the canonical forms and fingerprints against fastavro's and the Python `avro` 1.12.2 package's own;
-- each example and 13 edges, such as 29 February 2000, a negative instant and an offset with seconds, by encoding it with fastavro, decoding it again with both libraries, and encoding it again with `avro` to the same bytes; and 29 values that each break one rule of sections 4 to 7, such as 29 February 1900, the second 60 and a duration with parts of both signs, with the field path a receiver reports for each, also inside the host type of section 9.3;
+- each example and 22 edges, such as 29 February 2000, a negative instant, an offset with seconds, a negative offset and a zone name of 64 bytes, by encoding it with fastavro, decoding it again with both libraries, and encoding it again with `avro` to the same bytes; and 45 values that each break one rule of sections 4 to 7, such as 29 February 1900, the second 60, a zone name of 65 bytes and a duration with parts of both signs, with the field path a receiver reports for each, also inside the host type of section 9.3;
 - the zoned examples against the time zone database 2026e of the system with Python's `zoneinfo`: the offset is that of the zone at the instant, and 02:30 on 2026-10-25 occurs in Berlin with the offsets 7200 and 3600; and that every name of the database has the syntax of section 6.1;
 - section 6.4 on a value written with rules that gave Berlin no summer time in 2026, under both anchors, and on a zone the database does not have;
-- 16 additions of section 7.2, over the ends of months, across the change of offset in Berlin on 2026-10-25 and into the gap of 2027-03-28, and of floating times, against Python's `datetime` and `zoneinfo`; and that an addition past the year 9999 fails;
+- 22 additions of section 7.2, over the ends of months and of a year, across the changes of offset in Berlin on 2026-10-25 and 2027-03-28 and into the gap of 2027-03-28, of floating times, and of a zone the database does not have, against Python's `datetime` and `zoneinfo`; and that an addition past the year 9999 fails;
 - the host type of section 9.3, by parsing it with both libraries and comparing their canonical forms, by parsing it and a second host into one set of names, which fastavro takes and `avro` rejects (section 3.1), by comparing the canonical form of each time type defined in it with that of the published schema, and by a round trip of its example with both libraries.
 
 The test vectors of [conformance.md](conformance.md) take precedence over these values.
@@ -241,7 +241,7 @@ Each value in Avro binary encoding, without a single-object header:
 | Every month, `P1M`                                           | `axt.Duration` | 1, 0, 0                                                       | `02 00 00`                                                                                           |
 | `P1M2DT3H`                                                   | `axt.Duration` | 1, 2, 10800000                                                | `02 04 80 ae a6 0a`                                                                                  |
 
-Additions of section 7.2, among the 16 the script checks:
+Additions of section 7.2, among the 22 the script checks:
 
 | Date and time                  | Duration   | Result                                 |
 | ------------------------------ | ---------- | -------------------------------------- |

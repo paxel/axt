@@ -40,6 +40,8 @@ An example: an appointment kept in cat-a-log, such as a visit to the vet, is sen
 
 - [Envelope and encoding](spec/envelope.md)
 - [Example types](spec/types.md)
+- [Time](spec/time.md)
+- [Field metadata](spec/metadata.md)
 - [Records](spec/records.md)
 - [Manifest](spec/manifest.md)
 - [Protocol](spec/protocol.md)

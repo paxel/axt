@@ -488,6 +488,7 @@ def hex_lines(data, indent="      "):
 
 
 def main():
+    import calendar
     import importlib.util
     import io
     import json
@@ -649,19 +650,25 @@ def main():
 
     # --- example 1: a signed DATA message -------------------------------------
 
+    # The Memo defines axt.DateTime in place, as its published schema (spec/time.md, section 3.1).
+    date_time_schema = json.loads((REPO / "types" / "axt" / "DateTime.avsc").read_text(encoding="utf-8"))
     memo_schema = {
         "type": "record", "name": "Memo", "namespace": "com.example",
         "doc": "An illustration for spec/envelope.md; not an AXT example type.",
         "fields": [
             {"name": "text", "type": "string", "doc": "The memo's text."},
-            {"name": "written", "type": {"type": "long", "logicalType": "timestamp-millis"},
-             "doc": "When the memo was written."},
+            {"name": "written", "type": date_time_schema, "doc": "When the memo was written.", "axt.anchor": "instant"},
         ],
     }
     memo_fp = fingerprint(json.dumps(memo_schema))[1]
     record_id = "0b5a3c1e-4d2f-4a6b-9c8d-7e6f5a4b3c2d"
     text = "Vet, Tuesday 10:00"
-    body = header(memo_fp) + zigzag(len(text)) + text.encode() + zigzag(1763200800000)
+    # written: 2025-11-15 11:00 in Europe/Berlin, the offset 3600 and the instant 2025-11-15T10:00:00Z.
+    zone = b"Europe/Berlin"
+    written = (b"".join(zigzag(n) for n in (2025, 11, 15, 11, 0, 0, 0))
+               + zigzag(1) + zigzag(len(zone)) + zone + zigzag(1) + zigzag(3600) + zigzag(1) + zigzag(1763200800000))
+    body = header(memo_fp) + zigzag(len(text)) + text.encode() + written
+    assert len(body) < 64, "the body length takes one byte, as the offsets of spec/keys.md, section 7.3, assume"
     data_parts = [
         (header(envelope_fp)[:2], "single-object marker"),
         (header(envelope_fp)[2:], "fingerprint of axt.Envelope, format 1"),
@@ -686,6 +693,11 @@ def main():
     assert data_message[10:] == library_binary(envelope_schema, datum)
     back = fastavro.schemaless_reader(io.BytesIO(data_message[10:]), envelope_schema, envelope_schema)
     assert back["sender"] == old["pub"] and back["signature"] == data_sig and str(back["record"]["id"]) == record_id
+    memo_value = {"text": text, "written": {"year": 2025, "month": 11, "day": 15, "hour": 11, "minute": 0, "second": 0,
+                                            "millisecond": 0, "zone": "Europe/Berlin", "offset_seconds": 3600,
+                                            "instant_ms": 1763200800000}}
+    assert body[10:] == library_binary(fastavro.parse_schema(memo_schema), memo_value), "the Memo differs from fastavro's encoding"
+    assert 1763200800000 == calendar.timegm((2025, 11, 15, 11, 0, 0)) * 1000 - 3600 * 1000, "instant is not wall clock minus offset"
 
     # The same record with its id in upper case is another message: the signature covers the bytes.
     upper = data_message.replace(record_id.encode(), record_id.upper().encode())
@@ -761,7 +773,7 @@ def main():
         pass
     assert encryption_key_problem(bytes(32)) and encryption_key_problem((1).to_bytes(32, "little"))
     # Padding: the sizes of section 4.4.
-    sizes = [(n, padded_length(n)) for n in (183, 1023, 1024, 4000, 100000, 16777216)]
+    sizes = [(n, padded_length(n)) for n in (len(data_message), 1023, 1024, 4000, 100000, 16777216)]
     assert all(padded_length(n) > n for n, _ in sizes)
     # Above the minimum, Padme adds less than 1/16 of the length (spec/keys.md, section 4.4).
     assert all(16 * (padme(x) - x) < x for x in range(MIN_PADDED + 1, 1 << 17))

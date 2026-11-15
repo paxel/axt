@@ -48,7 +48,7 @@ The relay answers `503` with `Retry-After: 60` when its storage fails, such as w
 ### 3.2 HTTP
 
 - A response without a body carries `Content-Length: 0`, except `204`, which carries no `Content-Length` ([RFC 9110, section 8.6](https://www.rfc-editor.org/rfc/rfc9110#section-8.6)).
-- The list is the JSON object of [transports.md](transports.md), section 5.4, without spaces, such as `{"messages":[{"id":"6be5…","size":1073}]}`, with the messages held in the order of their puts. It holds at most 1,000 messages, the oldest.
+- The list is the JSON object of [transports.md](transports.md), section 5.4, without spaces, such as `{"messages":[{"id":"7cbe…","size":1073}]}`, with the messages held in the order of their puts. It holds at most 1,000 messages, the oldest.
 - A connection stays open for further requests unless the client asks to close it or the relay answers a request without reading its body. The relay answers a put that fails before its body is read (`411`, `413`, `404`) without reading the body, then closes the connection, after reading for up to 2 seconds what the client still sends, so that the client can read the answer. A request other than a put that carries a body is answered and its connection closed in the same way.
 - A request without `Content-Length` and without `Transfer-Encoding` has no body ([RFC 9112, section 6.3](https://www.rfc-editor.org/rfc/rfc9112#section-6.3)); a put of this kind gets `411`. A put with `Transfer-Encoding` and no `Content-Length` also gets `411`, since [transports.md](transports.md), section 5.3, requires `Content-Length`.
 - The relay sends `100 Continue` to a request with `Expect: 100-continue` only when it starts to read the body, so that a put that fails before is answered without its body being sent.

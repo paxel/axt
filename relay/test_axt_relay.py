@@ -40,7 +40,7 @@ def sealed_example():
     """The sealed message of spec/keys.md, section 7.4, as the relay-server vectors hold it."""
     doc = json.loads((REPO / "vectors" / "relay-server" / "relay-server.json").read_text(encoding="utf-8"))
     for r in doc["vectors"][0]["input"]["requests"]:
-        if r["method"] == "PUT" and r["target"].endswith("/messages/6be58e45f035eed7f4e3feb8fec0b59f00f74f93122015d22e6133bc65d187e7"):
+        if r["method"] == "PUT" and r["target"].endswith("/messages/7cbe47862344527d93735c97159cc8cf4d3631647233cac735553c968e6c2bc8"):
             data = bytes.fromhex(r["body"])
             if hashlib.sha256(data).hexdigest() == r["target"][-64:]:
                 return data
@@ -330,7 +330,7 @@ class EndToEndTest(unittest.TestCase):
 
     def test_the_sealed_message_of_keys_md_through_the_running_relay(self):
         sealed = sealed_example()
-        self.assertEqual((len(sealed), sha(sealed)), (1073, "6be58e45f035eed7f4e3feb8fec0b59f00f74f93122015d22e6133bc65d187e7"))
+        self.assertEqual((len(sealed), sha(sealed)), (1073, "7cbe47862344527d93735c97159cc8cf4d3631647233cac735553c968e6c2bc8"))
         directory = tempfile.mkdtemp(prefix="axt-relay-e2e-")
         self.addCleanup(shutil.rmtree, directory, True)
         proc = subprocess.Popen([sys.executable, str(HERE / "axt_relay.py"), "--storage", directory, "--port", "0",
@@ -354,7 +354,7 @@ class EndToEndTest(unittest.TestCase):
                                    {"Content-Type": "application/octet-stream"}, sealed)[0], 201)
         status, headers, body = r.request("GET", f"v1/mailboxes/{BOX}/messages?wait=30", OWNER)
         self.assertEqual((status, headers["Content-Type"]), (200, "application/json"))
-        self.assertEqual(body, b'{"messages":[{"id":"6be58e45f035eed7f4e3feb8fec0b59f00f74f93122015d22e6133bc65d187e7","size":1073}]}')
+        self.assertEqual(body, b'{"messages":[{"id":"7cbe47862344527d93735c97159cc8cf4d3631647233cac735553c968e6c2bc8","size":1073}]}')
         status, headers, fetched = r.request("GET", f"v1/mailboxes/{BOX}/messages/{sha(sealed)}", OWNER)
         self.assertEqual((status, headers["Content-Type"], fetched), (200, "application/octet-stream", sealed))
         self.assertEqual(r.request("DELETE", f"v1/mailboxes/{BOX}/messages/{sha(sealed)}", OWNER)[0], 204)
@@ -370,7 +370,7 @@ class EndToEndTest(unittest.TestCase):
         ctx = keys.hpke_base_context(keys.decap(fetched[1:33], obf_x25519), keys.HPKE_INFO)
         opened = keys.unpad(ChaCha20Poly1305(ctx["key"]).decrypt(ctx["base_nonce"], fetched[33:], b""))
         # the DATA message of spec/keys.md, section 7.2, signed by cat-a-log
-        self.assertEqual((len(opened), sha(opened)), (183, "c6901788f627c534b72f85e50165db1ee77aa89549f9713d5cbb2a2119b1ee83"))
+        self.assertEqual((len(opened), sha(opened)), (210, "23fdfeb720ae7a368b936ce9f990039b7472fe7128927da9c3648e9b9ea67f07"))
         cat = keys.public_key(hashlib.sha256(b"AXT test key, not for use: cat-a-log, old phone, Ed25519").digest())
         self.assertIsNone(keys.verify_problem(cat, keys.MESSAGE_PREFIX + opened[10:-64], opened[-64:]))
 

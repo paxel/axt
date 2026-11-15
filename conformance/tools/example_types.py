@@ -20,6 +20,10 @@ For every schema under types/axt/example/ this script:
   (spec/time.md, sections 4 to 7) and every check of its schema
   (spec/metadata.md, section 6), and that each zoned time has the offset
   of its zone at its instant by this system's zone rules;
+- checks further records that keep every rule (VALID), such as all-day
+  and floating times and an offset that is not the zone's, and records
+  with a value that breaks a rule (BREACHES), each with the field path and
+  the rule of the first such value in the order of the encoding;
 - computes the Parsing Canonical Form and the CRC-64-AVRO fingerprint, and
   checks both against fastavro and the Apache avro package;
 - encodes one example datum with fastavro, decodes it back and compares
@@ -185,6 +189,115 @@ DATA = {
         "notes": "",
     },
 }
+
+def floating(y, mo, d, h, mi):
+    """A floating axt.DateTime: a wall clock without zone, offset and instant (spec/time.md, section 6.5)."""
+    return {"year": y, "month": mo, "day": d, "hour": h, "minute": mi, "second": 0, "millisecond": 0,
+            "zone": None, "offset_seconds": None, "instant_ms": None}
+
+
+def duration(months=0, days=0, millis=0):
+    return {"months": months, "days": days, "millis": millis}
+
+
+CEST = 7200
+
+
+def variant(name, **fields):
+    """The example datum of the type with some fields replaced."""
+    return dict(copy.deepcopy(DATA[name]), **fields)
+
+
+def nested(name, field, index, **fields):
+    """The example datum with fields of one item of an array of nested records replaced."""
+    datum = copy.deepcopy(DATA[name])
+    datum[field][index] = dict(datum[field][index], **fields)
+    return datum
+
+
+# Further records of the example types that keep every rule: (label, type, datum).
+VALID = [
+    ("an all-day appointment: floating times at 00:00, the end at 00:00 of the day after", "Appointment",
+     variant("Appointment", start=floating(2026, 11, 24, 0, 0), end=floating(2026, 11, 25, 0, 0), all_day=True,
+             reminders=[duration(days=-1)])),
+    ("an appointment over two days, its end in another zone", "Appointment",
+     variant("Appointment", end=zoned(2026, 11, 25, 9, 0, "Europe/London", 0))),
+    ("an appointment whose offset is not that of its zone at the instant, but whose instant is that of its offset",
+     "Appointment", variant("Appointment", start=zoned(2026, 11, 24, 10, 0, BERLIN, CEST),
+                            end=zoned(2026, 11, 24, 10, 30, BERLIN, CEST))),
+    ("a task due all day: a floating time at 00:00", "Task",
+     variant("Task", due=floating(2026, 12, 1, 0, 0), due_all_day=True)),
+    ("a task due at 08:00 wherever its user is: a floating time", "Task", variant("Task", due=floating(2026, 12, 1, 8, 0))),
+    ("a task done, with the instant it was done", "Task",
+     variant("Task", done=True, done_at=zoned(2026, 11, 30, 19, 12, BERLIN, CET))),
+    ("a pet born in March 2021, the day not known", "Pet", variant("Pet", birthday=date(2021, 3))),
+    ("a document dated 2026 only", "Document", variant("Document", dated=date(2026))),
+    ("a measurement taken in summer time", "Measurement", variant("Measurement", measured_at=zoned(2026, 7, 1, 8, 0, BERLIN, CEST))),
+    ("a car of the year 1886 and an odometer of 0", "Car", variant("Car", year=1886, odometer=0)),
+]
+
+# Records of the example types with a value that breaks a rule: (label, type, datum, path, rule). The rule is a
+# time type, for a time value that is not valid, which every receiver rejects (spec/time.md, section 8), or the
+# attribute of a check, which a receiver that checks reports (spec/metadata.md, section 7.1). The path and the
+# rule are those of the first value in the order of the encoding.
+start = DATA["Appointment"]["start"]
+BREACHES = [
+    ("an appointment whose start has an instant an hour off", "Appointment",
+     variant("Appointment", start=dict(start, instant_ms=start["instant_ms"] + HOUR)), "start", "axt.DateTime"),
+    ("an appointment whose start has the offset 7200, which Berlin does not have then, and the instant of 3600",
+     "Appointment", variant("Appointment", start=dict(start, offset_seconds=CEST)), "start", "axt.DateTime"),
+    ("an appointment that ends on 31 November", "Appointment",
+     variant("Appointment", end=dict(DATA["Appointment"]["end"], day=31)), "end", "axt.DateTime"),
+    ("an appointment whose start has a zone but no offset and no instant", "Appointment",
+     variant("Appointment", start=dict(start, offset_seconds=None, instant_ms=None)), "start", "axt.DateTime"),
+    ("an appointment whose second reminder has parts of both signs", "Appointment",
+     variant("Appointment", reminders=[duration(days=-1), duration(days=-1, millis=HOUR)]), "reminders[1]", "axt.Duration"),
+    ("a person born on 29 February 2027", "Person", variant("Person", birthday=date(2027, 2, 29)), "birthday", "axt.Date"),
+    ("a pet whose birthday has a day and a year but no month", "Pet", variant("Pet", birthday=date(2021, None, 3)),
+     "birthday", "axt.Date"),
+    ("a task done at the second 60", "Task",
+     variant("Task", done=True, done_at=dict(zoned(2026, 11, 30, 19, 12, BERLIN, CET), second=60)), "done_at", "axt.DateTime"),
+    ("a person whose phone number has spaces", "Person", nested("Person", "phones", 0, number="+49 30 1234567"),
+     "phones[0].number", "axt.format"),
+    ("a person whose country is a name, not a code", "Person", nested("Person", "addresses", 0, country="Germany"),
+     "addresses[0].country", "axt.format"),
+    ("a person whose e-mail address has no domain", "Person", nested("Person", "emails", 0, address="anna"),
+     "emails[0].address", "axt.format"),
+    ("a car whose VIN holds the letter O", "Car", variant("Car", vin="WVWZZZ1KZAW00000O"), "vin", "axt.pattern"),
+    ("a car of the year 1800", "Car", variant("Car", year=1800), "year", "axt.min"),
+    ("a car with a negative odometer", "Car", variant("Car", odometer=-1), "odometer", "axt.min"),
+    ("a document whose media type has no subtype", "Document", variant("Document", media_type="pdf"), "media_type", "axt.format"),
+    ("a measurement with a time that is not valid, after a unit with a space", "Measurement",
+     variant("Measurement", unit="kg m", measured_at=dict(DATA["Measurement"]["measured_at"], month=13)), "unit", "axt.format"),
+    ("a document with a date that is not valid, after a media type without a subtype", "Document",
+     variant("Document", media_type="pdf", dated=date(2026, 2, 30)), "media_type", "axt.format"),
+]
+del start
+
+
+def check_cases(schemas):
+    """The records of VALID keep every rule; each of BREACHES breaks the rule named, first at the path named."""
+    tm = time_rules()
+    for label, name, datum in VALID:
+        if mr.breaches(schemas[name], datum, tm.time_check):
+            fail(name, f"{label}: {mr.breaches(schemas[name], datum, tm.time_check)}")
+    # Each zoned time has the offset of its zone at its instant, except in the third case, whose offsets are not
+    # those of Berlin at the instant: a receiver does not reject such a value (spec/time.md, section 6.2).
+    for i, (label, name, datum) in enumerate(VALID):
+        for v in zoned_values(datum):
+            if (tm.offset_at(v["zone"], v["instant_ms"]) == v["offset_seconds"]) != (i != 2):
+                fail(name, f"{label}: the offset {v['offset_seconds']} at {v['instant_ms']}")
+    for label, name, datum, path, rule in BREACHES:
+        found = mr.breaches(schemas[name], datum, tm.time_check)
+        if not found or found[0][:2] != (path, rule):
+            fail(name, f"{label}: {found}")
+        elif rule.startswith("axt.") and rule[4:] in ("Date", "Time", "DateTime", "Duration") and \
+                tm.value_breaches(schemas[name], datum)[0][:2] != (path, rule):
+            fail(name, f"{label}: not the first time value that is not valid")
+    for label, name, datum in VALID + [b[:3] for b in BREACHES]:
+        buf = io.BytesIO()  # every case is a value of the schema, whatever rule it breaks
+        fastavro.schemaless_writer(buf, fastavro.parse_schema(schemas[name], _write_hint=False), datum)
+
 
 # --- CRC-64-AVRO, as given in the Avro specification -------------------------
 
@@ -550,6 +663,7 @@ def main():
     rows = []
     all_defined = {}
     named_schemas = {}
+    schemas = {}
     for path in sorted(EXAMPLES.rglob("*.avsc")):
         text = path.read_text(encoding="utf-8")
         schema = json.loads(text)
@@ -586,9 +700,11 @@ def main():
             fail(name, "avro encodes the decoded datum to other bytes")
 
         check_datum(name, schema)
+        schemas[name] = schema
         required, defaults = check_defaults(name, schema, parsed)
         rows.append((schema["namespace"], name, schema["axt.version"], path, pcf, fp, len(data), required, depth, defaults))
 
+    check_cases(schemas)
     if failures:
         raise SystemExit("\n".join(["checks failed:"] + failures))
 
@@ -604,6 +720,13 @@ def main():
     for namespace, name, version, path, pcf, fp, size, required, depth, defaults in rows:
         link = "../" + path.relative_to(REPO).as_posix()  # relative to spec/types.md
         print(f"| `{namespace}.{name}` | {version} | [{path.name}]({link}) | `0x{fp:016x}` | `{fp.to_bytes(8, 'little').hex(' ')}` |")
+    print()
+    print(f"{len(VALID)} further records that keep every rule:")
+    for label, name, datum in VALID:
+        print(f"  {name}: {label}")
+    print(f"{len(BREACHES)} records with a value that breaks a rule, the first such value:")
+    for label, name, datum, path, rule in BREACHES:
+        print(f"  {name}: {label}: {path}, {rule}")
     for finding in sorted(findings):
         print(f"library finding: {finding}")
     print("all checks passed")

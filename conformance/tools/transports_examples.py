@@ -647,17 +647,20 @@ expect("TLS: a client limited to TLS 1.2 cannot connect", tls12_refused(), True)
 
 # --- the sealed message (spec/keys.md, sections 7.2 and 7.4) ------------------
 
-MEMO_FP = 0xB71CE40C6856B368
-memo_body = (b"\xc3\x01" + MEMO_FP.to_bytes(8, "little") + zigzag(18) + b"Vet, Tuesday 10:00" + zigzag(1763200800000))
+MEMO_FP = 0x37F20E16CADCAC73
+# The Memo: its text, then written, an axt.DateTime of 2025-11-15 11:00 in Europe/Berlin with the offset 3600.
+memo_written = (b"".join(zigzag(n) for n in (2025, 11, 15, 11, 0, 0, 0)) + zigzag(1) + zigzag(13) + b"Europe/Berlin"
+                + zigzag(1) + zigzag(3600) + zigzag(1) + zigzag(1763200800000))
+memo_body = b"\xc3\x01" + MEMO_FP.to_bytes(8, "little") + zigzag(18) + b"Vet, Tuesday 10:00" + memo_written
 _, memo_msg = pe.make_message("DATA", CAT_SEED, ("0b5a3c1e-4d2f-4a6b-9c8d-7e6f5a4b3c2d", 1), [(memo_body, "the Memo")])
-assert hashlib.sha256(memo_msg).hexdigest() == "c6901788f627c534b72f85e50165db1ee77aa89549f9713d5cbb2a2119b1ee83", \
+assert hashlib.sha256(memo_msg).hexdigest() == "23fdfeb720ae7a368b936ce9f990039b7472fe7128927da9c3648e9b9ea67f07", \
     "not the message of spec/keys.md, section 7.2"
 sk_e, pk_e = keys.derive_key_pair(test_secret("ephemeral key of the sealed message, ikmE"))
 enc, shared = keys.encap(sk_e, OBF_X25519)
 ctx = keys.hpke_base_context(shared, keys.HPKE_INFO)
 SEALED = keys.SEALED_FORMAT + enc + ChaCha20Poly1305(ctx["key"]).encrypt(ctx["base_nonce"], keys.pad(memo_msg), b"")
 SEALED_HASH = hashlib.sha256(SEALED).hexdigest()
-assert len(SEALED) == 1073 and SEALED_HASH == "6be58e45f035eed7f4e3feb8fec0b59f00f74f93122015d22e6133bc65d187e7", \
+assert len(SEALED) == 1073 and SEALED_HASH == "7cbe47862344527d93735c97159cc8cf4d3631647233cac735553c968e6c2bc8", \
     "not the sealed message of spec/keys.md, section 7.4"
 MAX_SEALED = 1 + 32 + keys.padded_length(MAX_MESSAGE) + 16
 assert MAX_SEALED == 17301553

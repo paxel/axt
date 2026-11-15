@@ -18,5 +18,5 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - Ed25519 signatures, relay encryption with HPKE, trust on first use and moving a key to a new installation. ([axt-1006](https://github.com/paxel/axt/issues/7))
 - The protocol of offer, accept, decline, data, acknowledgement and errors. ([axt-1005](https://github.com/paxel/axt/issues/6))
 - Three transports: a file, the local network found by QR code, and a relay. ([axt-1007](https://github.com/paxel/axt/issues/8))
-- Test vectors for every category and a conformance runner with a reference adapter. ([axt-1009](https://github.com/paxel/axt/issues/10))
+- Test vectors for every category, the time types and invalid values among them, and a conformance runner with a reference adapter. ([axt-1009](https://github.com/paxel/axt/issues/10), [axt-1019](https://github.com/paxel/axt/issues/20))
 - The reference relay, a sealed mailbox anyone can run. ([axt-1008](https://github.com/paxel/axt/issues/9))

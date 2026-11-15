@@ -187,16 +187,16 @@ The record type `com.example.Memo` is an illustration only, not an example type.
 
 ### 10.1 Schemas and fingerprints
 
-`com.example.Memo`, as offered:
+`com.example.Memo`, as offered. Its field `written` defines the time type `axt.DateTime` in place ([time.md](time.md), section 3.1); the `…` stand for the `doc` and the fields of the published schema [types/axt/DateTime.avsc](../types/axt/DateTime.avsc), which the schema carries in full:
 
 ```json
-{"type":"record","name":"Memo","namespace":"com.example","doc":"An illustration for spec/envelope.md; not an AXT example type.","fields":[{"name":"text","type":"string","doc":"The memo's text."},{"name":"written","type":{"type":"long","logicalType":"timestamp-millis"},"doc":"When the memo was written."}]}
+{"type":"record","name":"Memo","namespace":"com.example","doc":"An illustration for spec/envelope.md; not an AXT example type.","fields":[{"name":"text","type":"string","doc":"The memo's text."},{"name":"written","type":{"type":"record","name":"DateTime","namespace":"axt","doc":"…","fields":[…]},"doc":"When the memo was written.","axt.anchor":"instant"}]}
 ```
 
 Its Parsing Canonical Form:
 
 ```json
-{"name":"com.example.Memo","type":"record","fields":[{"name":"text","type":"string"},{"name":"written","type":"long"}]}
+{"name":"com.example.Memo","type":"record","fields":[{"name":"text","type":"string"},{"name":"written","type":{"name":"axt.DateTime","type":"record","fields":[{"name":"year","type":"int"},{"name":"month","type":"int"},{"name":"day","type":"int"},{"name":"hour","type":"int"},{"name":"minute","type":"int"},{"name":"second","type":"int"},{"name":"millisecond","type":"int"},{"name":"zone","type":["null","string"]},{"name":"offset_seconds","type":["null","int"]},{"name":"instant_ms","type":["null","long"]}]}}]}
 ```
 
 The Parsing Canonical Form of `axt.Envelope`, format 1:
@@ -208,11 +208,11 @@ The Parsing Canonical Form of `axt.Envelope`, format 1:
 | Schema                   | CRC-64-AVRO          | As bytes                  |
 | ------------------------ | -------------------- | ------------------------- |
 | `axt.Envelope`, format 1 | `0xa2e1e84fe5e40c7d` | `7d 0c e4 e5 4f e8 e1 a2` |
-| `com.example.Memo`       | `0xb71ce40c6856b368` | `68 b3 56 68 0c e4 1c b7` |
+| `com.example.Memo`       | `0x37f20e16cadcac73` | `73 ac dc ca 16 0e f2 37` |
 
 ### 10.2 A data message
 
-A `DATA` message in a live connection that carries the Memo `{"text": "Vet, Tuesday 10:00", "written": 1763200800000}` (2025-11-15T10:00:00Z) as version 1 of the record `0b5a3c1e-4d2f-4a6b-9c8d-7e6f5a4b3c2d`; 183 bytes. Offsets are hexadecimal.
+A `DATA` message in a live connection that carries the Memo with the text `Vet, Tuesday 10:00`, written at 2025-11-15 11:00 in `Europe/Berlin` with the offset 3600, the instant `1763200800000` (2025-11-15T10:00:00Z), as version 1 of the record `0b5a3c1e-4d2f-4a6b-9c8d-7e6f5a4b3c2d`; 210 bytes. Offsets are hexadecimal.
 
 ```text
 0000  c3 01                    single-object marker
@@ -231,28 +231,39 @@ A `DATA` message in a live connection that carries the Memo `{"text": "Vet, Tues
       37 65 36 66 35 61 34 62
       33 63 32 64
 0052  02                       record.version: long 1
-0053  46                       body: bytes length 35
+0053  7c                       body: bytes length 62
 0054  c3 01                    body: single-object marker
-0056  68 b3 56 68 0c e4 1c b7  body: fingerprint of com.example.Memo
-005e  24                       body: text, string length 18
+0056  73 ac dc ca 16 0e f2 37  body: fingerprint of com.example.Memo
+005e  24                       body: text: string length 18
 005f  56 65 74 2c 20 54 75 65  "Vet, Tuesday 10:00"
       73 64 61 79 20 31 30 3a
       30 30
-0071  80 d4 a8 ef d0 66        body: written, long 1763200800000
-0077  33 87 5e 5e 5b 36 d7 df  signature: fixed(64)
-      ac ea 9f e1 83 e4 11 8b
-      2b ef f6 e6 1e b1 36 7e
-      53 a3 3c 74 d3 2e 20 53
-      9e 2e c5 15 ee 75 d9 66
-      52 8e b6 8f bc 88 d4 09
-      4c fa 1f 48 2f eb 6c 24
-      ce 1e 5c 2f f6 c1 50 03
-00b7  end
+0071  d2 1f                    body: written.year: int 2025
+0073  16                       body: written.month: int 11
+0074  1e                       body: written.day: int 15
+0075  16                       body: written.hour: int 11
+0076  00                       body: written.minute: int 0
+0077  00                       body: written.second: int 0
+0078  00                       body: written.millisecond: int 0
+0079  02 1a                    body: written.zone: union index 1, string length 13
+007b  45 75 72 6f 70 65 2f 42  "Europe/Berlin"
+      65 72 6c 69 6e
+0088  02 a0 38                 body: written.offset_seconds: union index 1, int 3600
+008b  02 80 d4 a8 ef d0 66     body: written.instant_ms: union index 1, long 1763200800000
+0092  8d de f4 42 9c 18 3d 9c  signature: fixed(64)
+      a3 8e 0a 0d 7b 90 08 84
+      18 f7 1f e9 43 10 0e a9
+      b7 6b 4a 96 5c 60 b0 25
+      0d e8 56 1e 84 d1 0c ca
+      b3 e2 cb 6c a7 e0 ec a9
+      16 92 97 37 c4 fc 26 4c
+      5c 6a 52 39 67 df c1 06
+00d2  end
 ```
 
 ### 10.3 A file
 
-The same message in an AXT file with the codec `null`; 2,793 bytes, SHA-256 `c19b87302bdea31721a5dc5247effbaa57feb1289f74a5d77ec233f0e6796fa4`. A writer picks the 16-byte sync marker at random; the example uses `00 01 … 0f` so that its bytes can be reproduced. The two JSON values are shown shortened; the first is the Memo schema of section 10.1, the second the envelope schema of [types/axt/Envelope.avsc](../types/axt/Envelope.avsc) with its keys in the file's order, as Python's `json.dumps` writes it. The two hexadecimal texts are shortened as well.
+The same message in an AXT file with the codec `null`; 4,526 bytes, SHA-256 `6b1083ab16ed95a2299d4f0e0621cc3c86e9656b4658099fc220db928af6e969`. A writer picks the 16-byte sync marker at random; the example uses `00 01 … 0f` so that its bytes can be reproduced. The two JSON values are shown shortened; the first is the Memo schema of section 10.1, the second the envelope schema of [types/axt/Envelope.avsc](../types/axt/Envelope.avsc) with its keys in the file's order, as Python's `json.dumps` writes it. The two hexadecimal texts are shortened as well.
 
 ```text
 0000  4f 62 6a 01              magic "Obj" 01
@@ -260,37 +271,37 @@ The same message in an AXT file with the codec `null`; 2,793 bytes, SHA-256 `c19
 0005  16                       key: string length 11
 0006  61 78 74 2e 73 63 68 65  "axt.schemas"
       6d 61 73
-0011  e8 04                    value: bytes length 308
-0013  5b 7b 22 74 ... 7d 5d    [{"type":"record","name":"Memo", ...}]  (308 bytes of UTF-8 JSON)
-0147  14                       key: string length 10
-0148  61 78 74 2e 73 65 6e 64  "axt.sender"
+0011  bc 1f                    value: bytes length 2014
+0013  5b 7b 22 74 ... 7d 5d    [{"type":"record","name":"Memo", ...}]  (2014 bytes of UTF-8 JSON)
+07f1  14                       key: string length 10
+07f2  61 78 74 2e 73 65 6e 64  "axt.sender"
       65 72
-0152  80 01                    value: bytes length 64
-0154  31 62 38 34 ... 34 61    "1b84a6...26ec4a"  (64 hexadecimal digits, cat-a-log's test key)
-0194  1a                       key: string length 13
-0195  61 78 74 2e 73 69 67 6e  "axt.signature"
+07fc  80 01                    value: bytes length 64
+07fe  31 62 38 34 ... 34 61    "1b84a6...26ec4a"  (64 hexadecimal digits, cat-a-log's test key)
+083e  1a                       key: string length 13
+083f  61 78 74 2e 73 69 67 6e  "axt.signature"
       61 74 75 72 65
-01a2  80 02                    value: bytes length 128
-01a4  65 64 64 30 ... 30 36    "edd02e...355506"  (128 hexadecimal digits, the header signature)
-0224  14                       key: string length 10
-0225  61 76 72 6f 2e 63 6f 64  "avro.codec"
+084c  80 02                    value: bytes length 128
+084e  38 39 61 30 ... 30 30    "89a017...619300"  (128 hexadecimal digits, the header signature)
+08ce  14                       key: string length 10
+08cf  61 76 72 6f 2e 63 6f 64  "avro.codec"
       65 63
-022f  08                       value: bytes length 4
-0230  6e 75 6c 6c              "null"
-0234  16                       key: string length 11
-0235  61 76 72 6f 2e 73 63 68  "avro.schema"
+08d9  08                       value: bytes length 4
+08da  6e 75 6c 6c              "null"
+08de  16                       key: string length 11
+08df  61 76 72 6f 2e 73 63 68  "avro.schema"
       65 6d 61
-0240  ac 1f                    value: bytes length 2006
-0242  7b 22 74 79 ... 5d 7d    {"type": "record", "name": "Envelope", "namespace": "axt", ...}  (2006 bytes of UTF-8 JSON)
-0a18  00                       end of the metadata map
-0a19  00 01 02 03 04 05 06 07  sync marker
+08ea  ac 1f                    value: bytes length 2006
+08ec  7b 22 74 79 ... 5d 7d    {"type": "record", "name": "Envelope", "namespace": "axt", ...}  (2006 bytes of UTF-8 JSON)
+10c2  00                       end of the metadata map
+10c3  00 01 02 03 04 05 06 07  sync marker
       08 09 0a 0b 0c 0d 0e 0f
-0a29  02                       block: 1 datum
-0a2a  da 02                    block: 173 bytes
-0a2c  02 08 1b 84 a6 ...       the datum: bytes 000a to 00b6 of the message in 10.2
-0ad9  00 01 02 03 04 05 06 07  sync marker
+10d3  02                       block: 1 datum
+10d4  90 03                    block: 200 bytes
+10d6  02 08 1b 84 ... c1 06    the datum: bytes 000a to 00d1 of the message in 10.2
+119e  00 01 02 03 04 05 06 07  sync marker
       08 09 0a 0b 0c 0d 0e 0f
-0ae9  end
+11ae  end
 ```
 
 ## References

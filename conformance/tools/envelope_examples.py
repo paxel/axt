@@ -30,6 +30,7 @@ checks. The message and the file are then those of spec/keys.md, sections
 TEST KEY and MUST NOT be used outside tests.
 """
 
+import calendar
 import hashlib
 import importlib.util
 import io
@@ -52,6 +53,8 @@ _spec = importlib.util.spec_from_file_location("keys_examples", HERE / "keys_exa
 keys = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(keys)
 
+# The Memo defines axt.DateTime in place, as its published schema (spec/time.md, section 3.1).
+DATE_TIME_SCHEMA = json.loads((REPO / "types" / "axt" / "DateTime.avsc").read_text(encoding="utf-8"))
 MEMO_SCHEMA = {
     "type": "record",
     "name": "Memo",
@@ -59,11 +62,7 @@ MEMO_SCHEMA = {
     "doc": "An illustration for spec/envelope.md; not an AXT example type.",
     "fields": [
         {"name": "text", "type": "string", "doc": "The memo's text."},
-        {
-            "name": "written",
-            "type": {"type": "long", "logicalType": "timestamp-millis"},
-            "doc": "When the memo was written.",
-        },
+        {"name": "written", "type": DATE_TIME_SCHEMA, "doc": "When the memo was written.", "axt.anchor": "instant"},
     ],
 }
 
@@ -73,7 +72,10 @@ SENDER = keys.public_key(SEED)
 assert SENDER.hex() == "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a", "not the key of spec/keys.md"
 RECORD_ID = "0b5a3c1e-4d2f-4a6b-9c8d-7e6f5a4b3c2d"
 RECORD_VERSION = 1
-MEMO = {"text": "Vet, Tuesday 10:00", "written": 1763200800000}  # 2025-11-15T10:00:00Z
+# written: 2025-11-15 11:00 in Europe/Berlin, the offset 3600, the instant 2025-11-15T10:00:00Z.
+WRITTEN = {"year": 2025, "month": 11, "day": 15, "hour": 11, "minute": 0, "second": 0, "millisecond": 0,
+           "zone": "Europe/Berlin", "offset_seconds": 3600, "instant_ms": 1763200800000}
+MEMO = {"text": "Vet, Tuesday 10:00", "written": WRITTEN}
 SYNC_MARKER = bytes.fromhex("000102030405060708090a0b0c0d0e0f")  # a writer picks 16 random bytes
 
 # --- CRC-64-AVRO, as given in the Avro specification -------------------------
@@ -173,9 +175,20 @@ memo_parts = [
     ("C3 01", b"\xc3\x01", "single-object marker"),
     ("fingerprint", memo_fp.to_bytes(8, "little"), f"CRC-64-AVRO of com.example.Memo, 0x{memo_fp:016x}, little-endian"),
     ("text", avro_bytes(MEMO["text"].encode()), f'string, length {len(MEMO["text"])}: "{MEMO["text"]}"'),
-    ("written", zigzag(MEMO["written"]), f'timestamp-millis {MEMO["written"]} (2025-11-15T10:00:00Z)'),
+]
+# written, an axt.DateTime: the wall clock, then the zone, the offset and the instant, each a union index 1 and its value.
+for part in ("year", "month", "day", "hour", "minute", "second", "millisecond"):
+    memo_parts.append((f"written.{part}", zigzag(WRITTEN[part]), f"int {WRITTEN[part]}"))
+memo_parts += [
+    ("written.zone", zigzag(1) + avro_bytes(WRITTEN["zone"].encode()),
+     f'union index 1, string, length {len(WRITTEN["zone"])}: "{WRITTEN["zone"]}"'),
+    ("written.offset_seconds", zigzag(1) + zigzag(WRITTEN["offset_seconds"]), f'union index 1, int {WRITTEN["offset_seconds"]}'),
+    ("written.instant_ms", zigzag(1) + zigzag(WRITTEN["instant_ms"]),
+     f'union index 1, long {WRITTEN["instant_ms"]} (2025-11-15T10:00:00Z)'),
 ]
 body = b"".join(p[1] for p in memo_parts)
+assert len(body) < 64, "the body length takes one byte, as the offsets of the vectors assume"
+assert WRITTEN["instant_ms"] == calendar.timegm((2025, 11, 15, 11, 0, 0)) * 1000 - WRITTEN["offset_seconds"] * 1000
 assert body[10:] == library_binary(memo_schema, MEMO), "Memo encoding differs from fastavro"
 
 kinds = envelope_schema["fields"][1]["type"]["symbols"]
@@ -205,7 +218,7 @@ envelope_datum = {
     "body": body,
     "signature": SIGNATURE,
 }
-assert hashlib.sha256(message).hexdigest() == "c6901788f627c534b72f85e50165db1ee77aa89549f9713d5cbb2a2119b1ee83", \
+assert hashlib.sha256(message).hexdigest() == "23fdfeb720ae7a368b936ce9f990039b7472fe7128927da9c3648e9b9ea67f07", \
     "not the message of spec/keys.md, section 7.2"
 
 # Check against the library and decode back.
@@ -217,7 +230,7 @@ assert isinstance(decoded["record"]["id"], uuid.UUID) and str(decoded["record"][
 assert int.from_bytes(decoded["body"][2:10], "little") == memo_fp
 memo_back = fastavro.schemaless_reader(io.BytesIO(decoded["body"][10:]), memo_schema, memo_schema)
 assert memo_back["text"] == MEMO["text"]
-assert int(memo_back["written"].timestamp() * 1000) == MEMO["written"]
+assert memo_back["written"] == WRITTEN
 
 # --- the file -----------------------------------------------------------------
 
@@ -243,7 +256,7 @@ fastavro.writer(
     sync_marker=SYNC_MARKER,
 )
 axt_file = file_buf.getvalue()
-assert hashlib.sha256(axt_file).hexdigest() == "c19b87302bdea31721a5dc5247effbaa57feb1289f74a5d77ec233f0e6796fa4", \
+assert hashlib.sha256(axt_file).hexdigest() == "6b1083ab16ed95a2299d4f0e0621cc3c86e9656b4658099fc220db928af6e969", \
     "not the file of spec/keys.md, section 7.3"
 
 # Read back with fastavro.
@@ -302,4 +315,95 @@ for i in range(0, len(axt_file), 16):
     chunk = axt_file[i:i + 16]
     text = "".join(chr(c) if 32 <= c < 127 else "." for c in chunk)
     print(f"{i:04x}  {chunk.hex(' '):<47}  {text}")
+
+# The same message and file in the layout of spec/envelope.md, sections 10.2 and 10.3.
+SPEC_NAMES = {
+    "C3 01": "single-object marker", "format": "format: int 1", "kind": "kind: enum index 4, DATA",
+    "sender": "sender: fixed(32), cat-a-log's test key", "record": "record: union index 1, axt.RecordRef",
+    "record.version": f"record.version: long {RECORD_VERSION}", "body": f"body: bytes length {len(body)}",
+    "body: C3 01": "body: single-object marker", "body: fingerprint": "body: fingerprint of com.example.Memo",
+    "signature": "signature: fixed(64)",
+}
+spec_parts = []
+for name, data, meaning in message_parts:
+    if name == "fingerprint":
+        spec_parts.append((data, "fingerprint of axt.Envelope, format 1"))
+    elif name in SPEC_NAMES:
+        spec_parts.append((data, SPEC_NAMES[name]))
+    elif name in ("record.id", "body: text"):
+        text = RECORD_ID if name == "record.id" else MEMO["text"]
+        spec_parts += [(data[:1], f"{name}: string length {len(text)}"), (data[1:], f'"{text}"')]
+    elif name == "body: written.zone":
+        spec_parts += [(data[:2], f"body: written.zone: union index 1, string length {len(WRITTEN['zone'])}"),
+                       (data[2:], f'"{WRITTEN["zone"]}"')]
+    elif name in ("body: written.offset_seconds", "body: written.instant_ms"):
+        spec_parts.append((data, f"{name}: union index 1, {'int' if 'offset' in name else 'long'} {WRITTEN[name.split('.')[-1]]}"))
+    else:
+        spec_parts.append((data, f"{name}: {meaning}"))
+assert b"".join(d for d, _ in spec_parts) == message
+print()
+print(f"== Data message, as in spec/envelope.md, section 10.2: {len(message)} bytes ==")
+print(keys.dump(spec_parts))
+
+
+def file_layout(data):
+    """The parts of the file, as (offset, bytes, meaning), with long values shortened in the output."""
+    pos, out = 0, []
+
+    def take(n, meaning, short=False):
+        nonlocal pos
+        out.append((pos, data[pos:pos + n], meaning, short))
+        pos += n
+
+    def varint():
+        n = shift = 0
+        start = pos
+        while True:
+            b = data[start + shift // 7]
+            n |= (b & 0x7F) << shift
+            shift += 7
+            if not b & 0x80:
+                return (n >> 1) ^ -(n & 1), shift // 7
+
+    take(4, 'magic "Obj" 01')
+    count, n = varint()
+    take(n, f"metadata: map block of {count} entries")
+    for _ in range(count):
+        length, n = varint()
+        take(n, f"key: string length {length}")
+        key = data[pos:pos + length].decode()
+        take(length, f'"{key}"')
+        length, n = varint()
+        take(n, f"value: bytes length {length}")
+        value = data[pos:pos + length].decode()
+        take(length, {
+            "axt.schemas": f'[{{"type":"record","name":"Memo", ...}}]  ({length} bytes of UTF-8 JSON)',
+            "axt.sender": f'"{value[:6]}...{value[-6:]}"  ({length} hexadecimal digits, cat-a-log\'s test key)',
+            "axt.signature": f'"{value[:6]}...{value[-6:]}"  ({length} hexadecimal digits, the header signature)',
+            "avro.schema": f'{{"type": "record", "name": "Envelope", "namespace": "axt", ...}}  ({length} bytes of UTF-8 JSON)',
+        }.get(key, f'"{value}"'), short=length > 16)
+    take(1, "end of the metadata map")
+    take(16, "sync marker")
+    count, n = varint()
+    take(n, f"block: {count} datum")
+    size, n = varint()
+    take(n, f"block: {size} bytes")
+    take(size, f"the datum: bytes 000a to {len(message) - 1:04x} of the message in 10.2", short=True)
+    take(16, "sync marker")
+    assert pos == len(data)
+    return out
+
+
+print()
+print(f"== File, as in spec/envelope.md, section 10.3: {len(axt_file)} bytes ==")
+for offset, chunk, meaning, short in file_layout(axt_file):
+    if short:
+        print(f"{offset:04x}  {chunk[:4].hex(' ') + ' ... ' + chunk[-2:].hex(' '):<23}  {meaning}")
+        continue
+    for i in range(0, len(chunk), 8):
+        hexs = chunk[i:i + 8].hex(" ")
+        print(f"{offset:04x}  {hexs:<23}  {meaning}" if i == 0 else f"      {hexs}")
+print(f"{len(axt_file):04x}  end")
+print(f"axt.schemas: {len(schemas_value.encode())} bytes, SHA-256 {hashlib.sha256(schemas_value.encode()).hexdigest()}")
+print(f"axt.signature: {HEADER_SIGNATURE.hex()}")
 print("all checks passed")

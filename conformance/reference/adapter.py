@@ -309,21 +309,28 @@ def op_fingerprint(i):
 # --- types (spec/types.md) ----------------------------------------------------------------
 
 
+def decode_value(writer_text, body, reader=None):
+    """The value of a single-object encoding with the writer schema, before any check of its values; or a rejection.
+    With a reader schema, a writer schema that does not resolve to it is rejected before the body is decoded."""
+    if body[:2] != b"\xc3\x01" or len(body) < 10:
+        return None, no("UNDECODABLE", "not a single-object encoding")
+    if body[2:10] != pe.fp8(pe.canonical_fp(writer_text)):
+        return None, no("SCHEMA_UNKNOWN")
+    if reader is not None and not pe.resolves(json.loads(writer_text), reader):
+        return None, no("DOES_NOT_RESOLVE")
+    try:
+        return decode_all(pe.without_logical_types(json.loads(writer_text)), body[10:]), None
+    except Undecodable as e:
+        return None, no("UNDECODABLE", str(e))
+
+
 def op_decode_record(i):
     writer_text, reader_text, body = i["writer_schema"], i["reader_schema"], b_in(i["body"])
     writer = json.loads(writer_text)
-    if body[:2] != b"\xc3\x01" or len(body) < 10:
-        return no("UNDECODABLE", "not a single-object encoding")
-    if body[2:10] != pe.fp8(pe.canonical_fp(writer_text)):
-        return no("SCHEMA_UNKNOWN")
-    if reader_text is not None:
-        reader = json.loads(reader_text)
-        if not pe.resolves(writer, reader):
-            return no("DOES_NOT_RESOLVE")
-    try:
-        value = decode_all(pe.without_logical_types(writer), body[10:])
-    except Undecodable as e:
-        return no("UNDECODABLE", str(e))
+    reader = None if reader_text is None else json.loads(reader_text)
+    value, rejected = decode_value(writer_text, body, reader)
+    if rejected:
+        return rejected
     # Step 9 of spec/protocol.md, section 6.2: a value that decodes but holds a time value that is not valid.
     broken = tm.value_breaches(pe.without_logical_types(writer), value)
     if broken:
@@ -348,12 +355,13 @@ def op_describe(i):
 
 
 def op_check_record(i):
-    """A receiver that checks the attributes: the first value, in the order of the encoding, that breaks a rule."""
-    got = op_decode_record({"writer_schema": i["schema"], "reader_schema": None, "body": i["body"]})
-    if "reject" in got:
-        return got
+    """A receiver that checks the attributes: the first value, in the order of the encoding, that breaks a rule,
+    whether a check of an attribute or a rule of a time type (spec/conformance.md, section 5.13)."""
+    value, rejected = decode_value(i["schema"], b_in(i["body"]))
+    if rejected:
+        return rejected
     writer = pe.without_logical_types(json.loads(i["schema"]))
-    broken = mr.breaches(writer, got["accept"]["value"], tm.time_check)
+    broken = mr.breaches(writer, value, tm.time_check)
     if broken:
         path, rule, why = broken[0]
         return no("VALUE_INVALID", f"{rule}: {why}", field=mr.error_field(path))

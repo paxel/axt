@@ -231,7 +231,7 @@ A sender MUST pad to exactly P(n). Some lengths:
 
 | Message, bytes        | Padded, bytes |
 | --------------------- | ------------- |
-| 183 (section 7.2)     | 1,024         |
+| 210 (section 7.2)     | 1,024         |
 | 1,023                 | 1,024         |
 | 1,024                 | 1,088         |
 | 4,000                 | 4,096         |
@@ -389,7 +389,7 @@ The script prints further test keys that the examples do not use. The ephemeral 
 
 ### 7.2 A signed DATA message
 
-The `DATA` message of [envelope.md](envelope.md), section 10.2: the Memo `{"text": "Vet, Tuesday 10:00", "written": 1763200800000}` as version 1 of the record `0b5a3c1e-4d2f-4a6b-9c8d-7e6f5a4b3c2d`, sent by cat-a-log on the old phone and signed with its key; 183 bytes, SHA-256 `c6901788f627c534b72f85e50165db1ee77aa89549f9713d5cbb2a2119b1ee83`. Offsets are hexadecimal.
+The `DATA` message of [envelope.md](envelope.md), section 10.2: the Memo with the text `Vet, Tuesday 10:00`, written at 2025-11-15 11:00 in `Europe/Berlin`, as version 1 of the record `0b5a3c1e-4d2f-4a6b-9c8d-7e6f5a4b3c2d`, sent by cat-a-log on the old phone and signed with its key; 210 bytes, SHA-256 `23fdfeb720ae7a368b936ce9f990039b7472fe7128927da9c3648e9b9ea67f07`. Offsets are hexadecimal.
 
 ```text
 0000  c3 01                    single-object marker
@@ -408,24 +408,27 @@ The `DATA` message of [envelope.md](envelope.md), section 10.2: the Memo `{"text
       37 65 36 66 35 61 34 62
       33 63 32 64
 0052  02                       record.version: long 1
-0053  46                       body: bytes length 35
-0054  c3 01 68 b3 56 68 0c e4  body: the Memo, as in spec/envelope.md, section 10.2
-      1c b7 24 56 65 74 2c 20
+0053  7c                       body: bytes length 62
+0054  c3 01 73 ac dc ca 16 0e  body: the Memo, as in spec/envelope.md, section 10.2
+      f2 37 24 56 65 74 2c 20
       54 75 65 73 64 61 79 20
-      31 30 3a 30 30 80 d4 a8
-      ef d0 66
-0077  33 87 5e 5e 5b 36 d7 df  signature: fixed(64)
-      ac ea 9f e1 83 e4 11 8b
-      2b ef f6 e6 1e b1 36 7e
-      53 a3 3c 74 d3 2e 20 53
-      9e 2e c5 15 ee 75 d9 66
-      52 8e b6 8f bc 88 d4 09
-      4c fa 1f 48 2f eb 6c 24
-      ce 1e 5c 2f f6 c1 50 03
-00b7  end
+      31 30 3a 30 30 d2 1f 16
+      1e 16 00 00 00 02 1a 45
+      75 72 6f 70 65 2f 42 65
+      72 6c 69 6e 02 a0 38 02
+      80 d4 a8 ef d0 66
+0092  8d de f4 42 9c 18 3d 9c  signature: fixed(64)
+      a3 8e 0a 0d 7b 90 08 84
+      18 f7 1f e9 43 10 0e a9
+      b7 6b 4a 96 5c 60 b0 25
+      0d e8 56 1e 84 d1 0c ca
+      b3 e2 cb 6c a7 e0 ec a9
+      16 92 97 37 c4 fc 26 4c
+      5c 6a 52 39 67 df c1 06
+00d2  end
 ```
 
-The signed bytes, 124 of them, are the prefix of section 2.2 and the bytes `000a` to `0076` of the message:
+The signed bytes, 151 of them, are the prefix of section 2.2 and the bytes `000a` to `0091` of the message:
 
 ```text
 41 58 54 2d 76 31 20 6d 65 73 73 61 67 65 00 02
@@ -433,22 +436,24 @@ The signed bytes, 124 of them, are the prefix of section 2.2 and the bytes `000a
 19 4b f6 bd 69 af f1 47 1c ce 64 10 d5 3c 26 ec
 4a 02 48 30 62 35 61 33 63 31 65 2d 34 64 32 66
 2d 34 61 36 62 2d 39 63 38 64 2d 37 65 36 66 35
-61 34 62 33 63 32 64 02 46 c3 01 68 b3 56 68 0c
-e4 1c b7 24 56 65 74 2c 20 54 75 65 73 64 61 79
-20 31 30 3a 30 30 80 d4 a8 ef d0 66
+61 34 62 33 63 32 64 02 7c c3 01 73 ac dc ca 16
+0e f2 37 24 56 65 74 2c 20 54 75 65 73 64 61 79
+20 31 30 3a 30 30 d2 1f 16 1e 16 00 00 00 02 1a
+45 75 72 6f 70 65 2f 42 65 72 6c 69 6e 02 a0 38
+02 80 d4 a8 ef d0 66
 ```
 
 The same message with the record id in upper-case digits names the same record ([envelope.md](envelope.md), section 7), but its bytes differ, and the signature does not verify for them; the script checks this.
 
 ### 7.3 The message in a file
 
-The same message in an AXT file with the codec `null` and the sync marker `00 01 … 0f`, as in [envelope.md](envelope.md), section 10.3; 2,793 bytes, SHA-256 `c19b87302bdea31721a5dc5247effbaa57feb1289f74a5d77ec233f0e6796fa4`. The metadata holds, in this order, `axt.schemas` (the Memo schema of [envelope.md](envelope.md), section 10.1, as a JSON array without spaces, 308 bytes), `axt.sender`, `axt.signature`, `avro.codec` and `avro.schema`.
+The same message in an AXT file with the codec `null` and the sync marker `00 01 … 0f`, as in [envelope.md](envelope.md), section 10.3; 4,526 bytes, SHA-256 `6b1083ab16ed95a2299d4f0e0621cc3c86e9656b4658099fc220db928af6e969`. The metadata holds, in this order, `axt.schemas` (the Memo schema of [envelope.md](envelope.md), section 10.1, as a JSON array without spaces, 2,014 bytes), `axt.sender`, `axt.signature`, `avro.codec` and `avro.schema`.
 
 | What                     | Value                                                                                                                              |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| SHA-256 of `axt.schemas` | `a4f86183d65632511014faa8d89bdb4a12e911d1e0a160affe9da4e30017b188`                                                                 |
+| SHA-256 of `axt.schemas` | `1108ad5b1f5911e6938b8cdb27db54767aa486d3302ed9c2fea3162b5c8d2385`                                                                 |
 | `axt.sender`             | `1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a`                                                                 |
-| `axt.signature`          | `edd02ed03eea22c8586d1dddf330cd88edc1abf3c2664941cde1cb7fad1126ec811a9908a25ae76d02235fc8495f6c9b9bf3dec86dd443d1bf77e03d9d355506` |
+| `axt.signature`          | `89a017b974a85e6d6d4bff3efe19de530fc27767cb2b67848c53cb8fcec4c1df48ca7a8724d588cb9fe5ebcbc78abf710fbd113bda6a170176f59632f3619300` |
 
 The header's signed bytes, 83 of them: the prefix `AXT-v1 file header` and its zero byte, the key, and the SHA-256 of `axt.schemas`:
 
@@ -456,12 +461,12 @@ The header's signed bytes, 83 of them: the prefix `AXT-v1 file header` and its z
 41 58 54 2d 76 31 20 66 69 6c 65 20 68 65 61 64
 65 72 00 1b 84 a6 00 f3 50 3e 22 bb cc 99 e6 32
 02 a7 19 4b f6 bd 69 af f1 47 1c ce 64 10 d5 3c
-26 ec 4a a4 f8 61 83 d6 56 32 51 10 14 fa a8 d8
-9b db 4a 12 e9 11 d1 e0 a1 60 af fe 9d a4 e3 00
-17 b1 88
+26 ec 4a 11 08 ad 5b 1f 59 11 e6 93 8b 8c db 27
+db 54 76 7a a4 86 d3 30 2e d9 c2 fe a3 16 2b 5c
+8d 23 85
 ```
 
-The file's one block holds one datum, the bytes `000a` to `00b6` of the message of section 7.2. A reader finds its end by reading the envelope's fields in turn: `format` and `kind`, one byte each here; 32 bytes of `sender`; the union index `02`, the id with its length `48` and the version; the body with its length `46`; and 64 bytes of `signature`. It verifies the signature over the prefix and the datum without its last 64 bytes, the same 124 bytes as in section 7.2.
+The file's one block holds one datum, the bytes `000a` to `00d1` of the message of section 7.2. A reader finds its end by reading the envelope's fields in turn: `format` and `kind`, one byte each here; 32 bytes of `sender`; the union index `02`, the id with its length `48` and the version; the body with its length `7c`; and 64 bytes of `signature`. It verifies the signature over the prefix and the datum without its last 64 bytes, the same 151 bytes as in section 7.2.
 
 ### 7.4 The message sealed for the relay
 
@@ -476,15 +481,15 @@ The message of section 7.2, sealed for Old Brain Fix's encryption key with the e
 | `key`                  | `c06224435dd8746e228c29cb8398d7fa42733ef05ebadf09281080ed7caddbaa`                                                                   |
 | `base_nonce`           | `7a348d859da32b0b186b5b9b`                                                                                                           |
 
-The plaintext is the 183 bytes of the message, the byte `80` and 840 zero bytes: 1,024 bytes (section 4.4). The sealed message is the byte `01`, the 32 bytes of `enc` and 1,040 bytes of ciphertext: 1,073 bytes, SHA-256 `6be58e45f035eed7f4e3feb8fec0b59f00f74f93122015d22e6133bc65d187e7`. Its first and last bytes:
+The plaintext is the 210 bytes of the message, the byte `80` and 813 zero bytes: 1,024 bytes (section 4.4). The sealed message is the byte `01`, the 32 bytes of `enc` and 1,040 bytes of ciphertext: 1,073 bytes, SHA-256 `7cbe47862344527d93735c97159cc8cf4d3631647233cac735553c968e6c2bc8`. Its first and last bytes:
 
 ```text
 0000  01 ed 7a 4a 21 3a c3 7c df fc 78 37 28 05 f5 1e
 0010  a5 3b 59 21 74 ea 7b d2 bc ea cf 6b 35 94 38 b3
 0020  36 3d 9d f8 be 1f 42 1f 9f 80 24 00 66 51 92 51
       ...
-0420  87 85 f7 81 93 1b 9c a7 65 4e bb ba 57 5f 24 cd
-0430  29
+0420  87 d6 fb 5c 60 49 cc c1 62 2f 0b 7a b2 d9 93 49
+0430  c8
 ```
 
 The script prints the whole sealed message.
