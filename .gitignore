@@ -1,0 +1,19 @@
+# Rust
+target/
+
+# Dart and Flutter
+.dart_tool/
+build/
+
+# JavaScript and TypeScript
+node_modules/
+
+# Python
+__pycache__/
+.venv/
+
+# Kotlin and Gradle (build/ is listed under Dart)
+.gradle/
+
+# Swift
+.build/
