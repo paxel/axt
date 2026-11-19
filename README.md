@@ -1,5 +1,15 @@
 # AXT: Avro eXchange Transfer
 
+[![CI](https://github.com/paxel/axt/actions/workflows/ci.yml/badge.svg?branch=summer)](https://github.com/paxel/axt/actions/workflows/ci.yml)
+[![Security](https://github.com/paxel/axt/actions/workflows/security.yml/badge.svg?branch=summer)](https://github.com/paxel/axt/actions/workflows/security.yml)
+[![CodeQL](https://github.com/paxel/axt/actions/workflows/codeql.yml/badge.svg?branch=summer)](https://github.com/paxel/axt/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/paxel/axt/badge)](https://scorecard.dev/viewer/?uri=github.com/paxel/axt)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=paxel_axt&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=paxel_axt)
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpaxel%2Faxt%2Fsummer%2F.github%2Fbadges%2Fcoverage-python.json)](coverage-floors.toml)
+[![Fuzz](https://github.com/paxel/axt/actions/workflows/fuzz.yml/badge.svg?branch=summer)](https://github.com/paxel/axt/actions/workflows/fuzz.yml)
+[![Release](https://img.shields.io/github/v/release/paxel/axt)](https://github.com/paxel/axt/releases)
+[![License](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT%20%C2%B7%20CC0--1.0-blue)](LICENSING.md)
+
 AXT is an open standard that lets small, independent apps exchange typed records with each other.
 
 Status: draft, 0.1.0 in progress. The documents in [spec/](spec/README.md) are stubs or drafts and may still change in incompatible ways. See [CHANGELOG.md](CHANGELOG.md).

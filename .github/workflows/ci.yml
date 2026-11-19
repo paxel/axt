@@ -1,12 +1,13 @@
 name: CI
 
 # The gates every pull request and every push to summer runs, from paxel/gates (the standard:
-# its standard.toml). The Python gate runs ruff, mypy and the tests; the tests run the
+# its standard.toml): the OSV gate on the locked dependencies, the Python gate and SonarQube
+# Cloud, which reads the coverage the Python gate measured. The Python gate runs ruff, mypy and the tests; the tests run the
 # conformance suite against the reference adapter and the reference relay, compare the
 # committed vectors with the generator's output, run every example script of the
 # specification and check the changelog.
 # A branch gets its run through its pull request; a run per push as well would be the same
-# jobs twice.
+# jobs twice, and SonarQube Cloud analyses only the default branch and pull requests.
 on:
   push:
     branches: [summer]
@@ -20,5 +21,14 @@ permissions:
   contents: read
 
 jobs:
+  vulns:
+    uses: paxel/gates/.github/workflows/vulns.yml@02a81ad45b815cbed94f9bb6841424a624e8155f # v1.2.0
+
   python:
     uses: paxel/gates/.github/workflows/python.yml@02a81ad45b815cbed94f9bb6841424a624e8155f # v1.2.0
+
+  sonar:
+    needs: python
+    uses: paxel/gates/.github/workflows/sonar.yml@02a81ad45b815cbed94f9bb6841424a624e8155f # v1.2.0
+    secrets:
+      sonar-token: ${{ secrets.SQ_TOKEN }}
