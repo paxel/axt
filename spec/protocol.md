@@ -16,27 +16,31 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 - **Accepted offer of a type**: an offer that includes the type, that the receiver has accepted for that type, and that has not ended (section 4.3).
 - **Record message**: a `DATA` or `DELETE` message ([records.md](records.md), section 1).
 - **Reply**: an `ACCEPT`, `DECLINE`, `ACK` or `ERROR` message; it is about messages of the app it goes to.
-- **Addressee**: the app a message is for. Its key is in the `to` field of the body (section 9.1).
+- **Addressee**: the app a message is for, and of its devices the one whose key is in the `to` field of the body (section 9.1).
 
 The receiver's user confirms the other app's key before the two apps exchange records ([keys.md](keys.md), section 3.2). Nothing in this document applies to a message from a key that the receiver's user has not accepted, except that the receiver reads the app name from its `MANIFEST` and MAY keep its messages until the user decides, as [keys.md](keys.md), section 3.2, says.
 
 ## 2. Messages
 
-| Kind       | `record` | Body                                               | `to` in the body | Sent by                    | In a file                        |
-| ---------- | -------- | -------------------------------------------------- | ---------------- | -------------------------- | -------------------------------- |
-| `MANIFEST` | `null`   | `axt.Manifest` ([manifest.md](manifest.md))        | no               | each app, about itself     | at most one, after the key moves |
-| `OFFER`    | `null`   | `axt.Offer` (section 4)                            | yes              | the sender                 | no                               |
-| `ACCEPT`   | `null`   | `axt.Accept` (section 5)                           | yes              | the receiver               | no                               |
-| `DECLINE`  | `null`   | `axt.Decline` (section 5)                          | yes              | the receiver               | no                               |
-| `DATA`     | required | the record ([records.md](records.md), section 4.1) | no               | the sender                 | yes                              |
-| `DELETE`   | required | empty ([records.md](records.md), section 4.2)      | no               | the sender                 | yes                              |
-| `ACK`      | `null`   | `axt.Ack` (section 7)                              | yes              | the receiver               | no                               |
-| `ERROR`    | `null`   | `axt.Error` (section 8)                            | yes              | the app that got a message | no                               |
-| `KEY_MOVE` | `null`   | `axt.KeyMove` ([keys.md](keys.md), section 5)      | no               | a sender whose key moved   | at the start                     |
+| Kind            | `record` | Body                                                 | `to` in the body | Sent by                    | In a file                    |
+| --------------- | -------- | ---------------------------------------------------- | ---------------- | -------------------------- | ---------------------------- |
+| `MANIFEST`      | `null`   | `axt.Manifest` ([manifest.md](manifest.md))          | no               | each app, about itself     | at most one, after the chain |
+| `OFFER`         | `null`   | `axt.Offer` (section 4)                              | yes              | the sender                 | no                           |
+| `ACCEPT`        | `null`   | `axt.Accept` (section 5)                             | yes              | the receiver               | no                           |
+| `DECLINE`       | `null`   | `axt.Decline` (section 5)                            | yes              | the receiver               | no                           |
+| `DATA`          | required | the record ([records.md](records.md), section 4.1)   | no               | the sender                 | yes                          |
+| `DELETE`        | required | empty ([records.md](records.md), section 4.2)        | no               | the sender                 | yes                          |
+| `ACK`           | `null`   | `axt.Ack` (section 7)                                | yes              | the receiver               | no                           |
+| `ERROR`         | `null`   | `axt.Error` (section 8)                              | yes              | the app that got a message | no                           |
+| `DEVICE_JOIN`   | `null`   | `axt.DeviceJoin` ([keys.md](keys.md), section 5.2)   | yes              | a new device               | no                           |
+| `DEVICE_ADD`    | `null`   | `axt.DeviceAdd` ([keys.md](keys.md), section 5.2)    | no               | a device of the sender     | at the start                 |
+| `DEVICE_REMOVE` | `null`   | `axt.DeviceRemove` ([keys.md](keys.md), section 5.3) | no               | a device of the sender     | at the start                 |
 
 The column "In a file" is that of [transports.md](transports.md), section 2.1. The schemas are in [types/axt/](../types/axt/); their fingerprints are in section 16. Each is a schema of the specification and changes only with a new envelope format ([manifest.md](manifest.md), section 2). An app MUST reject a message whose `record` is present where the table says `null` or absent where it is required, and a message whose body fingerprint is not the one of its kind and format ([envelope.md](envelope.md), section 3.1), with the error `INVALID_MESSAGE` (section 8).
 
-`MANIFEST`, `DATA`, `DELETE` and `KEY_MOVE` are the same for every receiver: a manifest says what an app takes, a record message is sent under the same id to every receiver ([records.md](records.md), section 2), and a key move is for every app that knows the key. They carry no addressee, so that they keep their signature when they are passed on or put into a file ([keys.md](keys.md), sections 2.2 and 2.6). An offer depends on the receiver's manifest and the replies on the messages of one app, so their bodies name the app they are for.
+The kinds `CHANGE`, `RESYNC`, `FORWARD`, `WITHDRAW`, `PROPOSAL` and `PROPOSAL_REPLY` of [envelope.md](envelope.md), section 2.2, come with their tickets and are not in the table yet.
+
+`MANIFEST`, `DATA`, `DELETE`, `DEVICE_ADD` and `DEVICE_REMOVE` are the same for every receiver: a manifest says what an app takes, a record message is sent under the same id to every receiver ([records.md](records.md), section 2), and an addition or a removal of a device is for every app that knows the sender. They carry no addressee, so that they keep their signature when they are passed on or put into a file ([keys.md](keys.md), sections 2.2 and 2.6). An offer depends on the receiver's manifest and the replies on the messages of one app, so their bodies name the device they are for; a `DEVICE_JOIN` is for the one device whose join code was scanned.
 
 ## 3. Opening a live connection
 
@@ -44,11 +48,15 @@ The column "In a file" is that of [transports.md](transports.md), section 2.1. T
 
 When a live connection is open, after both apps' `HELLO` ([transports.md](transports.md), section 4.6), each app:
 
-1. sends the `KEY_MOVE` messages of section 3.3, if it has any for the other app;
+1. sends its chain, the `DEVICE_ADD` and `DEVICE_REMOVE` messages of section 3.3, if it has any to send to the other app;
 2. sends its `MANIFEST` ([manifest.md](manifest.md), section 5.1), in the format of section 3.2;
 3. waits for a valid `MANIFEST` of the other app.
 
-Neither app waits for the other before it sends these. An app MUST send its `MANIFEST` before any message of another kind except `KEY_MOVE`. An app MUST NOT process a message of another kind than `MANIFEST`, `KEY_MOVE` or `ERROR` that arrives before the other app's valid `MANIFEST`; it MAY close the connection.
+In a connection that a join code opened, these steps wait: neither app sends its chain or its `MANIFEST` before the `DEVICE_JOIN` is answered (section 3.3).
+
+Neither app waits for the other before it sends these. An app MUST send its `MANIFEST` before any message of another kind except `DEVICE_ADD`, `DEVICE_REMOVE` and `DEVICE_JOIN`. An app MUST NOT process a message of another kind than `MANIFEST`, `DEVICE_ADD`, `DEVICE_REMOVE`, `DEVICE_JOIN` or `ERROR` that arrives before the other app's valid `MANIFEST`; it MAY close the connection.
+
+A `DEVICE_ADD` or a `DEVICE_REMOVE` MAY also come later in the connection, after messages of other kinds, and MAY carry a `sender` other than the connection key; neither closes the connection ([transports.md](transports.md), section 4.5). A `DEVICE_JOIN` is not exempt: one whose `sender` is not the connection key closes the connection, and one in a connection that no join code opened is ignored without an error, before the `MANIFEST` and after it (section 3.3).
 
 An app MUST NOT send an `OFFER` before it has received a valid `MANIFEST` of the other app in the connection ([manifest.md](manifest.md), section 5.1), and before its user has accepted the other app's key ([keys.md](keys.md), section 3.2). It MAY answer offers and send acknowledgements as soon as it has the other app's valid `MANIFEST` and its user has accepted the key. Errors are reported as section 8.3 says.
 
@@ -66,15 +74,20 @@ When an app has the other app's valid `MANIFEST`, it writes every further messag
 
 A message whose envelope fingerprint is not of a format the receiver supports is rejected without decoding ([envelope.md](envelope.md), section 3.1). Before the receiver has the other app's `MANIFEST`, it does not report it: it cannot verify the message, and the exchange of manifests above resolves a `MANIFEST` in an unread format. After that, it reports it with `FORMAT_UNSUPPORTED` (section 8), whose `fingerprint` is the message's envelope fingerprint.
 
-### 3.3 Key moves in a connection
+### 3.3 Additions and removals of devices
 
-An installation that has moved its key ([keys.md](keys.md), section 5) sends, as the first messages of every live connection with an app it exchanged with before the move, the chain of its `KEY_MOVE` messages, oldest first, before its `MANIFEST`. It does so until it has an answer from that app:
+A device that has a chain ([keys.md](keys.md), section 5.4) sends it, oldest message first, to each app it exchanges with: as the first messages of each of its next three live connections with the app, before its `MANIFEST`, and, to an app it exchanges with through the relay, three times through the relay: at once, before any other message it sends there, and twice more, each after the holding time has passed (section 11). Then it stops. Whenever its chain grows, by an addition or a removal that it signs or gets of its own set, it counts anew and sends the whole chain three times in each way again. For an app it begins to exchange with later, the count begins then.
 
-- **Acknowledged.** The receiver applied the move: it sends an `ACK` whose `to` is the new key and whose `moved_from` is the key it knew the sender by (section 7.1). It sends the same `ACK` again for a repeat of a move it has applied ([keys.md](keys.md), section 5.3, step 2), so that a lost acknowledgement does not leave the sender resending forever.
-- **Rejected.** The receiver's user declined the move, or the move fails a check of [keys.md](keys.md), section 5.3, other than step 3. In a live connection, the receiver sends `KEY_MOVE_REJECTED` (section 8) on the connection. Its `to` is the move's old key, the `sender` of the `KEY_MOVE`, which the new installation takes as one of its moved-from keys (section 9.1). The new installation stops sending the move to that app, and the app meets the new key as a first contact ([keys.md](keys.md), section 3.2). Through a relay, the receiver has no encryption key it may use for the new installation ([keys.md](keys.md), section 4.2), so it sends nothing; the bound below ends the resends.
-- **No answer.** A receiver that knows neither key ignores the move without a reply ([keys.md](keys.md), section 5.3, step 3). The new installation stops sending the move to an app after it has sent it in three live connections, or three times through the relay (section 11), without an answer.
+The receiver applies a `DEVICE_ADD` and a `DEVICE_REMOVE` by [keys.md](keys.md), section 5.5, without asking its user. Nothing acknowledges them:
 
-The receiver asks its user before it applies a move ([keys.md](keys.md), section 5.3, step 6). Until the user decides, the messages signed with the new key are those of an unknown key: the receiver keeps them, and processes them as the sender's once the user confirms the move. Through a relay, the new installation sends the `KEY_MOVE` as its first message ([keys.md](keys.md), section 5.2). The acknowledgement, or the bound of three sends, ends its resends.
+- **Applied or ignored.** The receiver sends no reply. When it applies the removal of the connection key, it closes the connection ([keys.md](keys.md), section 5.5). A repeat of an addition or a removal it has applied is ignored without an error, so a chain is safe to send again.
+- **Rejected.** For a `DEVICE_ADD` or a `DEVICE_REMOVE` that [keys.md](keys.md), section 5.5, has the receiver reject, and for a `DEVICE_JOIN` that the device it is for rejects or whose user declines it ([keys.md](keys.md), section 5.2), the receiver sends `DEVICE_REJECTED` (section 8) in a live connection, on the connection the message came in. Its `to` is the connection key, as for every `ERROR` in a live connection (section 9.1): the key of the device that sent the message, which for an addition or a removal need not be the key that signed it. Its `message_hash` names the message. For a message of a chain that arrives before the other app's `MANIFEST`, the receiver holds the `DEVICE_REJECTED` and sends it among its replies to that `MANIFEST` (section 8.3). The device stops sending that message to that app. Through a relay, the receiver sends nothing.
+- **An unknown signer.** A `DEVICE_ADD` by a key the receiver does not know, for a device that is a current key of a sender it knows, adds the signer to that sender; a message it cannot place is kept until the chain has been read, and gets no reply ([keys.md](keys.md), section 5.5, step 3). A kept message that a later try rejects is not reported either.
+- **The rest of the chain.** A message of a chain that fails its signature, its key or its proof is rejected for itself, and reported as section 8.3 allows; the receiver goes on with the messages after it, unless it closes the connection (section 8.3).
+
+**Removals.** A removal makes the chain grow, so the device that signs it, and every device of the set that gets it, sends its whole chain again as above ([keys.md](keys.md), section 5.3). It sends the chain and not the removal alone, since the app may not know the key that signed the removal. A chain is safe to repeat, and no reply ends its sending earlier.
+
+**Joining.** A `DEVICE_JOIN` travels only in the live connection that a join code opened, as the first message of the new device, before its `MANIFEST` ([keys.md](keys.md), section 5.2; [transports.md](transports.md), section 4.7). Until the `DEVICE_JOIN` is answered, neither device sends its chain or its `MANIFEST`. The device that showed the code answers on the connection with its chain, which holds the new device's `DEVICE_ADD`, or with `DEVICE_REJECTED`, after which it closes the connection. Its answer waits for its user and has no time limit: the 30 seconds of section 12 do not run while the user decides, and the `PING` frames keep the connection open ([transports.md](transports.md), section 4.6). After an answer with the chain, the connection goes on as any other, with the steps of section 3.1. A sent `DEVICE_JOIN` binds the new device whatever the answer ([keys.md](keys.md), section 5.2). A repeat of a `DEVICE_JOIN` from the same key is answered as the first was; one from another key is ignored. A `DEVICE_JOIN` anywhere else is ignored without a report, whether it comes before or after the `MANIFEST`.
 
 ## 4. The offer
 
@@ -84,7 +97,7 @@ An `OFFER` message carries `record` `null` and one `axt.Offer` as its body ([typ
 
 | Field            | Avro type                     | Content                                                                                            |
 | ---------------- | ----------------------------- | -------------------------------------------------------------------------------------------------- |
-| `to`             | `fixed` of 32, `axt.OfferTo`  | The Ed25519 public key of the receiver                                                             |
+| `to`             | `fixed` of 32, `axt.OfferTo`  | The Ed25519 public key of the receiver, the key of the device the offer goes to (section 9.1)      |
 | `offer_id`       | `string`, logical type `uuid` | The id of the offer                                                                                |
 | `types`          | array of `axt.OfferType`      | The types offered                                                                                  |
 | `types[].schema` | `string`                      | The writer schema of the type, as its full JSON text                                               |
@@ -111,7 +124,7 @@ A receiver MUST reject an offer that is not valid, and MUST NOT accept any of it
 
 A type that does not fit the receiver's manifest, or whose schema does not resolve against the receiver's, does not make an offer invalid; the receiver declines the type (section 5.2).
 
-A sender MUST offer only types that fit the receiver's manifest ([manifest.md](manifest.md), section 5.3). A set of types whose schemas do not fit into one message of 16 MiB is offered in several offers.
+A sender MUST offer only types that fit the receiver's manifest ([manifest.md](manifest.md), section 5.3): the manifest of the device whose key is the offer's `to`. A set of types whose schemas do not fit into one message of 16 MiB is offered in several offers.
 
 ### 4.3 How long an offer stays open
 
@@ -119,7 +132,7 @@ An offer belongs to the channel it was sent through.
 
 - **Live connection.** An offer made in a live connection ends when the connection ends. A new connection starts again with manifests and offers (section 3.1).
 - **Relay.** An offer made through the relay does not end with time; it ends only for one of the reasons below.
-- **Both.** An offer also ends for a type when the sender makes a later offer of that type in the same channel, and when the type no longer fits the receiver's manifest ([manifest.md](manifest.md), section 6). It ends for every type when the receiver forgets the sender, or the sender forgets the receiver ([keys.md](keys.md), section 3.4).
+- **Both.** An offer also ends for a type when the sender makes a later offer of that type in the same channel, and when the type no longer fits the receiver's manifest ([manifest.md](manifest.md), section 6). It ends for every type when the receiver forgets the sender, or the sender forgets the receiver ([keys.md](keys.md), section 3.4), and when the key that signed it or the key in its `to` is removed from its sender ([keys.md](keys.md), section 5.5).
 
 An offer that has ended for a type no longer allows record messages of that type. Its schemas are no longer used for decoding (section 6.2); [envelope.md](envelope.md), section 3, keeps a schema for as long as this section keeps the offer open.
 
@@ -138,7 +151,7 @@ An `ACCEPT` or `DECLINE` message carries `record` `null` and one `axt.Accept` or
 
 | Field            | In        | Avro type                     | Content                                      |
 | ---------------- | --------- | ----------------------------- | -------------------------------------------- |
-| `to`             | both      | `fixed` of 32                 | The Ed25519 public key of the offer's sender |
+| `to`             | both      | `fixed` of 32                 | The Ed25519 public key that signed the offer |
 | `offer_id`       | both      | `string`, logical type `uuid` | The id of the offer this message answers     |
 | `types`          | `ACCEPT`  | array of `string`             | The full names of the types taken            |
 | `types[].type`   | `DECLINE` | `string`                      | The full name of a type not taken            |
@@ -166,7 +179,7 @@ A fit is not an acceptance ([manifest.md](manifest.md), section 5.4): the receiv
 
 ### 5.3 What the sender takes
 
-The sender of an offer takes an answer when its `to` is the sender's key (section 9.1), it names an offer the sender made to the app that sent the answer, and each type it names is a type of that offer. An answer whose types are not types of the offer, or that names a type twice, is reported with `INVALID_MESSAGE`. Of each answered type, the sender takes:
+The sender of an offer takes an answer when its `to` is its own key, the key that signed the offer (section 9.1), it names an offer the sender made to the app that sent the answer, and each type it names is a type of that offer. An answer whose types are not types of the offer, or that names a type twice, is reported with `INVALID_MESSAGE`. Of each answered type, the sender takes:
 
 - only the answer to its latest offer of that type to that receiver in that channel; it ignores answers to earlier offers of the type, since a later offer replaced them (section 4.3);
 - only the first answer for that offer and type. A later `ACCEPT` or `DECLINE` of the same offer and type, a repeat or a reordered message, is ignored.
@@ -219,20 +232,23 @@ Step 9 checks the value that step 8 decoded, by the rules set for it rather than
 
 An `ACK` message carries `record` `null` and one `axt.Ack` as its body ([types/axt/Ack.avsc](../types/axt/Ack.avsc)). One `ACK` reports up to 4,096 record messages:
 
-| Field                        | Avro type                     | Content                                                                                    |
-| ---------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------ |
-| `to`                         | `fixed` of 32                 | The current key, as the receiver knows it, of the sender of the acknowledged messages      |
-| `records`                    | array of `axt.AckRecord`      | The outcomes, 0 to 4,096                                                                   |
-| `records[].id`               | `string`, logical type `uuid` | The record's id, as the acknowledged message carried it                                    |
-| `records[].version`          | `long`                        | The version of the acknowledged message                                                    |
-| `records[].outcome`          | enum `axt.AckOutcome`         | `APPLIED`, `MERGED`, `KEPT`, `DUPLICATE` or `STALE` ([records.md](records.md), section 7)  |
-| `records[].receiver_version` | `long`                        | The receiver's version of the record after the message                                     |
-| `records[].kept_fields`      | array of `string`             | For `MERGED`, the fields the receiver kept, by the names of the message's writer schema    |
-| `moved_from`                 | `null` or `fixed` of 32       | The key the receiver knew the sender by before it applied a key move to `to` (section 3.3) |
+| Field                        | Avro type                     | Content                                                                                                   |
+| ---------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `to`                         | `fixed` of 32                 | The key that signed the acknowledged messages, the key of one device of their sender                      |
+| `records`                    | array of `axt.AckRecord`      | The outcomes, 1 to 4,096                                                                                  |
+| `records[].id`               | `string`, logical type `uuid` | The record's id, as the acknowledged message carried it                                                   |
+| `records[].version`          | `long`                        | The version of the acknowledged message                                                                   |
+| `records[].outcome`          | enum `axt.AckOutcome`         | `APPLIED`, `MERGED`, `KEPT`, `DUPLICATE` or `STALE` ([records.md](records.md), section 7), or `WITHDRAWN` |
+| `records[].receiver_version` | `long`                        | The receiver's version of the record after the message                                                    |
+| `records[].kept_fields`      | array of `string`             | For `MERGED`, the fields the receiver kept, by the names of the message's writer schema                   |
+
+One `ACK` reports record messages signed with one key. The record messages of two devices of a sender are acknowledged in two messages, each to the key that signed them (section 9.1).
+
+The outcome `WITHDRAWN` is that of a `WITHDRAW` message, which comes with [axt-1026](https://github.com/paxel/axt/issues/28); no record message has it, and until then a receiver sends none.
 
 An `ACK` is valid when:
 
-- `records` has at most 4,096 entries, and is empty only when `moved_from` is not `null`;
+- `records` has 1 to 4,096 entries;
 - each `id` is a UUID in text form, neither nil nor max, and each `version` is at least 1;
 - no id and version appears twice; ids are compared as 128-bit values ([envelope.md](envelope.md), section 7);
 - for `STALE`, `receiver_version` is above `version`, and for every other outcome it is equal to `version`;
@@ -255,7 +271,7 @@ When the user later decides to take the message, the receiver sends a further `A
 
 ### 7.4 What the sender does with an acknowledgement
 
-The sender takes the entries of a valid `ACK` whose `to` is its key or one of its moved-from keys ([keys.md](keys.md), section 1). For each id and version:
+A device takes the entries of a valid `ACK` whose `to` is its own key (section 9.1). For each id and version:
 
 - The first outcome it gets stands, with two exceptions: `APPLIED` replaces `KEPT` and `MERGED` (section 7.3), and every other outcome replaces `DUPLICATE`, which a resend can bring before the acknowledgement of the first copy. A repeated entry, and `DUPLICATE` for a message it has another outcome for, change nothing.
 - It MAY show its user that the receiver kept changes of its own (`MERGED`, `KEPT`).
@@ -270,7 +286,7 @@ An `ERROR` message carries `record` `null` and one `axt.Error` as its body ([typ
 
 | Field          | Avro type                   | Content                                                                                                                                                                                    |
 | -------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `to`           | `fixed` of 32               | The Ed25519 public key of the app that sent the reported message                                                                                                                           |
+| `to`           | `fixed` of 32               | The Ed25519 public key of the device that sent the reported message: in a live connection the connection key, through a relay the key that signed it                                       |
 | `code`         | enum `axt.ErrorCode`        | Why the message was not processed (section 8.2)                                                                                                                                            |
 | `message_hash` | `fixed` of 32               | The SHA-256 of the reported message as received, from its single-object marker to its last byte; through a relay, after opening and removing the padding ([keys.md](keys.md), section 4.5) |
 | `record`       | `null` or `axt.ErrorRecord` | The `record` field of the reported message, as it carried it: `id` as a plain string and `version`                                                                                         |
@@ -284,32 +300,34 @@ An `ERROR` message carries `record` `null` and one `axt.Error` as its body ([typ
 
 The receiver checks every message in this order: size, envelope, signature, sender, addressee, body ([keys.md](keys.md), section 2.3, allows reading the format and the end before the signature is verified). The first check that fails gives the code.
 
-| Code                 | The receiver got                                                                                                                                                                                                                                                                                                                                                                                                                                                     | The sender then                                                                                     |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `TOO_LARGE`          | A message above 16 MiB, rejected without decoding, or an offer with a schema above the schema limits ([envelope.md](envelope.md), section 8)                                                                                                                                                                                                                                                                                                                         | Stops sending it; a sender that produced it breaks [envelope.md](envelope.md), section 8            |
-| `FORMAT_UNSUPPORTED` | A message whose envelope fingerprint is not of a format the receiver supports (section 3.2)                                                                                                                                                                                                                                                                                                                                                                          | Writes in the chosen format                                                                         |
-| `INVALID_MESSAGE`    | Bytes that are not a valid message of their kind: bytes left over after the envelope or the body, a body that is not the kind's schema, a `record` where none belongs or none where one is required, a `format` field that is not the envelope fingerprint's format ([keys.md](keys.md), section 2.2), a string that is not well-formed UTF-8 in the envelope or a body of this specification, an answer of section 5.3 or an `ACK` of section 7.1 that is not valid | Logs it; it is a fault of the sender's implementation                                               |
-| `SIGNATURE_INVALID`  | A message whose signature does not verify ([keys.md](keys.md), section 2.3)                                                                                                                                                                                                                                                                                                                                                                                          | Logs it                                                                                             |
-| `MANIFEST_INVALID`   | A `MANIFEST` that is not valid ([manifest.md](manifest.md), section 4)                                                                                                                                                                                                                                                                                                                                                                                               | Sends a valid one; until then the receiver offers it nothing                                        |
-| `OFFER_INVALID`      | An `OFFER` that is not valid (section 4.2), other than for its size                                                                                                                                                                                                                                                                                                                                                                                                  | Sends no record messages under it                                                                   |
-| `RECORD_ID_INVALID`  | A record message whose id is not a UUID in text form, or is the nil or the max UUID                                                                                                                                                                                                                                                                                                                                                                                  | Logs it                                                                                             |
-| `VERSION_INVALID`    | A record message whose version is below 1                                                                                                                                                                                                                                                                                                                                                                                                                            | Logs it                                                                                             |
-| `SCHEMA_UNKNOWN`     | A `DATA` whose body fingerprint is not that of the schema of a current offer of its sender in the channel                                                                                                                                                                                                                                                                                                                                                            | Offers the type again with that schema, and sends the record again once it is accepted              |
-| `NOT_ACCEPTED`       | A record message of a type without an accepted offer in the channel, or of a type that no longer fits the receiver's manifest (section 6.2, step 5)                                                                                                                                                                                                                                                                                                                  | Stops sending records of the type there; offers it again if it fits                                 |
-| `TYPE_CHANGED`       | A `DATA` whose type has another full name than the one the receiver keeps for the id ([records.md](records.md), section 4.3)                                                                                                                                                                                                                                                                                                                                         | Logs it; the record keeps its type                                                                  |
-| `UNDECODABLE`        | A `DATA` whose body does not decode with its offered schema: cut short, bytes left over, a string that is not well-formed, a data depth above 32 ([types.md](types.md), section 5.7)                                                                                                                                                                                                                                                                                 | Logs it                                                                                             |
-| `VALUE_INVALID`      | A `DATA` whose body decodes but holds a time value that is not valid ([time.md](time.md), section 8), or, at a receiver that checks them, a value that breaks a check of the offered schema ([metadata.md](metadata.md), section 7.1); `field` names the value                                                                                                                                                                                                       | Shows its user the record and the field if it can; sends the record again only after it has changed |
-| `KEY_MOVE_REJECTED`  | A `KEY_MOVE` the receiver did not apply: its user declined it, or it fails a check of [keys.md](keys.md), section 5.3, except step 3; reported in a live connection only (section 3.3)                                                                                                                                                                                                                                                                               | Stops sending the move to that app (section 3.3)                                                    |
+| Code                  | The receiver got                                                                                                                                                                                                                                                                                                                                                                                                                                                     | The sender then                                                                                     |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `TOO_LARGE`           | A message above 16 MiB, rejected without decoding, or an offer with a schema above the schema limits ([envelope.md](envelope.md), section 8)                                                                                                                                                                                                                                                                                                                         | Stops sending it; a sender that produced it breaks [envelope.md](envelope.md), section 8            |
+| `FORMAT_UNSUPPORTED`  | A message whose envelope fingerprint is not of a format the receiver supports (section 3.2)                                                                                                                                                                                                                                                                                                                                                                          | Writes in the chosen format                                                                         |
+| `INVALID_MESSAGE`     | Bytes that are not a valid message of their kind: bytes left over after the envelope or the body, a body that is not the kind's schema, a `record` where none belongs or none where one is required, a `format` field that is not the envelope fingerprint's format ([keys.md](keys.md), section 2.2), a string that is not well-formed UTF-8 in the envelope or a body of this specification, an answer of section 5.3 or an `ACK` of section 7.1 that is not valid | Logs it; it is a fault of the sender's implementation                                               |
+| `SIGNATURE_INVALID`   | A message whose signature does not verify ([keys.md](keys.md), section 2.3)                                                                                                                                                                                                                                                                                                                                                                                          | Logs it                                                                                             |
+| `MANIFEST_INVALID`    | A `MANIFEST` that is not valid ([manifest.md](manifest.md), section 4)                                                                                                                                                                                                                                                                                                                                                                                               | Sends a valid one; until then the receiver offers it nothing                                        |
+| `OFFER_INVALID`       | An `OFFER` that is not valid (section 4.2), other than for its size                                                                                                                                                                                                                                                                                                                                                                                                  | Sends no record messages under it                                                                   |
+| `RECORD_ID_INVALID`   | A record message whose id is not a UUID in text form, or is the nil or the max UUID                                                                                                                                                                                                                                                                                                                                                                                  | Logs it                                                                                             |
+| `VERSION_INVALID`     | A record message whose version is below 1                                                                                                                                                                                                                                                                                                                                                                                                                            | Logs it                                                                                             |
+| `SCHEMA_UNKNOWN`      | A `DATA` whose body fingerprint is not that of the schema of a current offer of its sender in the channel                                                                                                                                                                                                                                                                                                                                                            | Offers the type again with that schema, and sends the record again once it is accepted              |
+| `NOT_ACCEPTED`        | A record message of a type without an accepted offer in the channel, or of a type that no longer fits the receiver's manifest (section 6.2, step 5)                                                                                                                                                                                                                                                                                                                  | Stops sending records of the type there; offers it again if it fits                                 |
+| `TYPE_CHANGED`        | A `DATA` whose type has another full name than the one the receiver keeps for the id ([records.md](records.md), section 4.3)                                                                                                                                                                                                                                                                                                                                         | Logs it; the record keeps its type                                                                  |
+| `UNDECODABLE`         | A `DATA` whose body does not decode with its offered schema: cut short, bytes left over, a string that is not well-formed, a data depth above 32 ([types.md](types.md), section 5.7)                                                                                                                                                                                                                                                                                 | Logs it                                                                                             |
+| `VALUE_INVALID`       | A `DATA` whose body decodes but holds a time value that is not valid ([time.md](time.md), section 8), or, at a receiver that checks them, a value that breaks a check of the offered schema ([metadata.md](metadata.md), section 7.1); `field` names the value                                                                                                                                                                                                       | Shows its user the record and the field if it can; sends the record again only after it has changed |
+| `DEVICE_REJECTED`     | A `DEVICE_ADD` or a `DEVICE_REMOVE` that [keys.md](keys.md), section 5.5, has the receiver reject, or a `DEVICE_JOIN` that the device it is for rejects or whose user declines it ([keys.md](keys.md), section 5.2); reported in a live connection only (section 3.3)                                                                                                                                                                                                | Stops sending that message to that app (section 3.3)                                                |
+| `RECORD_UNKNOWN`      | A `CHANGE` that does not hold the whole record, for a record the receiver does not have; it comes with [axt-1024](https://github.com/paxel/axt/issues/26)                                                                                                                                                                                                                                                                                                            | Sends the record whole; to come with that ticket                                                    |
+| `PROPOSALS_NOT_TAKEN` | A `PROPOSAL` for a record whose sender takes none from the proposer; it comes with [axt-1027](https://github.com/paxel/axt/issues/29)                                                                                                                                                                                                                                                                                                                                | To come with that ticket                                                                            |
 
 A receiver checks the addressee of the replies and the offer after their signature: one with another key in `to` is ignored without a report (section 9.1). A receiver also ignores, without a report:
 
 - a message from a key its user has not accepted, which it keeps or drops as [keys.md](keys.md), section 3.2, says;
-- a message signed with a moved-from key, which it rejects as [keys.md](keys.md), section 3.3, says, except the repeat of a key move, which it acknowledges (section 3.3);
+- a message signed with a removed key, which it rejects as [keys.md](keys.md), section 3.3, says; a `DEVICE_ADD` or a `DEVICE_REMOVE` signed with one is ignored or reported as section 3.3 says;
 - an answer to an offer the app did not make, or to an earlier offer of the type (section 5.3).
 
 ### 8.3 Reporting
 
-- **Only to a sender that can be addressed.** In a live connection, an app sends an `ERROR` to the other app once it has a `MANIFEST` of the connection whose signature verified, valid or not, and so knows the formats the other app reads (section 3.2); before that, it reports nothing. The other app's key is the one its `HELLO` proved ([transports.md](transports.md), section 4.5). Through the relay, it sends an `ERROR` only to a known sender whose message verified and whose encryption key it has ([keys.md](keys.md), section 4.2). A message through the relay that fails before its signature is verified is dropped without a report, since its `sender` may be anyone's key. In a live connection the other app is known by the connection, so a message from it that fails those checks is reported to it. In both, the receiver reports nothing to a key its user has not accepted, apart from `MANIFEST_INVALID` and, in a live connection, `KEY_MOVE_REJECTED`, which goes to the move's old key on the connection (section 3.3).
+- **Only to a sender that can be addressed.** In a live connection, an app sends an `ERROR` to the other app once it has a `MANIFEST` of the connection whose signature verified, valid or not, and so knows the formats the other app reads (section 3.2); before that, it reports nothing, with two exceptions. It holds the `DEVICE_REJECTED` for a `DEVICE_ADD` or a `DEVICE_REMOVE` that came before the `MANIFEST`, and sends it among its replies to the `MANIFEST`; every other error about a message before the `MANIFEST` is dropped. And in the connection that a join code opened, the device that showed the code answers a `DEVICE_JOIN` with `DEVICE_REJECTED` without a `MANIFEST`, in the format of the `DEVICE_JOIN` ([transports.md](transports.md), section 4.7). The other app's key is the one its `HELLO` proved ([transports.md](transports.md), section 4.5). Through the relay, it sends an `ERROR` only to a current key of a known sender, when the message signed with that key verified and it has that key's encryption key ([keys.md](keys.md), section 4.2). A message through the relay that fails before its signature is verified is dropped without a report, since its `sender` may be anyone's key. In a live connection the other app is known by the connection, so a message from it that fails those checks is reported to it. In both, the receiver reports nothing to a key its user has not accepted, apart from `MANIFEST_INVALID` and, in a live connection, `DEVICE_REJECTED`, which goes to the connection key (section 3.3).
 - **Never about an error.** An app MUST NOT send an `ERROR` about an `ERROR`. An `ERROR` that is not valid is dropped.
 - **Once.** An app sends at most one `ERROR` for each message it gets; a repeated message MAY be reported again.
 - **Closing.** In a live connection, an app MAY close the connection after it has reported `TOO_LARGE` when the transport cannot skip the message ([envelope.md](envelope.md), section 8), after `SIGNATURE_INVALID`, and after `INVALID_MESSAGE`.
@@ -320,10 +338,12 @@ A sender that gets an `ERROR` about a record message for whose id and version it
 
 ### 9.1 The addressee
 
-A signature names the sender of a message, not its receiver ([keys.md](keys.md), section 2.6). An app that got a reply could pass it on to a third app, which would then hold a genuine message of the first. The bodies of `OFFER`, `ACCEPT`, `DECLINE`, `ACK` and `ERROR` therefore carry `to`, the Ed25519 public key of the app they are for, and the signature covers it:
+A signature names the sender of a message, not its receiver ([keys.md](keys.md), section 2.6). An app that got a reply could pass it on to a third app, which would then hold a genuine message of the first. The bodies of `OFFER`, `ACCEPT`, `DECLINE`, `ACK`, `ERROR` and `DEVICE_JOIN` therefore carry `to`, the Ed25519 public key of the device they are for, and the signature covers it:
 
-- An app MUST ignore such a message whose `to` is not its current key or, for an `ACK`, `ERROR`, `ACCEPT` and `DECLINE`, one of its moved-from keys. It sends no report, since the message was not meant for it.
-- A sender writes in `to` the current key of the addressee as it knows it ([keys.md](keys.md), section 3.3).
+- An app MUST ignore such a message whose `to` is not its own signing key. It sends no report, since the message was not meant for it. A message for another device of its set is not meant for it either ([keys.md](keys.md), section 5.6).
+- A reply carries in `to` the key that signed the message it is about: an answer the key that signed the offer, an `ACK` the key that signed the record messages. An `ERROR` carries the key of the device that sent the reported message: in a live connection the connection key ([transports.md](transports.md), section 4.5), which is also the key that signed every message but a `DEVICE_ADD` or a `DEVICE_REMOVE` of a chain, and through a relay the key that signed the reported message. The reply goes to that device: on the connection, or into the mailbox of that key.
+- An `OFFER` carries in `to` a current key of the receiver ([keys.md](keys.md), section 3.3), and is judged by the manifest of that key (section 4.2). To a receiver with several current keys, a sender offers to the key from which it last got a valid message; [axt-1025](https://github.com/paxel/axt/issues/27) defines what the devices of the receiver do with it among themselves.
+- A `DEVICE_JOIN` carries in `to` the key of the join code it answers ([keys.md](keys.md), section 5.2).
 
 `to` binds a message to its addressee, not to one connection. The same `ACK` is valid in a live connection and through the relay, and an app that uses both reaches the same result whichever way a reply arrives.
 
@@ -331,17 +351,19 @@ A signature names the sender of a message, not its receiver ([keys.md](keys.md),
 
 A message carries no time, and a relay or a user can deliver a message again ([keys.md](keys.md), section 2.6). Every kind is safe to repeat:
 
-| Kind       | A repeat, or a late copy                                                                                                                                                                                                                                  |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MANIFEST` | Applied in a live connection, where the manifest received last applies; through a relay or in a file ignored unless its revision is higher ([manifest.md](manifest.md), section 6)                                                                        |
-| `OFFER`    | Answered again as before, if the receiver still knows the offer; it does not become the current offer again (section 4.3). If the receiver has forgotten it, its answer goes to an offer the sender has replaced, and the sender ignores it (section 5.3) |
-| `ACCEPT`   | Ignored: the first answer for an offer and type stands, and only the latest offer of a type counts (section 5.3)                                                                                                                                          |
-| `DECLINE`  | Ignored, for the same reasons                                                                                                                                                                                                                             |
-| `DATA`     | `DUPLICATE` or `STALE` by the version rule ([records.md](records.md), section 5.2)                                                                                                                                                                        |
-| `DELETE`   | The same                                                                                                                                                                                                                                                  |
-| `ACK`      | Changes nothing: the first outcome of an id and version stands, except `APPLIED` over `KEPT` and `MERGED`, and any outcome over `DUPLICATE` (section 7.4)                                                                                                 |
-| `ERROR`    | The sender acts again only for a message that still has no outcome; what it does then (section 8.2) is itself safe to repeat                                                                                                                              |
-| `KEY_MOVE` | Acknowledged again, not applied again ([keys.md](keys.md), section 5.3, step 2; section 3.3)                                                                                                                                                              |
+| Kind            | A repeat, or a late copy                                                                                                                                                                                                                                  |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MANIFEST`      | Applied in a live connection, where the manifest received last applies; through a relay or in a file ignored unless its revision is higher ([manifest.md](manifest.md), section 6)                                                                        |
+| `OFFER`         | Answered again as before, if the receiver still knows the offer; it does not become the current offer again (section 4.3). If the receiver has forgotten it, its answer goes to an offer the sender has replaced, and the sender ignores it (section 5.3) |
+| `ACCEPT`        | Ignored: the first answer for an offer and type stands, and only the latest offer of a type counts (section 5.3)                                                                                                                                          |
+| `DECLINE`       | Ignored, for the same reasons                                                                                                                                                                                                                             |
+| `DATA`          | `DUPLICATE` or `STALE` by the version rule ([records.md](records.md), section 5.2)                                                                                                                                                                        |
+| `DELETE`        | The same                                                                                                                                                                                                                                                  |
+| `ACK`           | Changes nothing: the first outcome of an id and version stands, except `APPLIED` over `KEPT` and `MERGED`, and any outcome over `DUPLICATE` (section 7.4)                                                                                                 |
+| `ERROR`         | The sender acts again only for a message that still has no outcome; what it does then (section 8.2) is itself safe to repeat                                                                                                                              |
+| `DEVICE_JOIN`   | Ignored outside the connection its join code opened; in it, a repeat from the same key is answered as the first was, and one from another key is ignored ([keys.md](keys.md), section 5.2)                                                                |
+| `DEVICE_ADD`    | Ignored, not applied again and not reported ([keys.md](keys.md), section 5.5; section 3.3)                                                                                                                                                                |
+| `DEVICE_REMOVE` | The same                                                                                                                                                                                                                                                  |
 
 ## 10. Versions that went back
 
@@ -364,7 +386,7 @@ A sender sends a record message again:
 - **Without an acknowledgement.** A record message with neither an outcome nor an error that settles it has not been delivered. In a live connection, the sender sends the record again in a later connection, under an offer accepted there and in its current state. Through a relay, it sends the same message again under the same offer, once the holding time of 14 days ([transports.md](transports.md), section 5.5) has passed without an outcome, not before. A record that has changed since the offer is offered again instead (section 4.3).
 - **For a schema.** After `SCHEMA_UNKNOWN` (section 8.2), once the type is accepted again.
 - **When a type is accepted again.** When a type that a receiver had stopped taking ([manifest.md](manifest.md), section 6) fits again and is accepted, the sender SHOULD send the current state of each record of the type it had sent to that receiver before: a `DATA` with the current version of a record that exists, a `DELETE` with the version of the deletion of one deleted in between.
-- **After a key move.** As [keys.md](keys.md), section 5.4, says.
+- **After a removal.** When a device is removed from its set, the remaining devices send again what has no outcome, as [keys.md](keys.md), section 5.6, says.
 
 A receiver cannot ask for a resend beyond the schema request of `SCHEMA_UNKNOWN`. A record that the receiver could not process for a passing reason, such as a full storage, is neither acknowledged nor reported, and is sent again by the first rule. A receiver that loses records it had acknowledged, for example by restoring an older backup, gets each again when the sender changes it, or when the type is accepted again after it stopped fitting. 0.1.0 has no message for asking for them.
 
@@ -374,12 +396,12 @@ The protocol relies on few timers. Every step is safe to repeat (section 9.2), s
 
 | What                                                           | Time                                                                                                                                                                                                                                |
 | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The other app's valid `MANIFEST` after a live connection opens | An app SHOULD close a connection without one after 30 seconds                                                                                                                                                                       |
+| The other app's valid `MANIFEST` after a live connection opens | An app SHOULD close a connection without one after 30 seconds; in a connection that a join code opened, the time runs from the answer to the `DEVICE_JOIN` (section 3.3)                                                            |
 | An acknowledgement after processing a record message           | Within 5 seconds (section 7.2)                                                                                                                                                                                                      |
 | An answer in a live connection                                 | Types the receiver decides on its own SHOULD be answered within 5 seconds. A type whose answer waits for the user has no limit; the sender MAY close a connection in which nothing but unanswered types has happened for 10 minutes |
 | A resend through a relay                                       | After the holding time of 14 days ([transports.md](transports.md), section 5.5), not before                                                                                                                                         |
 | An unanswered offer through a relay                            | The sender MAY offer again after the same time                                                                                                                                                                                      |
-| A key move without an answer                                   | Three connections or three sends through the relay (section 3.3)                                                                                                                                                                    |
+| The chain of a device                                          | Sent in three connections and three times through the relay, counted anew when it grows (section 3.3)                                                                                                                               |
 
 ## 13. What a declined or interrupted exchange leaves
 
@@ -392,11 +414,11 @@ The protocol relies on few timers. Every step is safe to repeat (section 9.2), s
 
 Each app runs the same machine, as a sender of its records and as a receiver of the other's. The connection has three phases:
 
-| Phase   | The app                                                                                                                                                                                                                               | Leaves the phase                                                                                                                             |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Opening | sends its `KEY_MOVE` messages (section 3.3), then its `MANIFEST` in its lowest format; takes `KEY_MOVE`, `MANIFEST` and `ERROR`; asks its user about an unknown key or a key move and keeps the other messages until the user decides | to Open with a valid `MANIFEST` of the other app and its key accepted; to Closed after 30 seconds without, or when the user declines the key |
-| Open    | writes in the chosen format (section 3.2); offers, answers, sends and acknowledges records, reports errors; takes a new `MANIFEST` of the other app at any time                                                                       | to Closed when either app or the transport closes the connection                                                                             |
-| Closed  | ends every offer made in the connection (section 4.3); keeps the outcomes it has; marks record messages without one for a resend (section 11)                                                                                         |                                                                                                                                              |
+| Phase   | The app                                                                                                                                                                                                                                                                                                                                      | Leaves the phase                                                                                                                                                                            |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Opening | in a connection that a join code opened, first sends or answers the `DEVICE_JOIN` (section 3.3); sends its chain (section 3.3), then its `MANIFEST` in its lowest format; takes `DEVICE_ADD`, `DEVICE_REMOVE`, `DEVICE_JOIN`, `MANIFEST` and `ERROR`; asks its user about an unknown key and keeps the other messages until the user decides | to Open with a valid `MANIFEST` of the other app and its key accepted; to Closed after 30 seconds without, when the user declines the key, or after a `DEVICE_REJECTED` for a `DEVICE_JOIN` |
+| Open    | writes in the chosen format (section 3.2); offers, answers, sends and acknowledges records, reports errors; takes a new `MANIFEST` of the other app at any time                                                                                                                                                                              | to Closed when either app or the transport closes the connection                                                                                                                            |
+| Closed  | ends every offer made in the connection (section 4.3); keeps the outcomes it has; marks record messages without one for a resend (section 11)                                                                                                                                                                                                |                                                                                                                                                                                             |
 
 In the Open phase, each offer the app makes, each type of it, and each record message it sends goes through these states at the sender:
 
@@ -420,7 +442,7 @@ A new `MANIFEST` of the receiver with a higher revision is a transition of both 
 
 Through a relay ([transports.md](transports.md), section 5) the messages and the rules are the same, with these differences:
 
-- **No connection.** There is no Opening phase and no end of a connection. Each app sends its current `MANIFEST` through the relay to every known sender that takes messages through the relay and has not got it there yet: after it has accepted the other app's key, and whenever its manifest changes. This is when [manifest.md](manifest.md), section 5.1, has an app send a `MANIFEST` through the relay. A sender offers by the manifest it keeps of the receiver ([manifest.md](manifest.md), section 6), and an offer stays open until replaced (section 4.3).
+- **No connection.** There is no Opening phase and no end of a connection. Each app sends its current `MANIFEST` through the relay to every device of a known sender that takes messages through the relay and has not got it there yet: after it has accepted the other app's key, and whenever its manifest changes. This is when [manifest.md](manifest.md), section 5.1, has an app send a `MANIFEST` through the relay. A sender offers by the manifest it keeps of the receiver ([manifest.md](manifest.md), section 6), and an offer stays open until replaced (section 4.3).
 - **Replies come back the same way.** An app that sends record messages or offers through a relay MUST take messages through it, that is, have an encryption key in its manifest ([manifest.md](manifest.md), section 3.9). Otherwise its answers and acknowledgements cannot reach it.
 - **Order and repeats.** The relay may deliver late, out of order and more than once ([keys.md](keys.md), section 4.6); sections 4.3 and 9.2 make the result the same. A receiver that gets record messages of an offer it has not seen yet answers them with `SCHEMA_UNKNOWN` or `NOT_ACCEPTED`, and the sender sends them again after the offer.
 - **Errors.** Only messages whose signature verified are reported (section 8.3).
@@ -438,8 +460,8 @@ A file has no way back to its sender ([records.md](records.md), section 7). Its 
 ### 15.3 What transports.md settles
 
 - **The boundaries of each live message** are the frames of [transports.md](transports.md), section 4.4 ([envelope.md](envelope.md), section 3), and a connection opens and ends as [transports.md](transports.md), section 4.6, says (section 3.1 and section 14).
-- **The other app's key** is authenticated before its `MANIFEST`: each app proves its signing key in a `HELLO` bound to the TLS connection ([transports.md](transports.md), section 4.5), and every message in the connection carries that key as its `sender`, apart from the key moves at its start.
-- **A file** holds the key moves at its start, at most one `MANIFEST`, and record messages, and no `OFFER`, `ACCEPT`, `DECLINE`, `ACK` or `ERROR` ([transports.md](transports.md), section 2.1).
+- **The other app's key** is authenticated before its `MANIFEST`: each app proves its signing key in a `HELLO` bound to the TLS connection ([transports.md](transports.md), section 4.5), and every message in the connection carries that key as its `sender`, apart from the additions and removals of devices.
+- **A file** holds its writer's chain at its start, at most one `MANIFEST`, and record messages, and no `OFFER`, `ACCEPT`, `DECLINE`, `ACK` or `ERROR` ([transports.md](transports.md), section 2.1).
 - **The holding time** of a relay is 14 days ([transports.md](transports.md), section 5.5). It sets the resends of sections 11 and 12, and how long a receiver keeps the ids of the offers it answered (section 4.3).
 
 ## 16. Schemas and fingerprints
@@ -463,11 +485,11 @@ Their Parsing Canonical Forms:
 ```
 
 ```json
-{"name":"axt.Ack","type":"record","fields":[{"name":"to","type":{"name":"axt.AckTo","type":"fixed","size":32}},{"name":"records","type":{"type":"array","items":{"name":"axt.AckRecord","type":"record","fields":[{"name":"id","type":"string"},{"name":"version","type":"long"},{"name":"outcome","type":{"name":"axt.AckOutcome","type":"enum","symbols":["APPLIED","MERGED","KEPT","DUPLICATE","STALE"]}},{"name":"receiver_version","type":"long"},{"name":"kept_fields","type":{"type":"array","items":"string"}}]}}},{"name":"moved_from","type":["null",{"name":"axt.AckMovedFrom","type":"fixed","size":32}]}]}
+{"name":"axt.Ack","type":"record","fields":[{"name":"to","type":{"name":"axt.AckTo","type":"fixed","size":32}},{"name":"records","type":{"type":"array","items":{"name":"axt.AckRecord","type":"record","fields":[{"name":"id","type":"string"},{"name":"version","type":"long"},{"name":"outcome","type":{"name":"axt.AckOutcome","type":"enum","symbols":["APPLIED","MERGED","KEPT","DUPLICATE","STALE","WITHDRAWN"]}},{"name":"receiver_version","type":"long"},{"name":"kept_fields","type":{"type":"array","items":"string"}}]}}}]}
 ```
 
 ```json
-{"name":"axt.Error","type":"record","fields":[{"name":"to","type":{"name":"axt.ErrorTo","type":"fixed","size":32}},{"name":"code","type":{"name":"axt.ErrorCode","type":"enum","symbols":["INVALID_MESSAGE","FORMAT_UNSUPPORTED","TOO_LARGE","SIGNATURE_INVALID","MANIFEST_INVALID","OFFER_INVALID","RECORD_ID_INVALID","VERSION_INVALID","SCHEMA_UNKNOWN","NOT_ACCEPTED","TYPE_CHANGED","UNDECODABLE","KEY_MOVE_REJECTED","VALUE_INVALID"]}},{"name":"message_hash","type":{"name":"axt.ErrorMessageHash","type":"fixed","size":32}},{"name":"record","type":["null",{"name":"axt.ErrorRecord","type":"record","fields":[{"name":"id","type":"string"},{"name":"version","type":"long"}]}]},{"name":"fingerprint","type":["null",{"name":"axt.ErrorFingerprint","type":"fixed","size":8}]},{"name":"field","type":["null","string"]},{"name":"detail","type":"string"}]}
+{"name":"axt.Error","type":"record","fields":[{"name":"to","type":{"name":"axt.ErrorTo","type":"fixed","size":32}},{"name":"code","type":{"name":"axt.ErrorCode","type":"enum","symbols":["INVALID_MESSAGE","FORMAT_UNSUPPORTED","TOO_LARGE","SIGNATURE_INVALID","MANIFEST_INVALID","OFFER_INVALID","RECORD_ID_INVALID","VERSION_INVALID","SCHEMA_UNKNOWN","NOT_ACCEPTED","TYPE_CHANGED","UNDECODABLE","DEVICE_REJECTED","VALUE_INVALID","RECORD_UNKNOWN","PROPOSALS_NOT_TAKEN"]}},{"name":"message_hash","type":{"name":"axt.ErrorMessageHash","type":"fixed","size":32}},{"name":"record","type":["null",{"name":"axt.ErrorRecord","type":"record","fields":[{"name":"id","type":"string"},{"name":"version","type":"long"}]}]},{"name":"fingerprint","type":["null",{"name":"axt.ErrorFingerprint","type":"fixed","size":8}]},{"name":"field","type":["null","string"]},{"name":"detail","type":"string"}]}
 ```
 
 | Schema        | Envelope format | CRC-64-AVRO          | As bytes                  |
@@ -475,17 +497,17 @@ Their Parsing Canonical Forms:
 | `axt.Offer`   | 1               | `0x415463caca7a687d` | `7d 68 7a ca ca 63 54 41` |
 | `axt.Accept`  | 1               | `0x6b244fc3913d82ab` | `ab 82 3d 91 c3 4f 24 6b` |
 | `axt.Decline` | 1               | `0x22d2bd11845492c0` | `c0 92 54 84 11 bd d2 22` |
-| `axt.Ack`     | 1               | `0xee25c7cca8166ed8` | `d8 6e 16 a8 cc c7 25 ee` |
-| `axt.Error`   | 1               | `0x1506925136f99a1d` | `1d 9a f9 36 51 92 06 15` |
+| `axt.Ack`     | 1               | `0x38dd09198076e05c` | `5c e0 76 80 19 09 dd 38` |
+| `axt.Error`   | 1               | `0x7ca5b3d13dbcf383` | `83 f3 bc 3d d1 b3 a5 7c` |
 
 The fingerprints and the example of section 17 were produced with [conformance/tools/protocol_examples.py](../conformance/tools/protocol_examples.py). The script:
 
 - checks the rules of [types.md](types.md), section 5, named above, with the checks of [conformance/tools/example_types.py](../conformance/tools/example_types.py), and that no name is defined twice among the schemas of the specification;
-- computes the Parsing Canonical Forms and the CRC-64-AVRO fingerprints, compares them with those of the Python libraries fastavro 1.13.1 and `avro` 1.12.2, and checks that the fingerprints of the envelope, the manifest and the key move are those published;
+- computes the Parsing Canonical Forms and the CRC-64-AVRO fingerprints, compares them with those of the Python libraries fastavro 1.13.1 and `avro` 1.12.2, and checks that the fingerprints of the envelope, the manifest and the device messages are those published;
 - uses every default of the schemas once in schema resolution, with both libraries, and for each enum a symbol the reader does not know, which fastavro reads as the default; the `avro` package 1.12.2 raises an error instead ([types.md](types.md), section 7.3);
 - builds every message of section 17 field by field, compares it with fastavro's encoding, decodes it with fastavro and with `avro`, and checks that `avro` encodes each body to the same bytes;
 - signs each message with the Ed25519 implementation of [conformance/tools/keys_examples.py](../conformance/tools/keys_examples.py), with PyNaCl 1.6.2 and with cryptography 50.0.2, which give the same signatures, and verifies them with all three by the strict rule of [keys.md](keys.md), section 2.3;
-- runs a model of both apps over the exchange and over 60 further cases: repeats, messages addressed to another key, the first answer standing, outcomes decided later and acknowledgements of a resend in either order, an error never answered with an error, and one case for each error code that a record message, an offer, a manifest or an envelope can cause, among them a recursive app type at data depth 32, which is taken, and at 34, which is rejected, and a type that holds a time value that is not valid, which is rejected with `VALUE_INVALID` and the field `end`.
+- runs a model of both apps over the exchange and over 71 further cases: repeats, messages addressed to another key, the first answer standing, outcomes decided later and acknowledgements of a resend in either order, an error never answered with an error, the additions and removals of devices before and after the `MANIFEST`, among them a rejected one whose error is held until the `MANIFEST`, a `DEVICE_JOIN` in a connection that no join code opened, and one case for each error code that a record message, an offer, a manifest or an envelope can cause, among them a recursive app type at data depth 32, which is taken, and at 34, which is rejected, and a type that holds a time value that is not valid, which is rejected with `VALUE_INVALID` and the field `end`.
 
 The test vectors of [conformance.md](conformance.md) take precedence over these values.
 
@@ -529,11 +551,11 @@ The messages are live messages in envelope format 1. Offsets are hexadecimal. Ea
 
 The messages are those of [manifest.md](manifest.md), section 10.3, byte for byte; their bodies are shown shortened here.
 
-cat-a-log's MANIFEST: 315 bytes, SHA-256 `1ee7dfafb7a27b1ba7f1dd7fedb04e822d4cbc3f23033f8908b1b8691a163771`.
+cat-a-log's MANIFEST: 319 bytes, SHA-256 `b1305f014fc6a6f5fd33334cb8ecdbe6f7cdaa32b978773f7abcc56cfa45f678`.
 
 ```text
 0000  c3 01                    single-object marker
-0002  7d 0c e4 e5 4f e8 e1 a2  fingerprint of axt.Envelope, format 1
+0002  16 30 6f 71 b9 ce 9e a8  fingerprint of axt.Envelope, format 1
 000a  02                       format: int 1
 000b  00                       kind: enum index 0, MANIFEST
 000c  1b 84 a6 00 f3 50 3e 22  sender: fixed(32), cat-a-log's test key
@@ -541,26 +563,26 @@ cat-a-log's MANIFEST: 315 bytes, SHA-256 `1ee7dfafb7a27b1ba7f1dd7fedb04e822d4cbc
       4b f6 bd 69 af f1 47 1c
       ce 64 10 d5 3c 26 ec 4a
 002c  00                       record: union index 0, null
-002d  98 03                    body: bytes length 204
+002d  a0 03                    body: bytes length 208
 002f  c3 01                    body: single-object marker
-0031  b3 03 80 d3 b5 ec 08 6b  body: fingerprint of axt.Manifest, format 1
+0031  3e 1f a5 88 4c eb 9e a5  body: fingerprint of axt.Manifest, format 1
 0039  02 12 63 61 ... 00 00    body: the manifest of spec/manifest.md, section 10.3, from 0039
-00fb  21 cc f8 c7 3d 1f f7 c7  signature: fixed(64)
-      56 20 75 68 0d 2d d2 8f
-      db d8 d7 2a 00 fa 89 f8
-      76 11 43 de 49 5a d5 bb
-      85 33 a6 b5 e5 45 99 2d
-      f2 0b a4 cd 86 b9 6e 53
-      32 44 54 56 7f fe 19 c2
-      f2 a6 f7 8c 46 2e 3a 0a
-013b  end
+00ff  08 8e ed db 40 91 7d 25  signature: fixed(64)
+      ec 10 32 03 b8 4f 5f 68
+      50 0f c0 3c 7a 10 08 8f
+      e3 29 d4 e0 4a 68 a3 c3
+      33 c0 69 f1 33 e9 2a 5a
+      98 d2 96 26 bd 0e 05 23
+      22 6e 20 01 e3 d5 9a f3
+      bc 9d 97 b5 5b 7e 54 06
+013f  end
 ```
 
-Old Brain Fix's MANIFEST: 549 bytes, SHA-256 `d8d61697a0189e3afe3b500901b634a356ac1af1986b42bdf9d62d358e59dcaf`.
+Old Brain Fix's MANIFEST: 549 bytes, SHA-256 `3af8b09e06d556e993c33d1bf00f744645b8eb7e049c2f91c90f8fec96d23f6a`.
 
 ```text
 0000  c3 01                    single-object marker
-0002  7d 0c e4 e5 4f e8 e1 a2  fingerprint of axt.Envelope, format 1
+0002  16 30 6f 71 b9 ce 9e a8  fingerprint of axt.Envelope, format 1
 000a  02                       format: int 1
 000b  00                       kind: enum index 0, MANIFEST
 000c  da 9e 54 c9 aa 2d b4 32  sender: fixed(32), Old Brain Fix's test key
@@ -570,16 +592,16 @@ Old Brain Fix's MANIFEST: 549 bytes, SHA-256 `d8d61697a0189e3afe3b500901b634a356
 002c  00                       record: union index 0, null
 002d  ec 06                    body: bytes length 438
 002f  c3 01                    body: single-object marker
-0031  b3 03 80 d3 b5 ec 08 6b  body: fingerprint of axt.Manifest, format 1
+0031  3e 1f a5 88 4c eb 9e a5  body: fingerprint of axt.Manifest, format 1
 0039  02 1a 4f 6c ... 00 00    body: the manifest of spec/manifest.md, section 10.3, from 0039
-01e5  dc 24 c3 04 4b 0b 8d 06  signature: fixed(64)
-      cc 61 3b aa a7 43 6e 26
-      ff ca 67 f2 96 2c a1 d4
-      c8 46 d8 e1 d4 fc ec 5c
-      c5 3f ba e6 d0 3d 50 10
-      4d c1 56 38 fd f6 2c 61
-      a0 70 f3 41 83 7c 61 b1
-      6e b7 df 50 28 0a 95 00
+01e5  2a 69 59 e6 3d 0e 2c dd  signature: fixed(64)
+      0b 49 f5 bf e8 36 a6 13
+      88 3e 04 5c 8e 67 53 6e
+      4e 22 ca 6a c9 1b f6 8d
+      30 a9 1f 81 e9 29 7a 3d
+      f3 22 e7 3c 2a 3b 22 cc
+      b9 ae cb 79 5b 2a 3c 86
+      75 82 59 b9 eb 93 ac 06
 0225  end
 ```
 
@@ -587,11 +609,11 @@ Old Brain Fix's MANIFEST: 549 bytes, SHA-256 `d8d61697a0189e3afe3b500901b634a356
 
 The two schema texts are shown shortened; the script prints their SHA-256.
 
-cat-a-log's OFFER: 11,217 bytes, SHA-256 `777d0b503c7ae6cb09eb816a923a0d84c0e10b6fc8a02db4b384136a6fc16689`.
+cat-a-log's OFFER: 11,217 bytes, SHA-256 `27b45d6eda52375cd8cff954ae0a27c9f90cf1ed2e21c9833cbaaf3340b1dc26`.
 
 ```text
 0000  c3 01                    single-object marker
-0002  7d 0c e4 e5 4f e8 e1 a2  fingerprint of axt.Envelope, format 1
+0002  16 30 6f 71 b9 ce 9e a8  fingerprint of axt.Envelope, format 1
 000a  02                       format: int 1
 000b  02                       kind: enum index 1, OFFER
 000c  1b 84 a6 00 f3 50 3e 22  sender: fixed(32), cat-a-log's test key
@@ -633,11 +655,11 @@ cat-a-log's OFFER: 11,217 bytes, SHA-256 `777d0b503c7ae6cb09eb816a923a0d84c0e10b
 
 ### 17.4 The answers
 
-Old Brain Fix's ACCEPT: 219 bytes, SHA-256 `18858f2bf833ece43cd5b155da19f0e7755457a415268d5200df91b6a4615fc8`.
+Old Brain Fix's ACCEPT: 219 bytes, SHA-256 `655b9a4d2df481925f99d36a1e6442f11285338f5d730365e59abba249962694`.
 
 ```text
 0000  c3 01                    single-object marker
-0002  7d 0c e4 e5 4f e8 e1 a2  fingerprint of axt.Envelope, format 1
+0002  16 30 6f 71 b9 ce 9e a8  fingerprint of axt.Envelope, format 1
 000a  02                       format: int 1
 000b  04                       kind: enum index 2, ACCEPT
 000c  da 9e 54 c9 aa 2d b4 32  sender: fixed(32), Old Brain Fix's test key
@@ -676,11 +698,11 @@ Old Brain Fix's ACCEPT: 219 bytes, SHA-256 `18858f2bf833ece43cd5b155da19f0e77554
 00db  end
 ```
 
-Old Brain Fix's DECLINE: 212 bytes, SHA-256 `183d7ce9cae4b3130b52a59d2cee78f8a1e9feac4e92a9cb9ac4d8049ac18cc1`.
+Old Brain Fix's DECLINE: 212 bytes, SHA-256 `adbe5b06e8b1e75dc49814feae16579a40c591b7891174f446230b3eb3d54630`.
 
 ```text
 0000  c3 01                    single-object marker
-0002  7d 0c e4 e5 4f e8 e1 a2  fingerprint of axt.Envelope, format 1
+0002  16 30 6f 71 b9 ce 9e a8  fingerprint of axt.Envelope, format 1
 000a  02                       format: int 1
 000b  06                       kind: enum index 3, DECLINE
 000c  da 9e 54 c9 aa 2d b4 32  sender: fixed(32), Old Brain Fix's test key
@@ -723,11 +745,11 @@ Old Brain Fix's DECLINE: 212 bytes, SHA-256 `183d7ce9cae4b3130b52a59d2cee78f8a1e
 
 The body of the `DATA` names the Appointment's schema by its fingerprint, `0x1af207f82b6430cd` ([types.md](types.md), section 7.3). Old Brain Fix finds it among the schemas of cat-a-log's current offers, and only there.
 
-cat-a-log's DATA: 321 bytes, SHA-256 `931e6f370f80527bae25f7475aa56e59f9bde6d71a0fe77c3dfad75700786086`.
+cat-a-log's DATA: 321 bytes, SHA-256 `c0c852f36d6431ac1043f3b23d610b101b5adeaa88193c223afb6f9af27d0945`.
 
 ```text
 0000  c3 01                    single-object marker
-0002  7d 0c e4 e5 4f e8 e1 a2  fingerprint of axt.Envelope, format 1
+0002  16 30 6f 71 b9 ce 9e a8  fingerprint of axt.Envelope, format 1
 000a  02                       format: int 1
 000b  08                       kind: enum index 4, DATA
 000c  1b 84 a6 00 f3 50 3e 22  sender: fixed(32), cat-a-log's test key
@@ -798,11 +820,11 @@ cat-a-log's DATA: 321 bytes, SHA-256 `931e6f370f80527bae25f7475aa56e59f9bde6d71a
 0141  end
 ```
 
-Old Brain Fix's ACK: 197 bytes, SHA-256 `0f2d0004d3b42c9f4013e6e5ba3d4250dbaffa205b25eb509c974746c22fd9ca`.
+Old Brain Fix's ACK: 196 bytes, SHA-256 `2a6d038f3ddebf887b598a53edce083e948760476295d58112915222062249c4`.
 
 ```text
 0000  c3 01                    single-object marker
-0002  7d 0c e4 e5 4f e8 e1 a2  fingerprint of axt.Envelope, format 1
+0002  16 30 6f 71 b9 ce 9e a8  fingerprint of axt.Envelope, format 1
 000a  02                       format: int 1
 000b  0c                       kind: enum index 6, ACK
 000c  da 9e 54 c9 aa 2d b4 32  sender: fixed(32), Old Brain Fix's test key
@@ -810,9 +832,9 @@ Old Brain Fix's ACK: 197 bytes, SHA-256 `0f2d0004d3b42c9f4013e6e5ba3d4250dbaffa2
       ca 71 75 d4 ca 09 08 16
       8f 63 53 0e 4a 7d ed b7
 002c  00                       record: union index 0, null
-002d  ac 01                    body: bytes length 86
+002d  aa 01                    body: bytes length 85
 002f  c3 01                    body: single-object marker
-0031  d8 6e 16 a8 cc c7 25 ee  body: fingerprint of axt.Ack, format 1
+0031  5c e0 76 80 19 09 dd 38  body: fingerprint of axt.Ack, format 1
 0039  1b 84 a6 00 f3 50 3e 22  body: to: fixed(32), cat-a-log's test key
       bb cc 99 e6 32 02 a7 19
       4b f6 bd 69 af f1 47 1c
@@ -829,27 +851,26 @@ Old Brain Fix's ACK: 197 bytes, SHA-256 `0f2d0004d3b42c9f4013e6e5ba3d4250dbaffa2
 0081  02                       body: records[0].receiver_version: long 1
 0082  00                       body: records[0].kept_fields: end of the array
 0083  00                       body: records: end of the array
-0084  00                       body: moved_from: union index 0, null
-0085  57 42 fa 3f 10 cc 0c 44  signature: fixed(64)
-      d9 d7 4e 82 39 67 81 b0
-      e8 85 b8 a7 15 76 5d 0c
-      48 b4 9c 27 9e 5c 7d 8d
-      e7 41 da 4f e6 52 9f ea
-      d8 1b b7 61 68 08 c6 e0
-      c6 e7 18 ee 95 68 72 54
-      5a 5a ce 75 53 d6 d2 0a
-00c5  end
+0084  2d 37 91 f7 c1 6e 2e c1  signature: fixed(64)
+      19 67 6a d5 c9 ab 38 91
+      83 c1 e9 a0 19 2b 41 47
+      14 4f c9 c1 ca 5f b2 7b
+      a2 c5 7f 8a ac 5a 49 09
+      6b 15 1b e4 9e 5c c2 24
+      1a 22 83 64 f6 57 59 83
+      1b 5b 5b 8c 72 93 a8 0b
+00c4  end
 ```
 
 ### 17.6 A record without an accepted offer
 
-The `DATA` of step 8 carries the Pet of [conformance/tools/example_types.py](../conformance/tools/example_types.py) as the record `5e8a1f3c-7b2d-4c6e-a9f0-3d5b7c9e1a2f`, version 1, written with the offered Pet schema. Old Brain Fix knows the fingerprint from the offer, but the Pet's answer was `DECLINE`, so step 5 of section 6.2 fails. The `ERROR` names the message by its hash, `48b45d9eb50217990b348cb51f49a383c0feb93235e6f605701364fa73e41c61`.
+The `DATA` of step 8 carries the Pet of [conformance/tools/example_types.py](../conformance/tools/example_types.py) as the record `5e8a1f3c-7b2d-4c6e-a9f0-3d5b7c9e1a2f`, version 1, written with the offered Pet schema. Old Brain Fix knows the fingerprint from the offer, but the Pet's answer was `DECLINE`, so step 5 of section 6.2 fails. The `ERROR` names the message by its hash, `a79bc1f0ac90ceff861c72612016bdbf85386d8db6ad71c42151c4eb197a879d`.
 
-Old Brain Fix's ERROR: 246 bytes, SHA-256 `b0a788378deb7148e49a616791ddb9e3c1ff6b3d30e883edb9fb9f0845ce917b`.
+Old Brain Fix's ERROR: 246 bytes, SHA-256 `13dc0504e6ba7eb29a352a477f697e83c28f572424a8ffd5811ac59d597a5255`.
 
 ```text
 0000  c3 01                    single-object marker
-0002  7d 0c e4 e5 4f e8 e1 a2  fingerprint of axt.Envelope, format 1
+0002  16 30 6f 71 b9 ce 9e a8  fingerprint of axt.Envelope, format 1
 000a  02                       format: int 1
 000b  0e                       kind: enum index 7, ERROR
 000c  da 9e 54 c9 aa 2d b4 32  sender: fixed(32), Old Brain Fix's test key
@@ -859,16 +880,16 @@ Old Brain Fix's ERROR: 246 bytes, SHA-256 `b0a788378deb7148e49a616791ddb9e3c1ff6
 002c  00                       record: union index 0, null
 002d  8e 02                    body: bytes length 135
 002f  c3 01                    body: single-object marker
-0031  1d 9a f9 36 51 92 06 15  body: fingerprint of axt.Error, format 1
+0031  83 f3 bc 3d d1 b3 a5 7c  body: fingerprint of axt.Error, format 1
 0039  1b 84 a6 00 f3 50 3e 22  body: to: fixed(32), cat-a-log's test key
       bb cc 99 e6 32 02 a7 19
       4b f6 bd 69 af f1 47 1c
       ce 64 10 d5 3c 26 ec 4a
 0059  12                       body: code: enum index 9, NOT_ACCEPTED
-005a  48 b4 5d 9e b5 02 17 99  body: message_hash: fixed(32), SHA-256 of the reported message
-      0b 34 8c b5 1f 49 a3 83
-      c0 fe b9 32 35 e6 f6 05
-      70 13 64 fa 73 e4 1c 61
+005a  a7 9b c1 f0 ac 90 ce ff  body: message_hash: fixed(32), SHA-256 of the reported message
+      86 1c 72 61 20 16 bd bf
+      85 38 6d 8d b6 ad 71 c4
+      21 51 c4 eb 19 7a 87 9d
 007a  02                       body: record: union index 1, ErrorRecord
 007b  48                       body: record.id: string length 36
 007c  35 65 38 61 31 66 33 63  body: "5e8a1f3c-7b2d-4c6e-a9f0-3d5b7c9e1a2f"
@@ -883,14 +904,14 @@ Old Brain Fix's ERROR: 246 bytes, SHA-256 `b0a788378deb7148e49a616791ddb9e3c1ff6
 00a4  61 78 74 2e 65 78 61 6d  body: "axt.example.v1.Pet"
       70 6c 65 2e 76 31 2e 50
       65 74
-00b6  c8 1e 52 96 fd 22 0a 71  signature: fixed(64)
-      77 a4 4a f2 25 82 eb fd
-      68 b3 ea 2e e8 74 06 05
-      4c 73 03 d1 5e 84 53 58
-      d4 37 6e 33 3a 51 51 42
-      4c 18 02 c5 bc 9f aa 90
-      d9 9a ce 9a 09 76 62 05
-      5d 99 c2 cb b2 7a 4a 01
+00b6  60 bc 9c 94 77 c3 18 d3  signature: fixed(64)
+      5b be f1 71 af e2 d6 a6
+      52 1f 66 13 52 2f 10 fe
+      92 c9 21 79 6a 6d ec ad
+      08 ca 9e 7a 16 6e e5 25
+      61 1c 2a 86 55 2d 82 15
+      bd 9d 0a d1 11 f3 39 26
+      2b 7f 33 a8 23 b5 47 07
 00f6  end
 ```
 

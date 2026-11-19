@@ -277,7 +277,25 @@ def check_seal(vector: Any, output: Any) -> str | None:
 
 # Replies in a session: the runner decodes and verifies each message the adapter writes (section 5.6).
 
-KINDS = ["MANIFEST", "OFFER", "ACCEPT", "DECLINE", "DATA", "DELETE", "ACK", "ERROR", "KEY_MOVE"]
+KINDS = [
+    "MANIFEST",
+    "OFFER",
+    "ACCEPT",
+    "DECLINE",
+    "DATA",
+    "DELETE",
+    "ACK",
+    "ERROR",
+    "DEVICE_JOIN",
+    "DEVICE_ADD",
+    "DEVICE_REMOVE",
+    "CHANGE",
+    "RESYNC",
+    "FORWARD",
+    "WITHDRAW",
+    "PROPOSAL",
+    "PROPOSAL_REPLY",
+]
 _schemas: dict[str, Any] = {}
 
 
@@ -299,13 +317,13 @@ def schema(name: str) -> Any:
     return _schemas[name]
 
 
-ENVELOPE_FP = bytes.fromhex("7d0ce4e54fe8e1a2")
+ENVELOPE_FP = bytes.fromhex("16306f71b9ce9ea8")
 BODY_FPS = {
     "Offer": "7d687acaca635441",
     "Accept": "ab823d91c34f246b",
     "Decline": "c092548411bdd222",
-    "Ack": "d86e16a8ccc725ee",
-    "Error": "1d9af93651920615",
+    "Ack": "5ce076801909dd38",
+    "Error": "83f3bc3dd1b3a57c",
 }
 BODY_OF = {"OFFER": "Offer", "ACCEPT": "Accept", "DECLINE": "Decline", "ACK": "Ack", "ERROR": "Error"}
 
@@ -403,8 +421,8 @@ def check_step(step: Any, w: Any, g: Any, own: bytes, peer: bytes, where: str) -
         records: list[Any] = []
         for r in g["replies"]:
             kind, body = reply(r, own, peer)
-            if kind != "ACK" or body["moved_from"] is not None:
-                return f"{where}: a reply other than an ACK of records"
+            if kind != "ACK":
+                return f"{where}: a reply other than an ACK"
             records += body["records"]
 
         def order(entries: Any) -> list[Any]:  # in any order (section 5.6)

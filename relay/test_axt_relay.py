@@ -44,7 +44,7 @@ def sealed_example() -> bytes:
     doc = json.loads((REPO / "vectors" / "relay-server" / "relay-server.json").read_text(encoding="utf-8"))
     for r in doc["vectors"][0]["input"]["requests"]:
         if r["method"] == "PUT" and r["target"].endswith(
-            "/messages/7cbe47862344527d93735c97159cc8cf4d3631647233cac735553c968e6c2bc8"
+            "/messages/64a9988bd3e1e8210d592e29115d5b3252d2e75be5c219ca67583608cfdb878a"
         ):
             data = bytes.fromhex(r["body"])
             if hashlib.sha256(data).hexdigest() == r["target"][-64:]:
@@ -375,7 +375,7 @@ class EndToEndTest(unittest.TestCase):
         sealed = sealed_example()
         self.assertEqual(
             (len(sealed), sha(sealed)),
-            (1073, "7cbe47862344527d93735c97159cc8cf4d3631647233cac735553c968e6c2bc8"),
+            (1073, "64a9988bd3e1e8210d592e29115d5b3252d2e75be5c219ca67583608cfdb878a"),
         )
         directory = tempfile.mkdtemp(prefix="axt-relay-e2e-")
         self.addCleanup(shutil.rmtree, directory, True)
@@ -423,7 +423,7 @@ class EndToEndTest(unittest.TestCase):
         self.assertEqual((status, headers["Content-Type"]), (200, "application/json"))
         self.assertEqual(
             body,
-            b'{"messages":[{"id":"7cbe47862344527d93735c97159cc8cf4d3631647233cac735553c968e6c2bc8","size":1073}]}',
+            b'{"messages":[{"id":"64a9988bd3e1e8210d592e29115d5b3252d2e75be5c219ca67583608cfdb878a","size":1073}]}',
         )
         status, headers, fetched = r.request("GET", f"v1/mailboxes/{BOX}/messages/{sha(sealed)}", OWNER)
         self.assertEqual(
@@ -448,7 +448,7 @@ class EndToEndTest(unittest.TestCase):
         # the DATA message of spec/keys.md, section 7.2, signed by cat-a-log
         self.assertEqual(
             (len(opened), sha(opened)),
-            (210, "23fdfeb720ae7a368b936ce9f990039b7472fe7128927da9c3648e9b9ea67f07"),
+            (210, "68d19c518a50880136a9f7412d3e636b17422c89cf63837b7ae1a22c8abedfc3"),
         )
         cat = keys.public_key(
             hashlib.sha256(b"AXT test key, not for use: cat-a-log, old phone, Ed25519").digest()

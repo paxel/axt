@@ -4,7 +4,7 @@ The vocabulary of this repository. The specification in [spec/](spec/README.md) 
 
 **Installation**: one copy of an app on one device, with its own data and its own keys.
 
-**Sender**: the installation that created a record and sends its versions. A receiver knows a sender by the key it saw first from it.
+**Sender**: the app that created a record and sends its versions: one installation, or the installations of one owner on several devices, each with a key of its own, as one **device set**. A receiver knows a sender by the first key it accepted from it and by the keys added to it and removed from it since.
 
 **Receiver**: an app that takes records from a sender, through a live connection, a relay or a file.
 

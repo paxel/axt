@@ -15,11 +15,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - The example types hold their times in the time types and carry labels, help, emoji and checks in English and German. ([axt-1018](https://github.com/paxel/axt/issues/19))
 - Records with a stable id and a rising version, sent whole, with updates, deletions and the receiver's own changes. ([axt-1003](https://github.com/paxel/axt/issues/4))
 - The manifest, in which an app names the types it takes and what it does with them. ([axt-1004](https://github.com/paxel/axt/issues/5))
-- Ed25519 signatures, relay encryption with HPKE, trust on first use and moving a key to a new installation. ([axt-1006](https://github.com/paxel/axt/issues/7))
+- Ed25519 signatures, relay encryption with HPKE and trust on first use. ([axt-1006](https://github.com/paxel/axt/issues/7))
 - The protocol of offer, accept, decline, data, acknowledgement and errors. ([axt-1005](https://github.com/paxel/axt/issues/6))
 - Three transports: a file, the local network found by QR code, and a relay. ([axt-1007](https://github.com/paxel/axt/issues/8))
 - Test vectors for every category, the time types and invalid values among them, and a conformance runner with a reference adapter. ([axt-1009](https://github.com/paxel/axt/issues/10), [axt-1019](https://github.com/paxel/axt/issues/20))
 - The reference relay, a sealed mailbox anyone can run. ([axt-1008](https://github.com/paxel/axt/issues/9))
+- Device sets: an owner's devices, each with its own key, count as one sender, joined by QR code and removable by any other. ([axt-1022](https://github.com/paxel/axt/issues/24))
 
 ---
 

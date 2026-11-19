@@ -264,7 +264,7 @@ envelope_datum = {
     "signature": SIGNATURE,
 }
 assert (
-    hashlib.sha256(message).hexdigest() == "23fdfeb720ae7a368b936ce9f990039b7472fe7128927da9c3648e9b9ea67f07"
+    hashlib.sha256(message).hexdigest() == "68d19c518a50880136a9f7412d3e636b17422c89cf63837b7ae1a22c8abedfc3"
 ), "not the message of spec/keys.md, section 7.2"
 
 # Check against the library and decode back.
@@ -307,7 +307,7 @@ fastavro.writer(
 )
 axt_file = file_buf.getvalue()
 assert (
-    hashlib.sha256(axt_file).hexdigest() == "6b1083ab16ed95a2299d4f0e0621cc3c86e9656b4658099fc220db928af6e969"
+    hashlib.sha256(axt_file).hexdigest() == "3112dfd846a5bd572299ff9a0be0e42d5cd9aa55ab47d83834b85484a90e5f71"
 ), "not the file of spec/keys.md, section 7.3"
 
 # Read back with fastavro.

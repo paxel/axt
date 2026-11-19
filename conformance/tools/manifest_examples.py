@@ -118,10 +118,10 @@ CAT_A_LOG: dict[str, Any] = {
     ],
     "any_type": None,
     "sends": [
-        {"type": "axt.example.v1.Pet", "min_version": 1, "max_version": 1},
-        {"type": "axt.example.v1.Appointment", "min_version": 1, "max_version": 1},
-        {"type": "axt.example.v1.Measurement", "min_version": 1, "max_version": 1},
-        {"type": "axt.example.v1.Document", "min_version": 1, "max_version": 1},
+        {"type": "axt.example.v1.Pet", "min_version": 1, "max_version": 1, "proposals": False},
+        {"type": "axt.example.v1.Appointment", "min_version": 1, "max_version": 1, "proposals": False},
+        {"type": "axt.example.v1.Measurement", "min_version": 1, "max_version": 1, "proposals": False},
+        {"type": "axt.example.v1.Document", "min_version": 1, "max_version": 1, "proposals": False},
     ],
     "encryption_key": None,
     "relay": None,
@@ -179,8 +179,8 @@ assert SENDERS["cat-a-log"].hex() == "1b84a600f3503e22bbcc99e63202a7194bf6bd69af
 assert SENDERS["Old Brain Fix"].hex() == "da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7"
 # The messages of spec/protocol.md, section 17.2, by their SHA-256.
 PUBLISHED = {
-    "cat-a-log": "1ee7dfafb7a27b1ba7f1dd7fedb04e822d4cbc3f23033f8908b1b8691a163771",
-    "Old Brain Fix": "d8d61697a0189e3afe3b500901b634a356ac1af1986b42bdf9d62d358e59dcaf",
+    "cat-a-log": "b1305f014fc6a6f5fd33334cb8ecdbe6f7cdaa32b978773f7abcc56cfa45f678",
+    "Old Brain Fix": "3af8b09e06d556e993c33d1bf00f744645b8eb7e049c2f91c90f8fec96d23f6a",
 }
 
 # --- schema -------------------------------------------------------------------
@@ -239,10 +239,10 @@ def fingerprint(schema_text: str) -> tuple[str, int]:
 
 manifest_pcf, manifest_fp = fingerprint(manifest_text)
 envelope_pcf, envelope_fp = fingerprint(envelope_text)
-assert envelope_fp == 0xA2E1E84FE5E40C7D, "the envelope fingerprint is not the one of spec/envelope.md"
+assert envelope_fp == 0xA89ECEB9716F3016, "the envelope fingerprint is not the one of spec/envelope.md"
 
 # Every default once in schema resolution, with both libraries. check_defaults
-# reaches the fields of the record and of the records in its arrays; the two
+# reaches the fields of the record and of the records in its arrays; the three
 # defaults below those, in any_type's record and in the array inside the sends
 # union, are used by a writer schema without them.
 rules.DATA["Manifest"] = OLD_BRAIN_FIX
@@ -253,7 +253,7 @@ wfields = {f["name"]: f for f in writer["fields"]}
 any_record = wfields["any_type"]["type"][1]
 any_record["fields"] = [f for f in any_record["fields"] if f["name"] != "purpose_translations"]
 send_record = wfields["sends"]["type"][1]["items"]
-send_record["fields"] = [f for f in send_record["fields"] if f["name"] != "max_version"]
+send_record["fields"] = [f for f in send_record["fields"] if f["name"] not in ("max_version", "proposals")]
 datum = dict(
     OLD_BRAIN_FIX,
     any_type={"purpose": OLD_BRAIN_FIX["any_type"]["purpose"]},
@@ -265,11 +265,16 @@ for library, back in zip(
     expected: Any = (
         fields["any_type"]["type"][1]["fields"][1]["default"],
         fields["sends"]["type"][1]["items"]["fields"][2]["default"],
+        fields["sends"]["type"][1]["items"]["fields"][3]["default"],
     )
-    got = (back["any_type"]["purpose_translations"], back["sends"][0]["max_version"])
+    got = (
+        back["any_type"]["purpose_translations"],
+        back["sends"][0]["max_version"],
+        back["sends"][0]["proposals"],
+    )
     if got != expected:
         rules.fail("Manifest", f"{library} read {got!r} for the defaults of any_type and sends")
-defaults_resolved += 2
+defaults_resolved += 3
 
 
 def count_defaults(t: Any) -> int:
@@ -426,7 +431,8 @@ def big(datum: dict[str, Any]) -> None:
 
 
 def note_sends(**change: Any) -> list[dict[str, Any]]:
-    return [dict({"type": "axt.example.v1.Note", "min_version": 1, "max_version": None}, **change)]
+    entry = {"type": "axt.example.v1.Note", "min_version": 1, "max_version": None, "proposals": False}
+    return [dict(entry, **change)]
 
 
 # A valid encryption key and relay, for the cases that need one (spec/keys.md, section 7.1;
@@ -724,6 +730,8 @@ def body_parts(m: Any) -> Parts:
         out = block("sends", len(sends), "array") if sends else []
         for i, e in enumerate(sends):
             out += string_parts(f"sends[{i}].type", e["type"]) + version_parts(f"sends[{i}]", e)
+            proposals = str(e["proposals"]).lower()
+            out.append((bytes([e["proposals"]]), f"sends[{i}].proposals: boolean {proposals}"))
         return out + end("sends", "array")
 
     parts += null_or("sends", m["sends"], "array", sends_parts)

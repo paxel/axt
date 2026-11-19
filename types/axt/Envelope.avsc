@@ -14,7 +14,7 @@
       "type": {
         "type": "enum",
         "name": "Kind",
-        "doc": "What the message is. Each kind is defined in the document named in spec/envelope.md.",
+        "doc": "What the message is. Each kind is defined in the document named in spec/envelope.md, section 2.2. DEVICE_JOIN, DEVICE_ADD and DEVICE_REMOVE: the devices of one sender, spec/keys.md, section 5. CHANGE and RESYNC: records between the devices of one sender, to come with axt-1024. FORWARD: a message of another app passed on between the devices of one sender, to come with axt-1025. WITHDRAW: a record its sender no longer shares, to come with axt-1026. PROPOSAL and PROPOSAL_REPLY: a change a receiver proposes to a record's sender, and the answer, to come with axt-1027.",
         "symbols": [
           "MANIFEST",
           "OFFER",
@@ -24,7 +24,15 @@
           "DELETE",
           "ACK",
           "ERROR",
-          "KEY_MOVE"
+          "DEVICE_JOIN",
+          "DEVICE_ADD",
+          "DEVICE_REMOVE",
+          "CHANGE",
+          "RESYNC",
+          "FORWARD",
+          "WITHDRAW",
+          "PROPOSAL",
+          "PROPOSAL_REPLY"
         ]
       },
       "doc": "What the message is, and so which schema its body has."
@@ -37,7 +45,7 @@
         "size": 32,
         "doc": "An Ed25519 public key in the encoding of RFC 8032. Defined in spec/keys.md."
       },
-      "doc": "The Ed25519 public key of the sending installation, which made the signature."
+      "doc": "The Ed25519 public key of the sending device, which made the signature."
     },
     {
       "name": "record",

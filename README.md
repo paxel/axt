@@ -26,7 +26,7 @@ An example: an appointment kept in cat-a-log, such as a visit to the vet, is sen
 - In a live connection the schema is sent once with the offer; each record after it carries only a fingerprint of its schema. A file is an Avro object container file with the schema in its header.
 - When two apps connect, each sends a manifest of the types it takes and one sentence per type on what it does with them. The sender offers only what fits, and the receiver confirms each offer.
 - Every record has a stable id and a version. The sender can send updates and deletions later; the receiver applies them or keeps what its user changed there.
-- Every message is signed with the sending app's Ed25519 key. The receiver accepts updates and deletions of a record only with the key it saw first. A key can be moved to a new installation.
+- Every message is signed with the sending app's Ed25519 key. The receiver accepts updates and deletions of a record only from the sender it has the record from. The devices of one owner each have a key of their own and count as one sender: a device adds a new one, and any device can remove another, such as a lost one.
 - The repository brings example types (Note, Task, Appointment, Person and more) that work without prior agreement. Anyone may evolve or replace them, at the cost of compatibility.
 
 ## Three ways to exchange

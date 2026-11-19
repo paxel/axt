@@ -15,7 +15,7 @@ each as annotated hex:
   of the specification;
 - the Parsing Canonical Form and the CRC-64-AVRO fingerprint of each,
   against fastavro and the Apache avro package, and that the fingerprints
-  of the envelope, the manifest and the key move are those published;
+  of the envelope, the manifest and the device messages are those published;
 - every default once in schema resolution, with both libraries, and for
   every enum a symbol the reader does not know, which fastavro reads as
   the enum's default (the avro package 1.12.2 raises instead);
@@ -33,8 +33,10 @@ each as annotated hex:
   checks the exchange above and a set of messages that must be ignored,
   answered as before, or reported with a given error code.
 
-The key moves of spec/keys.md are checked by keys_examples.py; this script
-checks only how a key move is acknowledged.
+The additions and removals of devices of spec/keys.md, section 5.5, are
+checked by keys_examples.py, whose model of a receiver the app here uses;
+this script checks where they stand in a connection and how a rejected one
+is reported (spec/protocol.md, section 3.3).
 
 Run from anywhere, with fastavro, avro (1.12), pynacl and cryptography
 installed:
@@ -87,7 +89,8 @@ tm = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(tm)
 
 PROTOCOL = ["Offer", "Accept", "Decline", "Ack", "Error"]
-ALL_SPEC = ["Envelope", "Manifest", "KeyMove"] + PROTOCOL
+DEVICES = ["DeviceJoin", "DeviceAdd", "DeviceRemove"]
+ALL_SPEC = ["Envelope", "Manifest"] + DEVICES + PROTOCOL
 
 # --- the limits of spec/protocol.md -------------------------------------------
 
@@ -122,15 +125,17 @@ def without_logical_types(t: Any) -> Any:
 raw = {n: fastavro.parse_schema(without_logical_types(jsons[n]), _write_hint=False) for n in ALL_SPEC}
 
 fingerprints = {n: me.fingerprint(texts[n]) for n in ALL_SPEC}  # (canonical form, fingerprint)
-assert fingerprints["Envelope"][1] == 0xA2E1E84FE5E40C7D, (
+assert fingerprints["Envelope"][1] == 0xA89ECEB9716F3016, (
     "the envelope fingerprint is not that of spec/envelope.md"
 )
-assert fingerprints["Manifest"][1] == 0x6B08ECB5D38003B3, (
+assert fingerprints["Manifest"][1] == 0xA59EEB4C88A51F3E, (
     "the manifest fingerprint is not that of spec/manifest.md"
 )
-assert fingerprints["KeyMove"][1] == 0xA9E20AFEA72F2876, (
-    "the key move fingerprint is not that of spec/keys.md"
-)
+assert [fingerprints[n][1] for n in DEVICES] == [
+    0xDFF876FAB5FECF2F,
+    0xC60D1EF44B7B3131,
+    0xD0F57582AAB2AADC,
+], "the fingerprints of the device messages are not those of spec/keys.md"
 assert len({fp for _, fp in fingerprints.values()}) == len(ALL_SPEC)
 
 defined_by: dict[str, str] = {}
@@ -168,7 +173,8 @@ OBF = keys.public_key(OBF_SEED)
 assert CAT.hex() == "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a", (
     "not the key of spec/keys.md"
 )
-OTHER = keys.public_key(test_secret("cat-a-log, new phone, Ed25519"))  # a third key, for forwarded messages
+OTHER_SEED = test_secret("cat-a-log, new phone, Ed25519")
+OTHER = keys.public_key(OTHER_SEED)  # a third key: for forwarded messages, and cat-a-log's new phone
 for k in (CAT, OBF, OTHER):
     assert keys.key_problem(k) is None
 
@@ -199,9 +205,13 @@ BODY_SCHEMA = {
     "DECLINE": "Decline",
     "ACK": "Ack",
     "ERROR": "Error",
-    "KEY_MOVE": "KeyMove",
+    "DEVICE_JOIN": "DeviceJoin",
+    "DEVICE_ADD": "DeviceAdd",
+    "DEVICE_REMOVE": "DeviceRemove",
 }
 RECORD_KINDS = {"DATA", "DELETE"}
+DEVICE_KINDS = {"DEVICE_JOIN", "DEVICE_ADD", "DEVICE_REMOVE"}
+CHAIN_KINDS = {"DEVICE_ADD", "DEVICE_REMOVE"}  # signed with a key of a device set, not the connection's
 
 
 def fp8(fp: int) -> bytes:
@@ -297,11 +307,13 @@ def body_parts(name: str, d: dict[str, Any]) -> list[tuple[Any, ...]]:
                 + array_parts(f"{n}.kept_fields", r["kept_fields"], lambda m, f: string_parts(m, f))
             )
 
-        return (
-            to_parts(d["to"])
-            + array_parts("records", d["records"], entry)
-            + null_or("moved_from", d["moved_from"], "AckMovedFrom", lambda k: [(k, "moved_from: fixed(32)")])
-        )
+        return to_parts(d["to"]) + array_parts("records", d["records"], entry)
+    if name == "DeviceJoin":
+        return [(d["to"], "to: fixed(32)"), (d["proof"], "proof: fixed(64)")]
+    if name == "DeviceAdd":
+        return [(d["device"], "device: fixed(32)"), (d["proof"], "proof: fixed(64)")]
+    if name == "DeviceRemove":
+        return [(d["device"], "device: fixed(32)")]
     if name == "Error":
         return (
             to_parts(d["to"])
@@ -418,6 +430,43 @@ def make_message(
 
 NAMES = {CAT: "cat-a-log", OBF: "Old Brain Fix", OTHER: "a third app"}
 
+
+def device_parts(m: bytes) -> tuple[str, bytes, dict[str, Any], bytes, bytes]:
+    """A well-formed DEVICE_JOIN, DEVICE_ADD or DEVICE_REMOVE as a live message: its kind, its sender,
+    its body, its signed bytes (spec/keys.md, section 2.2) and its signature."""
+    env: Any = fastavro.schemaless_reader(io.BytesIO(m[10:]), raw["Envelope"], raw["Envelope"])
+    kind, body = env["kind"], env["body"]
+    if kind not in DEVICE_KINDS or body[:10] != b"\xc3\x01" + fp8(fingerprints[BODY_SCHEMA[kind]][1]):
+        raise ValueError("not a message about a device")
+    name = BODY_SCHEMA[kind]
+    d: Any = fastavro.schemaless_reader(io.BytesIO(body[10:]), raw[name], raw[name])
+    return kind, env["sender"], d, keys.MESSAGE_PREFIX + m[10:-64], m[-64:]
+
+
+def device_join(device_seed: bytes, member: bytes, proof: bytes | None = None) -> bytes:
+    """The DEVICE_JOIN of a new device to the member whose join code it scanned (spec/keys.md, section
+    5.2); with another proof for a case that must be rejected."""
+    device = keys.public_key(device_seed)
+    d = {"to": member, "proof": proof or keys.sign(device_seed, keys.proof_bytes(member, device))}
+    return make_message("DEVICE_JOIN", device_seed, None, make_body("DeviceJoin", d)[0], check=False)[1]
+
+
+def device_add(
+    member_seed: bytes, device_seed: bytes, proof: bytes | None = None, device: bytes | None = None
+) -> bytes:
+    """The DEVICE_ADD by which a member adds a device, with the proof of the device's DEVICE_JOIN."""
+    member = keys.public_key(member_seed)
+    device = device or keys.public_key(device_seed)
+    d = {"device": device, "proof": proof or keys.sign(device_seed, keys.proof_bytes(member, device))}
+    return make_message("DEVICE_ADD", member_seed, None, make_body("DeviceAdd", d)[0], check=False)[1]
+
+
+def device_remove(signer_seed: bytes, device: bytes) -> bytes:
+    return make_message(
+        "DEVICE_REMOVE", signer_seed, None, make_body("DeviceRemove", {"device": device})[0], check=False
+    )[1]
+
+
 # --- a model of an app (spec/protocol.md) -------------------------------------
 
 
@@ -496,12 +545,18 @@ class App:
         readers: dict[str, Any],
         decide: Callable[[str], bool],
         formats: tuple[int, ...] = (1,),
+        peer_key: bytes | None = None,
     ) -> None:
         self.name, self.seed, self.pub = name, seed, keys.public_key(seed)
         self.manifest, self.readers, self.decide, self.formats = manifest, readers, decide, list(formats)
         self.peer: bytes | None
         self.peer_manifest: Any
         self.peer, self.peer_manifest = None, None
+        # The other app as a known sender: the key its HELLO proved, which the user has accepted, and
+        # the keys its chain adds and removes (spec/keys.md, section 5.5).
+        self.peer_key = peer_key
+        self.devices = keys.DeviceReceiver([keys.KnownSender("peer", [peer_key])] if peer_key else [])
+        self.held: list[bytes] = []  # rejected device messages, to report once a MANIFEST has come
         # as receiver
         self.current: dict[
             str, dict[str, Any]
@@ -569,7 +624,7 @@ class App:
     def ack(self) -> bytes | None:
         if not self.pending_acks:
             return None
-        d = {"to": self.peer, "records": self.pending_acks[:MAX_ACK_RECORDS], "moved_from": None}
+        d = {"to": self.peer, "records": self.pending_acks[:MAX_ACK_RECORDS]}
         self.pending_acks = self.pending_acks[MAX_ACK_RECORDS:]
         return self.reply("ACK", d)
 
@@ -583,24 +638,35 @@ class App:
         """Process one live message. Returns (what happened, replies)."""
         self.kind: str | None = None
         try:
-            return self._receive(message)
+            what, replies = self._receive(message)
         except Rejected as e:
-            if not e.report or self.peer is None or self.kind == "ERROR":
-                return (f"rejected {e.code}, not reported", [])
-            if e.code in ("SIGNATURE_INVALID", "FORMAT_UNSUPPORTED", "INVALID_MESSAGE") and e.record is None:
-                record = None
-            else:
-                record = e.record
-            d = {
-                "to": self.peer,
-                "code": e.code,
-                "message_hash": hashlib.sha256(message).digest(),
-                "record": record,
-                "fingerprint": e.fingerprint,
-                "field": e.field,
-                "detail": e.detail,
-            }
-            return (f"rejected {e.code}", [self.reply("ERROR", d)])
+            what, replies = self._rejected(e, message)
+        if self.peer is not None and self.held:
+            # Section 8.3: an ERROR goes out once a MANIFEST of the connection has come; the chain
+            # stands before it (section 3.1), so the report of a rejected device message waits for it.
+            replies = [self._report(Rejected("DEVICE_REJECTED"), m) for m in self.held] + replies
+            self.held = []
+        return what, replies
+
+    def _report(self, e: Rejected, message: bytes) -> bytes:
+        d = {
+            "to": self.peer,
+            "code": e.code,
+            "message_hash": hashlib.sha256(message).digest(),
+            "record": e.record,
+            "fingerprint": e.fingerprint,
+            "field": e.field,
+            "detail": e.detail,
+        }
+        return self.reply("ERROR", d)
+
+    def _rejected(self, e: Rejected, message: bytes) -> tuple[str, list[bytes]]:
+        if e.code == "DEVICE_REJECTED" and self.peer is None:
+            self.held.append(message)
+            return ("rejected DEVICE_REJECTED, reported after the MANIFEST", [])
+        if not e.report or self.peer is None or self.kind == "ERROR":
+            return (f"rejected {e.code}, not reported", [])
+        return (f"rejected {e.code}", [self._report(e, message)])
 
     def _receive(self, m: bytes) -> tuple[str, list[bytes]]:
         if len(m) > MAX_MESSAGE:
@@ -625,12 +691,18 @@ class App:
             record = None
         if env["format"] != 1:
             raise Rejected("INVALID_MESSAGE", "format does not match the envelope fingerprint", record)
-        if self.peer is not None and env["sender"] != self.peer:
-            raise Rejected("INVALID_MESSAGE", "another sender in this connection", report=False)
+        if kind not in CHAIN_KINDS:
+            self.devices.end()  # a message of another kind ends a chain
+            if self.devices.key_state(env["sender"])[0] == "removed":
+                return ("ignored: signed with a removed key", [])
+            if self.peer is not None and env["sender"] != self.peer:
+                raise Rejected("INVALID_MESSAGE", "another sender in this connection", report=False)
         if kind == "ERROR" and self.peer is None:
             raise Rejected("INVALID_MESSAGE", "an ERROR before the MANIFEST", report=False)
-        if kind not in ("MANIFEST", "KEY_MOVE", "ERROR") and self.peer_manifest is None:
+        if kind not in ("MANIFEST", "ERROR", *DEVICE_KINDS) and self.peer_manifest is None:
             raise Rejected("INVALID_MESSAGE", "a message before the MANIFEST", report=False)
+        if kind not in BODY_SCHEMA and kind not in RECORD_KINDS:
+            raise Rejected("INVALID_MESSAGE", f"no document defines the kind {kind} yet", record)
         if (rec is None) == (kind in RECORD_KINDS):
             raise Rejected("INVALID_MESSAGE", "record field present or missing", record)
         body = env["body"]
@@ -650,6 +722,8 @@ class App:
             raise Rejected("INVALID_MESSAGE", f"the body is not an axt.{name}") from None
         if buf.tell() != len(body) - 10:
             raise Rejected("INVALID_MESSAGE", "bytes left over after the body")
+        if kind in DEVICE_KINDS:
+            return self._device(kind, env["sender"], d, m)
         if kind == "MANIFEST":
             return self._manifest(env["sender"], d, len(body))
         if kind == "ERROR":
@@ -661,6 +735,24 @@ class App:
         return {"OFFER": self._offer, "ACCEPT": self._answer, "DECLINE": self._answer, "ACK": self._ack}[
             kind
         ](kind, d)
+
+    def _device(self, kind: str, signer: bytes, d: dict[str, Any], m: bytes) -> tuple[str, list[bytes]]:
+        """A message of a chain, or a DEVICE_JOIN (section 3.3). Nothing acknowledges it."""
+        if kind == "DEVICE_JOIN":
+            return ("ignored: no join code opened this connection", [])
+        problem = keys.device_message_problem(
+            kind, signer, keys.MESSAGE_PREFIX + m[10:-64], m[-64:], d["device"], d.get("proof")
+        )
+        here = self.peer_key is not None and self.devices.key_state(self.peer_key)[0] == "current"
+        result = self.devices.take(kind, signer, d["device"], problem)
+        if result == keys.REJECTED:
+            raise Rejected("DEVICE_REJECTED")
+        if here and self.devices.key_state(self.peer_key)[0] == "removed":
+            # The offers from a removed key and to it end, and the connection of a removed key is closed
+            # (spec/keys.md, section 5.5).
+            self.close()
+            return ("the connection key is removed: close", [])
+        return (f"device message: {result}", [])
 
     def _manifest(self, sender: bytes, d: dict[str, Any], body_length: int) -> tuple[str, list[bytes]]:
         problems = me.manifest_problems(d, body_length)
@@ -836,8 +928,8 @@ class App:
         return ("APPLIED", [])
 
     def _ack(self, kind: str, d: dict[str, Any]) -> tuple[str, list[bytes]]:
-        if not d["records"] and d["moved_from"] is None or len(d["records"]) > MAX_ACK_RECORDS:
-            raise Rejected("INVALID_MESSAGE", "not 1 to 4096 records, or 0 with a key move")
+        if not 1 <= len(d["records"]) <= MAX_ACK_RECORDS:
+            raise Rejected("INVALID_MESSAGE", "not 1 to 4096 records")
         seen = set()
         for r in d["records"]:
             k = (r["id"].lower(), r["version"])
@@ -1070,7 +1162,6 @@ k_parts, k_check = make_message(
                     "kept_fields": [],
                 }
             ],
-            "moved_from": None,
         },
     )[0],
 )
@@ -1616,7 +1707,6 @@ for order in (("KEPT", "APPLIED"), ("APPLIED", "KEPT")):
                             "kept_fields": [],
                         }
                     ],
-                    "moved_from": None,
                 },
             )
         )
@@ -1639,13 +1729,12 @@ for order in (("DUPLICATE", "MERGED"), ("MERGED", "DUPLICATE")):
                             "kept_fields": ["location"] if outcome == "MERGED" else [],
                         }
                     ],
-                    "moved_from": None,
                 },
             )
         )
     expect(f"MERGED stands after {order[0]} then {order[1]}", s.outcomes[(APPOINTMENT_ID, 4)], "MERGED")
 invalid_acks = [
-    ("an ACK without entries and without a key move", []),
+    ("an ACK without entries", []),
     (
         "an ACK of STALE without a higher receiver version",
         [{"id": APPOINTMENT_ID, "version": 2, "outcome": "STALE", "receiver_version": 2, "kept_fields": []}],
@@ -1675,16 +1764,99 @@ invalid_acks = [
 for label, entries in invalid_acks:
     expect(
         label,
-        code_of(cat_app.receive(obf_app.reply("ACK", {"to": CAT, "records": entries, "moved_from": None}))),
+        code_of(cat_app.receive(obf_app.reply("ACK", {"to": CAT, "records": entries}))),
         "ERROR INVALID_MESSAGE",
     )
-key_move_ack = obf_app.reply("ACK", {"to": CAT, "records": [], "moved_from": OTHER})
-expect("an ACK of a key move alone", cat_app.receive(key_move_ack), ("acknowledged", []))
 broken_error = make_message("ERROR", OBF_SEED, None, header("Error") + [(b"\x00", "")], check=False)[1]
 expect(
     "an ERROR that cannot be processed is not answered with an ERROR",
     cat_app.receive(broken_error),
     ("rejected INVALID_MESSAGE, not reported", []),
+)
+
+# Additions and removals of devices in a connection (section 3.3). Old Brain Fix knows cat-a-log by
+# the key of the old phone, which is the connection key; the new phone is the third key.
+UNKNOWN_SEED = test_secret("an app Old Brain Fix has not met, Ed25519")
+add_new = device_add(CAT_SEED, OTHER_SEED)
+bad_proof = device_add(CAT_SEED, OTHER_SEED, proof=keys.sign(OTHER_SEED, keys.proof_bytes(OBF, OTHER)))
+unplaced = device_add(UNKNOWN_SEED, OBF_SEED)
+
+
+def knows_cat() -> App:
+    return App("Old Brain Fix", OBF_SEED, me.OLD_BRAIN_FIX, {}, lambda n: True, peer_key=CAT)
+
+
+def error_of(reply: bytes) -> tuple[str, bytes, bytes]:
+    """The code, the addressee and the message hash of an ERROR."""
+    env: Any = fastavro.schemaless_reader(io.BytesIO(reply[10:]), parsed["Envelope"], parsed["Envelope"])
+    assert env["kind"] == "ERROR" and env["sender"] == OBF
+    e: Any = fastavro.schemaless_reader(io.BytesIO(env["body"][10:]), parsed["Error"], parsed["Error"])
+    return e["code"], e["to"], e["message_hash"]
+
+
+r = knows_cat()
+expect(
+    "a DEVICE_ADD before the MANIFEST is applied without a reply",
+    r.receive(add_new),
+    ("device message: APPLIED", []),
+)
+expect(
+    "a repeated DEVICE_ADD is ignored without a reply", r.receive(add_new), ("device message: IGNORED", [])
+)
+expect(
+    "a DEVICE_ADD by a signer that cannot be placed gets no reply",
+    r.receive(unplaced),
+    ("device message: NOT_PLACED", []),
+)
+expect(
+    "a DEVICE_JOIN in a connection that no join code opened is ignored",
+    r.receive(device_join(CAT_SEED, OBF)),
+    ("ignored: no join code opened this connection", []),
+)
+expect(
+    "a rejected DEVICE_ADD before the MANIFEST is not reported yet",
+    r.receive(bad_proof),
+    ("rejected DEVICE_REJECTED, reported after the MANIFEST", []),
+)
+what, replies = r.receive(m1)
+expect(
+    "the rejected DEVICE_ADD is reported once the MANIFEST has come",
+    (what, [error_of(e) for e in replies]),
+    ("manifest taken", [("DEVICE_REJECTED", CAT, hashlib.sha256(bad_proof).digest())]),
+)
+assert r.devices.senders[0].current == [CAT, OTHER]
+expect(
+    "a DEVICE_REMOVE after the MANIFEST is applied without a reply",
+    r.receive(device_remove(CAT_SEED, OTHER)),
+    ("device message: APPLIED", []),
+)
+late_removal = device_remove(OTHER_SEED, CAT)
+what, replies = r.receive(late_removal)
+expect(
+    "a DEVICE_REMOVE signed with a removed key is reported to the connection key",
+    (what, [error_of(e) for e in replies]),
+    ("rejected DEVICE_REJECTED", [("DEVICE_REJECTED", CAT, hashlib.sha256(late_removal).digest())]),
+)
+expect(
+    "a DEVICE_REMOVE of its signer's own key",
+    code_of(r.receive(device_remove(CAT_SEED, CAT))),
+    "ERROR DEVICE_REJECTED",
+)
+broken_add = add_new[:-1] + bytes([add_new[-1] ^ 1])
+expect(
+    "a DEVICE_ADD whose signature does not verify", code_of(r.receive(broken_add)), "ERROR SIGNATURE_INVALID"
+)
+r = knows_cat()
+r.receive(add_new)
+expect(
+    "the connection key is removed by its set, and the connection closed",
+    r.receive(device_remove(OTHER_SEED, CAT)),
+    ("the connection key is removed: close", []),
+)
+expect(
+    "a MANIFEST signed with a removed key is rejected without a report",
+    r.receive(m1),
+    ("ignored: signed with a removed key", []),
 )
 
 # --- schema resolution of every default ---------------------------------------
@@ -1718,7 +1890,6 @@ DATA = {
                 "kept_fields": ["location"],
             }
         ],
-        "moved_from": OTHER,
     },
     "Error": {
         "to": CAT,

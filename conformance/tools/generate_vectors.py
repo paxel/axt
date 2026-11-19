@@ -148,33 +148,11 @@ assert MEMO_MSG[0x53] < 0x80 and MEMO_MSG[0x54:0x56] == b"\xc3\x01", (
     "the body begins at 0x54, as the slices below assume"
 )
 assert (
-    hashlib.sha256(MEMO_MSG).hexdigest() == "23fdfeb720ae7a368b936ce9f990039b7472fe7128927da9c3648e9b9ea67f07"
+    hashlib.sha256(MEMO_MSG).hexdigest() == "68d19c518a50880136a9f7412d3e636b17422c89cf63837b7ae1a22c8abedfc3"
 )
 assert MEMO_MSG == tx.memo_msg
 
 # --- keys (spec/keys.md) --------------------------------------------------------
-
-
-def key_move_body(
-    new_seed: bytes, old_key: bytes, new_encryption_key: bytes | None, proof: bytes | None = None
-) -> bytes:
-    """The body of a KEY_MOVE: axt.KeyMove in single-object encoding (spec/keys.md, section 5.1)."""
-    new_key = keys.public_key(new_seed)
-    if proof is None:
-        proof = keys.sign(new_seed, keys.KEY_MOVE_PREFIX + old_key + new_key)
-    datum = (
-        new_key
-        + (keys.zigzag(0) if new_encryption_key is None else keys.zigzag(1) + new_encryption_key)
-        + proof
-    )
-    return cast(bytes, b"\xc3\x01" + pe.fp8(pe.fingerprints["KeyMove"][1]) + datum)
-
-
-def key_move(
-    old_seed: bytes, new_seed: bytes, new_encryption_key: bytes | None, proof: bytes | None = None
-) -> bytes:
-    body = key_move_body(new_seed, keys.public_key(old_seed), new_encryption_key, proof)
-    return cast(bytes, pe.make_message("KEY_MOVE", old_seed, None, [(body, "")], check=False)[1])
 
 
 def sealed(message: bytes, receiver_key: bytes, ikm_label: str, plaintext: bytes | None = None) -> bytes:
@@ -190,16 +168,166 @@ def sealed(message: bytes, receiver_key: bytes, ikm_label: str, plaintext: bytes
     )
 
 
-KM_MSG = key_move(CAT_SEED, NEW_SEED, NEW_X25519)
+ADD_MSG = pe.device_add(CAT_SEED, NEW_SEED)
 assert (
-    hashlib.sha256(KM_MSG).hexdigest() == "a4e2e8662beb27b3b4df70d1840fe8f58cbfac501a8f937a197f729028180bea"
-), "not the KEY_MOVE of spec/keys.md, section 7.5"
+    hashlib.sha256(ADD_MSG).hexdigest() == "cfe02dfa2168149a75835448342ec39fd2c95464e22c9d4d1a6666ef4f740bd8"
+), "not the DEVICE_ADD of spec/keys.md, section 7.5"
+JOIN_MSG = pe.device_join(NEW_SEED, CAT)  # the DEVICE_JOIN that carried its proof
+OLDER_SEED = test_secret("cat-a-log, older phone, Ed25519")
+OLDER = keys.public_key(OLDER_SEED)
+# The neutral element as a key: with it, the signature of the neutral element and S = 0 verifies under
+# a lax rule for every message (spec/keys.md, section 7.6).
+SMALL_KEY, SMALL_SIGNATURE = (1).to_bytes(32, "little"), (1).to_bytes(32, "little") + bytes(32)
+
+
+def flip_signature(message: bytes) -> bytes:
+    """The message with one bit of its signature changed."""
+    return message[:-1] + bytes([message[-1] ^ 1])
+
+
+# --- device sets (spec/keys.md, section 5.5) ---------------------------------------
+
+RECORD_IDS = {f"r{n}": f"0000000{n}-5e55-4d0e-8a11-00000000000{n}" for n in range(1, 5)}
+
+
+def set_seed(letter: str) -> bytes:
+    return test_secret(f"device set, key {letter}, Ed25519")
+
+
+def set_key(letter: str) -> bytes:
+    return cast(bytes, keys.public_key(set_seed(letter)))
+
+
+def set_message(kind: str, signer: str, device: str) -> tuple[bytes, Any]:
+    """A message of a case of keys_examples.py with the test keys of its letters, and what the model
+    takes of it."""
+    base, _, fault = kind.partition("+")
+    member, key = set_key(signer), set_key(device)
+    if base == keys.REMOVE:
+        m = pe.device_remove(set_seed(signer), key)
+    elif fault == keys.BAD_DEVICE[1:]:
+        key = SMALL_KEY
+        m = pe.device_add(set_seed(signer), b"", proof=SMALL_SIGNATURE, device=key)
+    elif fault == keys.BAD_PROOF[1:]:
+        m = pe.device_add(
+            set_seed(signer),
+            set_seed(device),
+            proof=keys.sign(set_seed(device), keys.proof_bytes(key, member)),
+        )
+    else:
+        m = pe.device_add(set_seed(signer), set_seed(device))
+    if fault == keys.BAD_SIGNATURE[1:]:
+        m = flip_signature(m)
+    proof = m[-128:-64] if base == keys.ADD else None  # the last field of the body of a DEVICE_ADD
+    problem = keys.device_message_problem(base, member, keys.MESSAGE_PREFIX + m[10:-64], m[-64:], key, proof)
+    if fault:
+        assert problem == (keys.SIGNATURE_INVALID if fault == keys.BAD_SIGNATURE[1:] else keys.REJECTED)
+    else:
+        assert problem == (keys.REJECTED if (base, signer) == (keys.REMOVE, device) else None)
+    return m, (base, member, key, problem)
+
+
+def set_senders(senders: list[Any], records: Any) -> list[Any]:
+    return [
+        keys.KnownSender(
+            name,
+            [set_key(k) for k in current],
+            [set_key(k) for k in removed],
+            {RECORD_IDS[rid]: (version, state) for rid, version, state in records.get(name, [])},
+        )
+        for name, current, removed in senders
+        if name != keys.REFUSED_KEYS
+    ]
+
+
+def set_receiver(senders: list[Any], records: Any) -> Any:
+    refused = [set_key(k) for name, letters, _ in senders if name == keys.REFUSED_KEYS for k in letters]
+    return keys.DeviceReceiver(set_senders(senders, records), refused)
+
+
+def device_sets_vectors(c: Category) -> None:
+    """The cases of keys_examples.py as sessions: the expected results are those written out there, and
+    the model must reach them with signed messages as it does with letters."""
+    cases: list[
+        tuple[
+            str,
+            str,
+            list[str],
+            list[Any],
+            Any,
+            list[Any],
+            Any | None,
+        ]
+    ]
+    cases = [
+        (
+            f"the table, {label}",
+            label,
+            ["keys.md 5.5"] + (["keys.md 3.4"] if "refused" in label else []),
+            before,
+            {},
+            [(None, [message], [result], None, after)],
+            None,
+        )
+        for label, before, message, result, after in keys.table_cases()
+    ]
+    cases += [
+        (
+            what,
+            name,
+            ["keys.md 5.5"]
+            + (["keys.md 3.3"] if "removed key" in what else [])
+            + (["keys.md 3.4"] if "refused" in what else []),
+            before,
+            records,
+            steps,
+            records_after,
+        )
+        for name, what, before, records, steps, records_after in keys.chain_cases()
+    ]
+    for description, _, refs, before, records, steps, records_after in cases:
+        receiver = set_receiver(before, records)
+        inputs: list[dict[str, Any]] = []
+        expected: list[dict[str, Any]] = []
+        for key, messages, results, state, after in steps:
+            built = [set_message(*m) for m in messages]
+            got = receiver.chain([model for _, model in built])
+            assert got == results, (description, got)
+            now = receiver.state()
+            assert [(s["name"], s["current"], s["removed"]) for s in now] == [
+                (name, sorted(H(set_key(k)) for k in current), sorted(H(set_key(k)) for k in removed))
+                for name, current, removed in sorted(after)
+            ], description
+            key_state, key_sender = (None, None) if key is None else receiver.key_state(set_key(key))
+            assert state is None or (key_state, key_sender) == state, description
+            inputs.append(
+                {"chain": [B(m) for m, _ in built], "key": None if key is None else H(set_key(key))}
+            )
+            expected.append(
+                {"results": got, "key_state": key_state, "key_sender": key_sender, "senders": now}
+            )
+        if records_after is not None:
+            assert (
+                receiver.state() == keys.DeviceReceiver(set_senders(steps[-1][4], records_after)).state()
+            ), description
+        c.add(
+            "device_sets",
+            description,
+            refs,
+            {
+                "senders": set_receiver(before, records).state(),
+                "refused": sorted(H(k) for k in receiver.refused),
+                "steps": inputs,
+            },
+            {"steps": expected},
+        )
 
 
 def keys_category() -> Category:
     c = Category(
         "keys",
-        "Signing keys, signatures, short fingerprints, key moves, and sealing for the relay (spec/keys.md).",
+        "Signing keys, signatures, short fingerprints, the devices of a sender, and sealing for the relay "
+        "(spec/keys.md).",
     )
     rfc_seed = bytes.fromhex("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")
     rfc_pub = keys.public_key(rfc_seed)
@@ -220,16 +348,16 @@ def keys_category() -> Category:
         )
 
     header_signed = keys.FILE_HEADER_PREFIX + CAT + hashlib.sha256(env.schemas_value.encode()).digest()
-    proof_signed = keys.KEY_MOVE_PREFIX + CAT + NEW
+    proof_signed = keys.proof_bytes(CAT, NEW)
     for label, seed, data, refs in [
         ("RFC 8032, section 7.1, TEST 1: the empty message", rfc_seed, b"", ["keys.md 2.2"]),
         ("the DATA message of keys.md, section 7.2", CAT_SEED, MEMO_SIGNED, ["keys.md 2.2", "keys.md 7.2"]),
         ("the file header of keys.md, section 7.3", CAT_SEED, header_signed, ["keys.md 2.5", "keys.md 7.3"]),
         (
-            "the proof of the KEY_MOVE of keys.md, section 7.5",
+            "the proof of the DEVICE_ADD of keys.md, section 7.5",
             NEW_SEED,
             proof_signed,
-            ["keys.md 5.1", "keys.md 7.5"],
+            ["keys.md 5.2", "keys.md 7.5"],
         ),
     ]:
         c.add(
@@ -347,10 +475,10 @@ def keys_category() -> Category:
     for label, message, ok, refs in [
         ("the DATA message of keys.md, section 7.2", MEMO_MSG, True, ["keys.md 7.2"]),
         (
-            "the KEY_MOVE of keys.md, section 7.5, signed with the old key",
-            KM_MSG,
+            "the DEVICE_ADD of keys.md, section 7.5, signed with the old phone's key",
+            ADD_MSG,
             True,
-            ["keys.md 5.1", "keys.md 7.5"],
+            ["keys.md 5.2", "keys.md 7.5"],
         ),
         ("the MANIFEST of cat-a-log of protocol.md, section 17.2", pe.m1, True, ["protocol.md 17.2"]),
         ("the OFFER of protocol.md, section 17.3", pe.offer_msg, True, ["protocol.md 17.3"]),
@@ -372,80 +500,241 @@ def keys_category() -> Category:
             accept() if ok else reject("SIGNATURE_INVALID"),
         )
 
-    # Key moves: the checks of spec/keys.md, section 5.3, steps 1 and 4, that need no known sender.
+    # Additions of devices: steps 1 and 2 of spec/keys.md, section 5.5, which need no known sender.
     c.add(
-        "key_move",
-        "the KEY_MOVE of keys.md, section 7.5",
-        ["keys.md 5.1", "keys.md 5.3", "keys.md 7.5"],
-        {"message": B(KM_MSG)},
-        accept({"old_key": H(CAT), "new_key": H(NEW), "new_encryption_key": H(NEW_X25519)}),
+        "device_add",
+        "the DEVICE_ADD of keys.md, section 7.5",
+        ["keys.md 5.2", "keys.md 5.5", "keys.md 7.5"],
+        {"message": B(ADD_MSG)},
+        accept({"member": H(CAT), "device": H(NEW)}),
     )
-    no_x = key_move(CAT_SEED, NEW_SEED, None)
+    self_added = pe.device_add(CAT_SEED, CAT_SEED)
     c.add(
-        "key_move",
-        "a KEY_MOVE without an encryption key",
-        ["keys.md 5.1", "keys.md 5.3"],
-        {"message": B(no_x)},
-        accept({"old_key": H(CAT), "new_key": H(NEW), "new_encryption_key": None}),
+        "device_add",
+        "a DEVICE_ADD of its signer's own key, which passes steps 1 and 2",
+        ["keys.md 5.2", "keys.md 5.5"],
+        {"message": B(self_added)},
+        accept({"member": H(CAT), "device": H(CAT)}),
     )
-    other_old = keys.public_key(test_secret("cat-a-log, older phone, Ed25519"))
-    bad = [
+    bad_adds = [
         (
-            "a proof made by another key than the new one",
-            key_move(CAT_SEED, NEW_SEED, NEW_X25519, keys.sign(OBF_SEED, keys.KEY_MOVE_PREFIX + CAT + NEW)),
+            "a proof made by another key than the new device's",
+            pe.device_add(CAT_SEED, NEW_SEED, proof=keys.sign(OBF_SEED, proof_signed)),
             "the proof does not verify",
         ),
         (
-            "a proof over another old key",
-            key_move(
-                CAT_SEED, NEW_SEED, NEW_X25519, keys.sign(NEW_SEED, keys.KEY_MOVE_PREFIX + other_old + NEW)
-            ),
+            "a proof over the key of another member",
+            pe.device_add(CAT_SEED, NEW_SEED, proof=keys.sign(NEW_SEED, keys.proof_bytes(OLDER, NEW))),
+            "the proof does not verify",
+        ),
+        (
+            "a proof over the two keys in the other order",
+            pe.device_add(CAT_SEED, NEW_SEED, proof=keys.sign(NEW_SEED, keys.proof_bytes(NEW, CAT))),
             "the proof does not verify",
         ),
         (
             "a proof with the prefix of a message signature",
-            key_move(CAT_SEED, NEW_SEED, NEW_X25519, keys.sign(NEW_SEED, keys.MESSAGE_PREFIX + CAT + NEW)),
+            pe.device_add(CAT_SEED, NEW_SEED, proof=keys.sign(NEW_SEED, keys.MESSAGE_PREFIX + CAT + NEW)),
             "the proof does not verify",
         ),
         (
-            "a new encryption key of small order",
-            key_move(CAT_SEED, NEW_SEED, bytes(32)),
-            "the encryption key is of small order",
+            "a device key of small order, with a proof that verifies under a lax rule",
+            pe.device_add(CAT_SEED, b"", proof=SMALL_SIGNATURE, device=SMALL_KEY),
+            "the device's key is not of order L",
         ),
     ]
-    for label, message, note in bad:
+    assert keys.verify_plain(SMALL_KEY, proof_signed, SMALL_SIGNATURE)
+    for label, message, note in bad_adds:
         c.add(
-            "key_move",
+            "device_add",
             f"reject {label}",
-            ["keys.md 5.3"],
+            ["keys.md 2.3", "keys.md 5.5"],
             {"message": B(message)},
-            reject("KEY_MOVE_REJECTED", note),
+            reject("DEVICE_REJECTED", note),
         )
-    # A new key of small order: its body is built by hand, since no seed gives such a key.
-    small_body = (
-        b"\xc3\x01"
-        + pe.fp8(pe.fingerprints["KeyMove"][1])
-        + identity
-        + keys.zigzag(1)
-        + NEW_X25519
-        + identity
-        + bytes(32)
-    )
     c.add(
-        "key_move",
-        "reject a new key of small order, with a proof that verifies under a lax rule",
-        ["keys.md 2.3", "keys.md 5.3"],
-        {"message": B(pe.make_message("KEY_MOVE", CAT_SEED, None, [(small_body, "")], check=False)[1])},
-        reject("KEY_MOVE_REJECTED", "the new key is not of order L"),
-    )
-    bad_sig = KM_MSG[:-1] + bytes([KM_MSG[-1] ^ 1])
-    c.add(
-        "key_move",
-        "reject a KEY_MOVE whose signature by the old key does not verify",
-        ["keys.md 5.3"],
-        {"message": B(bad_sig)},
+        "device_add",
+        "reject a DEVICE_ADD whose signature by the member does not verify",
+        ["keys.md 5.5"],
+        {"message": B(flip_signature(ADD_MSG))},
         reject("SIGNATURE_INVALID"),
     )
+
+    # A DEVICE_JOIN at the member whose join code was scanned (spec/keys.md, section 5.2).
+    def member(key: bytes, current: Iterable[bytes] = (), removed: Iterable[bytes] = ()) -> dict[str, Any]:
+        return {"key": H(key), "current": [H(k) for k in current], "removed": [H(k) for k in removed]}
+
+    joins: list[tuple[str, bytes, dict[str, Any], Any] | tuple[str, bytes, dict[str, Any], Any, bytes]] = [
+        (
+            "the DEVICE_JOIN of the new phone of keys.md, section 7.5: the member asks its user",
+            JOIN_MSG,
+            member(CAT),
+            accept({"device": H(NEW), "action": "ask"}),
+        ),
+        (
+            "a DEVICE_JOIN of a key that is a current key of the set already: the chain is sent again",
+            JOIN_MSG,
+            member(CAT, [OLDER, NEW]),
+            accept({"device": H(NEW), "action": "send_chain"}),
+        ),
+        (
+            "a DEVICE_JOIN whose to is another key, ignored without a report",
+            JOIN_MSG,
+            member(OLDER, [CAT]),
+            accept({"device": H(NEW), "action": "ignore"}),
+        ),
+        (
+            "reject a DEVICE_JOIN of a removed key of the member's set",
+            JOIN_MSG,
+            member(CAT, [OLDER], [NEW]),
+            reject("DEVICE_REJECTED", "a removed key is never a key of the set again"),
+        ),
+        (
+            "reject a DEVICE_JOIN whose proof was made by another key",
+            pe.device_join(NEW_SEED, CAT, proof=keys.sign(OBF_SEED, proof_signed)),
+            member(CAT),
+            reject("DEVICE_REJECTED", "the proof does not verify"),
+        ),
+        (
+            "reject a DEVICE_JOIN whose proof names another member",
+            pe.device_join(NEW_SEED, CAT, proof=keys.sign(NEW_SEED, keys.proof_bytes(OLDER, NEW))),
+            member(CAT),
+            reject("DEVICE_REJECTED", "the proof does not verify"),
+        ),
+        (
+            "reject a DEVICE_JOIN whose proof has the prefix of a message signature",
+            pe.device_join(NEW_SEED, CAT, proof=keys.sign(NEW_SEED, keys.MESSAGE_PREFIX + CAT + NEW)),
+            member(CAT),
+            reject("DEVICE_REJECTED", "the proof does not verify"),
+        ),
+        (
+            "reject a DEVICE_JOIN whose signature does not verify",
+            flip_signature(JOIN_MSG),
+            member(CAT),
+            reject("SIGNATURE_INVALID"),
+        ),
+        (
+            "a second DEVICE_JOIN from the same key is answered as the first: the question stays",
+            JOIN_MSG,
+            member(CAT),
+            accept({"device": H(NEW), "action": "ask"}),
+            NEW,
+        ),
+        (
+            "a second DEVICE_JOIN from the same key, a current key by now: the chain is sent again",
+            JOIN_MSG,
+            member(CAT, [NEW]),
+            accept({"device": H(NEW), "action": "send_chain"}),
+            NEW,
+        ),
+        (
+            "a DEVICE_JOIN from another key than the first of the join code, ignored without a report",
+            JOIN_MSG,
+            member(CAT),
+            accept({"device": H(NEW), "action": "ignore"}),
+            OBF,
+        ),
+    ]
+    for label, message, who, expected, *more in joins:
+        first = more[0] if more else None
+        _, new_key, body, signed_bytes, signature = pe.device_parts(message)
+        got = (
+            keys.SIGNATURE_INVALID
+            if keys.verify_problem(new_key, signed_bytes, signature)
+            else keys.join_action(
+                bytes.fromhex(who["key"]),
+                [bytes.fromhex(k) for k in who["current"]],
+                [bytes.fromhex(k) for k in who["removed"]],
+                body["to"],
+                new_key,
+                body["proof"],
+                first,
+            )
+        )
+        assert got == (
+            expected["accept"]["action"] if "accept" in expected else expected["reject"]["error"]
+        ), label
+        c.add(
+            "device_join",
+            label,
+            ["keys.md 5.2", "transports.md 4.7"],
+            {"message": B(message), "member": who, "first": None if first is None else H(first)},
+            expected,
+        )
+
+    # The chain a new device gets in answer to its DEVICE_JOIN (spec/keys.md, section 5.2, step 5).
+    earlier = [pe.device_add(OLDER_SEED, CAT_SEED), pe.device_remove(CAT_SEED, OLDER)]
+    no_add = "no DEVICE_ADD of the new device by the scanned key with its proof"
+    removed_again = "a DEVICE_REMOVE of the new device after its addition"
+    chains: list[tuple[str, list[bytes], str | None]] = [
+        ("a chain of the DEVICE_ADD of keys.md, section 7.5, alone", [ADD_MSG], None),
+        (
+            "a chain with earlier messages, signed with keys the new device has not met",
+            earlier + [ADD_MSG],
+            None,
+        ),
+        (
+            "a chain in which the DEVICE_ADD of the new device is not the last message",
+            [earlier[0], ADD_MSG, earlier[1], pe.device_add(CAT_SEED, OBF_SEED)],
+            None,
+        ),
+        (
+            "reject a chain with a DEVICE_REMOVE of the new device after its DEVICE_ADD",
+            [ADD_MSG, pe.device_remove(CAT_SEED, NEW)],
+            removed_again,
+        ),
+        ("reject an empty chain", [], no_add),
+        (
+            "reject a chain with the DEVICE_ADD of another device only",
+            [pe.device_add(CAT_SEED, OBF_SEED)],
+            no_add,
+        ),
+        (
+            "reject a chain whose DEVICE_ADD of the new device is signed with a key that was not scanned",
+            [pe.device_add(OLDER_SEED, NEW_SEED)],
+            no_add,
+        ),
+        (
+            "reject a chain whose DEVICE_ADD of the new device carries another proof",
+            [pe.device_add(CAT_SEED, NEW_SEED, proof=keys.sign(NEW_SEED, keys.proof_bytes(OLDER, NEW)))],
+            no_add,
+        ),
+        (
+            "reject a chain with an earlier message whose signature does not verify",
+            [flip_signature(earlier[0]), earlier[1], ADD_MSG],
+            "a signature does not verify",
+        ),
+        (
+            "reject a chain whose DEVICE_ADD of the new device has a signature that does not verify",
+            [flip_signature(ADD_MSG)],
+            "a signature does not verify",
+        ),
+    ]
+    for label, chain, why in chains:
+        parts = [pe.device_parts(m) for m in chain]
+        assert why == keys.join_chain_problem(
+            [
+                (
+                    kind,
+                    signer,
+                    d["device"],
+                    d.get("proof"),
+                    keys.verify_problem(signer, signed_bytes, signature) is None,
+                )
+                for kind, signer, d, signed_bytes, signature in parts
+            ],
+            CAT,
+            NEW,
+        ), label
+        c.add(
+            "join_chain",
+            label,
+            ["keys.md 5.2", "transports.md 4.7"],
+            {"chain": [B(m) for m in chain], "member": H(CAT), "device": H(NEW)},
+            accept() if why is None else reject("JOIN_INVALID", why),
+        )
+
+    device_sets_vectors(c)
 
     # Padding (spec/keys.md, section 4.4).
     table = {len(MEMO_MSG): 1024, 1023: 1024, 1024: 1088, 4000: 4096, 100000: 100352, 16777216: 17301504}
@@ -463,7 +752,7 @@ def keys_category() -> Category:
     # Sealing: the runner opens what the library seals, with the receiver's test key.
     for label, message in [
         ("the DATA message of keys.md, section 7.2", MEMO_MSG),
-        ("the KEY_MOVE of keys.md, section 7.5", KM_MSG),
+        ("the DEVICE_ADD of keys.md, section 7.5", ADD_MSG),
     ]:
         n = len(message)
         c.add(
@@ -486,7 +775,7 @@ def keys_category() -> Category:
     published = tx.SEALED
     assert (
         hashlib.sha256(published).hexdigest()
-        == "7cbe47862344527d93735c97159cc8cf4d3631647233cac735553c968e6c2bc8"
+        == "64a9988bd3e1e8210d592e29115d5b3252d2e75be5c219ca67583608cfdb878a"
     )
     other_sk = test_secret("cat-a-log, new phone, X25519")
     opens = [
@@ -717,20 +1006,24 @@ def encoding_category() -> Category:
         accept({"canonical_form": pcf, "fingerprint": H(pe.fp8(fp))}),
     )
     published = {
-        "Envelope": 0xA2E1E84FE5E40C7D,
-        "Manifest": 0x6B08ECB5D38003B3,
-        "KeyMove": 0xA9E20AFEA72F2876,
+        "Envelope": 0xA89ECEB9716F3016,
+        "Manifest": 0xA59EEB4C88A51F3E,
+        "DeviceJoin": 0xDFF876FAB5FECF2F,
+        "DeviceAdd": 0xC60D1EF44B7B3131,
+        "DeviceRemove": 0xD0F57582AAB2AADC,
         "Offer": 0x415463CACA7A687D,
         "Accept": 0x6B244FC3913D82AB,
         "Decline": 0x22D2BD11845492C0,
-        "Ack": 0xEE25C7CCA8166ED8,
-        "Error": 0x1506925136F99A1D,
-        "QrPayload": 0x6BBD68FE56640B90,
+        "Ack": 0x38DD09198076E05C,
+        "Error": 0x7CA5B3D13DBCF383,
+        "QrPayload": 0xDDBCA858F745D131,
     }
     sections = {
         "Envelope": "envelope.md 10.1",
         "Manifest": "manifest.md 9",
-        "KeyMove": "keys.md 6",
+        "DeviceJoin": "keys.md 6",
+        "DeviceAdd": "keys.md 6",
+        "DeviceRemove": "keys.md 6",
         "QrPayload": "transports.md 6",
     }
     for name, want in published.items():
@@ -750,7 +1043,9 @@ def encoding_category() -> Category:
     goods = [
         ("the DATA message of envelope.md, section 10.2", MEMO_MSG, ["envelope.md 10.2", "keys.md 7.2"]),
         ("the DATA message with its record id in upper case, kept as received", upper, ["envelope.md 7"]),
-        ("the KEY_MOVE of keys.md, section 7.5", KM_MSG, ["keys.md 7.5"]),
+        ("the DEVICE_ADD of keys.md, section 7.5", ADD_MSG, ["keys.md 7.5"]),
+        ("the DEVICE_JOIN that carried the proof of keys.md, section 7.5", JOIN_MSG, ["keys.md 5.2"]),
+        ("a DEVICE_REMOVE of the old phone by the new one", pe.device_remove(NEW_SEED, CAT), ["keys.md 5.3"]),
         ("the MANIFEST of cat-a-log of manifest.md, section 10.3", pe.m1, ["manifest.md 10.3"]),
         ("the MANIFEST of Old Brain Fix of manifest.md, section 10.3", pe.m2, ["manifest.md 10.3"]),
         ("the OFFER of protocol.md, section 17.3", pe.offer_msg, ["protocol.md 17.3"]),
@@ -771,6 +1066,17 @@ def encoding_category() -> Category:
     above = signed(CAT_SEED, "DATA", (env.RECORD_ID, 1), bytes(pad_len + 1))
     assert len(above) == MAX_MESSAGE + 1
     goods.append(("a message of exactly 16 MiB", at_limit, ["envelope.md 8"]))
+    # The kinds that come with later tickets: format 1 has their symbols, and no document their bodies.
+    later = [k for k in pe.KINDS if k not in pe.BODY_SCHEMA and k not in pe.RECORD_KINDS]
+    assert later == ["CHANGE", "RESYNC", "FORWARD", "WITHDRAW", "PROPOSAL", "PROPOSAL_REPLY"]
+    goods += [
+        (
+            f"an envelope of the kind {kind}, which no document defines yet, with an empty body",
+            signed(CAT_SEED, kind, None, b""),
+            ["envelope.md 2.2"],
+        )
+        for kind in later
+    ]
     for label, m, refs in goods:
         c.add(
             "decode_message",
@@ -807,8 +1113,8 @@ def encoding_category() -> Category:
             ["envelope.md 2.1", "keys.md 2.2"],
         ),
         (
-            "kind index 9, which format 1 does not have",
-            m[:11] + keys.zigzag(9) + m[12:],
+            "kind index 17, which format 1 does not have",
+            m[:11] + keys.zigzag(len(pe.KINDS)) + m[12:],
             "INVALID_MESSAGE",
             ["envelope.md 2.2"],
         ),
@@ -859,7 +1165,7 @@ def encoding_category() -> Category:
     # The bodies of the kinds whose schema the specification publishes.
     for label, msg, refs in goods:
         d: Any = fastavro.schemaless_reader(io.BytesIO(msg[10:]), pe.raw["Envelope"], pe.raw["Envelope"])
-        if d["kind"] in ("DATA", "DELETE"):
+        if d["kind"] not in pe.BODY_SCHEMA:
             continue
         name = pe.BODY_SCHEMA[d["kind"]]
         body = d["body"]
@@ -890,17 +1196,17 @@ def encoding_category() -> Category:
             ack_body[:2] + pe.fp8(pe.fingerprints["Error"][1]) + ack_body[10:],
         ),
         (
-            "an ACK body with an outcome index of 5",
+            "an ACK body with an outcome index of 6",
             "ACK",
-            ack_body[:outcome_at] + keys.zigzag(5) + ack_body[outcome_at + 1 :],
+            ack_body[:outcome_at] + keys.zigzag(len(pe.OUTCOME["symbols"])) + ack_body[outcome_at + 1 :],
         ),
         ("an empty body for an ACK", "ACK", b""),
         (
-            "a MANIFEST body of the KEY_MOVE schema",
+            "a MANIFEST body of the DEVICE_ADD schema",
             "MANIFEST",
             cast(
                 Any,
-                fastavro.schemaless_reader(io.BytesIO(KM_MSG[10:]), pe.raw["Envelope"], pe.raw["Envelope"]),
+                fastavro.schemaless_reader(io.BytesIO(ADD_MSG[10:]), pe.raw["Envelope"], pe.raw["Envelope"]),
             )["body"],
         ),
     ]:
@@ -915,7 +1221,7 @@ def encoding_category() -> Category:
     for label, msg in [
         ("the DATA message of envelope.md, section 10.2", MEMO_MSG),
         ("the DATA message with its record id in upper case", upper),
-        ("the KEY_MOVE of keys.md, section 7.5", KM_MSG),
+        ("the DEVICE_ADD of keys.md, section 7.5", ADD_MSG),
         ("the MANIFEST of cat-a-log of manifest.md, section 10.3", pe.m1),
         ("a DELETE, with an empty body", pe.del_unknown),
     ]:
@@ -1771,7 +2077,7 @@ def run_session(
 ) -> None:
     """Play the steps against a fresh model app of protocol_examples.py; the result of each step is the
     expected one. Each step names what the script itself expects, and the model's result must match it."""
-    app = pe.App("app", seed, manifest, readers, lambda n: n in takes)
+    app = pe.App("app", seed, manifest, readers, lambda n: n in takes, peer_key=peer)
     inputs: list[dict[str, Any]]
     expected: list[dict[str, Any]]
     inputs, expected = [], []
@@ -1783,8 +2089,8 @@ def run_session(
             what, replies = app.receive(m)
             answers, errors = normalize_replies(replies)
             outcome = what if what in ("APPLIED", "DUPLICATE", "STALE") else None
-            close = what == "no common format: close"
-            if want in ("APPLIED", "DUPLICATE", "STALE"):
+            close = what.endswith(": close")
+            if want in ("APPLIED", "DUPLICATE", "STALE") and not opts.get("device"):
                 assert what == want, (label, what, want)
             elif want == "taken":
                 assert not replies and (
@@ -1797,6 +2103,20 @@ def run_session(
                 )
             elif want == "answers":
                 assert answers == opts["answers"] and not errors, (label, answers)
+            elif opts.get("device"):
+                # An addition or a removal of a device that gets no reply (spec/protocol.md, section 3.3).
+                assert not replies and what == f"device message: {want}", (label, what)
+                outcome = None
+            elif want == "closes":
+                assert not replies and what == "the connection key is removed: close", (label, what)
+            elif want == "held":
+                assert not replies and what == "rejected DEVICE_REJECTED, reported after the MANIFEST", (
+                    label,
+                    what,
+                )
+            elif want == "taken, with reports":
+                assert what.endswith("taken") and not answers, (label, what)
+                assert [(e["code"], e["message_hash"]) for e in errors] == opts["reports"], (label, errors)
             elif want.startswith("ERROR "):
                 assert (
                     what == "rejected " + want[6:] and len(errors) == 1 and errors[0]["code"] == want[6:]
@@ -1869,7 +2189,7 @@ def protocol_category() -> Category:
         "The steps of an exchange in a live connection, played against one app: manifests, "
         "offers, answers, record messages, acknowledgements and errors (spec/protocol.md).",
     )
-    assert len(pe.checks) == 60, "spec/protocol.md, section 16, names 60 cases besides the exchange"
+    assert len(pe.checks) == 71, "spec/protocol.md, section 16, names 71 cases besides the exchange"
     want: Any
     for label, own, theirs, want in [
         ("the highest common format", [1, 2], [2, 3], 2),
@@ -2069,7 +2389,6 @@ def protocol_category() -> Category:
         ("query", "accepted", P_, {"accepted": False}),
         r(pe.obf_app.reply("ACCEPT", {"to": pe.OTHER, "offer_id": OID, "types": [A]}), "ignored"),
         r(pe.obf_app.reply("ACCEPT", {"to": CAT, "offer_id": PID, "types": [P_]}), "ignored"),
-        r(pe.key_move_ack, "taken"),
     ]
     run_session(
         c,
@@ -2122,7 +2441,7 @@ def protocol_category() -> Category:
             offered
             + [
                 r(
-                    pe.obf_app.reply("ACK", {"to": CAT, "records": entries, "moved_from": None}),
+                    pe.obf_app.reply("ACK", {"to": CAT, "records": entries}),
                     "ERROR INVALID_MESSAGE",
                     **may_close,
                 )
@@ -2247,7 +2566,6 @@ def protocol_category() -> Category:
                             "kept_fields": ["location"] if o == "MERGED" else [],
                         }
                     ],
-                    "moved_from": None,
                 },
             )
             for o in (first, second)
@@ -2268,6 +2586,101 @@ def protocol_category() -> Category:
                 ("query", "outcome", (AID, 4), {"outcome": stands}),
             ],
         )
+
+    # Additions and removals of devices in a connection (spec/protocol.md, section 3.3). Old Brain Fix
+    # knows cat-a-log by the key of the old phone, the connection key.
+    def device(m: bytes, result: str) -> tuple[str, bytes, str, dict[str, Any]]:
+        return r(m, result, device=True)
+
+    def rejected(m: bytes) -> tuple[str, str]:
+        return ("DEVICE_REJECTED", H(hashlib.sha256(m).digest()))
+
+    remove_new = pe.device_remove(CAT_SEED, pe.OTHER)
+    device_refs = ["protocol.md 3.1", "protocol.md 3.3", "keys.md 5.5"]
+    device_sessions: list[tuple[str, list[str], list[Any]]] = [
+        (
+            "a chain before the MANIFEST and a removal after it are applied or ignored without a reply",
+            ["protocol.md 9.2"],
+            [
+                device(pe.add_new, keys.APPLIED),
+                device(pe.add_new, keys.IGNORED),
+                device(pe.unplaced, keys.NOT_PLACED),
+                r(pe.m1, "taken"),
+                device(remove_new, keys.APPLIED),
+                device(remove_new, keys.IGNORED),
+                device(pe.add_new, keys.IGNORED),
+            ],
+        ),
+        (
+            "a DEVICE_JOIN in a connection that no join code opened is ignored without a report",
+            ["keys.md 5.2"],
+            [
+                r(pe.device_join(CAT_SEED, OBF), "ignored"),
+                r(pe.m1, "taken"),
+                r(pe.device_join(CAT_SEED, OBF), "ignored"),
+            ],
+        ),
+        (
+            "a rejected DEVICE_ADD before the MANIFEST is reported once the MANIFEST has come",
+            ["protocol.md 8.3"],
+            [
+                r(pe.bad_proof, "held"),
+                device(pe.add_new, keys.APPLIED),
+                r(pe.m1, "taken, with reports", reports=[rejected(pe.bad_proof)]),
+            ],
+        ),
+        (
+            "a DEVICE_REMOVE signed with a removed key, and one of its signer's own key, are reported to "
+            "the connection key",
+            ["protocol.md 8.3", "protocol.md 9.1"],
+            [
+                r(pe.m1, "taken"),
+                device(pe.add_new, keys.APPLIED),
+                device(remove_new, keys.APPLIED),
+                r(pe.late_removal, "ERROR DEVICE_REJECTED"),
+                r(pe.device_remove(CAT_SEED, CAT), "ERROR DEVICE_REJECTED"),
+            ],
+        ),
+        (
+            "the connection key is removed by its set: the connection is closed, and in a new connection "
+            "its MANIFEST is rejected without a report",
+            ["keys.md 3.3"],
+            [
+                device(pe.add_new, keys.APPLIED),
+                r(pe.device_remove(pe.OTHER_SEED, CAT), "closes"),
+                ("close",),
+                r(pe.m1, "ignored"),
+            ],
+        ),
+        (
+            "a DEVICE_ADD whose signature does not verify is reported, and Old Brain Fix may close the "
+            "connection",
+            ["keys.md 2.3", "protocol.md 8.3"],
+            [r(pe.m1, "taken"), r(pe.broken_add, "ERROR SIGNATURE_INVALID", **may_close)],
+        ),
+    ]
+    for label, refs, steps in device_sessions:
+        run_session(c, label, device_refs + refs, OBF_SEED, me.OLD_BRAIN_FIX, {}, set(), CAT, steps)
+    # The other way round: cat-a-log has an accepted offer to Old Brain Fix, whose key is then removed.
+    run_session(
+        c,
+        "the offers made to a key end when its sender removes the key, and the connection is closed",
+        ["protocol.md 4.3", "keys.md 5.5"],
+        CAT_SEED,
+        me.CAT_A_LOG,
+        {},
+        set(),
+        OBF,
+        [
+            r(pe.m2, "taken"),
+            ("offer", OID, [(ap_text, 1)]),
+            r(pe.accept_msg, "taken"),
+            ("query", "accepted", A, {"accepted": True}),
+            device(pe.device_add(OBF_SEED, pe.UNKNOWN_SEED), keys.APPLIED),
+            r(pe.device_remove(pe.UNKNOWN_SEED, OBF), "closes"),
+            ("query", "accepted", A, {"accepted": False}),
+        ],
+    )
     return c
 
 
@@ -2286,8 +2699,10 @@ def qr_category() -> Category:
         return meaning(tx.qr_json, q)
 
     largest_text = tx.qr_text(tx.encode_qr(tx.LARGEST))
-    key_only = {"signing_key": OBF, "encryption_key": None, "local": None, "relay": None}
+    key_only = tx.KEY_ALONE
     key_only_text = tx.qr_text(tx.encode_qr(key_only))
+    join_text = tx.qr_text(tx.encode_qr(tx.JOIN_QR))
+    join_local = dict(tx.JOIN_QR, encryption_key=None, relay=None)
     text = tx.text
     mixed = "axt:" + "".join(ch.lower() if i % 2 else ch for i, ch in enumerate(text[4:]))
     for label, t, q in [
@@ -2296,16 +2711,18 @@ def qr_category() -> Category:
         ("the same text in mixed case", mixed, tx.QR),
         ("a code with the signing key alone", key_only_text, key_only),
         ("the largest valid payload, every field at its largest", largest_text, tx.LARGEST),
+        ("a join code: the code of transports.md, section 7.2, with join true", join_text, tx.JOIN_QR),
+        ("a join code with local alone", tx.qr_text(tx.encode_qr(join_local)), join_local),
     ]:
         assert tx.parse_qr(t) == q, label
         c.add(
             "parse_qr",
             label,
-            ["transports.md 3.1", "transports.md 3.2"],
+            ["transports.md 3.1", "transports.md 3.2"] + (["transports.md 4.7"] if q["join"] else []),
             {"text": t},
             accept({"payload": qr_meaning(q)}),
         )
-    assert len(tx.QR_NEGATIVE) == 20, "spec/transports.md, section 6, names 20 invalid payloads and texts"
+    assert len(tx.QR_NEGATIVE) == 21, "spec/transports.md, section 6, names 21 invalid payloads and texts"
     for label, t, reason in tx.QR_NEGATIVE:
         got = tx.parse_qr(t)
         assert isinstance(got, str) and reason in got, label
@@ -2321,16 +2738,15 @@ def qr_category() -> Category:
         ("the payload of transports.md, section 7.2", tx.payload, text),
         ("a payload with the signing key alone", tx.encode_qr(key_only), key_only_text),
         ("the largest valid payload", tx.encode_qr(tx.LARGEST), largest_text),
+        ("the payload of a join code", tx.encode_qr(tx.JOIN_QR), join_text),
     ]:
         assert tx.qr_text(payload) == t and len(t) <= tx.MAX_QR_TEXT
         c.add("qr_text", label, ["transports.md 3.2"], {"payload": B(payload)}, accept({"text": t}))
-    assert len(text) == 230 and tx.MAX_QR_TEXT == 694 and tx.MAX_QR_PAYLOAD == 431
+    assert len(text) == 232 and tx.MAX_QR_TEXT == 696 and tx.MAX_QR_PAYLOAD == 432
     return c
 
 
 # --- local network (spec/transports.md, section 4) -----------------------------------------
-
-OLDER_SEED = test_secret("cat-a-log, older phone, Ed25519")
 
 
 def local_category() -> Category:
@@ -2399,7 +2815,7 @@ def local_category() -> Category:
         tx.ping_frame,
         tx.frame,
     )
-    move = key_move(OLDER_SEED, CAT_SEED, None)  # a key move to the key of the client's HELLO
+    chain = [frame(tx.MESSAGE, tx.chain_add), frame(tx.MESSAGE, tx.chain_remove)]
     assert connection(
         "the server takes the client's HELLO, the DATA of protocol.md, section 17.5, and a PING",
         ["transports.md 7.3", "transports.md 7.4"],
@@ -2416,11 +2832,18 @@ def local_category() -> Category:
         expected_key=OBF,
     ) == ["open"]
     assert connection(
-        "a KEY_MOVE signed with an earlier key at the start, then the sender's messages",
+        "a chain at the start, with a DEVICE_ADD signed with another key, then the sender's messages",
+        ["protocol.md 3.3", "keys.md 5.4"],
+        S,
+        CH,
+        [hello_c, *chain, data],
+    ) == ["open", "message", "message", "message"]
+    assert connection(
+        "a DEVICE_REMOVE signed with another key after another message",
         ["protocol.md 3.3"],
         S,
         CH,
-        [hello_c, frame(tx.MESSAGE, move), data],
+        [hello_c, data, frame(tx.MESSAGE, tx.foreign_remove)],
     ) == ["open", "message", "message"]
     connection(
         "a MESSAGE above 16 MiB is skipped and reported, or the connection closed",
@@ -2457,7 +2880,13 @@ def local_category() -> Category:
         ("a PING with a payload", S, CH, [hello_c, frame(tx.PING, b"\x00")], None),
         ("an unknown frame type", S, CH, [hello_c, frame(4, b"")], None),
         ("a frame cut short by the end of the connection", S, CH, [hello_c, data[:-1]], None),
-        ("a KEY_MOVE after another message", S, CH, [hello_c, data, frame(tx.MESSAGE, move)], None),
+        (
+            "a DEVICE_JOIN whose sender is not the key of the HELLO",
+            S,
+            CH,
+            [hello_c, frame(tx.MESSAGE, tx.foreign_join)],
+            None,
+        ),
     ]
     assert len(closing) == 15 == sum(x.startswith("closed: ") for x in tx.checks), (
         "spec/transports.md, section 6, names 15"
@@ -3120,12 +3549,15 @@ def file_category() -> Category:
         sender: bytes,
         records: list[Any],
         manifest: Any = "none",
-        moves: Iterable[tuple[bytes, bytes]] = (),
+        chain: Iterable[tuple[str, bytes, bytes, str]] = (),
     ) -> dict[str, Any]:
         return accept(
             {
                 "sender": H(sender),
-                "key_moves": [{"from": H(a), "to": H(b)} for a, b in moves],
+                "chain": [
+                    {"kind": kind, "signer": H(signer), "device": H(device), "result": result}
+                    for kind, signer, device, result in chain
+                ],
                 "manifest": manifest,
                 "records": records,
             }
@@ -3178,20 +3610,81 @@ def file_category() -> Category:
         ["envelope.md 4.1"],
     )
 
-    move1 = key_move(OLDER_SEED, CAT_SEED, None)
-    move2 = KM_MSG  # cat-a-log, old phone to new phone (spec/keys.md, section 7.5)
-    older = keys.public_key(OLDER_SEED)
+    # The chain of cat-a-log: an older phone added the old phone, which added the new one (spec/keys.md,
+    # section 7.5). The reader knows the file's sender alone, and learns the earlier devices backwards.
+    ADD_, REMOVE_ = keys.ADD, keys.REMOVE
+    add1 = pe.device_add(OLDER_SEED, CAT_SEED)
+    older = OLDER
     full = container(
-        [move1, move2, MAN(NEW_SEED), D(1, seed=NEW_SEED), DEL(2, 3, NEW_SEED)],
+        [add1, ADD_MSG, MAN(NEW_SEED), D(1, seed=NEW_SEED), DEL(2, 3, NEW_SEED)],
         [schema(A_)],
         seed=NEW_SEED,
         codec="deflate",
     )
     add(
-        "key moves, a MANIFEST and record messages, in that order",
+        "a chain, a MANIFEST and record messages, in that order",
         full,
-        read(NEW, [rec(1, 1, "APPLIED"), rec(2, 3, "APPLIED")], "used", [(older, CAT), (CAT, NEW)]),
-        ["transports.md 2.1", "keys.md 5.2", "manifest.md 7"],
+        read(
+            NEW,
+            [rec(1, 1, "APPLIED"), rec(2, 3, "APPLIED")],
+            "used",
+            [(ADD_, older, CAT, keys.APPLIED), (ADD_, CAT, NEW, keys.APPLIED)],
+        ),
+        ["transports.md 2.1", "keys.md 5.4", "keys.md 5.5", "manifest.md 7"],
+    )
+    unknown = keys.public_key(pe.UNKNOWN_SEED)
+    remove_new = pe.device_remove(CAT_SEED, NEW)
+    add(
+        "a chain with messages that the reader cannot place, ignores or rejects by the table: they are not "
+        "applied, and the records are",
+        container(
+            [
+                pe.device_add(pe.UNKNOWN_SEED, OBF_SEED),
+                pe.device_remove(CAT_SEED, older),
+                ADD_MSG,
+                ADD_MSG,
+                remove_new,
+                pe.device_add(NEW_SEED, OBF_SEED),
+                D(20),
+            ],
+            [schema(A_)],
+        ),
+        read(
+            CAT,
+            [rec(20, 1, "APPLIED")],
+            "none",
+            [
+                (ADD_, unknown, OBF, keys.NOT_PLACED),
+                (REMOVE_, CAT, older, keys.IGNORED),
+                (ADD_, CAT, NEW, keys.APPLIED),
+                (ADD_, CAT, NEW, keys.IGNORED),
+                (REMOVE_, CAT, NEW, keys.APPLIED),
+                (ADD_, NEW, OBF, keys.REJECTED),
+            ],
+        ),
+        ["keys.md 5.5"],
+    )
+    add(
+        "a chain in which a DEVICE_REMOVE stands before the DEVICE_ADD of its device: it is kept and applied",
+        container([remove_new, ADD_MSG, D(26)], [schema(A_)]),
+        read(
+            CAT,
+            [rec(26, 1, "APPLIED")],
+            "none",
+            [(REMOVE_, CAT, NEW, keys.APPLIED), (ADD_, CAT, NEW, keys.APPLIED)],
+        ),
+        ["keys.md 5.5"],
+    )
+    add(
+        "a chain after which the key in axt.sender is a removed key: no record of the file is applied",
+        container([ADD_MSG, pe.device_remove(NEW_SEED, CAT), D(21), DEL(22, 2)], [schema(A_)]),
+        read(
+            CAT,
+            [rec(21, 1, "SENDER_REMOVED"), rec(22, 2, "SENDER_REMOVED")],
+            "none",
+            [(ADD_, CAT, NEW, keys.APPLIED), (REMOVE_, NEW, CAT, keys.APPLIED)],
+        ),
+        ["keys.md 3.3", "keys.md 5.5"],
     )
     add(
         "a file that only carries its writer's MANIFEST",
@@ -3315,7 +3808,6 @@ def file_category() -> Category:
                         "kept_fields": [],
                     }
                 ],
-                "moved_from": None,
             },
             check=False,
         )[0],
@@ -3336,7 +3828,8 @@ def file_category() -> Category:
         )[0],
         check=False,
     )[1]
-    bad_proof = key_move(OLDER_SEED, CAT_SEED, None, keys.sign(OBF_SEED, keys.KEY_MOVE_PREFIX + older + CAT))
+    bad_proof = pe.device_add(OLDER_SEED, CAT_SEED, proof=keys.sign(OBF_SEED, keys.proof_bytes(older, CAT)))
+    small_device = pe.device_add(CAT_SEED, b"", proof=SMALL_SIGNATURE, device=SMALL_KEY)
     datum = MEMO_MSG[10:]
     rejects = [
         (
@@ -3408,19 +3901,39 @@ def file_category() -> Category:
         ("an OFFER", container([offer], [schema(PT)]), ["transports.md 2.1"]),
         ("a message of another sender", container([D(14, seed=OBF_SEED)], [schema(A_)]), ["keys.md 2.5"]),
         (
-            "a KEY_MOVE after a record message",
-            container([D(15), move1], [schema(A_)]),
-            ["keys.md 5.2", "transports.md 2.1"],
+            "a DEVICE_ADD after a record message",
+            container([D(15), add1], [schema(A_)]),
+            ["keys.md 5.4", "transports.md 2.1"],
         ),
         (
-            "a chain of key moves that does not end at axt.sender",
-            container([move2, D(16)], [schema(A_)]),
-            ["keys.md 5.2"],
+            "a DEVICE_REMOVE after the MANIFEST",
+            container([MAN(), pe.device_remove(CAT_SEED, NEW), D(16)], [schema(A_)]),
+            ["keys.md 5.4", "transports.md 2.1"],
         ),
         (
-            "a KEY_MOVE whose proof does not verify",
+            "a DEVICE_ADD whose proof does not verify",
             container([bad_proof, D(17)], [schema(A_)]),
-            ["keys.md 5.3"],
+            ["keys.md 5.5"],
+        ),
+        (
+            "a DEVICE_ADD whose device key is of small order",
+            container([small_device, D(23)], [schema(A_)]),
+            ["keys.md 2.3", "keys.md 5.5"],
+        ),
+        (
+            "a DEVICE_REMOVE of its signer's own key",
+            container([pe.device_remove(CAT_SEED, CAT), D(27)], [schema(A_)]),
+            ["keys.md 5.3", "keys.md 5.5"],
+        ),
+        (
+            "a DEVICE_REMOVE whose signature does not verify",
+            container([flip_signature(pe.device_remove(CAT_SEED, NEW)), D(24)], [schema(A_)]),
+            ["keys.md 5.5"],
+        ),
+        (
+            "a DEVICE_JOIN",
+            container([JOIN_MSG, D(25, seed=NEW_SEED)], [schema(A_)], seed=NEW_SEED),
+            ["transports.md 2.1"],
         ),
         ("a second MANIFEST", container([MAN(), MAN(), D(18)], [schema(A_)]), ["transports.md 2.1"]),
         ("a MANIFEST after a record message", container([D(19), MAN()], [schema(A_)]), ["transports.md 2.1"]),
@@ -3501,7 +4014,7 @@ def same_values(v: Any) -> Any:
 # spec/conformance.md, section 7.4, counts them.
 COUNTS = {
     "encoding": (
-        {"fingerprint": 16, "decode_message": 30, "decode_body": 14, "encode_message": 5},
+        {"fingerprint": 18, "decode_message": 38, "decode_body": 16, "encode_message": 5},
         {"decode_message": 17, "decode_body": 6},
     ),
     "types": ({"fingerprint": 8, "decode_record": 63}, {"decode_record": 21}),
@@ -3521,7 +4034,10 @@ COUNTS = {
             "check_encryption_key": 10,
             "short_fingerprint": 3,
             "verify_message": 8,
-            "key_move": 8,
+            "device_add": 8,
+            "device_join": 11,
+            "join_chain": 10,
+            "device_sets": 57,
             "padded_length": 10,
             "seal": 2,
             "open": 10,
@@ -3531,14 +4047,16 @@ COUNTS = {
             "check_signing_key": 12,
             "check_encryption_key": 8,
             "verify_message": 3,
-            "key_move": 6,
+            "device_add": 6,
+            "device_join": 5,
+            "join_chain": 7,
             "open": 8,
         },
     ),
-    "protocol": ({"choose_format": 3, "session": 23}, {}),
-    "file": ({"read_file": 46}, {"read_file": 31}),
-    "qr": ({"parse_qr": 25, "qr_text": 3}, {"parse_qr": 20}),
-    "local": ({"hello_frame": 2, "connection": 19}, {}),
+    "protocol": ({"choose_format": 3, "session": 30}, {}),
+    "file": ({"read_file": 53}, {"read_file": 35}),
+    "qr": ({"parse_qr": 28, "qr_text": 4}, {"parse_qr": 21}),
+    "local": ({"hello_frame": 2, "connection": 20}, {}),
     "relay": ({"mailbox_id": 2, "request": 7, "reaction": 28, "listing": 3}, {}),
     "relay-server": ({"relay": 2}, {}),
 }

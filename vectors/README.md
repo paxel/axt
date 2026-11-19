@@ -13,7 +13,7 @@ This directory holds the test vectors of AXT: bytes with their expected meaning,
 | [metadata/metadata.json](metadata/metadata.json)                 | Labels, formats, patterns and limits of fields ([spec/metadata.md](../spec/metadata.md))      |
 | [records/records.json](records/records.json)                     | Applying record messages ([spec/records.md](../spec/records.md))                              |
 | [manifest/manifest.json](manifest/manifest.json)                 | Validity of a manifest and which types fit ([spec/manifest.md](../spec/manifest.md))          |
-| [keys/keys.json](keys/keys.json)                                 | Signatures, key moves, sealing ([spec/keys.md](../spec/keys.md))                              |
+| [keys/keys.json](keys/keys.json)                                 | Signatures, device sets, sealing ([spec/keys.md](../spec/keys.md))                            |
 | [protocol/protocol.json](protocol/protocol.json)                 | One app in a live connection ([spec/protocol.md](../spec/protocol.md))                        |
 | [file/file.json](file/file.json)                                 | Reading a file ([spec/transports.md](../spec/transports.md), section 2)                       |
 | [qr/qr.json](qr/qr.json)                                         | The QR code ([spec/transports.md](../spec/transports.md), section 3)                          |

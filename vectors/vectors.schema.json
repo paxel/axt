@@ -272,6 +272,48 @@
     {
      "if": {
       "properties": {
+       "op": {"const": "device_add"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["message"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "device_join"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["message", "member", "first"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "device_sets"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["senders", "refused", "steps"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
        "op": {"const": "fingerprint"}
       }
      },
@@ -314,13 +356,13 @@
     {
      "if": {
       "properties": {
-       "op": {"const": "key_move"}
+       "op": {"const": "join_chain"}
       }
      },
      "then": {
       "properties": {
        "input": {
-        "required": ["message"]
+        "required": ["chain", "member", "device"]
        }
       }
      }
@@ -762,7 +804,10 @@
          "enum": [
           "check_encryption_key",
           "check_signing_key",
-          "key_move",
+          "device_add",
+          "device_join",
+          "device_sets",
+          "join_chain",
           "open",
           "padded_length",
           "public_key",

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 """Produce and check the examples of spec/keys.md.
 
-Signs, seals and moves keys with fixed test keys, prints the results as
+Signs, seals and adds a device with fixed test keys, prints the results as
 annotated hex, and checks them:
 
 - a pure-Python Ed25519 (RFC 8032) with the strict verification of
@@ -20,9 +20,13 @@ annotated hex, and checks them:
 - a signed DATA message (the Memo of spec/envelope.md), the same message
   in an AXT file with a signed header, read back from the file's block
   bytes and verified, and read with fastavro and the avro package;
-- a KEY_MOVE message with the schema types/axt/KeyMove.avsc, checked with
-  the schema rules of conformance/tools/example_types.py, encoded field by field
-  and compared with fastavro, decoded with fastavro and avro;
+- the schemas types/axt/DeviceJoin.avsc, DeviceAdd.avsc and DeviceRemove.avsc,
+  checked with the schema rules of conformance/tools/example_types.py, and a
+  DEVICE_ADD message, encoded field by field and compared with fastavro,
+  decoded with fastavro and avro;
+- a model of a receiver that follows the devices of its known senders
+  (spec/keys.md, section 5.5), against the result of every cell of the
+  section's table and of each of its rules, written out by hand here;
 - the short fingerprints of the test keys.
 
 Every key here is a TEST KEY, derived from a published text. It protects
@@ -33,13 +37,15 @@ installed:
 
     python3 conformance/tools/keys_examples.py
 
-conformance/tools/manifest_examples.py imports the X25519 function from here;
+conformance/tools/manifest_examples.py imports the X25519 function from here,
+and the vector generator and the reference adapter the model of the receiver;
 importing this file runs none of the checks.
 """
 
 import hashlib
 import hmac
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
@@ -50,7 +56,7 @@ REPO = HERE.parents[1]
 
 MESSAGE_PREFIX = b"AXT-v1 message\x00"
 FILE_HEADER_PREFIX = b"AXT-v1 file header\x00"
-KEY_MOVE_PREFIX = b"AXT-v1 key move\x00"
+DEVICE_ADD_PREFIX = b"AXT-v1 device add\x00"
 FINGERPRINT_PREFIX = b"AXT-v1 fingerprint\x00"
 HPKE_INFO = b"AXT-v1 relay message"
 SEALED_FORMAT = b"\x01"
@@ -413,6 +419,662 @@ def file_datums(data: bytes) -> tuple[dict[str, bytes], list[bytes]]:
     return meta, datums
 
 
+# --- device sets (spec/keys.md, section 5) ------------------------------------
+
+ADD, REMOVE = "DEVICE_ADD", "DEVICE_REMOVE"
+# What a receiver does with an addition or a removal (section 5.5).
+APPLIED, IGNORED, REJECTED, NOT_PLACED = "APPLIED", "IGNORED", "DEVICE_REJECTED", "NOT_PLACED"
+REFUSED = "REFUSED"  # signed with a refused key: rejected without a report (step 3)
+SIGNATURE_INVALID = "SIGNATURE_INVALID"
+
+
+def proof_bytes(member: bytes, device: bytes) -> bytes:
+    """The bytes the new device signs as the proof of a DEVICE_JOIN and a DEVICE_ADD (section 5.2)."""
+    return DEVICE_ADD_PREFIX + member + device
+
+
+def device_message_problem(
+    kind: str, signer: bytes, signed: bytes, signature: bytes, device: bytes, proof: bytes | None
+) -> str | None:
+    """Steps 1 and 2 of section 5.5 for a message whose signed bytes (section 2.2) are signed."""
+    if verify_problem(signer, signed, signature):
+        return SIGNATURE_INVALID
+    if kind == ADD and (
+        key_problem(device) or proof is None or verify_problem(device, proof_bytes(signer, device), proof)
+    ):
+        return REJECTED
+    if kind == REMOVE and device == signer:
+        return REJECTED  # a device does not remove itself (section 5.3)
+    return None
+
+
+def join_action(
+    member: bytes,
+    current: list[bytes],
+    removed: list[bytes],
+    to: bytes,
+    device: bytes,
+    proof: bytes,
+    first: bytes | None = None,
+) -> str:
+    """What a device that shows a join code does with a DEVICE_JOIN whose signature verified (section
+    5.2): member is its own key, current and removed the other keys of its set, to and proof the body
+    and device the sender of the message; first is the key of the first DEVICE_JOIN it got for the
+    code, if this is not the first. It ignores the message, rejects it, sends its chain again or asks
+    its user; a repeat from the same key is answered as the first was."""
+    if first is not None and device != first:
+        return "ignore"
+    if to != member:
+        return "ignore"
+    if key_problem(device) or verify_problem(device, proof_bytes(member, device), proof) or device in removed:
+        return REJECTED
+    return "send_chain" if device == member or device in current else "ask"
+
+
+def join_chain_problem(
+    chain: list[tuple[str, bytes, bytes, bytes | None, bool]], member: bytes, own: bytes
+) -> str | None:
+    """Why a new device does not take the chain it gets in answer to its DEVICE_JOIN (section 5.2, step
+    5), or None: each message is its kind, signer, device, proof and whether its signature verifies;
+    member is the scanned key, own the new device's."""
+    if not all(verifies for *_, verifies in chain):
+        return "a signature does not verify"
+    for i, (kind, signer, device, proof, _) in enumerate(chain):
+        if (
+            kind == ADD
+            and signer == member
+            and device == own
+            and proof is not None
+            and verify_problem(own, proof_bytes(member, own), proof) is None
+        ):
+            if any(k == REMOVE and d == own for k, _, d, _, _ in chain[i + 1 :]):
+                return "a DEVICE_REMOVE of the new device after its addition"
+            return None
+    return "no DEVICE_ADD of the new device by the scanned key with its proof"
+
+
+@dataclass
+class KnownSender:
+    """What a receiver keeps of a sender's keys (section 3.3), and of its records their id, version and
+    state."""
+
+    name: str
+    current: list[bytes]
+    removed: list[bytes] = field(default_factory=list)
+    records: dict[str, tuple[int, str]] = field(default_factory=dict)
+
+    def single(self) -> bool:
+        """Whether the sender has only one key, current and not removed."""
+        return len(self.current) == 1 and not self.removed
+
+
+# One message of a chain: its kind, its signer, its device, and SIGNATURE_INVALID or DEVICE_REJECTED
+# if it fails step 1 or 2.
+ChainMessage = tuple[str, bytes, bytes, str | None]
+
+
+class DeviceReceiver:
+    """A receiver that follows the devices of its known senders: steps 3 and 4, the table and the chain
+    of section 5.5, with the refused keys of section 3.4. It keeps no manifests and no encryption keys."""
+
+    def __init__(self, senders: list[KnownSender], refused: list[bytes] | None = None) -> None:
+        self.senders = senders
+        self.refused = refused or []  # the removed keys of senders the receiver has forgotten
+        # The chain being read: its messages, the result of each, and those kept.
+        self.messages: list[tuple[str, bytes, bytes]] = []
+        self.results: list[str] = []
+        self.kept: list[int] = []
+
+    def sender_of(self, key: bytes) -> KnownSender | None:
+        for s in self.senders:
+            if key in s.current or key in s.removed:
+                return s
+        return None
+
+    def state(self) -> list[dict[str, Any]]:
+        """The known senders with their keys in hexadecimal, everything sorted, so that two receivers
+        that keep the same hold the same value."""
+        return [
+            {
+                "name": s.name,
+                "current": sorted(k.hex() for k in s.current),
+                "removed": sorted(k.hex() for k in s.removed),
+                "records": [
+                    {"id": rid, "version": s.records[rid][0], "state": s.records[rid][1]}
+                    for rid in sorted(s.records)
+                ],
+            }
+            for s in sorted(self.senders, key=lambda s: s.name)
+        ]
+
+    def key_state(self, key: bytes) -> tuple[str, str | None]:
+        """What a key is to the receiver: current, with its sender's name; removed; refused; or
+        unknown."""
+        if key in self.refused:
+            return "refused", None
+        s = self.sender_of(key)
+        if s is None:
+            return "unknown", None
+        return ("current", s.name) if key in s.current else ("removed", None)
+
+    def join(self, other: KnownSender, second: KnownSender) -> None:
+        """The second sender's key and records become the other's; the version rule decides each record."""
+        other.current += second.current
+        for rid, (version, state) in second.records.items():
+            if rid not in other.records or version > other.records[rid][0]:
+                other.records[rid] = (version, state)
+        self.senders.remove(second)
+
+    def place(self, kind: str, signer: bytes, device: bytes) -> str:
+        """Steps 3 and 4 for a message that passed steps 1 and 2."""
+        if signer in self.refused:  # step 3
+            return REFUSED
+        s, t = self.sender_of(signer), self.sender_of(device)
+        if s is None:
+            if kind == ADD and t is not None and device in t.current:
+                t.current.append(signer)
+                return APPLIED
+            return NOT_PLACED
+        signer_current = signer in s.current
+        if t is s:
+            if device in s.removed or kind == ADD:
+                return IGNORED
+            if not signer_current:
+                return REJECTED
+            s.current.remove(device)
+            s.removed.append(device)
+            return APPLIED
+        if kind == REMOVE:
+            return IGNORED if signer_current else REJECTED
+        if not signer_current:
+            return REJECTED
+        if device in self.refused or t is not None and device in t.removed:
+            return REJECTED
+        if t is None:
+            s.current.append(device)
+            return APPLIED
+        if t.single():
+            self.join(s, t)
+        elif s.single():
+            self.join(t, s)
+        else:
+            return REJECTED
+        return APPLIED
+
+    def take(self, kind: str, signer: bytes, device: bytes, problem: str | None = None) -> str:
+        """The next message of a chain; its result for now. A message that step 3 cannot place is kept,
+        and so is a removal by a current key whose device is not a key of the signer's sender; a kept
+        message is tried again after every applied addition, until it applies."""
+        self.messages.append((kind, signer, device))
+        result = problem or self.place(kind, signer, device)
+        self.results.append(result)
+        early = result == IGNORED and kind == REMOVE and self.sender_of(device) is not self.sender_of(signer)
+        if result == NOT_PLACED or early:
+            self.kept.append(len(self.results) - 1)
+        elif result == APPLIED and kind == ADD:
+            self.try_kept()
+        return result
+
+    def try_kept(self) -> None:
+        applied = True
+        while applied:
+            applied = False
+            for i in list(self.kept):
+                self.results[i] = self.place(*self.messages[i])
+                if self.results[i] == APPLIED:
+                    self.kept.remove(i)
+                    applied = True
+
+    def end(self) -> list[str]:
+        """The end of a chain: the kept messages are tried once more. The result of each message of
+        the chain, for a kept one that of its last try: a removal whose device is still not a key of
+        the signer's sender is ignored."""
+        self.try_kept()
+        results = self.results
+        self.messages, self.results, self.kept = [], [], []
+        return results
+
+    def chain(self, messages: list[ChainMessage]) -> list[str]:
+        """The results of the messages of one chain, taken in their order."""
+        for message in messages:
+            self.take(*message)
+        return self.end()
+
+
+# The cases of section 5.5, with the results the text gives, written out by hand. A key is a letter and
+# a sender is its name, its current keys and its removed keys; a record is its id, version and state.
+SenderCase = tuple[str, str, str]
+RecordCase = dict[str, list[tuple[str, int, str]]]
+# A chain: the key that sends it (the connection key or a file's axt.sender; None through a relay), its
+# messages as kind, signer and device, the result of each, what the sending key then is, and the
+# senders afterwards.
+ChainCase = tuple[
+    str | None, list[tuple[str, str, str]], list[str], tuple[str, str | None] | None, list[SenderCase]
+]
+BAD_SIGNATURE, BAD_PROOF, BAD_DEVICE = "+bad signature", "+bad proof", "+device of small order"
+# In the senders of a case, the entry of this name holds the receiver's refused keys (section 3.4).
+REFUSED_KEYS = "refused keys"
+
+
+def table_cases() -> list[tuple[str, list[SenderCase], tuple[str, str, str], str, list[SenderCase]]]:
+    """Every cell of the table of section 5.5: (label, the senders before, the message, the result, the
+    senders after), each message a chain of its own, so that a removal that is kept is ignored at its
+    end. Further cases cover both readings of "further keys" and of "the only key", and a refused key."""
+    s1, s2 = [("s", "AB", "R")], [("s", "A", "RQ")]
+    t3 = [("s", "A", "R"), ("t", "X", "")]
+    t4 = [("s", "A", "R"), ("t", "XY", "")]
+    t5 = [("s", "A", "R"), ("t", "X", "Z")]
+    f5 = [("s", "A", "R"), (REFUSED_KEYS, "F", "")]
+    s6 = [("s", "A", "R")]
+    rows = [
+        "a current key of the signer's sender",
+        "a removed key of the signer's sender",
+        "the only key of another known sender",
+        "a current key of another known sender with further keys",
+        "a removed key of another known sender",
+        "a key of no known sender",
+    ]
+    cur, rem = "signer current", "signer removed"
+
+    def cell(row: int, kind: str, signer: str, variant: str = "") -> str:
+        return f"row {row}, {kind}, {signer}{variant}: the device is {rows[row - 1]}"
+
+    return [
+        (cell(1, ADD, cur), s1, (ADD, "A", "B"), IGNORED, s1),
+        (cell(1, ADD, cur, ", the signer's own key"), s1, (ADD, "A", "A"), IGNORED, s1),
+        (cell(1, ADD, rem), s1, (ADD, "R", "B"), IGNORED, s1),
+        (cell(1, REMOVE, cur), s1, (REMOVE, "A", "B"), APPLIED, [("s", "A", "RB")]),
+        (cell(1, REMOVE, rem), s1, (REMOVE, "R", "B"), REJECTED, s1),
+        (cell(2, ADD, cur), s2, (ADD, "A", "Q"), IGNORED, s2),
+        (cell(2, ADD, rem), s2, (ADD, "R", "Q"), IGNORED, s2),
+        (cell(2, REMOVE, cur), s2, (REMOVE, "A", "Q"), IGNORED, s2),
+        (cell(2, REMOVE, rem), s2, (REMOVE, "R", "Q"), IGNORED, s2),
+        (cell(3, ADD, cur), t3, (ADD, "A", "X"), APPLIED, [("s", "AX", "R")]),
+        (cell(3, ADD, rem), t3, (ADD, "R", "X"), REJECTED, t3),
+        (cell(3, REMOVE, cur), t3, (REMOVE, "A", "X"), IGNORED, t3),
+        (cell(3, REMOVE, rem), t3, (REMOVE, "R", "X"), REJECTED, t3),
+        (
+            cell(4, ADD, cur, ", the signer the only key of its sender"),
+            [("s", "A", ""), ("t", "XY", "")],
+            (ADD, "A", "X"),
+            APPLIED,
+            [("t", "XYA", "")],
+        ),
+        (cell(4, ADD, cur, ", the signer's sender with a removed key"), t4, (ADD, "A", "X"), REJECTED, t4),
+        (
+            cell(4, ADD, cur, ", the signer's sender with two current keys"),
+            [("s", "AB", ""), ("t", "XY", "")],
+            (ADD, "A", "X"),
+            REJECTED,
+            [("s", "AB", ""), ("t", "XY", "")],
+        ),
+        (
+            cell(4, ADD, cur, ", a removed key at the device's sender, the signer its sender's only key"),
+            [("s", "A", ""), ("t", "X", "Z")],
+            (ADD, "A", "X"),
+            APPLIED,
+            [("t", "XA", "Z")],
+        ),
+        (cell(4, ADD, cur, ", a removed key at both senders"), t5, (ADD, "A", "X"), REJECTED, t5),
+        (cell(4, ADD, rem), t4, (ADD, "R", "X"), REJECTED, t4),
+        (cell(4, REMOVE, cur), t4, (REMOVE, "A", "X"), IGNORED, t4),
+        (cell(4, REMOVE, rem), t4, (REMOVE, "R", "X"), REJECTED, t4),
+        (cell(5, ADD, cur), t5, (ADD, "A", "Z"), REJECTED, t5),
+        (cell(5, ADD, rem), t5, (ADD, "R", "Z"), REJECTED, t5),
+        (cell(5, REMOVE, cur), t5, (REMOVE, "A", "Z"), IGNORED, t5),
+        (cell(5, REMOVE, rem), t5, (REMOVE, "R", "Z"), REJECTED, t5),
+        (cell(5, ADD, cur, ", a refused key"), f5, (ADD, "A", "F"), REJECTED, s6),
+        (cell(5, ADD, rem, ", a refused key"), f5, (ADD, "R", "F"), REJECTED, s6),
+        (cell(5, REMOVE, cur, ", a refused key"), f5, (REMOVE, "A", "F"), IGNORED, s6),
+        (cell(5, REMOVE, rem, ", a refused key"), f5, (REMOVE, "R", "F"), REJECTED, s6),
+        (cell(6, ADD, cur), s6, (ADD, "A", "N"), APPLIED, [("s", "AN", "R")]),
+        (cell(6, ADD, rem), s6, (ADD, "R", "N"), REJECTED, s6),
+        (cell(6, REMOVE, cur), s6, (REMOVE, "A", "N"), IGNORED, s6),
+        (cell(6, REMOVE, rem), s6, (REMOVE, "R", "N"), REJECTED, s6),
+    ]
+
+
+def chain_cases() -> list[tuple[str, str, list[SenderCase], RecordCase, list[ChainCase], RecordCase]]:
+    """The steps and rules of section 5.5 beyond the table: (name, what the case shows, the senders
+    before, their records, the chains in turn, the records afterwards)."""
+    s = [("s", "A", "")]
+    ab = [("s", "AB", "")]
+    current = ("current", "s")
+    return [
+        (
+            "step-1-signature",
+            "step 1: a message whose signature does not verify is not applied, and the next one is taken",
+            s,
+            {},
+            [
+                (
+                    "A",
+                    [(ADD + BAD_SIGNATURE, "A", "B"), (ADD, "A", "C")],
+                    [SIGNATURE_INVALID, APPLIED],
+                    current,
+                    [("s", "AC", "")],
+                )
+            ],
+            {},
+        ),
+        (
+            "step-2-proof",
+            "step 2: an addition whose proof does not verify, or whose device is not a point of order L, "
+            "is rejected, whoever signs it",
+            s,
+            {},
+            [
+                (
+                    "A",
+                    [(ADD + BAD_PROOF, "A", "B"), (ADD + BAD_DEVICE, "A", "T"), (ADD + BAD_PROOF, "N", "A")],
+                    [REJECTED, REJECTED, REJECTED],
+                    current,
+                    s,
+                )
+            ],
+            {},
+        ),
+        (
+            "step-2-self-removal",
+            "step 2: a removal of its signer's own key is rejected, whether the signer is a current "
+            "key, a removed key or a key the receiver does not know",
+            [("s", "AB", "R")],
+            {},
+            [
+                (
+                    "A",
+                    [(REMOVE, "A", "A"), (REMOVE, "R", "R"), (REMOVE, "N", "N")],
+                    [REJECTED, REJECTED, REJECTED],
+                    current,
+                    [("s", "AB", "R")],
+                )
+            ],
+            {},
+        ),
+        (
+            "step-3-refused-signer",
+            "step 3: a message signed with a refused key is rejected without a report, a known device "
+            "does not vouch for a refused key, and a further message of that key is rejected",
+            [("s", "A", ""), (REFUSED_KEYS, "F", "")],
+            {},
+            [
+                (None, [(ADD, "F", "A"), (ADD, "F", "N"), (REMOVE, "F", "A")], [REFUSED] * 3, None, s),
+                ("F", [], [], ("refused", None), s),
+            ],
+            {},
+        ),
+        (
+            "refused-device-unknown-signer",
+            "an addition of a refused key by a signer the receiver does not know is not placed",
+            [("s", "A", ""), (REFUSED_KEYS, "F", "")],
+            {},
+            [(None, [(ADD, "N", "F")], [NOT_PLACED], None, s)],
+            {},
+        ),
+        (
+            "step-3-known-device",
+            "step 3: an addition by an unknown signer of a device that is a current key adds the signer",
+            s,
+            {},
+            [("A", [(ADD, "N", "A")], [APPLIED], current, [("s", "AN", "")])],
+            {},
+        ),
+        (
+            "step-3-removed-device",
+            "step 3: a removed key vouches for no one, so an addition of it by an unknown signer is not "
+            "placed, and neither is a removal by an unknown signer",
+            [("s", "A", "R")],
+            {},
+            [
+                (
+                    None,
+                    [(ADD, "N", "R"), (REMOVE, "N", "A"), (ADD, "N", "M")],
+                    [NOT_PLACED] * 3,
+                    None,
+                    [("s", "A", "R")],
+                )
+            ],
+            {},
+        ),
+        (
+            "chain-forwards",
+            "a chain read by a receiver that knows the first device: each message applies in its turn, "
+            "and the device that sends the chain is then a current key",
+            s,
+            {},
+            [
+                (
+                    "C",
+                    [(ADD, "A", "B"), (ADD, "B", "C"), (REMOVE, "C", "A")],
+                    [APPLIED, APPLIED, APPLIED],
+                    current,
+                    [("s", "BC", "A")],
+                )
+            ],
+            {},
+        ),
+        (
+            "chain-backwards",
+            "a chain read by a receiver that knows only the last device: the earlier ones are learnt "
+            "link by link, backwards, and the removal that follows meets its keys",
+            [("s", "D", "")],
+            {},
+            [
+                (
+                    "D",
+                    [(ADD, "A", "B"), (ADD, "A", "C"), (REMOVE, "C", "B"), (ADD, "C", "D")],
+                    [APPLIED, APPLIED, APPLIED, APPLIED],
+                    current,
+                    [("s", "DCA", "B")],
+                )
+            ],
+            {},
+        ),
+        (
+            "chain-unplaced",
+            "a chain of another set, sent by a key the receiver does not know: nothing is placed, and "
+            "the key is a first contact",
+            s,
+            {},
+            [("N", [(ADD, "M", "N"), (REMOVE, "N", "M")], [NOT_PLACED, NOT_PLACED], ("unknown", None), s)],
+            {},
+        ),
+        (
+            "chain-with-removed-signer",
+            "a repeat is recognised before the signer's removal counts: a chain whose addition was "
+            "signed with a key removed later is taken again without an error",
+            [("s", "B", "A")],
+            {},
+            [("B", [(ADD, "A", "B"), (REMOVE, "B", "A")], [IGNORED, IGNORED], current, [("s", "B", "A")])],
+            {},
+        ),
+        (
+            "file-of-later-device",
+            "a file whose sender is a later device: the chain leads from the key the reader knows to "
+            "the key in axt.sender, which is then a current key of that sender",
+            s,
+            {},
+            [("C", [(ADD, "A", "B"), (ADD, "B", "C")], [APPLIED, APPLIED], current, [("s", "ABC", "")])],
+            {},
+        ),
+        (
+            "sender-removed",
+            "the key of a connection is removed by another device of its set: it is a removed key "
+            "afterwards, so its further messages are rejected",
+            ab,
+            {},
+            [("B", [(REMOVE, "A", "B")], [APPLIED], ("removed", None), [("s", "A", "B")])],
+            {},
+        ),
+        (
+            "removal-before-addition-in-one-chain",
+            "a removal that stands before the addition of its device in one chain is kept, and "
+            "applies once the addition is applied",
+            s,
+            {},
+            [(None, [(REMOVE, "A", "B"), (ADD, "A", "B")], [APPLIED, APPLIED], None, [("s", "A", "B")])],
+            {},
+        ),
+        (
+            "removal-kept-to-the-end",
+            "a kept removal whose device is still not a key of the signer's sender at the end of the "
+            "chain is ignored, whatever other addition was applied in between",
+            s,
+            {},
+            [(None, [(REMOVE, "A", "B"), (ADD, "A", "C")], [IGNORED, APPLIED], None, [("s", "AC", "")])],
+            {},
+        ),
+        (
+            "addition-after-first-contact",
+            "order through a relay: a key that was a first contact is the sender's once its addition arrives",
+            s,
+            {},
+            [
+                ("B", [], [], ("unknown", None), s),
+                (None, [(ADD, "A", "B")], [APPLIED], None, ab),
+                ("B", [], [], current, ab),
+            ],
+            {},
+        ),
+        (
+            "removal-before-addition",
+            "a removal that arrives in a chain of its own before the addition of its device is "
+            "ignored, the addition applied, and the removal applies when it is sent again",
+            s,
+            {},
+            [
+                (None, [(REMOVE, "A", "B")], [IGNORED], None, s),
+                (None, [(ADD, "A", "B")], [APPLIED], None, ab),
+                (None, [(ADD, "A", "B"), (REMOVE, "A", "B")], [IGNORED, APPLIED], None, [("s", "A", "B")]),
+                (None, [(ADD, "A", "B"), (REMOVE, "A", "B")], [IGNORED, IGNORED], None, [("s", "A", "B")]),
+            ],
+            {},
+        ),
+        (
+            "removal-not-arrived",
+            "a removal that did not arrive: the removed key is taken as a current one by its addition "
+            "of a known device, until the whole chain is sent again",
+            [("s", "B", "")],
+            {},
+            [
+                (None, [(ADD, "A", "B")], [APPLIED], None, [("s", "BA", "")]),
+                ("B", [(ADD, "A", "B"), (REMOVE, "B", "A")], [IGNORED, APPLIED], current, [("s", "B", "A")]),
+            ],
+            {},
+        ),
+        (
+            "mutual-removal-first",
+            "two devices that remove each other: the removal the receiver gets first applies, and the "
+            "other is signed with a removed key and rejected; the sender's records and tombstones stay",
+            ab,
+            {"s": [("r1", 3, "there"), ("r2", 2, "tombstone")]},
+            [(None, [(REMOVE, "A", "B"), (REMOVE, "B", "A")], [APPLIED, REJECTED], None, [("s", "A", "B")])],
+            {"s": [("r1", 3, "there"), ("r2", 2, "tombstone")]},
+        ),
+        (
+            "mutual-removal-second",
+            "two devices that remove each other, in the other order: this receiver keeps the other device",
+            ab,
+            {},
+            [(None, [(REMOVE, "B", "A"), (REMOVE, "A", "B")], [APPLIED, REJECTED], None, [("s", "B", "A")])],
+            {},
+        ),
+        (
+            "removed-stays-removed",
+            "a removed key is never added again, and a message signed with it adds no device",
+            [("s", "A", "B")],
+            {},
+            [(None, [(ADD, "A", "B"), (ADD, "B", "C")], [IGNORED, REJECTED], None, [("s", "A", "B")])],
+            {},
+        ),
+        (
+            "join-device-sender",
+            "joining two senders: the device's sender has one key and is the second sender; its "
+            "records go to the other by the version rule, and it is forgotten",
+            [("s", "A", "R"), ("t", "X", "")],
+            {
+                "s": [("r1", 3, "there"), ("r2", 2, "there"), ("r3", 5, "tombstone")],
+                "t": [("r1", 4, "tombstone"), ("r2", 2, "tombstone"), ("r3", 1, "there"), ("r4", 1, "there")],
+            },
+            [(None, [(ADD, "A", "X")], [APPLIED], None, [("s", "AX", "R")])],
+            {"s": [("r1", 4, "tombstone"), ("r2", 2, "there"), ("r3", 5, "tombstone"), ("r4", 1, "there")]},
+        ),
+        (
+            "join-signer-sender",
+            "joining two senders: the device's sender has further keys, so the signer's sender, with "
+            "its one key, is the second",
+            [("s", "A", ""), ("t", "XY", "")],
+            {"s": [("r1", 2, "there")], "t": [("r1", 1, "there"), ("r2", 7, "tombstone")]},
+            [("A", [(ADD, "A", "X")], [APPLIED], ("current", "t"), [("t", "XYA", "")])],
+            {"t": [("r1", 2, "there"), ("r2", 7, "tombstone")]},
+        ),
+        (
+            "join-rejected",
+            "two senders that each have more than one key are not joined, and keep their records",
+            [("s", "AB", ""), ("t", "XY", "")],
+            {"s": [("r1", 2, "there")], "t": [("r1", 1, "there")]},
+            [("A", [(ADD, "A", "X")], [REJECTED], current, [("s", "AB", ""), ("t", "XY", "")])],
+            {"s": [("r1", 2, "there")], "t": [("r1", 1, "there")]},
+        ),
+    ]
+
+
+def check_device_cases() -> int:
+    """Run the model over the cases above with letters as keys; the number of cases."""
+
+    def receiver(senders: list[SenderCase], records: RecordCase) -> DeviceReceiver:
+        return DeviceReceiver(
+            [
+                KnownSender(
+                    name,
+                    [k.encode() for k in current],
+                    [k.encode() for k in removed],
+                    {rid: (version, state) for rid, version, state in records.get(name, [])},
+                )
+                for name, current, removed in senders
+                if name != REFUSED_KEYS
+            ],
+            [k.encode() for name, keys, _ in senders if name == REFUSED_KEYS for k in keys],
+        )
+
+    def keys_of(r: DeviceReceiver) -> list[SenderCase]:
+        return [(s.name, b"".join(s.current).decode(), b"".join(s.removed).decode()) for s in r.senders]
+
+    def records_of(r: DeviceReceiver) -> RecordCase:
+        return {s.name: [(rid, *s.records[rid]) for rid in sorted(s.records)] for s in r.senders if s.records}
+
+    table = table_cases()
+    cells = {label.split(":")[0].split(", the ")[0].split(", a re")[0] for label, *_ in table}
+    assert len(cells) == 24, "not every cell of the table of section 5.5"
+    for label, before, (kind, signer, device), result, after in table:
+        r = receiver(before, {})
+        assert r.chain([(kind, signer.encode(), device.encode(), None)]) == [result], label
+        assert keys_of(r) == after, (label, keys_of(r))
+    chains = chain_cases()
+    for name, _, before, records, steps, records_after in chains:
+        r = receiver(before, records)
+        for key, messages, results, state, after in steps:
+            got = r.chain(
+                [
+                    (
+                        kind.split("+")[0],
+                        signer.encode(),
+                        device.encode(),
+                        {BAD_SIGNATURE: SIGNATURE_INVALID, BAD_PROOF: REJECTED, BAD_DEVICE: REJECTED}.get(
+                            kind[len(kind.split("+")[0]) :],
+                            REJECTED if (kind, signer) == (REMOVE, device) else None,
+                        ),
+                    )
+                    for kind, signer, device in messages
+                ]
+            )
+            assert got == results, (name, got)
+            assert keys_of(r) == after, (name, keys_of(r))
+            assert state is None or key is not None and r.key_state(key.encode()) == state, name
+        assert records_of(r) == records_after, (name, records_of(r))
+    return len(table) + len(chains)
+
+
 # --- the edges of verification (spec/keys.md, section 7.6) --------------------
 
 
@@ -617,12 +1279,16 @@ def main() -> None:
         pub = public_key(seed)
         assert pub == bytes(nacl.signing.SigningKey(seed).verify_key)
         assert pub == ed25519.Ed25519PrivateKey.from_private_bytes(seed).public_key().public_bytes_raw()
+        assert key_problem(pub) is None
+        keys[label] = {"seed": seed, "pub": pub}
+        if label == "cat-a-log, new phone":
+            continue  # no example uses an encryption key of the new phone
         xsk = test_secret(label + ", X25519")
         xpk = x25519(xsk, X25519_BASE)
         assert xpk == nacl.bindings.crypto_scalarmult_base(xsk)
         assert xpk == cx25519.X25519PrivateKey.from_private_bytes(xsk).public_key().public_bytes_raw()
-        assert key_problem(pub) is None and encryption_key_problem(xpk) is None
-        keys[label] = {"seed": seed, "pub": pub, "xsk": xsk, "xpk": xpk}
+        assert encryption_key_problem(xpk) is None
+        keys[label] |= {"xsk": xsk, "xpk": xpk}
     old, new, obf = keys["cat-a-log, old phone"], keys["cat-a-log, new phone"], keys["Old Brain Fix"]
     ikm_e = test_secret("ephemeral key of the sealed message, ikmE")
     sk_e, pk_e = derive_key_pair(ikm_e)
@@ -650,25 +1316,11 @@ def main() -> None:
         return pcf, fp
 
     envelope_text = (REPO / "types" / "axt" / "Envelope.avsc").read_text(encoding="utf-8")
-    keymove_text = (REPO / "types" / "axt" / "KeyMove.avsc").read_text(encoding="utf-8")
     manifest_text = (REPO / "types" / "axt" / "Manifest.avsc").read_text(encoding="utf-8")
     envelope_pcf, envelope_fp = fingerprint(envelope_text)
-    keymove_pcf, keymove_fp = fingerprint(keymove_text)
-    assert envelope_fp == 0xA2E1E84FE5E40C7D, "the envelope fingerprint is not the one of spec/envelope.md"
+    assert envelope_fp == 0xA89ECEB9716F3016, "the envelope fingerprint is not the one of spec/envelope.md"
     envelope_schema = cast(dict[str, Any], fastavro.parse_schema(json.loads(envelope_text)))
-    keymove_json = json.loads(keymove_text)
-    keymove_schema = fastavro.parse_schema(keymove_json)
     kinds = envelope_schema["fields"][1]["type"]["symbols"]
-
-    # The rules of spec/types.md, section 5, for a schema of the specification.
-    assert keymove_json["name"] == "KeyMove" and keymove_json["namespace"] == "axt"
-    assert "axt.version" not in keymove_json
-    assert (
-        len(keymove_text.encode()) <= rules.MAX_SCHEMA_BYTES
-        and rules.json_depth(keymove_json) <= rules.MAX_JSON_DEPTH
-    )
-    defined: list[str] = []
-    rules.check_type(keymove_json, "types/axt/KeyMove.avsc", keymove_json, set(), defined)
 
     def named_types(t: Any, out: list[str]) -> list[str]:
         """Full names of the named types a schema defines, in the namespace axt."""
@@ -685,13 +1337,34 @@ def main() -> None:
                     named_types(t[key], out)
         return out
 
+    # The schemas of the device messages, under the rules of spec/types.md, section 5, for a schema of
+    # the specification.
+    device_names = ("DeviceJoin", "DeviceAdd", "DeviceRemove")
+    device_texts = {
+        name: (REPO / "types" / "axt" / f"{name}.avsc").read_text(encoding="utf-8") for name in device_names
+    }
+    device_fps = {name: fingerprint(text) for name, text in device_texts.items()}
     others = named_types(json.loads(envelope_text), []) + named_types(json.loads(manifest_text), [])
-    assert len(set(defined)) == len(defined), "a name is defined twice in KeyMove.avsc"
-    assert not set(defined) & set(others), (
-        "a name of KeyMove.avsc is defined in another schema of the specification"
-    )
-    keymove_problems = [f for f in rules.failures if "KeyMove" in f]
-    assert not keymove_problems, keymove_problems
+    for name in device_names:
+        device_json = json.loads(device_texts[name])
+        assert device_json["name"] == name and device_json["namespace"] == "axt"
+        assert "axt.version" not in device_json
+        assert (
+            len(device_texts[name].encode()) <= rules.MAX_SCHEMA_BYTES
+            and rules.json_depth(device_json) <= rules.MAX_JSON_DEPTH
+        )
+        defined: list[str] = []
+        rules.check_type(device_json, f"types/axt/{name}.avsc", device_json, set(), defined)
+        assert len(set(defined)) == len(defined), f"a name is defined twice in {name}.avsc"
+        assert all(d == "axt." + name or d.startswith("axt." + name) for d in defined), defined
+        assert not set(defined) & set(others), (
+            f"a name of {name}.avsc is defined in another schema of the specification"
+        )
+        others += defined
+    device_problems = [f for f in rules.failures if "Device" in f]
+    assert not device_problems, device_problems
+    add_schema = fastavro.parse_schema(json.loads(device_texts["DeviceAdd"]))
+    add_fp = device_fps["DeviceAdd"][1]
 
     def library_binary(schema: Any, datum: Any) -> bytes:
         buf = io.BytesIO()
@@ -896,59 +1569,90 @@ def main() -> None:
         except ValueError:
             pass
 
-    # --- example 4: a KEY_MOVE ------------------------------------------------
+    # --- example 4: a DEVICE_ADD ----------------------------------------------
 
-    proof_signed = KEY_MOVE_PREFIX + old["pub"] + new["pub"]
+    proof_signed = proof_bytes(old["pub"], new["pub"])
+    assert len(DEVICE_ADD_PREFIX) == 18
     proof = all_sign(new["seed"], proof_signed)
-    km_body_parts = [
-        (header(keymove_fp)[:2], "body: single-object marker"),
-        (header(keymove_fp)[2:], "body: fingerprint of axt.KeyMove, format 1"),
-        (new["pub"], "body: new_sender: fixed(32), the new installation's test key"),
-        (zigzag(1), "body: new_encryption_key: union index 1, axt.KeyMoveEncryptionKey"),
-        (new["xpk"], "body: new_encryption_key: fixed(32)"),
-        (proof, "body: proof: fixed(64), signed with the new key"),
+    add_body_parts = [
+        (header(add_fp)[:2], "body: single-object marker"),
+        (header(add_fp)[2:], "body: fingerprint of axt.DeviceAdd, format 1"),
+        (new["pub"], "body: device: fixed(32), the new phone's test key"),
+        (proof, "body: proof: fixed(64), signed with the new phone's key"),
     ]
-    km_body = b"".join(p[0] for p in km_body_parts)
-    km_datum = {"new_sender": new["pub"], "new_encryption_key": new["xpk"], "proof": proof}
-    assert km_body[10:] == library_binary(keymove_schema, km_datum)
-    assert fastavro.schemaless_reader(io.BytesIO(km_body[10:]), keymove_schema, keymove_schema) == km_datum
-    apache_km = avro.io.DatumReader(avro.schema.parse(keymove_text)).read(
-        avro.io.BinaryDecoder(io.BytesIO(km_body[10:]))
+    add_body = b"".join(p[0] for p in add_body_parts)
+    add_datum = {"device": new["pub"], "proof": proof}
+    assert add_body[10:] == library_binary(add_schema, add_datum)
+    assert fastavro.schemaless_reader(io.BytesIO(add_body[10:]), add_schema, add_schema) == add_datum
+    apache_add = avro.io.DatumReader(avro.schema.parse(device_texts["DeviceAdd"])).read(
+        avro.io.BinaryDecoder(io.BytesIO(add_body[10:]))
     )
-    assert apache_km == km_datum
-    km_parts = [
+    assert apache_add == add_datum
+    add_parts = [
         (header(envelope_fp)[:2], "single-object marker"),
         (header(envelope_fp)[2:], "fingerprint of axt.Envelope, format 1"),
         (zigzag(1), "format: int 1"),
-        (zigzag(kinds.index("KEY_MOVE")), "kind: enum index 8, KEY_MOVE"),
-        (old["pub"], "sender: fixed(32), the old key"),
+        (zigzag(kinds.index(ADD)), f"kind: enum index {kinds.index(ADD)}, {ADD}"),
+        (old["pub"], "sender: fixed(32), the old phone's test key"),
         (zigzag(0), "record: union index 0, null"),
-        (zigzag(len(km_body)), f"body: bytes length {len(km_body)}"),
-    ] + km_body_parts
-    km_unsigned = b"".join(p[0] for p in km_parts)
-    km_sig = all_sign(old["seed"], MESSAGE_PREFIX + km_unsigned[10:])
-    km_parts.append((km_sig, "signature: fixed(64), signed with the old key"))
-    km_message = km_unsigned + km_sig
-    km_env = {
+        (zigzag(len(add_body)), f"body: bytes length {len(add_body)}"),
+    ] + add_body_parts
+    add_unsigned = b"".join(p[0] for p in add_parts)
+    add_sig = all_sign(old["seed"], MESSAGE_PREFIX + add_unsigned[10:])
+    add_parts.append((add_sig, "signature: fixed(64), signed with the old phone's key"))
+    add_message = add_unsigned + add_sig
+    add_env = {
         "format": 1,
-        "kind": "KEY_MOVE",
+        "kind": ADD,
         "sender": old["pub"],
         "record": None,
-        "body": km_body,
-        "signature": km_sig,
+        "body": add_body,
+        "signature": add_sig,
     }
-    assert km_message[10:] == library_binary(envelope_schema, km_env)
-    all_verify(old["pub"], MESSAGE_PREFIX + km_message[10:-64], km_message[-64:])
-    all_verify(new["pub"], KEY_MOVE_PREFIX + old["pub"] + new["pub"], proof)
-    # The proof does not verify for another old key: it names the key it continues.
+    assert add_message[10:] == library_binary(envelope_schema, add_env)
+    all_verify(old["pub"], MESSAGE_PREFIX + add_message[10:-64], add_message[-64:])
+    all_verify(new["pub"], proof_signed, proof)
     assert (
-        verify_problem(new["pub"], KEY_MOVE_PREFIX + obf["pub"] + new["pub"], proof)
-        == "equation does not hold"
+        device_message_problem(
+            ADD, old["pub"], MESSAGE_PREFIX + add_message[10:-64], add_sig, new["pub"], proof
+        )
+        is None
     )
+    # The proof does not verify for another member: it names the key that adds the device.
+    assert verify_problem(new["pub"], proof_bytes(obf["pub"], new["pub"]), proof) == "equation does not hold"
+    assert (
+        device_message_problem(
+            ADD, obf["pub"], MESSAGE_PREFIX + add_message[10:-64], add_sig, new["pub"], proof
+        )
+        == SIGNATURE_INVALID
+    )
+    # A receiver that knows cat-a-log by the old phone's key applies the addition (section 7.5).
+    cat_a_log = KnownSender("cat-a-log", [old["pub"]])
+    receiver = DeviceReceiver([cat_a_log])
+    assert receiver.chain([(ADD, old["pub"], new["pub"], None)]) == [APPLIED]
+    assert cat_a_log.current == [old["pub"], new["pub"]] and receiver.key_state(new["pub"]) == (
+        "current",
+        "cat-a-log",
+    )
+    device_cases = check_device_cases()
+    # The join that led to the addition (section 5.2): the old phone asks its user, and the new phone
+    # takes the chain that ends with its addition.
+    assert join_action(old["pub"], [], [], old["pub"], new["pub"], proof) == "ask"
+    assert join_action(old["pub"], [new["pub"]], [], old["pub"], new["pub"], proof) == "send_chain"
+    assert join_action(old["pub"], [], [new["pub"]], old["pub"], new["pub"], proof) == REJECTED
+    assert join_action(obf["pub"], [], [], old["pub"], new["pub"], proof) == "ignore"
+    assert join_action(obf["pub"], [], [], obf["pub"], new["pub"], proof) == REJECTED
+    assert join_chain_problem([(ADD, old["pub"], new["pub"], proof, True)], old["pub"], new["pub"]) is None
+    assert join_chain_problem([(ADD, old["pub"], new["pub"], proof, True)], obf["pub"], new["pub"])
+    assert join_chain_problem([], old["pub"], new["pub"])
+    assert join_action(old["pub"], [], [], old["pub"], new["pub"], proof, first=new["pub"]) == "ask"
+    assert join_action(old["pub"], [], [], old["pub"], new["pub"], proof, first=obf["pub"]) == "ignore"
+    # A removal of the old phone by itself fails step 2, whoever signed the addition before.
+    assert device_message_problem(REMOVE, old["pub"], data_signed, data_sig, old["pub"], None) == REJECTED
 
     # --- domain separation ----------------------------------------------------
 
-    prefixes = [MESSAGE_PREFIX, FILE_HEADER_PREFIX, KEY_MOVE_PREFIX, FINGERPRINT_PREFIX]
+    prefixes = [MESSAGE_PREFIX, FILE_HEADER_PREFIX, DEVICE_ADD_PREFIX, FINGERPRINT_PREFIX]
     for a in prefixes:
         assert a.count(b"\x00") == 1 and a.endswith(b"\x00")
         assert not any(b != a and b.startswith(a) for b in prefixes)
@@ -1006,14 +1710,16 @@ def main() -> None:
         print(f"  Ed25519 seed        {k['seed'].hex()}")
         print(f"  Ed25519 public key  {k['pub'].hex()}")
         print(f"  short fingerprint   {short_fingerprint(k['pub'])}")
-        print(f"  X25519 private key  {k['xsk'].hex()}")
-        print(f"  X25519 public key   {k['xpk'].hex()}")
+        if "xsk" in k:
+            print(f"  X25519 private key  {k['xsk'].hex()}")
+            print(f"  X25519 public key   {k['xpk'].hex()}")
     print(f"ephemeral ikmE        {ikm_e.hex()}")
     print(f"ephemeral skE         {sk_e.hex()}")
     print(f"ephemeral pkE (enc)   {pk_e.hex()}")
     print()
-    print(f"axt.KeyMove canonical form: {keymove_pcf}")
-    print(f"axt.KeyMove CRC-64-AVRO: 0x{keymove_fp:016x}, bytes {keymove_fp.to_bytes(8, 'little').hex(' ')}")
+    for name, (pcf, fp) in device_fps.items():
+        print(f"axt.{name} canonical form: {pcf}")
+        print(f"axt.{name} CRC-64-AVRO: 0x{fp:016x}, bytes {fp.to_bytes(8, 'little').hex(' ')}")
     print()
     print(
         f"== Example 1: DATA message, {len(data_message)} bytes, "
@@ -1049,10 +1755,10 @@ def main() -> None:
     print(f"largest sealed message: {max_sealed} bytes")
     print()
     print(
-        f"== Example 4: KEY_MOVE message, {len(km_message)} bytes, "
-        f"SHA-256 {hashlib.sha256(km_message).hexdigest()} =="
+        f"== Example 4: DEVICE_ADD message, {len(add_message)} bytes, "
+        f"SHA-256 {hashlib.sha256(add_message).hexdigest()} =="
     )
-    print(dump(km_parts))
+    print(dump(add_parts))
     print(f"proof signed bytes ({len(proof_signed)}):")
     print(hex_lines(proof_signed))
     print()
@@ -1066,6 +1772,8 @@ def main() -> None:
     )
     for row in edge_rows:
         print(" | ".join(row))
+    print()
+    print(f"device sets: {device_cases} cases of section 5.5 hold in the model")
     print()
     print("== The canonical encodings of the eight points of small order ==")
     for e in small:

@@ -10,7 +10,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 - **Record**: one datum of a type ([types.md](types.md)), such as one Appointment, together with its id and its version. A record travels in the body of a `DATA` message; its id and version travel in the envelope's `record` field ([envelope.md](envelope.md), section 2).
 - **Record message**: a `DATA` or a `DELETE` message.
-- **Sender** of a record: the installation that created the record and sends its versions. A receiver knows a sender by the key it saw first from it, followed through the key moves that [keys.md](keys.md) defines. Where this document says "the same sender", it means that key and the keys it moved to.
+- **Sender** of a record: the app that created the record and sends its versions: one installation, or the installations of one owner on several devices, which [keys.md](keys.md), section 5, makes one device set. A receiver knows a sender by the first key it accepted from it and by the keys added to it and removed from it since. Where this document says "the same sender", it means any current key of that set.
 - **Receiver**: an app that takes records from a sender, through a live connection, a relay or a file.
 - **Local change**: a change the receiver's user makes to a received record in the receiver, including its deletion there.
 - **Tombstone**: what a receiver keeps of a record its sender deleted: its id and the version of the deletion.
@@ -21,7 +21,7 @@ A record has one sender. Only its sender sends versions of it. A receiver's loca
 
 The id of a record is a UUID, carried as a `string` with the logical type `uuid` in the representation of [envelope.md](envelope.md), section 7.
 
-- The sender generates the id when it creates the record, and the record keeps it for its whole life: through every update, a deletion and a return after it (section 5.3), and through key moves ([keys.md](keys.md)).
+- The sender generates the id when it creates the record, and the record keeps it for its whole life: through every update, a deletion and a return after it (section 5.3), and whichever device of its sender sends it ([keys.md](keys.md), section 5.6).
 - A sender MUST generate ids as UUIDs of version 4 (random) or version 7 (time-ordered, with random bits) of [RFC 9562](https://www.rfc-editor.org/rfc/rfc9562). It MUST NOT use the nil UUID or the max UUID.
 - An id MUST be unique among all records of the sender, of all types. A sender MUST NOT use an id for a second record, also not after the first one was deleted.
 - A sender MUST send a record under the same id to every receiver.
@@ -42,7 +42,7 @@ The version of a record is a `long`. It names one state of the record at its sen
 - A sender SHOULD count the versions of each record and add one for every change it sends. Any rising value meets the rules above, but a clock time used as a version goes back when the clock does.
 - A receiver MUST accept a first version above 1: a receiver that is connected later, or misses messages, sees a record first at a later version. A receiver MUST reject a record message whose version is below 1, with the error `VERSION_INVALID` ([protocol.md](protocol.md), section 8.2).
 
-The highest version of each record that a sender has sent MUST survive whatever the sender's data goes through, including a restore from a backup and a key move to a new installation ([keys.md](keys.md)). A sender whose versions went back can learn it from the outcome `STALE` (section 7), but not in every case: a new version that happens to equal the receiver's version is taken for a duplicate, and the change is lost at that receiver. [protocol.md](protocol.md), section 10, therefore makes a sender that may have lost versions, such as after a restore from a backup, continue them above a random jump.
+The highest version of each record that a sender has sent MUST survive whatever the sender's data goes through, including a restore from a backup and a move to a new device ([keys.md](keys.md), section 5.7). The devices of one sender give the versions of a record as one sender ([keys.md](keys.md), section 5.6); how they keep them in step comes with [axt-1023](https://github.com/paxel/axt/issues/25) and [axt-1024](https://github.com/paxel/axt/issues/26). A sender whose versions went back can learn it from the outcome `STALE` (section 7), but not in every case: a new version that happens to equal the receiver's version is taken for a duplicate, and the change is lost at that receiver. [protocol.md](protocol.md), section 10, therefore makes a sender that may have lost versions, such as after a restore from a backup, continue them above a random jump.
 
 ## 4. Sending records
 
@@ -92,7 +92,7 @@ Transports may deliver a message twice, late or out of order: a relay holds mess
 - A `DELETE` with a higher version deletes the record at the receiver, and the receiver keeps a tombstone with the deletion's version. Section 6.4 says when the receiver keeps the record instead.
 - A `DELETE` for an id the receiver does not have from that sender leaves a tombstone as well, so that a `DATA` with a lower version that arrives later does not create the record.
 - A `DATA` with a version higher than the tombstone's brings the record back: the receiver takes it as a new record under the same id, and the tombstone ends. A `DATA` with a lower or equal version is stale or a duplicate.
-- A receiver MUST keep a tombstone for as long as it keeps the sender, that is, as long as it would accept messages from that sender's key ([keys.md](keys.md)). A tombstone is an id, a version and the sender; a fixed retention time would let an old file or a delayed message bring a deleted record back after it.
+- A receiver MUST keep a tombstone for as long as it keeps the sender, that is, as long as it would accept messages from one of that sender's keys ([keys.md](keys.md)). A tombstone is an id, a version and the sender; a fixed retention time would let an old file or a delayed message bring a deleted record back after it.
 - A receiver that forgets a sender MAY forget its records and tombstones with it.
 
 ## 6. The receiver's own changes

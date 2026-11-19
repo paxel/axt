@@ -12,7 +12,7 @@
     {
       "name": "app_name",
       "type": "string",
-      "doc": "The name the app gives itself, as plain text on one line, such as Old Brain Fix. It is shown to the other app's user; it does not identify the app, the sender key of the envelope does."
+      "doc": "The name the app gives itself, as plain text on one line, such as Old Brain Fix. It is shown to the other app's user; it does not identify the app, the keys of its sender do, of which the sender key of the envelope is one."
     },
     {
       "name": "app_url",
@@ -117,7 +117,7 @@
           "items": {
             "type": "record",
             "name": "ManifestSend",
-            "doc": "One type the app may send, and the versions of it it writes.",
+            "doc": "One type the app may send, the versions of it it writes, and whether it takes proposals for its records of the type.",
             "fields": [
               {
                 "name": "type",
@@ -137,6 +137,12 @@
                 ],
                 "default": null,
                 "doc": "The highest version of the type the app writes, at least min_version. Null when the app does not say."
+              },
+              {
+                "name": "proposals",
+                "type": "boolean",
+                "default": false,
+                "doc": "Whether the app takes proposals of changes to the records of this type it sends, as PROPOSAL messages, to come with axt-1027. False when it takes none."
               }
             ]
           }

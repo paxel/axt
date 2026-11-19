@@ -6,7 +6,8 @@
 It answers every operation of the suite with the code of the example scripts in
 conformance/tools/, which check the examples of the specification: the Avro
 encoding and the schema checks of example_types.py and manifest_examples.py,
-the Ed25519, X25519 and HPKE of keys_examples.py, the model of an app of
+the Ed25519, X25519 and HPKE of keys_examples.py and its model of a receiver
+that follows the devices of its senders, the model of an app of
 protocol_examples.py, the QR code, frames and relay of
 transports_examples.py, the time types of time_examples.py, and the attributes of spec/metadata.md of
 metadata_rules.py. Where those scripts have no model, for a receiver's
@@ -549,7 +550,13 @@ def op_session(i: Any) -> dict[str, Any]:
     readers = {n: json.loads(t) for n, t in cfg["readers"].items()}
     takes = set(cfg["user_takes"])
     app = pe.App(
-        "adapter", b_in(cfg["seed"]), manifest, readers, lambda n: n in takes, formats=cfg["formats"]
+        "adapter",
+        b_in(cfg["seed"]),
+        manifest,
+        readers,
+        lambda n: n in takes,
+        formats=cfg["formats"],
+        peer_key=b_in(cfg["peer"]),
     )
     out: list[dict[str, Any]] = []
     for step in i["steps"]:
@@ -558,7 +565,7 @@ def op_session(i: Any) -> dict[str, Any]:
             out.append(
                 {
                     "outcome": what if what in OUTCOMES else None,
-                    "close": what == "no common format: close",
+                    "close": what.endswith(": close"),
                     "replies": [b_out(r) for r in replies],
                 }
             )
@@ -599,7 +606,7 @@ MAX_FILE, MAX_META, MAX_BLOCK, MAX_TOTAL = (
 )  # spec/envelope.md, section 8
 ENVELOPE_PCF = pe.fingerprints["Envelope"][0]
 LOWER_HEX = __import__("re").compile(r"^[0-9a-f]*$")
-KEY_MOVE_FP = pe.fp8(pe.fingerprints["KeyMove"][1])
+CHAIN_SCHEMAS = {"DEVICE_ADD": "DeviceAdd", "DEVICE_REMOVE": "DeviceRemove"}
 
 
 class FileRejected(Exception):
@@ -729,10 +736,9 @@ def read_file(data: bytes, reader: Any) -> dict[str, Any]:
         except Exception:
             raise FileRejected("axt.schemas is not a JSON array of schemas") from None
     messages: list[tuple[str, Any, bytes]]
-    moves: list[dict[str, str]]
+    chain: list[tuple[str, bytes, bytes, None]]
     manifests: list[bytes]
-    messages, moves, manifests, seen_other, seen_record = [], [], [], False, False
-    chain_key: bytes | None = None
+    messages, chain, manifests, seen_other, seen_record = [], [], [], False, False
     for d in datums:
         try:
             env = decode_all(ENVELOPE, d)
@@ -744,27 +750,25 @@ def read_file(data: bytes, reader: Any) -> dict[str, Any]:
         if keys.verify_problem(key, keys.MESSAGE_PREFIX + d[:-64], d[-64:]):
             raise FileRejected("a message whose signature does not verify")
         kind, body, record = env["kind"], bytes.fromhex(env["body"]), env["record"]
-        if kind not in ("KEY_MOVE", "MANIFEST", "DATA", "DELETE"):
+        if kind not in (*CHAIN_SCHEMAS, "MANIFEST", "DATA", "DELETE"):
             raise FileRejected(f"a {kind} in a file")
         if (record is None) == (kind in ("DATA", "DELETE")):
             raise FileRejected("a record where none belongs, or none where one is required")
-        if kind == "KEY_MOVE":
+        if kind in CHAIN_SCHEMAS:
+            name = CHAIN_SCHEMAS[kind]
             if seen_other:
-                raise FileRejected("a KEY_MOVE after another kind of message")
-            if body[:10] != b"\xc3\x01" + KEY_MOVE_FP:
-                raise FileRejected("a KEY_MOVE whose body is not an axt.KeyMove")
-            km = decode_all(pe.without_logical_types(json.loads(pe.texts["KeyMove"])), body[10:])
-            new, enc = bytes.fromhex(km["new_sender"]), km["new_encryption_key"]
-            if chain_key is not None and key != chain_key:
-                raise FileRejected("a chain of key moves whose links do not join")
-            if (
-                keys.key_problem(new)
-                or keys.verify_problem(new, keys.KEY_MOVE_PREFIX + key + new, bytes.fromhex(km["proof"]))
-                or (enc is not None and keys.encryption_key_problem(bytes.fromhex(enc)))
-            ):
-                raise FileRejected("a KEY_MOVE that fails step 4 of keys.md, section 5.3")
-            moves.append({"from": key.hex(), "to": new.hex()})
-            chain_key = new
+                raise FileRejected(f"a {kind} after another kind of message")
+            if body[:10] != b"\xc3\x01" + pe.fp8(pe.fingerprints[name][1]):
+                raise FileRejected(f"a {kind} whose body is not an axt.{name}")
+            try:
+                dm = decode_all(pe.without_logical_types(json.loads(pe.texts[name])), body[10:])
+            except Undecodable as e:
+                raise FileRejected(str(e)) from e
+            device = bytes.fromhex(dm["device"])
+            proof = bytes.fromhex(dm["proof"]) if kind == "DEVICE_ADD" else None
+            if keys.device_message_problem(kind, key, keys.MESSAGE_PREFIX + d[:-64], d[-64:], device, proof):
+                raise FileRejected(f"a {kind} that fails step 2 of keys.md, section 5.5")
+            chain.append((kind, key, device, None))
             continue
         seen_other = True
         if key != sender:
@@ -784,8 +788,10 @@ def read_file(data: bytes, reader: Any) -> dict[str, Any]:
         ):
             raise FileRejected("a DATA whose fingerprint is not in axt.schemas")
         messages.append((kind, record, body))
-    if chain_key is not None and chain_key != sender:
-        raise FileRejected("a chain of key moves that does not end at axt.sender")
+    # The reader knows the file's sender by the key in axt.sender alone, and follows the chain from it.
+    receiver = keys.DeviceReceiver([keys.KnownSender("sender", [sender])])
+    chain_results = receiver.chain(list(chain))
+    removed = receiver.key_state(sender)[0] == "removed"
     state = "none"
     for body in manifests:
         datum, _, error = manifest_datum(body)
@@ -798,6 +804,9 @@ def read_file(data: bytes, reader: Any) -> dict[str, Any]:
         rid, version = record["id"], record["version"]
         out = {"id": rid, "version": version}
         results.append(out)
+        if removed:
+            out["result"] = "SENDER_REMOVED"
+            continue
         rkey = record_key(rid)
         if rkey is None:
             out["result"] = "RECORD_ID_INVALID"
@@ -835,7 +844,11 @@ def read_file(data: bytes, reader: Any) -> dict[str, Any]:
         else:
             kept[rkey] = {"type": None if k is None else k["type"], "version": version}
         out["result"] = "APPLIED"
-    return ok({"sender": sender.hex(), "key_moves": moves, "manifest": state, "records": results})
+    links = [
+        {"kind": kind, "signer": signer.hex(), "device": device.hex(), "result": result}
+        for (kind, signer, device, _), result in zip(chain, chain_results, strict=True)
+    ]
+    return ok({"sender": sender.hex(), "chain": links, "manifest": state, "records": results})
 
 
 # --- transports (spec/transports.md) -------------------------------------------------------
@@ -966,25 +979,76 @@ def op_verify_message(i: Any) -> dict[str, Any]:
     return ok() if problem is None else no("SIGNATURE_INVALID", problem)
 
 
-def op_key_move(i: Any) -> dict[str, Any]:
-    m = b_in(i["message"])
-    sender, signed, sig = live_parts(m)
-    if keys.verify_problem(sender, signed, sig):
+def op_device_add(i: Any) -> dict[str, Any]:
+    """Steps 1 and 2 of keys.md, section 5.5, for a DEVICE_ADD."""
+    kind, member, d, signed, sig = pe.device_parts(b_in(i["message"]))
+    problem = keys.device_message_problem(kind, member, signed, sig, d["device"], d["proof"])
+    return no(problem) if problem else ok({"member": member.hex(), "device": d["device"].hex()})
+
+
+def op_device_join(i: Any) -> dict[str, Any]:
+    """A DEVICE_JOIN at the device that shows the join code (keys.md, section 5.2)."""
+    _, device, d, signed, sig = pe.device_parts(b_in(i["message"]))
+    if keys.verify_problem(device, signed, sig):
         return no("SIGNATURE_INVALID")
-    env: Any = fastavro.schemaless_reader(io.BytesIO(m[10:]), pe.raw["Envelope"], pe.raw["Envelope"])
-    body = env["body"]
-    if env["kind"] != "KEY_MOVE" or body[:10] != b"\xc3\x01" + pe.fp8(pe.fingerprints["KeyMove"][1]):
-        return no("INVALID_MESSAGE")
-    km: Any = fastavro.schemaless_reader(io.BytesIO(body[10:]), pe.raw["KeyMove"], pe.raw["KeyMove"])
-    new, enc = km["new_sender"], km["new_encryption_key"]
-    problem = (
-        keys.key_problem(new)
-        or keys.verify_problem(new, keys.KEY_MOVE_PREFIX + sender + new, km["proof"])
-        or (enc is not None and keys.encryption_key_problem(enc))
+    who = i["member"]
+    action = keys.join_action(
+        b_in(who["key"]),
+        [b_in(k) for k in who["current"]],
+        [b_in(k) for k in who["removed"]],
+        d["to"],
+        device,
+        d["proof"],
+        None if i["first"] is None else b_in(i["first"]),
     )
-    if problem:
-        return no("KEY_MOVE_REJECTED", problem)
-    return ok({"old_key": sender.hex(), "new_key": new.hex(), "new_encryption_key": b_out(enc)})
+    return no(action) if action == keys.REJECTED else ok({"device": device.hex(), "action": action})
+
+
+def op_join_chain(i: Any) -> dict[str, Any]:
+    """The chain a new device gets in answer to its DEVICE_JOIN (keys.md, section 5.2, step 5)."""
+    chain = []
+    for m in i["chain"]:
+        kind, signer, d, signed, sig = pe.device_parts(b_in(m))
+        chain.append(
+            (kind, signer, d["device"], d.get("proof"), keys.verify_problem(signer, signed, sig) is None)
+        )
+    problem = keys.join_chain_problem(chain, b_in(i["member"]), b_in(i["device"]))
+    return no("JOIN_INVALID", problem) if problem else ok()
+
+
+def op_device_sets(i: Any) -> dict[str, Any]:
+    """A receiver that follows the devices of its known senders, as the model of keys_examples.py does."""
+    receiver = keys.DeviceReceiver(
+        [
+            keys.KnownSender(
+                s["name"],
+                [b_in(k) for k in s["current"]],
+                [b_in(k) for k in s["removed"]],
+                {r["id"]: (r["version"], r["state"]) for r in s["records"]},
+            )
+            for s in i["senders"]
+        ],
+        [b_in(k) for k in i["refused"]],
+    )
+    steps: list[dict[str, Any]] = []
+    for step in i["steps"]:
+        messages = []
+        for m in step["chain"]:
+            kind, signer, d, signed, sig = pe.device_parts(b_in(m))
+            problem = keys.device_message_problem(kind, signer, signed, sig, d["device"], d.get("proof"))
+            messages.append((kind, signer, d["device"], problem))
+        results = receiver.chain(messages)
+        key = step["key"]
+        key_state, key_sender = (None, None) if key is None else receiver.key_state(b_in(key))
+        steps.append(
+            {
+                "results": results,
+                "key_state": key_state,
+                "key_sender": key_sender,
+                "senders": receiver.state(),
+            }
+        )
+    return {"steps": steps}
 
 
 def op_seal(i: Any) -> dict[str, Any]:
@@ -1063,7 +1127,10 @@ OPS: dict[str, Callable[[Any], dict[str, Any]]] = {
     ),
     "short_fingerprint": lambda i: ok({"short_fingerprint": keys.short_fingerprint(b_in(i["public_key"]))}),
     "verify_message": op_verify_message,
-    "key_move": op_key_move,
+    "device_add": op_device_add,
+    "device_join": op_device_join,
+    "join_chain": op_join_chain,
+    "device_sets": op_device_sets,
     "padded_length": lambda i: ok({"padded_length": keys.padded_length(i["length"])}),
     "seal": op_seal,
     "open": op_open,

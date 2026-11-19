@@ -30,7 +30,7 @@ python3 conformance/run.py -- python3 conformance/reference/adapter.py
 | [tools/time_examples.py](tools/time_examples.py)             | Produces and checks the examples of [spec/time.md](../spec/time.md), with zone rules from Python's `zoneinfo`            |
 | [tools/metadata_rules.py](tools/metadata_rules.py)           | The rules of [spec/metadata.md](../spec/metadata.md): attributes, formats, I-Regexp and checks; imports no other script  |
 | [tools/metadata_examples.py](tools/metadata_examples.py)     | Produces and checks the examples of [spec/metadata.md](../spec/metadata.md)                                              |
-| [tools/keys_examples.py](tools/keys_examples.py)             | Produces and checks the examples of [spec/keys.md](../spec/keys.md), with Ed25519, X25519 and HPKE in Python             |
+| [tools/keys_examples.py](tools/keys_examples.py)             | Produces and checks the examples of [spec/keys.md](../spec/keys.md), with Ed25519, X25519, HPKE and device sets          |
 | [tools/manifest_examples.py](tools/manifest_examples.py)     | Produces and checks the examples of [spec/manifest.md](../spec/manifest.md)                                              |
 | [tools/protocol_examples.py](tools/protocol_examples.py)     | Produces and checks the examples of [spec/protocol.md](../spec/protocol.md), with a model of an app                      |
 | [tools/transports_examples.py](tools/transports_examples.py) | Produces and checks the examples of [spec/transports.md](../spec/transports.md), with models of the frames and the relay |

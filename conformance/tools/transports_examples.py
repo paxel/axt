@@ -117,7 +117,7 @@ for full in me.named_types(qr_json, []):
     assert full not in pe.defined_by, f"{full} is defined in QrPayload.avsc and {pe.defined_by[full]}.avsc"
 qr_pcf, qr_fp = me.fingerprint(qr_text_schema)
 assert qr_fp not in {fp for _, fp in pe.fingerprints.values()}
-assert pe.fingerprints["Manifest"][1] == 0x6B08ECB5D38003B3, (
+assert pe.fingerprints["Manifest"][1] == 0xA59EEB4C88A51F3E, (
     "the manifest fingerprint is not that of spec/manifest.md"
 )
 
@@ -144,7 +144,7 @@ MAILBOX_PREFIX = b"AXT-v1 mailbox\x00"
 PREFIXES = [
     keys.MESSAGE_PREFIX,
     keys.FILE_HEADER_PREFIX,
-    keys.KEY_MOVE_PREFIX,
+    keys.DEVICE_ADD_PREFIX,
     keys.FINGERPRINT_PREFIX,
     HELLO_PREFIX,
     MAILBOX_PREFIX,
@@ -176,12 +176,13 @@ QR: dict[str, Any] = {
     "encryption_key": OBF_X25519,
     "local": {"addresses": [ADDRESS.packed], "port": PORT},
     "relay": {"url": RELAY_URL, "mailbox": MAILBOX},
+    "join": False,
 }
 MAX_ADDRESSES = 4
 MAX_RELAY_URL = 256
 rules.DATA["QrPayload"] = QR
 required, defaults_resolved = rules.check_defaults("QrPayload", qr_json, qr_schema)
-assert defaults_resolved == 3 and required == ["signing_key"]
+assert defaults_resolved == 4 and required == ["signing_key"]
 if rules.failures:
     raise SystemExit("\n".join(["checks failed:"] + rules.failures))
 
@@ -234,6 +235,7 @@ def qr_parts(q: dict[str, Any]) -> list[tuple[bytes, str]]:
 
     parts += null_or("local", q["local"], "QrPayloadLocal", local_parts)
     parts += null_or("relay", q["relay"], "QrPayloadRelay", relay_parts)
+    parts.append((bytes([q["join"]]), f"join: boolean {str(q['join']).lower()}"))
     return parts
 
 
@@ -303,6 +305,8 @@ def qr_problems(q: dict[str, Any]) -> list[str]:
             problems.append("local.port is not 1 to 65535")
     if q["relay"] is not None and relay_url_problem(q["relay"]["url"]):
         problems.append(cast(str, relay_url_problem(q["relay"]["url"])))
+    if q["join"] and q["local"] is None:
+        problems.append("a join code without local")
     return problems
 
 
@@ -312,10 +316,12 @@ LARGEST: dict[str, Any] = {
     "encryption_key": OBF_X25519,
     "local": {"addresses": [bytes(16)] * MAX_ADDRESSES, "port": 65535},
     "relay": {"url": "https://relay.example.org/" + "a" * (MAX_RELAY_URL - 27) + "/", "mailbox": MAILBOX},
+    "join": True,
 }
 assert not qr_problems(LARGEST) and len(LARGEST["relay"]["url"]) == MAX_RELAY_URL
 MAX_QR_PAYLOAD = len(encode_qr(LARGEST))
 MAX_QR_TEXT = len(QR_SCHEME) + -(-MAX_QR_PAYLOAD * 8 // 5)
+assert (MAX_QR_PAYLOAD, MAX_QR_TEXT) == (432, 696), "not the limits of sections 3.1 and 3.2"
 
 
 def parse_qr(text: str) -> dict[str, Any] | str:
@@ -464,16 +470,26 @@ QR_NEGATIVE = [
         qr_text(encode_qr(qr_with(relay={"url": "https://relay.example.org", "mailbox": MAILBOX}))),
         "relay.url",
     ),
+    ("a join code without local", qr_text(encode_qr(qr_with(local=None, join=True))), "join"),
 ]
 for label, bad, reason in QR_NEGATIVE:
     got = parse_qr(bad)
     assert isinstance(got, str) and reason in got, (label, got)
     checks.append(f"QR rejected: {label}")
 # A code with the signing key alone is valid: it only shows the key, for comparing it in person.
+KEY_ALONE = {"signing_key": OBF, "encryption_key": None, "local": None, "relay": None, "join": False}
 expect(
     "a QR code with the signing key alone",
-    parse_qr(qr_text(encode_qr({"signing_key": OBF, "encryption_key": None, "local": None, "relay": None}))),
-    {"signing_key": OBF, "encryption_key": None, "local": None, "relay": None},
+    parse_qr(qr_text(encode_qr(KEY_ALONE))),
+    KEY_ALONE,
+)
+# A join code: the code a member shows to a new device of its owner (sections 3.1 and 4.7).
+JOIN_QR = qr_with(join=True)
+expect("a join code with local", parse_qr(qr_text(encode_qr(JOIN_QR))), JOIN_QR)
+expect(
+    "a join code with local alone",
+    parse_qr(qr_text(encode_qr(qr_with(join=True, encryption_key=None, relay=None)))),
+    qr_with(join=True, encryption_key=None, relay=None),
 )
 
 # --- the TLS certificate (section 4.3) ----------------------------------------
@@ -549,7 +565,6 @@ class Peer:
     def __init__(self, role: int, cert_hash: bytes, expected_key: bytes | None = None) -> None:
         self.role, self.cert_hash, self.expected_key = role, cert_hash, expected_key
         self.peer_key: bytes | None = None
-        self.messages = 0  # messages taken other than KEY_MOVE
         self.taken: list[bytes] = []
 
     def receive(self, data: bytes) -> str:
@@ -584,12 +599,10 @@ class Peer:
             raise Closed("an empty MESSAGE")
         kind_index, _ = keys.read_long(body, 11)
         sender = body[12:44]
-        if pe.KINDS[kind_index] == "KEY_MOVE" and self.messages == 0:
-            self.taken.append(body)
-            return "message"  # a KEY_MOVE at the start, signed with an earlier key (section 4.5)
-        if sender != self.peer_key:
+        # A DEVICE_ADD or a DEVICE_REMOVE is signed with a key of a device set, which need not be the
+        # connection key (section 4.5).
+        if pe.KINDS[kind_index] not in ("DEVICE_ADD", "DEVICE_REMOVE") and sender != self.peer_key:
             raise Closed("a message whose sender is not the key of the HELLO")
-        self.messages += 1
         self.taken.append(body)
         return "message"
 
@@ -600,7 +613,7 @@ data_frame = frame(MESSAGE, pe.data_msg)
 ping_frame = frame(PING, b"")
 assert (
     hashlib.sha256(pe.data_msg).hexdigest()
-    == "931e6f370f80527bae25f7475aa56e59f9bde6d71a0fe77c3dfad75700786086"
+    == "c0c852f36d6431ac1043f3b23d610b101b5adeaa88193c223afb6f9af27d0945"
 ), "not the DATA of spec/protocol.md, section 17.5"
 
 server = Peer(SERVER, CERT_HASH)
@@ -624,9 +637,12 @@ def closes(label: str, peer: Peer, *frames: bytes) -> None:
     raise AssertionError(f"{label}: the connection stays open")
 
 
-km_parts, key_move = pe.make_message(
-    "KEY_MOVE", test_secret("cat-a-log, older phone, Ed25519"), None, [(b"", "placeholder")], check=False
-)
+# cat-a-log's chain: an older phone added the phone that connects here, which then removed it.
+OLDER_SEED = test_secret("cat-a-log, older phone, Ed25519")
+chain_add = pe.device_add(OLDER_SEED, CAT_SEED)
+chain_remove = pe.device_remove(CAT_SEED, keys.public_key(OLDER_SEED))
+foreign_remove = pe.device_remove(OLDER_SEED, CAT)
+foreign_join = pe.device_join(OLDER_SEED, OBF)
 closes(
     "a HELLO for another certificate, passed on by a machine in the middle",
     Peer(SERVER, OTHER_CERT_HASH),
@@ -656,16 +672,21 @@ closes("a PING with a payload", Peer(SERVER, CERT_HASH), client_hello, frame(PIN
 closes("an unknown frame type", Peer(SERVER, CERT_HASH), client_hello, frame(4, b""))
 closes("a frame cut short", Peer(SERVER, CERT_HASH), client_hello, data_frame[:-1])
 closes(
-    "a KEY_MOVE after another message",
+    "a DEVICE_JOIN whose sender is not the key of the HELLO",
     Peer(SERVER, CERT_HASH),
     client_hello,
-    data_frame,
-    frame(MESSAGE, key_move),
+    frame(MESSAGE, foreign_join),
 )
 p = Peer(SERVER, CERT_HASH)
 p.receive(client_hello)
-expect("a KEY_MOVE signed with an earlier key at the start", p.receive(frame(MESSAGE, key_move)), "message")
+expect("a DEVICE_ADD signed with another key at the start", p.receive(frame(MESSAGE, chain_add)), "message")
+expect("then a DEVICE_REMOVE of the chain", p.receive(frame(MESSAGE, chain_remove)), "message")
 expect("then the sender's messages", p.receive(data_frame), "message")
+expect(
+    "a DEVICE_REMOVE signed with another key after another message",
+    p.receive(frame(MESSAGE, foreign_remove)),
+    "message",
+)
 too_large = bytes([MESSAGE]) + (MAX_MESSAGE + 1).to_bytes(4, "big")
 p = Peer(SERVER, CERT_HASH)
 p.receive(client_hello)
@@ -819,7 +840,7 @@ _, memo_msg = pe.make_message(
     "DATA", CAT_SEED, ("0b5a3c1e-4d2f-4a6b-9c8d-7e6f5a4b3c2d", 1), [(memo_body, "the Memo")]
 )
 assert (
-    hashlib.sha256(memo_msg).hexdigest() == "23fdfeb720ae7a368b936ce9f990039b7472fe7128927da9c3648e9b9ea67f07"
+    hashlib.sha256(memo_msg).hexdigest() == "68d19c518a50880136a9f7412d3e636b17422c89cf63837b7ae1a22c8abedfc3"
 ), "not the message of spec/keys.md, section 7.2"
 sk_e, pk_e = keys.derive_key_pair(test_secret("ephemeral key of the sealed message, ikmE"))
 enc, shared = keys.encap(sk_e, OBF_X25519)
@@ -831,7 +852,7 @@ SEALED = (
 )
 SEALED_HASH = hashlib.sha256(SEALED).hexdigest()
 assert (
-    len(SEALED) == 1073 and SEALED_HASH == "7cbe47862344527d93735c97159cc8cf4d3631647233cac735553c968e6c2bc8"
+    len(SEALED) == 1073 and SEALED_HASH == "64a9988bd3e1e8210d592e29115d5b3252d2e75be5c219ca67583608cfdb878a"
 ), "not the sealed message of spec/keys.md, section 7.4"
 MAX_SEALED = 1 + 32 + keys.padded_length(MAX_MESSAGE) + 16
 assert MAX_SEALED == 17301553
