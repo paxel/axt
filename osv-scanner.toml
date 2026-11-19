@@ -15,3 +15,28 @@
 # license.ignore = true
 # effectiveUntil = 2027-05-14
 # reason = "..."
+
+[[PackageOverrides]]
+name = "typing-extensions"
+ecosystem = "PyPI"
+license.ignore = true
+effectiveUntil = 2027-05-19
+reason = """PSF-2.0 is a permissive licence that is not on the standard's allowlist. \
+typing-extensions comes only through mypy, a development tool that checks the scripts; it is \
+never part of anything this repository publishes."""
+
+[[PackageOverrides]]
+name = "atheris"
+ecosystem = "PyPI"
+license.override = ["Apache-2.0"]
+effectiveUntil = 2027-05-19
+reason = """deps.dev reports no licence for atheris; its LICENSE in google/atheris is \
+Apache-2.0. A development tool for the fuzz targets only."""
+
+[[PackageOverrides]]
+name = "colorama"
+ecosystem = "PyPI"
+license.override = ["BSD-3-Clause"]
+effectiveUntil = 2027-05-19
+reason = """deps.dev reports no licence for colorama; its LICENSE.txt in tartley/colorama is \
+BSD-3-Clause. It comes only through pytest, a development tool, on Windows."""
