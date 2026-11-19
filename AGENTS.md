@@ -13,3 +13,7 @@ Default five-role vocabulary plus `implemented`, label string equals role name. 
 ### Ticket IDs
 
 Implementation tickets carry an ID with the prefix `axt`. See `docs/agents/ticket-ids.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
