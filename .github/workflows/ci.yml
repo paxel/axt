@@ -1,0 +1,24 @@
+name: CI
+
+# The gates every pull request and every push to summer runs, from paxel/gates (the standard:
+# its standard.toml). The Python gate runs ruff, mypy and the tests; the tests run the
+# conformance suite against the reference adapter and the reference relay, compare the
+# committed vectors with the generator's output, run every example script of the
+# specification and check the changelog.
+# A branch gets its run through its pull request; a run per push as well would be the same
+# jobs twice.
+on:
+  push:
+    branches: [summer]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    uses: paxel/gates/.github/workflows/python.yml@02a81ad45b815cbed94f9bb6841424a624e8155f # v1.2.0

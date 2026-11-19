@@ -1,0 +1,16 @@
+# The strict Python config of paxel/gates (configs/python/ruff.toml): pycodestyle, pyflakes,
+# isort, bugbear, the bandit security rules and pyupgrade. ruff takes the target version from
+# `requires-python` in pyproject.toml.
+line-length = 110
+
+[lint]
+select = ["E", "F", "W", "I", "B", "S", "UP"]
+
+[lint.per-file-ignores]
+# Tests assert with assert and write temporary files; that is what they are for.
+"tests/**" = ["S101", "S108"]
+"**/test_*.py" = ["S101", "S108"]
+# The example scripts, the generator and the reference adapter state every check of the
+# specification's examples as an assert: a failed check must stop the script.
+"conformance/**" = ["S101"]
+"fuzz/**" = ["S101"]

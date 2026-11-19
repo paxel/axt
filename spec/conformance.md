@@ -292,7 +292,7 @@ An adapter does what an app would do with its library, with the keys and values 
 python3 conformance/run.py [--vectors DIR] [--category NAME ...] [--verbose] -- ADAPTER COMMAND ...
 ```
 
-It checks every vector file against the schema, starts the adapter, and sends the vectors of the categories the adapter implements, file by file and in the order of each file. It reports each vector that fails and, for each category, how many vectors passed, and it names the categories the adapter does not implement as not run. It exits with 0 only when every vector it ran passed. It needs Python 3.10 or later, fastavro to decode the messages an adapter writes, and the package cryptography to open what an adapter seals.
+It checks every vector file against the schema, starts the adapter, and sends the vectors of the categories the adapter implements, file by file and in the order of each file. It reports each vector that fails and, for each category, how many vectors passed, and it names the categories the adapter does not implement as not run. It exits with 0 only when every vector it ran passed. It needs Python 3.11 or later, fastavro to decode the messages an adapter writes, and the package cryptography to open what an adapter seals.
 
 ### 7.2 The reference adapter
 

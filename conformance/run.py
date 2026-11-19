@@ -10,7 +10,7 @@ the answer with the vector's expected result. It never sends the expected
 result. It exits with 0 when every vector of every category the adapter
 implements passed, and with 1 otherwise.
 
-It needs Python 3.10 or later, fastavro (to decode the messages an adapter
+It needs Python 3.11 or later, fastavro (to decode the messages an adapter
 writes) and cryptography (to open what an adapter seals). The Ed25519, X25519
 and HPKE code is that of conformance/tools/keys_examples.py.
 """
@@ -25,26 +25,42 @@ import subprocess
 import sys
 import zlib
 from pathlib import Path
+from typing import Any
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 FILE_FORMAT = 1
-CATEGORIES = ["encoding", "types", "time", "metadata", "records", "manifest", "keys", "protocol", "file", "qr", "local",
-              "relay", "relay-server"]
+CATEGORIES = [
+    "encoding",
+    "types",
+    "time",
+    "metadata",
+    "records",
+    "manifest",
+    "keys",
+    "protocol",
+    "file",
+    "qr",
+    "local",
+    "relay",
+    "relay-server",
+]
 HEX = re.compile(r"^(?:[0-9a-f]{2})*$")
 
 _spec = importlib.util.spec_from_file_location("keys_examples", HERE / "tools" / "keys_examples.py")
+if _spec is None or _spec.loader is None:
+    raise ImportError("keys_examples.py cannot be loaded")
 keys = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(keys)  # runs none of that script's checks
 
 # --- bytes (spec/conformance.md, section 3.2) ---------------------------------------
 
 
-def is_bytes_object(v):
+def is_bytes_object(v: Any) -> bool:
     return isinstance(v, dict) and set(v) == {"deflate", "length", "sha256"}
 
 
-def to_bytes(v):
+def to_bytes(v: Any) -> bytes:
     """The bytes of a hex string or a deflate object."""
     if isinstance(v, str):
         if not HEX.match(v):
@@ -59,7 +75,7 @@ def to_bytes(v):
     raise ValueError(f"not bytes: {v!r}"[:80])
 
 
-def canonical(v):
+def canonical(v: Any) -> Any:
     """A value with every deflate object replaced by the hex of its bytes, for comparison."""
     if is_bytes_object(v):
         return to_bytes(v).hex()
@@ -70,7 +86,7 @@ def canonical(v):
     return v
 
 
-def strip_notes(v):
+def strip_notes(v: Any) -> Any:
     if isinstance(v, dict):
         return {k: strip_notes(x) for k, x in v.items() if k != "note"}
     if isinstance(v, list):
@@ -78,7 +94,7 @@ def strip_notes(v):
     return v
 
 
-def diff(expected, got, path="$"):
+def diff(expected: Any, got: Any, path: str = "$") -> str | None:
     """The first difference between two JSON values, or None. Objects compare without regard to order;
     an expected {"one_of": [...]} is met by any of its values (spec/conformance.md, section 4.1)."""
     if isinstance(expected, dict) and set(expected) == {"one_of"}:
@@ -99,17 +115,19 @@ def diff(expected, got, path="$"):
     if isinstance(expected, list) and isinstance(got, list):
         if len(expected) != len(got):
             return f"{path}: expected {len(expected)} items, got {len(got)}"
-        for i, (e, g) in enumerate(zip(expected, got)):
+        for i, (e, g) in enumerate(zip(expected, got, strict=True)):
             d = diff(e, g, f"{path}[{i}]")
             if d:
                 return d
         return None
-    if type(expected) is not type(got) and not (isinstance(expected, (int, float)) and isinstance(got, (int, float))):
+    if type(expected) is not type(got) and not (
+        isinstance(expected, (int, float)) and isinstance(got, (int, float))
+    ):
         return f"{path}: expected {short(expected)}, got {short(got)}"
     return None if expected == got else f"{path}: expected {short(expected)}, got {short(got)}"
 
 
-def short(v):
+def short(v: Any) -> str:
     t = json.dumps(v, ensure_ascii=False)
     return t if len(t) <= 120 else t[:100] + f"... ({len(t)} characters)"
 
@@ -117,20 +135,27 @@ def short(v):
 # --- the vector files and their schema -----------------------------------------------
 
 
-def validate(value, schema, root, path="$"):
+def validate(value: Any, schema: Any, root: Any, path: str = "$") -> list[str]:
     """The subset of JSON Schema (draft 2020-12) that vectors.schema.json uses; returns a list of problems."""
     if "$ref" in schema:
         name = schema["$ref"].split("/")[-1]
         return validate(value, root["$defs"][name], root, path)
-    problems = []
+    problems: list[str] = []
     t = schema.get("type")
     if t:
         types = t if isinstance(t, list) else [t]
-        ok = any({"object": isinstance(value, dict), "array": isinstance(value, list),
-                  "string": isinstance(value, str), "boolean": isinstance(value, bool),
-                  "null": value is None,
-                  "integer": isinstance(value, int) and not isinstance(value, bool),
-                  "number": isinstance(value, (int, float)) and not isinstance(value, bool)}[x] for x in types)
+        ok = any(
+            {
+                "object": isinstance(value, dict),
+                "array": isinstance(value, list),
+                "string": isinstance(value, str),
+                "boolean": isinstance(value, bool),
+                "null": value is None,
+                "integer": isinstance(value, int) and not isinstance(value, bool),
+                "number": isinstance(value, (int, float)) and not isinstance(value, bool),
+            }[x]
+            for x in types
+        )
         if not ok:
             return [f"{path}: not of type {t}"]
     if "const" in schema and value != schema["const"]:
@@ -169,9 +194,9 @@ def validate(value, schema, root, path="$"):
     return problems
 
 
-def load_vectors(directory, wanted):
+def load_vectors(directory: Path, wanted: set[str]) -> dict[str, Any]:
     schema = json.loads((directory / "vectors.schema.json").read_text(encoding="utf-8"))
-    files = {}
+    files: dict[str, Any] = {}
     for name in CATEGORIES:
         if wanted and name not in wanted:
             continue
@@ -192,11 +217,13 @@ def load_vectors(directory, wanted):
 
 
 class Adapter:
-    def __init__(self, command):
-        self.proc = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
-                                     encoding="utf-8", bufsize=1)
+    def __init__(self, command: list[str]) -> None:
+        self.proc = subprocess.Popen(  # noqa: S603 the command is the adapter the caller names
+            command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8", bufsize=1
+        )
 
-    def ask(self, rid, op, input):
+    def ask(self, rid: str, op: str, input: Any) -> Any:
+        assert self.proc.stdin is not None and self.proc.stdout is not None  # both are pipes
         self.proc.stdin.write(json.dumps({"id": rid, "op": op, "input": input}, ensure_ascii=False) + "\n")
         self.proc.stdin.flush()
         line = self.proc.stdout.readline()
@@ -207,8 +234,9 @@ class Adapter:
             raise RuntimeError(f"the adapter answered {answer.get('id')!r} to {rid!r}")
         return answer
 
-    def close(self):
+    def close(self) -> None:
         try:
+            assert self.proc.stdin is not None  # a pipe
             self.proc.stdin.close()
             self.proc.wait(30)
         except Exception:
@@ -218,9 +246,10 @@ class Adapter:
 # --- checks that need more than a comparison --------------------------------------------
 
 
-def check_seal(vector, output):
+def check_seal(vector: Any, output: Any) -> str | None:
     """A sealed message cannot be compared, since its ephemeral key is random: the runner opens it."""
     from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
+
     want = vector["expected"]["accept"]["sealed"]
     if "accept" not in output or set(output["accept"]) != {"sealed"}:
         return f"expected accept with sealed, got {short(output)}"
@@ -236,7 +265,9 @@ def check_seal(vector, output):
     except Exception as e:
         return f"the sealed message does not open: {e!r}"
     if len(plain) != keys.padded_length(len(to_bytes(want["to"]))):
-        return f"the padded message has {len(plain)} bytes, not {keys.padded_length(len(to_bytes(want['to'])))}"
+        return (
+            f"the padded message has {len(plain)} bytes, not {keys.padded_length(len(to_bytes(want['to'])))}"
+        )
     try:
         message = keys.unpad(plain)
     except ValueError as e:
@@ -247,14 +278,14 @@ def check_seal(vector, output):
 # Replies in a session: the runner decodes and verifies each message the adapter writes (section 5.6).
 
 KINDS = ["MANIFEST", "OFFER", "ACCEPT", "DECLINE", "DATA", "DELETE", "ACK", "ERROR", "KEY_MOVE"]
-_schemas = {}
+_schemas: dict[str, Any] = {}
 
 
-def schema(name):
+def schema(name: str) -> Any:
     """A schema of the specification, with logical types removed so that ids stay text."""
     import fastavro
 
-    def plain(t):
+    def plain(t: Any) -> Any:
         if isinstance(t, list):
             return [plain(b) for b in t]
         if isinstance(t, dict):
@@ -269,20 +300,26 @@ def schema(name):
 
 
 ENVELOPE_FP = bytes.fromhex("7d0ce4e54fe8e1a2")
-BODY_FPS = {"Offer": "7d687acaca635441", "Accept": "ab823d91c34f246b", "Decline": "c092548411bdd222",
-            "Ack": "d86e16a8ccc725ee", "Error": "1d9af93651920615"}
+BODY_FPS = {
+    "Offer": "7d687acaca635441",
+    "Accept": "ab823d91c34f246b",
+    "Decline": "c092548411bdd222",
+    "Ack": "d86e16a8ccc725ee",
+    "Error": "1d9af93651920615",
+}
 BODY_OF = {"OFFER": "Offer", "ACCEPT": "Accept", "DECLINE": "Decline", "ACK": "Ack", "ERROR": "Error"}
 
 
-def reply(hexed, own, peer):
+def reply(hexed: Any, own: bytes, peer: bytes) -> tuple[str, Any]:
     """The kind and body of a message the adapter wrote; raises ValueError if it is not a valid message of
     its own key, signed, and addressed to the peer."""
     import fastavro
+
     m = to_bytes(hexed)
     if m[:2] != b"\xc3\x01" or m[2:10] != ENVELOPE_FP:
         raise ValueError("a reply that is not a live message of envelope format 1")
     buf = io.BytesIO(m[10:])
-    env = fastavro.schemaless_reader(buf, schema("Envelope"), schema("Envelope"))
+    env: Any = fastavro.schemaless_reader(buf, schema("Envelope"), schema("Envelope"))
     if buf.tell() != len(m) - 10 or env["format"] != 1:
         raise ValueError("a reply with bytes left over or another format")
     if env["sender"] != own:
@@ -290,10 +327,14 @@ def reply(hexed, own, peer):
     if keys.verify_problem(own, keys.MESSAGE_PREFIX + m[10:-64], m[-64:]):
         raise ValueError("a reply whose signature does not verify")
     name = BODY_OF.get(env["kind"])
-    if name is None or env["record"] is not None or env["body"][:10] != b"\xc3\x01" + bytes.fromhex(BODY_FPS[name]):
+    if (
+        name is None
+        or env["record"] is not None
+        or env["body"][:10] != b"\xc3\x01" + bytes.fromhex(BODY_FPS[name])
+    ):
         raise ValueError(f"a reply of kind {env['kind']} that is not a valid reply")
     buf = io.BytesIO(env["body"][10:])
-    body = fastavro.schemaless_reader(buf, schema(name), schema(name))
+    body: Any = fastavro.schemaless_reader(buf, schema(name), schema(name))
     if buf.tell() != len(env["body"]) - 10:
         raise ValueError("a reply body with bytes left over")
     if body["to"] != peer:
@@ -301,7 +342,7 @@ def reply(hexed, own, peer):
     return env["kind"], body
 
 
-def check_session(vector, output):
+def check_session(vector: Any, output: Any) -> str | None:
     """None if every step meets its expected result, else every step that does not."""
     app = vector["input"]["app"]
     own, peer = keys.public_key(bytes.fromhex(app["seed"])), bytes.fromhex(app["peer"])
@@ -309,8 +350,8 @@ def check_session(vector, output):
     got = output.get("steps")
     if not isinstance(got, list) or len(got) != len(steps):
         return f"expected {len(steps)} step results, got {short(got)}"
-    problems = []
-    for n, (step, w, g) in enumerate(zip(steps, want, got)):
+    problems: list[str] = []
+    for n, (step, w, g) in enumerate(zip(steps, want, got, strict=False)):
         try:
             problem = check_step(step, w, g, own, peer, f"step {n}")
         except (ValueError, KeyError, TypeError) as e:
@@ -320,9 +361,10 @@ def check_session(vector, output):
     return "; ".join(problems) if problems else None
 
 
-def check_step(step, w, g, own, peer, where):
+def check_step(step: Any, w: Any, g: Any, own: bytes, peer: bytes, where: str) -> str | None:
     if "receive" in step:
-        answers, errors = {}, []
+        answers: dict[Any, dict[Any, Any]] = {}
+        errors: list[dict[str, Any]] = []
         for r in g["replies"]:
             kind, body = reply(r, own, peer)
             if kind in ("ACCEPT", "DECLINE"):
@@ -332,43 +374,57 @@ def check_step(step, w, g, own, peer, where):
                         return f"{where}: {name} answered twice"
                     answers.setdefault(body["offer_id"], {})[name] = verdict
             elif kind == "ERROR":
-                errors.append({"code": body["code"], "message_hash": body["message_hash"].hex(), "record": body["record"],
-                               "fingerprint": None if body["fingerprint"] is None else body["fingerprint"].hex(),
-                               "field": body["field"]})
+                errors.append(
+                    {
+                        "code": body["code"],
+                        "message_hash": body["message_hash"].hex(),
+                        "record": body["record"],
+                        "fingerprint": None if body["fingerprint"] is None else body["fingerprint"].hex(),
+                        "field": body["field"],
+                    }
+                )
             else:
                 return f"{where}: a reply of kind {kind}"
-        d = diff({k: w[k] for k in ("outcome", "close", "answers")},
-                 {"outcome": g.get("outcome"), "close": g.get("close"), "answers": answers}, where)
+        d = diff(
+            {k: w[k] for k in ("outcome", "close", "answers")},
+            {"outcome": g.get("outcome"), "close": g.get("close"), "answers": answers},
+            where,
+        )
         if d:
             return d
         if len(errors) != len(w["errors"]):
             return f"{where}: expected {len(w['errors'])} ERROR replies, got {len(errors)}"
-        for e, x in zip(w["errors"], errors):
+        for e, x in zip(w["errors"], errors, strict=True):
             d = diff(e, {k: x[k] for k in e}, f"{where}.errors")  # only the members the vector lists
             if d:
                 return d
         return None
     if "flush_acks" in step:
-        records = []
+        records: list[Any] = []
         for r in g["replies"]:
             kind, body = reply(r, own, peer)
             if kind != "ACK" or body["moved_from"] is not None:
                 return f"{where}: a reply other than an ACK of records"
             records += body["records"]
-        order = lambda entries: sorted(entries, key=lambda e: json.dumps(e, sort_keys=True))  # in any order (section 5.6)
+
+        def order(entries: Any) -> list[Any]:  # in any order (section 5.6)
+            return sorted(entries, key=lambda e: json.dumps(e, sort_keys=True))
+
         return diff(order(w["acks"]), order(records), f"{where}.acks")
     if "offer" in step:
         kind, body = reply(g["message"], own, peer)
         if kind != "OFFER":
             return f"{where}: not an OFFER"
-        return diff(w["offer"], {"to": body["to"].hex(), "offer_id": body["offer_id"], "types": body["types"]}, where)
+        return diff(
+            w["offer"], {"to": body["to"].hex(), "offer_id": body["offer_id"], "types": body["types"]}, where
+        )
     return diff(w, g, where)
 
 
 SPECIAL = {"seal": check_seal, "session": check_session}
 
 
-def check(vector, output):
+def check(vector: Any, output: Any) -> str | None:
     """None if the output meets the vector's expected result, else what differs."""
     special = SPECIAL.get(vector["op"])
     if special:
@@ -379,9 +435,11 @@ def check(vector, output):
 # --- run ---------------------------------------------------------------------------------
 
 
-def main():
+def main() -> None:
     ap = argparse.ArgumentParser(description="Run the AXT test vectors against an adapter.")
-    ap.add_argument("--vectors", type=Path, default=REPO / "vectors", help="the vector directory (default: vectors/)")
+    ap.add_argument(
+        "--vectors", type=Path, default=REPO / "vectors", help="the vector directory (default: vectors/)"
+    )
     ap.add_argument("--category", action="append", default=[], help="run only this category (repeatable)")
     ap.add_argument("--verbose", action="store_true", help="name every vector, not only the failures")
     ap.add_argument("command", nargs=argparse.REMAINDER, help="the adapter command, after --")
@@ -398,7 +456,8 @@ def main():
         if unknown:
             raise SystemExit(f"the adapter declares unknown categories: {unknown}")
         print(f"adapter: {hello.get('output', {}).get('name', '?')}; categories: {', '.join(declared)}")
-        failures, totals = [], {}
+        failures: list[tuple[str, str]] = []
+        totals: dict[str, tuple[int, int]] = {}
         for name, doc in files.items():
             if name not in declared:
                 print(f"{name}: not implemented by the adapter, {len(doc['vectors'])} vectors not run")
@@ -408,7 +467,11 @@ def main():
                 try:
                     answer = adapter.ask(vector["id"], vector["op"], vector["input"])
                     if "output" not in answer:
-                        problem = "unsupported" if answer.get("unsupported") else f"adapter failure: {answer.get('failure')}"
+                        problem: str | None = (
+                            "unsupported"
+                            if answer.get("unsupported")
+                            else f"adapter failure: {answer.get('failure')}"
+                        )
                     else:
                         problem = check(vector, answer["output"])
                 except (ValueError, KeyError, TypeError) as e:

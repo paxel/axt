@@ -45,7 +45,9 @@ import io
 import json
 import re
 import unicodedata
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any, cast
 from urllib.parse import urlsplit
 
 import avro.io
@@ -62,9 +64,13 @@ ENVELOPE_AVSC = REPO / "types" / "axt" / "Envelope.avsc"
 # The checks of example_types.py and the X25519 check of keys_examples.py;
 # importing them runs none of their checks.
 _spec = importlib.util.spec_from_file_location("example_types", HERE / "example_types.py")
+if _spec is None or _spec.loader is None:
+    raise ImportError("example_types.py cannot be loaded")
 rules = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(rules)
 _spec = importlib.util.spec_from_file_location("keys_examples", HERE / "keys_examples.py")
+if _spec is None or _spec.loader is None:
+    raise ImportError("keys_examples.py cannot be loaded")
 keys = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(keys)
 
@@ -96,7 +102,7 @@ LANGTAG = re.compile(
 
 # --- the example manifests (spec/manifest.md, section 10) ---------------------
 
-CAT_A_LOG = {
+CAT_A_LOG: dict[str, Any] = {
     "revision": 1,
     "app_name": "cat-a-log",
     "app_url": None,
@@ -121,7 +127,7 @@ CAT_A_LOG = {
     "relay": None,
 }
 
-OLD_BRAIN_FIX = {
+OLD_BRAIN_FIX: dict[str, Any] = {
     "revision": 1,
     "app_name": "Old Brain Fix",
     "app_url": None,
@@ -159,7 +165,7 @@ OLD_BRAIN_FIX = {
 }
 
 
-def test_secret(label):
+def test_secret(label: str) -> bytes:
     return hashlib.sha256(b"AXT test key, not for use: " + label.encode()).digest()
 
 
@@ -190,12 +196,12 @@ assert manifest_json["namespace"] == "axt"
 assert "axt.version" not in manifest_json, "a schema of the specification carries no axt.version"
 assert len(manifest_text.encode("utf-8")) <= rules.MAX_SCHEMA_BYTES, "schema above the size limit"
 assert rules.json_depth(manifest_json) <= rules.MAX_JSON_DEPTH, "schema JSON nested above the depth limit"
-defined = []
+defined: list[str] = []
 data_depth = rules.check_type(manifest_json, where, manifest_json, set(), defined)
 assert data_depth <= rules.MAX_DATA_DEPTH
 
 
-def named_types(t, out):
+def named_types(t: Any, out: list[str]) -> list[str]:
     """Full names of the named types a schema defines, in the namespace axt."""
     if isinstance(t, list):
         for b in t:
@@ -216,15 +222,17 @@ assert not clash, f"names defined in both Envelope.avsc and Manifest.avsc: {clas
 assert len(set(defined)) == len(defined), "a name is defined twice in Manifest.avsc"
 
 manifest_schema = fastavro.parse_schema(manifest_json)
-envelope_schema = fastavro.parse_schema(envelope_json)
+envelope_schema = cast(dict[str, Any], fastavro.parse_schema(envelope_json))
 apache_manifest = avro.schema.parse(manifest_text)
 
 
-def fingerprint(schema_text):
+def fingerprint(schema_text: str) -> tuple[str, int]:
     pcf = to_parsing_canonical_form(fastavro.parse_schema(json.loads(schema_text)))
     assert avro.schema.parse(pcf).canonical_form == pcf, "the two libraries disagree on the canonical form"
     fp = rules.crc64_avro(pcf.encode())
-    assert fa_fingerprint(pcf, "CRC-64-AVRO") == fp.to_bytes(8, "little").hex(), "fastavro fingerprint differs"
+    assert fa_fingerprint(pcf, "CRC-64-AVRO") == fp.to_bytes(8, "little").hex(), (
+        "fastavro fingerprint differs"
+    )
     assert rules.apache_fingerprint(schema_text) == fp.to_bytes(8, "little"), "avro fingerprint differs"
     return pcf, fp
 
@@ -246,18 +254,25 @@ any_record = wfields["any_type"]["type"][1]
 any_record["fields"] = [f for f in any_record["fields"] if f["name"] != "purpose_translations"]
 send_record = wfields["sends"]["type"][1]["items"]
 send_record["fields"] = [f for f in send_record["fields"] if f["name"] != "max_version"]
-datum = dict(OLD_BRAIN_FIX, any_type={"purpose": OLD_BRAIN_FIX["any_type"]["purpose"]},
-             sends=[{"type": "axt.example.v1.Note", "min_version": 1}])
-for library, back in zip(("fastavro", "avro"), rules.resolve(writer, manifest_json, manifest_schema, datum)):
-    expected = (fields["any_type"]["type"][1]["fields"][1]["default"],
-                fields["sends"]["type"][1]["items"]["fields"][2]["default"])
+datum = dict(
+    OLD_BRAIN_FIX,
+    any_type={"purpose": OLD_BRAIN_FIX["any_type"]["purpose"]},
+    sends=[{"type": "axt.example.v1.Note", "min_version": 1}],
+)
+for library, back in zip(
+    ("fastavro", "avro"), rules.resolve(writer, manifest_json, manifest_schema, datum), strict=True
+):
+    expected: Any = (
+        fields["any_type"]["type"][1]["fields"][1]["default"],
+        fields["sends"]["type"][1]["items"]["fields"][2]["default"],
+    )
     got = (back["any_type"]["purpose_translations"], back["sends"][0]["max_version"])
     if got != expected:
         rules.fail("Manifest", f"{library} read {got!r} for the defaults of any_type and sends")
 defaults_resolved += 2
 
 
-def count_defaults(t):
+def count_defaults(t: Any) -> int:
     """The number of fields with a default in a schema, nested records included."""
     if isinstance(t, list):
         return sum(count_defaults(b) for b in t)
@@ -274,22 +289,24 @@ if rules.failures:
 # --- validity (spec/manifest.md, section 4) -----------------------------------
 
 
-def one_line(text):
+def one_line(text: str) -> bool:
     """Not empty, and no control character or line or paragraph separator."""
     return text != "" and not any(unicodedata.category(c) in {"Cc", "Zl", "Zp"} for c in text)
 
 
-def check_sentences(where, entry, problems):
+def check_sentences(where: str, entry: Any, problems: list[str]) -> None:
     s = entry["purpose"]
     if not one_line(s) or len(s.encode("utf-8")) > MAX_SENTENCE:
         problems.append(f"{where}.purpose is not one line of 1 to {MAX_SENTENCE} bytes")
     tr = entry["purpose_translations"]
     if len(tr) > MAX_TRANSLATIONS:
         problems.append(f"{where} has more than {MAX_TRANSLATIONS} translations")
-    seen = set()
+    seen: set[str] = set()
     for tag, text in tr.items():
         if len(tag) > MAX_TAG or not LANGTAG.match(tag):
-            problems.append(f"{where}: {tag!r} is not a language tag of RFC 5646 of up to {MAX_TAG} characters")
+            problems.append(
+                f"{where}: {tag!r} is not a language tag of RFC 5646 of up to {MAX_TAG} characters"
+            )
         if tag.lower() == "en":
             problems.append(f"{where}: the English sentence belongs in purpose, not under the tag {tag!r}")
         if tag.lower() in seen:
@@ -299,10 +316,10 @@ def check_sentences(where, entry, problems):
             problems.append(f"{where}: the {tag} sentence is not one line of 1 to {MAX_SENTENCE} bytes")
 
 
-def check_types(where, entries, problems):
+def check_types(where: str, entries: Any, problems: list[str]) -> None:
     if len(entries) > MAX_TYPES:
         problems.append(f"{where} has more than {MAX_TYPES} entries")
-    names = set()
+    names: set[str] = set()
     for i, e in enumerate(entries):
         here = f"{where}[{i}]"
         if len(e["type"].encode("utf-8")) > MAX_FULL_NAME or not FULL_NAME.match(e["type"]):
@@ -316,9 +333,9 @@ def check_types(where, entries, problems):
             problems.append(f"{here}.max_version is below min_version")
 
 
-def manifest_problems(datum, body_length, envelope_format=1):
+def manifest_problems(datum: Any, body_length: int, envelope_format: int = 1) -> list[str]:
     """Every rule of section 4 the manifest breaks; empty for a valid one."""
-    problems = []
+    problems: list[str] = []
     if body_length > MAX_BODY:
         problems.append(f"body of {body_length} bytes, above {MAX_BODY}")
     if datum["revision"] < 1:
@@ -328,7 +345,13 @@ def manifest_problems(datum, body_length, envelope_format=1):
     url = datum["app_url"]
     if url is not None:
         parts = urlsplit(url)
-        if len(url.encode("utf-8")) > MAX_URL or parts.scheme != "https" or not parts.netloc or not one_line(url) or " " in url:
+        if (
+            len(url.encode("utf-8")) > MAX_URL
+            or parts.scheme != "https"
+            or not parts.netloc
+            or not one_line(url)
+            or " " in url
+        ):
             problems.append(f"app_url is not an absolute https URL of up to {MAX_URL} bytes")
     f = datum["formats"]
     if not 1 <= len(f) <= MAX_FORMATS or len(set(f)) != len(f) or min(f, default=0) < 1:
@@ -351,14 +374,24 @@ def manifest_problems(datum, body_length, envelope_format=1):
     if relay is not None:
         url = relay["url"]
         parts = urlsplit(url)
-        if (len(url.encode("utf-8")) > MAX_RELAY_URL or parts.scheme != "https" or not parts.hostname
-                or "@" in parts.netloc or parts.query or parts.fragment or "?" in url or "#" in url
-                or not url.endswith("/") or not one_line(url) or " " in url):
+        if (
+            len(url.encode("utf-8")) > MAX_RELAY_URL
+            or parts.scheme != "https"
+            or not parts.hostname
+            or "@" in parts.netloc
+            or parts.query
+            or parts.fragment
+            or "?" in url
+            or "#" in url
+            or not url.endswith("/")
+            or not one_line(url)
+            or " " in url
+        ):
             problems.append(f"relay.url is not an absolute https base URL of up to {MAX_RELAY_URL} bytes")
     return problems
 
 
-def encode_body(datum):
+def encode_body(datum: Any) -> bytes:
     buf = io.BytesIO()
     fastavro.schemaless_writer(buf, manifest_schema, datum)
     return b"\xc3\x01" + manifest_fp.to_bytes(8, "little") + buf.getvalue()
@@ -369,7 +402,7 @@ for example in (CAT_A_LOG, OLD_BRAIN_FIX):
     assert not problems, (example["app_name"], problems)
 
 
-def broken(change):
+def broken(change: Callable[[dict[str, Any]], object]) -> dict[str, Any]:
     datum = copy.deepcopy(OLD_BRAIN_FIX)
     change(datum)
     return datum
@@ -378,16 +411,21 @@ def broken(change):
 TAGS = [a + b for a in "abc" for b in "abcdefghijklmnopqrstuvwxyz"]  # well-formed, none of them en
 
 
-def big(datum):
+def big(datum: dict[str, Any]) -> None:
     # 256 types with 64 translations of 100 bytes each: within every count and length, above the body limit.
     datum["takes"] = [
-        {"type": f"org.example.T{i}", "min_version": 1, "max_version": None, "purpose": "x" * 100,
-         "purpose_translations": {tag: "y" * 100 for tag in TAGS[:64]}}
+        {
+            "type": f"org.example.T{i}",
+            "min_version": 1,
+            "max_version": None,
+            "purpose": "x" * 100,
+            "purpose_translations": {tag: "y" * 100 for tag in TAGS[:64]},
+        }
         for i in range(256)
     ]
 
 
-def note_sends(**change):
+def note_sends(**change: Any) -> list[dict[str, Any]]:
     return [dict({"type": "axt.example.v1.Note", "min_version": 1, "max_version": None}, **change)]
 
 
@@ -397,11 +435,17 @@ X25519_KEY = bytes.fromhex("34fa7e71770d8d94c76001ac8d575609f005981f80c115bb7a8f
 RELAY = {"url": "https://relay.example.org/axt/", "mailbox": bytes(range(32))}
 assert not manifest_problems(dict(OLD_BRAIN_FIX, encryption_key=X25519_KEY, relay=RELAY), 0)
 assert len(("https://relay.example.org/" + "a" * 229 + "/").encode()) == MAX_RELAY_URL
-assert not manifest_problems(dict(OLD_BRAIN_FIX, encryption_key=X25519_KEY,
-                                  relay=dict(RELAY, url="https://relay.example.org/" + "a" * 229 + "/")), 0)
+assert not manifest_problems(
+    dict(
+        OLD_BRAIN_FIX,
+        encryption_key=X25519_KEY,
+        relay=dict(RELAY, url="https://relay.example.org/" + "a" * 229 + "/"),
+    ),
+    0,
+)
 
 # Each broken manifest breaks one rule; every problem reported must name it.
-NEGATIVE = [
+NEGATIVE: list[tuple[str, Callable[[dict[str, Any]], object], str]] = [
     ("revision 0", lambda d: d.update(revision=0), "revision"),
     ("empty app name", lambda d: d.update(app_name=""), "app_name"),
     ("app name with a line break", lambda d: d.update(app_name="Old Brain\nFix"), "app_name"),
@@ -419,31 +463,101 @@ NEGATIVE = [
     ("full name above the limit", lambda d: d["takes"][0].update(type="a" * 513), "full name"),
     ("min_version 0", lambda d: d["takes"][0].update(min_version=0), "min_version"),
     ("max below min", lambda d: d["takes"][0].update(min_version=3, max_version=2), "max_version"),
-    ("257 types taken", lambda d: d.update(takes=[dict(d["takes"][0], type=f"org.example.T{i}") for i in range(257)]), "more than 256"),
+    (
+        "257 types taken",
+        lambda d: d.update(takes=[dict(d["takes"][0], type=f"org.example.T{i}") for i in range(257)]),
+        "more than 256",
+    ),
     ("empty sentence", lambda d: d["takes"][1].update(purpose=""), "purpose"),
-    ("sentence with a line separator", lambda d: d["takes"][2].update(purpose="A Note\u2028becomes a Note."), "purpose"),
+    (
+        "sentence with a line separator",
+        lambda d: d["takes"][2].update(purpose="A Note\u2028becomes a Note."),
+        "purpose",
+    ),
     ("sentence above the limit", lambda d: d["any_type"].update(purpose="x" * 513), "purpose"),
     ("empty translation", lambda d: d["takes"][0]["purpose_translations"].update(de=""), "de sentence"),
-    ("translation above the limit", lambda d: d["any_type"]["purpose_translations"].update(de="x" * 513), "de sentence"),
-    ("65 translations", lambda d: d["takes"][0].update(purpose_translations={t: "Ein Termin." for t in TAGS[:65]}), "more than 64"),
+    (
+        "translation above the limit",
+        lambda d: d["any_type"]["purpose_translations"].update(de="x" * 513),
+        "de sentence",
+    ),
+    (
+        "65 translations",
+        lambda d: d["takes"][0].update(purpose_translations={t: "Ein Termin." for t in TAGS[:65]}),
+        "more than 64",
+    ),
     ("tag en", lambda d: d["takes"][0]["purpose_translations"].update(en="An Appointment."), "English"),
     ("tag twice", lambda d: d["takes"][0]["purpose_translations"].update(DE="Ein Termin."), "twice"),
-    ("not a tag", lambda d: d["takes"][0]["purpose_translations"].update(de_DE="Ein Termin."), "language tag"),
-    ("private use tag alone", lambda d: d["takes"][0]["purpose_translations"].update({"x-old": "Ein Termin."}), "language tag"),
-    ("tag above the limit", lambda d: d["takes"][0]["purpose_translations"].update({"de-Latn-DE-1996-x-abcdefgh-abcdefgh-ab": "Ein Termin."}), "language tag"),
+    (
+        "not a tag",
+        lambda d: d["takes"][0]["purpose_translations"].update(de_DE="Ein Termin."),
+        "language tag",
+    ),
+    (
+        "private use tag alone",
+        lambda d: d["takes"][0]["purpose_translations"].update({"x-old": "Ein Termin."}),
+        "language tag",
+    ),
+    (
+        "tag above the limit",
+        lambda d: d["takes"][0]["purpose_translations"].update(
+            {"de-Latn-DE-1996-x-abcdefgh-abcdefgh-ab": "Ein Termin."}
+        ),
+        "language tag",
+    ),
     ("sends twice", lambda d: d.update(sends=note_sends() * 2), "appears twice"),
     ("sends not a full name", lambda d: d.update(sends=note_sends(type="Note!")), "full name"),
     ("sends min_version 0", lambda d: d.update(sends=note_sends(min_version=0)), "min_version"),
-    ("sends max below min", lambda d: d.update(sends=note_sends(min_version=2, max_version=1)), "max_version"),
-    ("257 types sent", lambda d: d.update(sends=[dict(note_sends()[0], type=f"org.example.T{i}") for i in range(257)]), "more than 256"),
-    ("encryption key of small order", lambda d: d.update(encryption_key=bytes(32), relay=RELAY), "encryption_key"),
-    ("encryption key without relay", lambda d: d.update(encryption_key=X25519_KEY), "relay and encryption_key"),
+    (
+        "sends max below min",
+        lambda d: d.update(sends=note_sends(min_version=2, max_version=1)),
+        "max_version",
+    ),
+    (
+        "257 types sent",
+        lambda d: d.update(sends=[dict(note_sends()[0], type=f"org.example.T{i}") for i in range(257)]),
+        "more than 256",
+    ),
+    (
+        "encryption key of small order",
+        lambda d: d.update(encryption_key=bytes(32), relay=RELAY),
+        "encryption_key",
+    ),
+    (
+        "encryption key without relay",
+        lambda d: d.update(encryption_key=X25519_KEY),
+        "relay and encryption_key",
+    ),
     ("relay without encryption key", lambda d: d.update(relay=RELAY), "relay and encryption_key"),
-    ("relay URL http", lambda d: d.update(encryption_key=X25519_KEY, relay=dict(RELAY, url="http://relay.example.org/axt/")), "relay.url"),
-    ("relay URL without a slash at the end", lambda d: d.update(encryption_key=X25519_KEY, relay=dict(RELAY, url="https://relay.example.org/axt")), "relay.url"),
-    ("relay URL with a query", lambda d: d.update(encryption_key=X25519_KEY, relay=dict(RELAY, url="https://relay.example.org/?a=1/")), "relay.url"),
-    ("relay URL with user information", lambda d: d.update(encryption_key=X25519_KEY, relay=dict(RELAY, url="https://me@relay.example.org/")), "relay.url"),
-    ("relay URL above the limit", lambda d: d.update(encryption_key=X25519_KEY, relay=dict(RELAY, url="https://relay.example.org/" + "a" * 230 + "/")), "relay.url"),
+    (
+        "relay URL http",
+        lambda d: d.update(encryption_key=X25519_KEY, relay=dict(RELAY, url="http://relay.example.org/axt/")),
+        "relay.url",
+    ),
+    (
+        "relay URL without a slash at the end",
+        lambda d: d.update(encryption_key=X25519_KEY, relay=dict(RELAY, url="https://relay.example.org/axt")),
+        "relay.url",
+    ),
+    (
+        "relay URL with a query",
+        lambda d: d.update(
+            encryption_key=X25519_KEY, relay=dict(RELAY, url="https://relay.example.org/?a=1/")
+        ),
+        "relay.url",
+    ),
+    (
+        "relay URL with user information",
+        lambda d: d.update(encryption_key=X25519_KEY, relay=dict(RELAY, url="https://me@relay.example.org/")),
+        "relay.url",
+    ),
+    (
+        "relay URL above the limit",
+        lambda d: d.update(
+            encryption_key=X25519_KEY, relay=dict(RELAY, url="https://relay.example.org/" + "a" * 230 + "/")
+        ),
+        "relay.url",
+    ),
     ("body above the limit", big, "body of"),
 ]
 for label, change, expected in NEGATIVE:
@@ -455,13 +569,13 @@ assert LANGTAG.match("de-Latn-DE-1996-x-abcdefgh-abcdefgh-ab"), "the long tag mu
 # --- fit and language (spec/manifest.md, sections 3.4, 3.6 and 5.2) -----------
 
 
-def schema_version(schema):
+def schema_version(schema: Any) -> int:
     """The version of a writer schema: its axt.version, or 1 without a valid one."""
     v = schema.get("axt.version")
     return v if isinstance(v, int) and not isinstance(v, bool) and v >= 1 else 1
 
 
-def fit(manifest, full_name, version):
+def fit(manifest: Any, full_name: str, version: int) -> Any:
     """The entry of the manifest a type and version fits, or None."""
     for entry in manifest["takes"]:
         if entry["type"] == full_name:
@@ -470,7 +584,7 @@ def fit(manifest, full_name, version):
     return manifest["any_type"]
 
 
-def sentence(entry, priority_list):
+def sentence(entry: Any, priority_list: list[str]) -> Any:
     """RFC 4647, section 3.4, Lookup over the tags of an entry; English by default."""
     texts = {tag.lower(): text for tag, text in entry["purpose_translations"].items()}
     texts.setdefault("en", entry["purpose"])
@@ -487,9 +601,17 @@ def sentence(entry, priority_list):
 
 EXAMPLE_TYPES = REPO / "types" / "axt" / "example" / "v1"
 appointment_version = schema_version(json.loads((EXAMPLE_TYPES / "Appointment.1.avsc").read_text()))
-memo = {"type": "record", "name": "Memo", "namespace": "com.example", "fields": []}  # spec/envelope.md, 10.1
+memo: dict[str, Any] = {
+    "type": "record",
+    "name": "Memo",
+    "namespace": "com.example",
+    "fields": [],
+}  # spec/envelope.md, 10.1
 assert appointment_version == 1 and schema_version(memo) == 1
-assert schema_version(dict(memo, **{"axt.version": "2"})) == 1 and schema_version(dict(memo, **{"axt.version": 0})) == 1
+assert (
+    schema_version(dict(memo, **{"axt.version": "2"})) == 1
+    and schema_version(dict(memo, **{"axt.version": 0})) == 1
+)
 
 # cat-a-log sends to Old Brain Fix: a named entry, and any type for the rest.
 walk = []
@@ -513,7 +635,7 @@ assert fit(narrowed, "axt.example.v1.Appointment", 1) is None
 # --- hand-built encoding ------------------------------------------------------
 
 
-def zigzag(n):
+def zigzag(n: int) -> bytes:
     z = (n << 1) ^ (n >> 63)
     out = bytearray()
     while True:
@@ -526,26 +648,38 @@ def zigzag(n):
             return bytes(out)
 
 
-def string_parts(name, text):
+Parts = list[tuple[bytes, str]]  # bytes and what they mean, for the annotated hex
+
+
+def string_parts(name: str, text: str) -> Parts:
     raw = text.encode("utf-8")
     return [(zigzag(len(raw)), f"{name}: string length {len(raw)}"), (raw, f'"{text}"')]
 
 
-def null_or(name, value, branch, parts_of):
+def null_or(name: str, value: Any, branch: str, parts_of: Callable[[Any], Parts]) -> Parts:
     if value is None:
         return [(zigzag(0), f"{name}: union index 0, null")]
     return [(zigzag(1), f"{name}: union index 1, {branch}")] + parts_of(value)
 
 
-def block(name, n, what):
-    return [(zigzag(n), f"{name}: {what} block of {n} {'item' if what == 'array' and n == 1 else 'items' if what == 'array' else 'entry' if n == 1 else 'entries'}")]
+def block(name: str, n: int, what: str) -> Parts:
+    unit = (
+        "item"
+        if what == "array" and n == 1
+        else "items"
+        if what == "array"
+        else "entry"
+        if n == 1
+        else "entries"
+    )
+    return [(zigzag(n), f"{name}: {what} block of {n} {unit}")]
 
 
-def end(name, what):
+def end(name: str, what: str) -> Parts:
     return [(zigzag(0), f"{name}: end of the {what}")]
 
 
-def sentence_parts(name, entry):
+def sentence_parts(name: str, entry: Any) -> Parts:
     parts = string_parts(f"{name}.purpose", entry["purpose"])
     tr = entry["purpose_translations"]
     if tr:
@@ -557,13 +691,17 @@ def sentence_parts(name, entry):
     return parts
 
 
-def version_parts(name, e):
+def version_parts(name: str, e: Any) -> Parts:
     return [(zigzag(e["min_version"]), f"{name}.min_version: int {e['min_version']}")] + null_or(
-        f"{name}.max_version", e["max_version"], "int", lambda v: [(zigzag(v), f"{name}.max_version: int {v}")])
+        f"{name}.max_version",
+        e["max_version"],
+        "int",
+        lambda v: [(zigzag(v), f"{name}.max_version: int {v}")],
+    )
 
 
-def body_parts(m):
-    parts = [
+def body_parts(m: Any) -> Parts:
+    parts: Parts = [
         (b"\xc3\x01", "single-object marker"),
         (manifest_fp.to_bytes(8, "little"), "fingerprint of axt.Manifest, format 1"),
         (zigzag(m["revision"]), f"revision: long {m['revision']}"),
@@ -582,21 +720,29 @@ def body_parts(m):
     parts += end("takes", "array")
     parts += null_or("any_type", m["any_type"], "ManifestAnyType", lambda a: sentence_parts("any_type", a))
 
-    def sends_parts(sends):
+    def sends_parts(sends: Any) -> Parts:
         out = block("sends", len(sends), "array") if sends else []
         for i, e in enumerate(sends):
             out += string_parts(f"sends[{i}].type", e["type"]) + version_parts(f"sends[{i}]", e)
         return out + end("sends", "array")
 
     parts += null_or("sends", m["sends"], "array", sends_parts)
-    parts += null_or("encryption_key", m["encryption_key"], "ManifestEncryptionKey",
-                     lambda k: [(k, "encryption_key: fixed(32)")])
-    parts += null_or("relay", m["relay"], "ManifestRelay",
-                     lambda r: string_parts("relay.url", r["url"]) + [(r["mailbox"], "relay.mailbox: fixed(32)")])
+    parts += null_or(
+        "encryption_key",
+        m["encryption_key"],
+        "ManifestEncryptionKey",
+        lambda k: [(k, "encryption_key: fixed(32)")],
+    )
+    parts += null_or(
+        "relay",
+        m["relay"],
+        "ManifestRelay",
+        lambda r: string_parts("relay.url", r["url"]) + [(r["mailbox"], "relay.mailbox: fixed(32)")],
+    )
     return parts
 
 
-def library_binary(schema, datum):
+def library_binary(schema: Any, datum: Any) -> bytes:
     buf = io.BytesIO()
     fastavro.schemaless_writer(buf, schema, datum)
     return buf.getvalue()
@@ -632,11 +778,23 @@ for m in (CAT_A_LOG, OLD_BRAIN_FIX):
     assert keys.verify_problem(sender, keys.MESSAGE_PREFIX + unsigned[10:], signature) is None
     parts.append((signature, "signature: fixed(64)"))
     message = unsigned + signature
-    assert hashlib.sha256(message).hexdigest() == PUBLISHED[m["app_name"]], \
+    assert hashlib.sha256(message).hexdigest() == PUBLISHED[m["app_name"]], (
         f"{m['app_name']}: not the MANIFEST of spec/protocol.md, section 17.2"
-    datum = {"format": 1, "kind": "MANIFEST", "sender": sender, "record": None, "body": body, "signature": signature}
-    assert message[10:] == library_binary(envelope_schema, datum), f"{m['app_name']}: envelope differs from fastavro"
-    back = fastavro.schemaless_reader(io.BytesIO(message[10:]), envelope_schema, envelope_schema)
+    )
+    datum = {
+        "format": 1,
+        "kind": "MANIFEST",
+        "sender": sender,
+        "record": None,
+        "body": body,
+        "signature": signature,
+    }
+    assert message[10:] == library_binary(envelope_schema, datum), (
+        f"{m['app_name']}: envelope differs from fastavro"
+    )
+    back = cast(
+        dict[str, Any], fastavro.schemaless_reader(io.BytesIO(message[10:]), envelope_schema, envelope_schema)
+    )
     assert back["kind"] == "MANIFEST" and back["record"] is None and back["body"] == body
     assert int.from_bytes(back["body"][2:10], "little") == manifest_fp
     assert len(message) <= MAX_MESSAGE and len(body) <= MAX_BODY
@@ -645,13 +803,13 @@ for m in (CAT_A_LOG, OLD_BRAIN_FIX):
 # --- output -------------------------------------------------------------------
 
 
-def dump(parts):
+def dump(parts: Parts) -> str:
     """Annotated hex in the layout of spec/envelope.md and spec/manifest.md."""
     offset = 0
     lines = []
     for data, meaning in parts:
         for i in range(0, len(data), 8):
-            hexs = data[i:i + 8].hex(" ")
+            hexs = data[i : i + 8].hex(" ")
             if i == 0:
                 lines.append(f"{offset:04x}  {hexs:<23}  {meaning}".rstrip())
             else:
@@ -663,8 +821,10 @@ def dump(parts):
 
 print(f"axt.Manifest canonical form: {manifest_pcf}")
 print(f"axt.Manifest CRC-64-AVRO: 0x{manifest_fp:016x}, bytes {manifest_fp.to_bytes(8, 'little').hex(' ')}")
-print(f"axt.Manifest: data depth {data_depth}; defaults resolved: {defaults_resolved}; "
-      f"fields without a default: {', '.join(required)}")
+print(
+    f"axt.Manifest: data depth {data_depth}; defaults resolved: {defaults_resolved}; "
+    f"fields without a default: {', '.join(required)}"
+)
 print(f"axt.Envelope CRC-64-AVRO: 0x{envelope_fp:016x}")
 print(f"validity: both examples valid; {len(NEGATIVE)} broken manifests rejected")
 print()
@@ -673,7 +833,9 @@ for full_name, en, de in walk:
     print(f"  {full_name}: {en} / {de}")
 for name, parts, message, body in messages:
     print()
-    print(f"== {name}: MANIFEST message, {len(message)} bytes, body {len(body)} bytes, "
-          f"SHA-256 {hashlib.sha256(message).hexdigest()} ==")
+    print(
+        f"== {name}: MANIFEST message, {len(message)} bytes, body {len(body)} bytes, "
+        f"SHA-256 {hashlib.sha256(message).hexdigest()} =="
+    )
     print(dump(parts))
 print("all checks passed")

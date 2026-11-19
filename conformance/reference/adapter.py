@@ -16,7 +16,8 @@ every vector shows that the vectors agree with the scripts' checks; it is a
 test of the vectors, not a library.
 
 It needs what the example scripts need: fastavro, avro (1.12), pynacl,
-cryptography, and a time zone database where Python's zoneinfo finds it. Every key it uses comes from the request; it holds none itself.
+cryptography, and a time zone database where Python's zoneinfo finds it. Every key it uses comes
+from the request; it holds none itself.
 """
 
 import contextlib
@@ -27,14 +28,19 @@ import json
 import os
 import sys
 import zlib
+from collections.abc import Callable, Iterable
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
 HERE = Path(__file__).resolve().parent
 TOOLS = HERE.parent / "tools"
 
 
-def load(name):
+def load(name: str) -> ModuleType:
     spec = importlib.util.spec_from_file_location(name, TOOLS / f"{name}.py")
+    if spec is None or spec.loader is None:
+        raise ImportError(f"{name}.py cannot be loaded")
     module = importlib.util.module_from_spec(spec)
     with contextlib.redirect_stdout(io.StringIO()):
         spec.loader.exec_module(module)
@@ -49,15 +55,28 @@ mr = rules.mr
 import fastavro  # noqa: E402
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305  # noqa: E402
 
-CATEGORIES = ["encoding", "types", "time", "metadata", "records", "manifest", "keys", "protocol", "file", "qr", "local", "relay",
-              "relay-server"]
+CATEGORIES = [
+    "encoding",
+    "types",
+    "time",
+    "metadata",
+    "records",
+    "manifest",
+    "keys",
+    "protocol",
+    "file",
+    "qr",
+    "local",
+    "relay",
+    "relay-server",
+]
 OUT_INLINE = 1 << 20  # bytes above which an answer carries raw DEFLATE rather than hex
 
 
 # --- bytes ----------------------------------------------------------------------------
 
 
-def b_in(v):
+def b_in(v: Any) -> Any:
     if v is None:
         return None
     if isinstance(v, str):
@@ -68,20 +87,24 @@ def b_in(v):
     return data
 
 
-def b_out(data):
+def b_out(data: bytes | None) -> Any:
     if data is None:
         return None
     if len(data) <= OUT_INLINE:
         return data.hex()
     c = zlib.compressobj(6, zlib.DEFLATED, -15)
-    return {"deflate": (c.compress(data) + c.flush()).hex(), "length": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+    return {
+        "deflate": (c.compress(data) + c.flush()).hex(),
+        "length": len(data),
+        "sha256": hashlib.sha256(data).hexdigest(),
+    }
 
 
-def ok(value=None):
+def ok(value: Any = None) -> dict[str, Any]:
     return {"accept": {} if value is None else value}
 
 
-def no(error, note=None, **members):
+def no(error: str, note: str | None = None, **members: Any) -> dict[str, Any]:
     return {"reject": dict({"error": error}, **({} if note is None else {"note": note}), **members)}
 
 
@@ -96,17 +119,17 @@ class Undecodable(Exception):
 
 
 class Reader:
-    def __init__(self, data, pos=0):
+    def __init__(self, data: bytes, pos: int = 0) -> None:
         self.data, self.pos = data, pos
 
-    def take(self, n):
+    def take(self, n: int) -> bytes:
         if n < 0 or self.pos + n > len(self.data):
             raise Undecodable("a length below 0 or beyond the end")
-        out = self.data[self.pos:self.pos + n]
+        out = self.data[self.pos : self.pos + n]
         self.pos += n
         return out
 
-    def long(self, bits=64):
+    def long(self, bits: int = 64) -> int:
         shift = result = 0
         for _ in range(10):
             b = self.take(1)[0]
@@ -120,18 +143,19 @@ class Reader:
         raise Undecodable("a varint of more than 10 bytes")
 
 
-def named(t, names, namespace):
+def named(t: dict[str, Any], names: dict[str, Any], namespace: str) -> str:
     """Register a named type under its full name; return the namespace its children inherit."""
     name = t["name"]
-    ns = name.rpartition(".")[0] if "." in name else t.get("namespace", namespace)
+    ns: str = name.rpartition(".")[0] if "." in name else t.get("namespace", namespace)
     full = name if "." in name else (f"{ns}.{name}" if ns else name)
     names[full] = t
     names.setdefault(name, t)
     return ns
 
 
-def read(t, r, names, namespace="", depth=0):
-    """Decode one value of the schema t, strictly; return its meaning as JSON (spec/conformance.md, section 3.3)."""
+def read(t: Any, r: Reader, names: dict[str, Any], namespace: str = "", depth: int = 0) -> Any:
+    """Decode one value of the schema t, strictly; return its meaning as JSON (spec/conformance.md,
+    section 3.3)."""
     if isinstance(t, str):
         if t not in PRIMITIVES:
             ref = names.get(t) or names.get(f"{namespace}.{t}")
@@ -151,9 +175,11 @@ def read(t, r, names, namespace="", depth=0):
             return r.long()
         if t == "float":
             import struct
+
             return struct.unpack("<f", r.take(4))[0]
         if t == "double":
             import struct
+
             return struct.unpack("<d", r.take(8))[0]
         data = r.take(r.long())
         if t == "bytes":
@@ -161,7 +187,7 @@ def read(t, r, names, namespace="", depth=0):
         try:
             return data.decode("utf-8")  # rejects surrogates and overlong forms (spec/envelope.md, section 7)
         except UnicodeDecodeError:
-            raise Undecodable("a string that is not well-formed UTF-8")
+            raise Undecodable("a string that is not well-formed UTF-8") from None
     if isinstance(t, list):
         i = r.long()
         if not 0 <= i < len(t):
@@ -184,7 +210,7 @@ def read(t, r, names, namespace="", depth=0):
     if kind in ("array", "map"):
         if depth + 1 > MAX_DATA_DEPTH:
             raise Undecodable("a data depth above 32")
-        out = [] if kind == "array" else {}
+        out: Any = [] if kind == "array" else {}
         while True:
             n = r.long()
             if n == 0:
@@ -203,7 +229,7 @@ def read(t, r, names, namespace="", depth=0):
     return read(kind, r, names, namespace, depth)
 
 
-def decode_all(t, data):
+def decode_all(t: Any, data: bytes) -> Any:
     r = Reader(data)
     value = read(t, r, {})
     if r.pos != len(data):
@@ -211,7 +237,7 @@ def decode_all(t, data):
     return value
 
 
-def json_of(t, value, names=None, namespace=""):
+def json_of(t: Any, value: Any, names: dict[str, Any] | None = None, namespace: str = "") -> Any:
     """The meaning of a value as fastavro decodes it with logical types removed."""
     names = {} if names is None else names
     if isinstance(t, str):
@@ -241,7 +267,7 @@ def json_of(t, value, names=None, namespace=""):
     return json_of(kind, value, names, namespace)
 
 
-def plain_schema(text):
+def plain_schema(text: str) -> Any:
     return pe.without_logical_types(json.loads(text))
 
 
@@ -252,7 +278,7 @@ ENVELOPE_FP = pe.fp8(pe.fingerprints["Envelope"][1])
 MAX_MESSAGE = pe.MAX_MESSAGE
 
 
-def decode_envelope(m):
+def decode_envelope(m: bytes) -> tuple[Any, str | None]:
     """The envelope of a live message, or the error code of spec/protocol.md, section 8.2."""
     if len(m) > MAX_MESSAGE:
         return None, "TOO_LARGE"
@@ -269,14 +295,14 @@ def decode_envelope(m):
     return d, None
 
 
-def op_decode_message(i):
+def op_decode_message(i: Any) -> dict[str, Any]:
     d, error = decode_envelope(b_in(i["message"]))
     if error:
         return no(error)
     return ok(dict(d, body=b_out(bytes.fromhex(d["body"]))))
 
 
-def op_encode_message(i):
+def op_encode_message(i: Any) -> dict[str, Any]:
     zz = keys.zigzag
     out = b"\xc3\x01" + ENVELOPE_FP + zz(i["format"]) + zz(pe.KINDS.index(i["kind"])) + b_in(i["sender"])
     rec = i["record"]
@@ -289,7 +315,7 @@ def op_encode_message(i):
     return ok({"message": b_out(out + zz(len(body)) + body + b_in(i["signature"]))})
 
 
-def op_decode_body(i):
+def op_decode_body(i: Any) -> dict[str, Any]:
     """The body of a kind whose schema the specification publishes (spec/envelope.md, section 2.3)."""
     name = pe.BODY_SCHEMA[i["kind"]]
     body = b_in(i["body"])
@@ -301,7 +327,7 @@ def op_decode_body(i):
         return no("INVALID_MESSAGE", str(e))
 
 
-def op_fingerprint(i):
+def op_fingerprint(i: Any) -> dict[str, Any]:
     pcf, fp = me.fingerprint(i["schema"])
     return ok({"canonical_form": pcf, "fingerprint": pe.fp8(fp).hex()})
 
@@ -309,9 +335,10 @@ def op_fingerprint(i):
 # --- types (spec/types.md) ----------------------------------------------------------------
 
 
-def decode_value(writer_text, body, reader=None):
-    """The value of a single-object encoding with the writer schema, before any check of its values; or a rejection.
-    With a reader schema, a writer schema that does not resolve to it is rejected before the body is decoded."""
+def decode_value(writer_text: str, body: bytes, reader: Any = None) -> tuple[Any, dict[str, Any] | None]:
+    """The value of a single-object encoding with the writer schema, before any check of its values; or a
+    rejection. With a reader schema, a writer schema that does not resolve to it is rejected before the
+    body is decoded."""
     if body[:2] != b"\xc3\x01" or len(body) < 10:
         return None, no("UNDECODABLE", "not a single-object encoding")
     if body[2:10] != pe.fp8(pe.canonical_fp(writer_text)):
@@ -324,7 +351,7 @@ def decode_value(writer_text, body, reader=None):
         return None, no("UNDECODABLE", str(e))
 
 
-def op_decode_record(i):
+def op_decode_record(i: Any) -> dict[str, Any]:
     writer_text, reader_text, body = i["writer_schema"], i["reader_schema"], b_in(i["body"])
     writer = json.loads(writer_text)
     reader = None if reader_text is None else json.loads(reader_text)
@@ -340,8 +367,11 @@ def op_decode_record(i):
         return ok({"value": value})
     w, r = pe.without_logical_types(writer), pe.without_logical_types(reader)
     try:
-        resolved = fastavro.schemaless_reader(io.BytesIO(body[10:]), fastavro.parse_schema(w, _write_hint=False),
-                                              fastavro.parse_schema(r, _write_hint=False))
+        resolved = fastavro.schemaless_reader(
+            io.BytesIO(body[10:]),
+            fastavro.parse_schema(w, _write_hint=False),
+            fastavro.parse_schema(r, _write_hint=False),
+        )
     except Exception as e:
         return no("DOES_NOT_RESOLVE", str(e))
     return ok({"value": json_of(r, resolved)})
@@ -350,13 +380,13 @@ def op_decode_record(i):
 # --- metadata (spec/metadata.md) ------------------------------------------------------------
 
 
-def op_describe(i):
+def op_describe(i: Any) -> dict[str, Any]:
     return ok(mr.describe(json.loads(i["schema"]), i["field"], i["languages"]))
 
 
-def op_check_record(i):
-    """A receiver that checks the attributes: the first value, in the order of the encoding, that breaks a rule,
-    whether a check of an attribute or a rule of a time type (spec/conformance.md, section 5.13)."""
+def op_check_record(i: Any) -> dict[str, Any]:
+    """A receiver that checks the attributes: the first value, in the order of the encoding, that breaks a
+    rule, whether a check of an attribute or a rule of a time type (spec/conformance.md, section 5.13)."""
     value, rejected = decode_value(i["schema"], b_in(i["body"]))
     if rejected:
         return rejected
@@ -374,7 +404,7 @@ MANIFEST = plain_schema(pe.texts["Manifest"])
 MANIFEST_FP = pe.fp8(pe.fingerprints["Manifest"][1])
 
 
-def manifest_datum(body):
+def manifest_datum(body: bytes) -> tuple[Any, Any, str | None]:
     """The manifest as fastavro decodes it, after a strict check of its bytes; or an error code."""
     if body[:10] != b"\xc3\x01" + MANIFEST_FP:
         return None, None, "INVALID_MESSAGE"
@@ -386,7 +416,7 @@ def manifest_datum(body):
     return datum, meaning, None
 
 
-def op_check_manifest(i):
+def op_check_manifest(i: Any) -> dict[str, Any]:
     body = b_in(i["body"])
     datum, meaning, error = manifest_datum(body)
     if error:
@@ -395,20 +425,22 @@ def op_check_manifest(i):
     return no("MANIFEST_INVALID", problems[0]) if problems else ok({"manifest": meaning})
 
 
-def op_fit(i):
+def op_fit(i: Any) -> dict[str, Any]:
     datum, _, error = manifest_datum(b_in(i["manifest"]))
     if error:
         return no(error)
     schema = json.loads(i["schema"])
     entry = me.fit(datum, pe.full_name(schema), me.schema_version(schema))
-    return ok({"fits": entry is not None, "purpose": None if entry is None else me.sentence(entry, i["languages"])})
+    return ok(
+        {"fits": entry is not None, "purpose": None if entry is None else me.sentence(entry, i["languages"])}
+    )
 
 
 # --- records (spec/records.md) ---------------------------------------------------------------
 # protocol_examples.py has no model of a receiver's own changes; this is the adapter's own.
 
 
-def record_key(rid):
+def record_key(rid: str) -> int | None:
     """The id as a 128-bit value, or None if it is not a UUID in text form or is the nil or max UUID."""
     if pe.uuid_problem(rid):
         return None
@@ -416,16 +448,24 @@ def record_key(rid):
 
 
 class Receiver:
-    """The records of one sender at a receiver that lets its user change them (spec/records.md, sections 5 and 6)."""
+    """The records of one sender at a receiver that lets its user change them (spec/records.md, sections 5
+    and 6)."""
 
-    def __init__(self, local_changes, delete_with_local_changes):
+    def __init__(self, local_changes: str, delete_with_local_changes: str) -> None:
+        # None is the key of an id that is not valid; no record is ever stored under it.
+        self.records: dict[int | None, dict[str, Any]]
         self.mode, self.keep_on_delete, self.records = local_changes, delete_with_local_changes == "keep", {}
 
-    def result(self, outcome, r, kept=()):
-        return {"outcome": outcome, "receiver_version": r["version"], "kept_fields": sorted(kept), "state": r["state"],
-                "value": None if r["state"] != "there" else dict(r["value"])}
+    def result(self, outcome: str, r: dict[str, Any], kept: Iterable[str] = ()) -> dict[str, Any]:
+        return {
+            "outcome": outcome,
+            "receiver_version": r["version"],
+            "kept_fields": sorted(kept),
+            "state": r["state"],
+            "value": None if r["state"] != "there" else dict(r["value"]),
+        }
 
-    def message(self, m):
+    def message(self, m: Any) -> dict[str, Any]:
         key = record_key(m["id"])
         if key is None:
             return {"error": "RECORD_ID_INVALID"}
@@ -438,9 +478,13 @@ class Receiver:
         if r is not None and m["version"] <= r["version"]:
             return self.result("DUPLICATE" if m["version"] == r["version"] else "STALE", r)
         if r is None:
-            r = self.records[key] = {"type": m["type"] if is_data else None, "version": m["version"],
-                                     "state": "there" if is_data else "tombstone",
-                                     "value": dict(m["value"]) if is_data else None, "changed": set()}
+            r = self.records[key] = {
+                "type": m["type"] if is_data else None,
+                "version": m["version"],
+                "state": "there" if is_data else "tombstone",
+                "value": dict(m["value"]) if is_data else None,
+                "changed": set(),
+            }
             return self.result("APPLIED", r)
         r["version"] = m["version"]
         if not is_data:
@@ -467,23 +511,25 @@ class Receiver:
         r["value"] = value
         return self.result("MERGED" if kept else "APPLIED", r, kept)
 
-    def local_change(self, rid, field, value):
+    def local_change(self, rid: str, field: str, value: Any) -> None:
         r = self.records[record_key(rid)]
         r["value"][field] = value
         r["changed"].add(field)
 
-    def local_delete(self, rid):
+    def local_delete(self, rid: str) -> None:
         self.records[record_key(rid)].update(state="deleted_by_user", value=None)
 
 
-def op_apply(i):
+def op_apply(i: Any) -> dict[str, Any]:
     receiver = Receiver(i["policy"]["local_changes"], i["policy"]["delete_with_local_changes"])
-    steps = []
+    steps: list[dict[str, Any]] = []
     for e in i["events"]:
         if "message" in e:
             steps.append(receiver.message(e["message"]))
         elif "local_change" in e:
-            receiver.local_change(e["local_change"]["id"], e["local_change"]["field"], e["local_change"]["value"])
+            receiver.local_change(
+                e["local_change"]["id"], e["local_change"]["field"], e["local_change"]["value"]
+            )
             steps.append({})
         else:
             receiver.local_delete(e["local_delete"]["id"])
@@ -496,31 +542,40 @@ def op_apply(i):
 OUTCOMES = ("APPLIED", "DUPLICATE", "STALE")
 
 
-def op_session(i):
+def op_session(i: Any) -> dict[str, Any]:
     """One app in one live connection, as the model of protocol_examples.py plays it."""
     cfg = i["app"]
     manifest, _, error = manifest_datum(b_in(cfg["manifest"]))
     readers = {n: json.loads(t) for n, t in cfg["readers"].items()}
     takes = set(cfg["user_takes"])
-    app = pe.App("adapter", b_in(cfg["seed"]), manifest, readers, lambda n: n in takes, formats=cfg["formats"])
-    out = []
+    app = pe.App(
+        "adapter", b_in(cfg["seed"]), manifest, readers, lambda n: n in takes, formats=cfg["formats"]
+    )
+    out: list[dict[str, Any]] = []
     for step in i["steps"]:
         if "receive" in step:
             what, replies = app.receive(b_in(step["receive"]))
-            out.append({"outcome": what if what in OUTCOMES else None, "close": what == "no common format: close",
-                        "replies": [b_out(r) for r in replies]})
+            out.append(
+                {
+                    "outcome": what if what in OUTCOMES else None,
+                    "close": what == "no common format: close",
+                    "replies": [b_out(r) for r in replies],
+                }
+            )
         elif "flush_acks" in step:
             m = app.ack()
             out.append({"replies": [] if m is None else [b_out(m)]})
         elif "offer" in step:
             o = step["offer"]
-            _, m = app.offer(o["offer_id"], [(t["schema"], t["count"], None) for t in o["types"]], check=False)
+            _, m = app.offer(
+                o["offer_id"], [(t["schema"], t["count"], None) for t in o["types"]], check=False
+            )
             out.append({"message": b_out(m)})
         elif "close" in step:
             app.close()
             out.append({})
         else:
-            (what, arg), = step["query"].items()
+            ((what, arg),) = step["query"].items()
             if what == "accepted":
                 out.append({"accepted": app.accepted(arg)})
             elif what == "outcome":
@@ -536,7 +591,12 @@ def op_session(i):
 # --- file (spec/transports.md, section 2) -----------------------------------------------------
 # The scripts write files but have no reader model; this is the adapter's own reader.
 
-MAX_FILE, MAX_META, MAX_BLOCK, MAX_TOTAL = 268435456, 8388608, 67108864, 1073741824  # spec/envelope.md, section 8
+MAX_FILE, MAX_META, MAX_BLOCK, MAX_TOTAL = (
+    268435456,
+    8388608,
+    67108864,
+    1073741824,
+)  # spec/envelope.md, section 8
 ENVELOPE_PCF = pe.fingerprints["Envelope"][0]
 LOWER_HEX = __import__("re").compile(r"^[0-9a-f]*$")
 KEY_MOVE_FP = pe.fp8(pe.fingerprints["KeyMove"][1])
@@ -546,7 +606,7 @@ class FileRejected(Exception):
     pass
 
 
-def inflate(payload, limit):
+def inflate(payload: bytes, limit: int) -> bytes:
     d = zlib.decompressobj(-15)
     out = d.decompress(payload, limit + 1)
     if len(out) > limit:
@@ -556,7 +616,7 @@ def inflate(payload, limit):
     return out
 
 
-def file_messages(data):
+def file_messages(data: bytes) -> tuple[dict[str, bytes], list[bytes]]:
     """The metadata and the datums of an AXT file, after the checks that reject a whole file."""
     if len(data) > MAX_FILE:
         raise FileRejected("above 256 MiB")
@@ -566,7 +626,7 @@ def file_messages(data):
     try:
         meta = decode_meta(r)
     except Undecodable as e:
-        raise FileRejected(str(e))
+        raise FileRejected(str(e)) from e
     if sum(len(k) + len(v) for k, v in meta.items()) > MAX_META:
         raise FileRejected("metadata above 8 MiB")
     sync = r.take(16) if len(data) - r.pos >= 16 else None
@@ -579,16 +639,17 @@ def file_messages(data):
         schema = json.loads(meta["avro.schema"])
         pcf = fastavro.schema.to_parsing_canonical_form(fastavro.parse_schema(schema, _write_hint=False))
     except Exception:
-        raise FileRejected("no avro.schema of a schema")
+        raise FileRejected("no avro.schema of a schema") from None
     if pcf != ENVELOPE_PCF:
         raise FileRejected("avro.schema is not a supported envelope format")
-    datums, total = [], 0
+    datums: list[bytes] = []
+    total = 0
     while r.pos < len(data):
         try:
             count, size = r.long(), r.long()
             payload = r.take(size)
         except Undecodable as e:
-            raise FileRejected(str(e))
+            raise FileRejected(str(e)) from e
         if r.take(16) != sync if len(data) - r.pos >= 16 else True:
             raise FileRejected("a block without its sync marker")
         block = inflate(payload, MAX_BLOCK) if codec == b"deflate" else payload
@@ -602,7 +663,7 @@ def file_messages(data):
             try:
                 end = keys.envelope_end(block, at)
             except IndexError:
-                raise FileRejected("a datum cut short")
+                raise FileRejected("a datum cut short") from None
             if end > len(block):
                 raise FileRejected("a datum cut short")
             datums.append(block[at:end])
@@ -612,8 +673,8 @@ def file_messages(data):
     return meta, datums
 
 
-def decode_meta(r):
-    meta = {}
+def decode_meta(r: Reader) -> dict[str, bytes]:
+    meta: dict[str, bytes] = {}
     while True:
         n = r.long()
         if n == 0:
@@ -626,31 +687,35 @@ def decode_meta(r):
             meta[key] = r.take(r.long())
 
 
-def header_sender(meta):
+def header_sender(meta: dict[str, bytes]) -> bytes:
     """The file's sender, after the header signature of spec/keys.md, section 2.5, has verified."""
     sender, sig = meta.get("axt.sender"), meta.get("axt.signature")
     for v, n in ((sender, 64), (sig, 128)):
         if v is None or len(v) != n or not LOWER_HEX.match(v.decode("latin-1")):
-            raise FileRejected("axt.sender or axt.signature missing or not lower-case hexadecimal of the right length")
+            raise FileRejected(
+                "axt.sender or axt.signature missing or not lower-case hexadecimal of the right length"
+            )
+    assert sender is not None and sig is not None  # the loop above rejects a missing one
     sender = bytes.fromhex(sender.decode())
     value = meta.get("axt.schemas", b"")
-    if keys.key_problem(sender) or keys.verify_problem(sender, keys.FILE_HEADER_PREFIX + sender + hashlib.sha256(value).digest(),
-                                                       bytes.fromhex(sig.decode())):
+    if keys.key_problem(sender) or keys.verify_problem(
+        sender, keys.FILE_HEADER_PREFIX + sender + hashlib.sha256(value).digest(), bytes.fromhex(sig.decode())
+    ):
         raise FileRejected("the header signature does not verify")
     return sender
 
 
-def op_read_file(i):
+def op_read_file(i: Any) -> dict[str, Any]:
     try:
         return read_file(b_in(i["file"]), i["reader"])
     except FileRejected as e:
         return no("FILE_REJECTED", str(e))
 
 
-def read_file(data, reader):
+def read_file(data: bytes, reader: Any) -> dict[str, Any]:
     meta, datums = file_messages(data)
     sender = header_sender(meta)
-    schemas = {}
+    schemas: dict[int, str] = {}
     if "axt.schemas" in meta:
         try:
             for t in json.loads(meta["axt.schemas"]):
@@ -662,14 +727,17 @@ def read_file(data, reader):
         except FileRejected:
             raise
         except Exception:
-            raise FileRejected("axt.schemas is not a JSON array of schemas")
+            raise FileRejected("axt.schemas is not a JSON array of schemas") from None
+    messages: list[tuple[str, Any, bytes]]
+    moves: list[dict[str, str]]
+    manifests: list[bytes]
     messages, moves, manifests, seen_other, seen_record = [], [], [], False, False
-    chain_key = None
+    chain_key: bytes | None = None
     for d in datums:
         try:
             env = decode_all(ENVELOPE, d)
         except Undecodable as e:
-            raise FileRejected(str(e))
+            raise FileRejected(str(e)) from e
         if env["format"] != 1:
             raise FileRejected("a datum whose format is not the file's")
         key = bytes.fromhex(env["sender"])
@@ -689,8 +757,11 @@ def read_file(data, reader):
             new, enc = bytes.fromhex(km["new_sender"]), km["new_encryption_key"]
             if chain_key is not None and key != chain_key:
                 raise FileRejected("a chain of key moves whose links do not join")
-            if (keys.key_problem(new) or keys.verify_problem(new, keys.KEY_MOVE_PREFIX + key + new, bytes.fromhex(km["proof"]))
-                    or (enc is not None and keys.encryption_key_problem(bytes.fromhex(enc)))):
+            if (
+                keys.key_problem(new)
+                or keys.verify_problem(new, keys.KEY_MOVE_PREFIX + key + new, bytes.fromhex(km["proof"]))
+                or (enc is not None and keys.encryption_key_problem(bytes.fromhex(enc)))
+            ):
                 raise FileRejected("a KEY_MOVE that fails step 4 of keys.md, section 5.3")
             moves.append({"from": key.hex(), "to": new.hex()})
             chain_key = new
@@ -708,7 +779,9 @@ def read_file(data, reader):
         seen_record = True
         if kind == "DELETE" and body:
             raise FileRejected("a DELETE with a body")
-        if kind == "DATA" and (body[:2] != b"\xc3\x01" or int.from_bytes(body[2:10], "little") not in schemas):
+        if kind == "DATA" and (
+            body[:2] != b"\xc3\x01" or int.from_bytes(body[2:10], "little") not in schemas
+        ):
             raise FileRejected("a DATA whose fingerprint is not in axt.schemas")
         messages.append((kind, record, body))
     if chain_key is not None and chain_key != sender:
@@ -719,19 +792,20 @@ def read_file(data, reader):
         state = "invalid" if error or me.manifest_problems(datum, len(body)) else "used"
     own, _, _ = manifest_datum(b_in(reader["manifest"]))
     readers = {n: json.loads(t) for n, t in reader["readers"].items()}
-    kept, results = {}, []
+    kept: dict[int, dict[str, Any]] = {}
+    results: list[dict[str, Any]] = []
     for kind, record, body in messages:
         rid, version = record["id"], record["version"]
         out = {"id": rid, "version": version}
         results.append(out)
-        key = record_key(rid)
-        if key is None:
+        rkey = record_key(rid)
+        if rkey is None:
             out["result"] = "RECORD_ID_INVALID"
             continue
         if version < 1:
             out["result"] = "VERSION_INVALID"
             continue
-        k = kept.get(key)
+        k = kept.get(rkey)
         if kind == "DATA":
             text = schemas[int.from_bytes(body[2:10], "little")]
             writer = json.loads(text)
@@ -746,15 +820,20 @@ def read_file(data, reader):
             out["result"] = "DUPLICATE" if version == k["version"] else "STALE"
             continue
         if kind == "DATA":
-            got = op_decode_record({"writer_schema": text, "reader_schema": None if name not in readers else json.dumps(readers[name]),
-                                    "body": body.hex()})
+            got = op_decode_record(
+                {
+                    "writer_schema": text,
+                    "reader_schema": None if name not in readers else json.dumps(readers[name]),
+                    "body": body.hex(),
+                }
+            )
             if "reject" in got:
                 error = got["reject"]["error"]
                 out["result"] = error if error in ("DOES_NOT_RESOLVE", "VALUE_INVALID") else "UNDECODABLE"
                 continue
-            kept[key] = {"type": name, "version": version}
+            kept[rkey] = {"type": name, "version": version}
         else:
-            kept[key] = {"type": None if k is None else k["type"], "version": version}
+            kept[rkey] = {"type": None if k is None else k["type"], "version": version}
         out["result"] = "APPLIED"
     return ok({"sender": sender.hex(), "key_moves": moves, "manifest": state, "records": results})
 
@@ -764,32 +843,36 @@ def read_file(data, reader):
 QR = plain_schema(tx.qr_text_schema)
 
 
-def op_parse_qr(i):
+def op_parse_qr(i: Any) -> dict[str, Any]:
     q = tx.parse_qr(i["text"])
     if isinstance(q, str):
         return no("QR_VERSION_UNSUPPORTED" if "version" in q else "QR_INVALID", q)
     return ok({"payload": json_of(QR, q)})
 
 
-def op_connection(i):
+def op_connection(i: Any) -> dict[str, Any]:
     role = tx.SERVER if i["role"] == "server" else tx.CLIENT
     peer = tx.Peer(role, b_in(i["certificate_sha256"]), b_in(i["expected_key"]))
-    steps = []
+    steps: list[str] = []
     for f in i["frames"]:
         try:
-            steps.append({"open": "open", "message": "message", "ping": "ping", "TOO_LARGE": "too_large"}[peer.receive(b_in(f))])
+            steps.append(
+                {"open": "open", "message": "message", "ping": "ping", "TOO_LARGE": "too_large"}[
+                    peer.receive(b_in(f))
+                ]
+            )
         except tx.Closed:
             steps.append("close")
             break
     return {"steps": steps}
 
 
-def op_request(i):
+def op_request(i: Any) -> dict[str, Any]:
     """A request of spec/transports.md, section 5.2, as an app writes it."""
     base, action = i["base_url"], i["action"]
     mailbox = i["mailbox"] if action == "put" else tx.mailbox_id(b_in(i["secret"])).hex()
     url = f"{base}v1/mailboxes/{mailbox}"
-    headers = {"authorization": None, "content_type": None, "content_length": None}
+    headers: dict[str, str | None] = {"authorization": None, "content_type": None, "content_length": None}
     if action != "put":
         headers["authorization"] = "Bearer " + i["secret"]
     if action in ("create", "remove"):
@@ -797,14 +880,32 @@ def op_request(i):
     if action == "put":
         message = b_in(i["message"])
         headers.update(content_type="application/octet-stream", content_length=str(len(message)))
-        return ok({"method": "PUT", "url": f"{url}/messages/{hashlib.sha256(message).hexdigest()}", "headers": headers})
+        return ok(
+            {
+                "method": "PUT",
+                "url": f"{url}/messages/{hashlib.sha256(message).hexdigest()}",
+                "headers": headers,
+            }
+        )
     if action == "list":
         wait = i.get("wait")
-        return ok({"method": "GET", "url": f"{url}/messages" + ("" if wait is None else f"?wait={wait}"), "headers": headers})
-    return ok({"method": "GET" if action == "fetch" else "DELETE", "url": f"{url}/messages/{i['message_id']}", "headers": headers})
+        return ok(
+            {
+                "method": "GET",
+                "url": f"{url}/messages" + ("" if wait is None else f"?wait={wait}"),
+                "headers": headers,
+            }
+        )
+    return ok(
+        {
+            "method": "GET" if action == "fetch" else "DELETE",
+            "url": f"{url}/messages/{i['message_id']}",
+            "headers": headers,
+        }
+    )
 
 
-def op_reaction(i):
+def op_reaction(i: Any) -> dict[str, Any]:
     """What an app does with a response of the relay (spec/transports.md, sections 5.2 to 5.4)."""
     status, retry, attempt, request = i["status"], i["retry_after"], i["attempt"], i["request"]
     backoff = min(2 ** (attempt - 1), 3600)
@@ -823,16 +924,16 @@ def op_reaction(i):
     return ok({"action": "stop", "wait": None})
 
 
-def op_listing(i):
+def op_listing(i: Any) -> dict[str, Any]:
     return ok({"messages": [{"id": m["id"], "size": m["size"]} for m in json.loads(i["body"])["messages"]]})
 
 
-def op_relay(i):
+def op_relay(i: Any) -> dict[str, Any]:
     relay = tx.Relay(quota_bytes=i["quota_bytes"])
-    steps = []
+    steps: list[dict[str, Any]] = []
     for r in i["requests"]:
         status, _, body = relay.handle(r["method"], r["target"], r["headers"], b_in(r["body"]), now=r["now"])
-        out = {"status": status}
+        out: dict[str, Any] = {"status": status}
         if status == 200 and r["target"].split("?")[0].endswith("/messages"):
             out["messages"] = json.loads(body)["messages"]
         elif status == 200:
@@ -844,57 +945,63 @@ def op_relay(i):
 # --- keys (spec/keys.md) ----------------------------------------------------------------
 
 
-def live_parts(m):
+def live_parts(m: bytes) -> tuple[bytes, bytes, bytes]:
     """Sender and signed bytes of a live message, found as keys.md, section 2.3, allows before verifying."""
     end = keys.envelope_end(m, 10)
     if end != len(m):
         raise ValueError("bytes left over after the envelope")
     _, pos = keys.read_long(m, 10)
     _, pos = keys.read_long(m, pos)
-    return m[pos:pos + 32], keys.MESSAGE_PREFIX + m[10:-64], m[-64:]
+    return m[pos : pos + 32], keys.MESSAGE_PREFIX + m[10:-64], m[-64:]
 
 
-def op_verify(i):
+def op_verify(i: Any) -> dict[str, Any]:
     problem = keys.verify_problem(b_in(i["public_key"]), b_in(i["data"]), b_in(i["signature"]))
     return ok() if problem is None else no("SIGNATURE_INVALID", problem)
 
 
-def op_verify_message(i):
+def op_verify_message(i: Any) -> dict[str, Any]:
     sender, signed, sig = live_parts(b_in(i["message"]))
     problem = keys.verify_problem(sender, signed, sig)
     return ok() if problem is None else no("SIGNATURE_INVALID", problem)
 
 
-def op_key_move(i):
+def op_key_move(i: Any) -> dict[str, Any]:
     m = b_in(i["message"])
     sender, signed, sig = live_parts(m)
     if keys.verify_problem(sender, signed, sig):
         return no("SIGNATURE_INVALID")
-    env = fastavro.schemaless_reader(io.BytesIO(m[10:]), pe.raw["Envelope"], pe.raw["Envelope"])
+    env: Any = fastavro.schemaless_reader(io.BytesIO(m[10:]), pe.raw["Envelope"], pe.raw["Envelope"])
     body = env["body"]
     if env["kind"] != "KEY_MOVE" or body[:10] != b"\xc3\x01" + pe.fp8(pe.fingerprints["KeyMove"][1]):
         return no("INVALID_MESSAGE")
-    km = fastavro.schemaless_reader(io.BytesIO(body[10:]), pe.raw["KeyMove"], pe.raw["KeyMove"])
+    km: Any = fastavro.schemaless_reader(io.BytesIO(body[10:]), pe.raw["KeyMove"], pe.raw["KeyMove"])
     new, enc = km["new_sender"], km["new_encryption_key"]
-    problem = (keys.key_problem(new)
-               or keys.verify_problem(new, keys.KEY_MOVE_PREFIX + sender + new, km["proof"])
-               or (enc is not None and keys.encryption_key_problem(enc)))
+    problem = (
+        keys.key_problem(new)
+        or keys.verify_problem(new, keys.KEY_MOVE_PREFIX + sender + new, km["proof"])
+        or (enc is not None and keys.encryption_key_problem(enc))
+    )
     if problem:
         return no("KEY_MOVE_REJECTED", problem)
     return ok({"old_key": sender.hex(), "new_key": new.hex(), "new_encryption_key": b_out(enc)})
 
 
-def op_seal(i):
+def op_seal(i: Any) -> dict[str, Any]:
     message, key = b_in(i["message"]), b_in(i["encryption_key"])
     if keys.encryption_key_problem(key):
         return no("ENCRYPTION_KEY_INVALID")
     enc, shared = keys.encap(os.urandom(32), key)  # a fresh ephemeral key (spec/keys.md, section 4.3)
     ctx = keys.hpke_base_context(shared, keys.HPKE_INFO)
-    sealed = keys.SEALED_FORMAT + enc + ChaCha20Poly1305(ctx["key"]).encrypt(ctx["base_nonce"], keys.pad(message), b"")
+    sealed = (
+        keys.SEALED_FORMAT
+        + enc
+        + ChaCha20Poly1305(ctx["key"]).encrypt(ctx["base_nonce"], keys.pad(message), b"")
+    )
     return ok({"sealed": b_out(sealed)})
 
 
-def op_open(i):
+def op_open(i: Any) -> dict[str, Any]:
     sealed = b_in(i["sealed"])
     if sealed[:1] != keys.SEALED_FORMAT or len(sealed) < 1 + 32 + 16:
         return no("NOT_OPENED")
@@ -902,7 +1009,7 @@ def op_open(i):
         try:
             ctx = keys.hpke_base_context(keys.decap(sealed[1:33], bytes.fromhex(sk)), keys.HPKE_INFO)
             plain = ChaCha20Poly1305(ctx["key"]).decrypt(ctx["base_nonce"], sealed[33:], b"")
-        except Exception:
+        except Exception:  # noqa: S112 a key that does not open the message is no fault; the next is tried
             continue
         try:
             return ok({"message": b_out(keys.unpad(plain))})
@@ -911,14 +1018,22 @@ def op_open(i):
     return no("NOT_OPENED")
 
 
-OPS = {
+OPS: dict[str, Callable[[Any], dict[str, Any]]] = {
     "decode_body": op_decode_body,
     "read_file": op_read_file,
     "apply": op_apply,
     "parse_qr": op_parse_qr,
     "qr_text": lambda i: ok({"text": tx.qr_text(b_in(i["payload"]))}),
-    "hello_frame": lambda i: ok({"frame": tx.hello(b_in(i["seed"]), tx.SERVER if i["role"] == "server" else tx.CLIENT,
-                                              b_in(i["certificate_sha256"]), check=False).hex()}),
+    "hello_frame": lambda i: ok(
+        {
+            "frame": tx.hello(
+                b_in(i["seed"]),
+                tx.SERVER if i["role"] == "server" else tx.CLIENT,
+                b_in(i["certificate_sha256"]),
+                check=False,
+            ).hex()
+        }
+    ),
     "connection": op_connection,
     "mailbox_id": lambda i: ok({"mailbox": tx.mailbox_id(b_in(i["secret"])).hex()}),
     "request": op_request,
@@ -940,9 +1055,12 @@ OPS = {
     "public_key": lambda i: ok({"public_key": keys.public_key(b_in(i["seed"])).hex()}),
     "sign": lambda i: ok({"signature": keys.sign(b_in(i["seed"]), b_in(i["data"])).hex()}),
     "verify": op_verify,
-    "check_signing_key": lambda i: (lambda p: ok() if p is None else no("KEY_INVALID", p))(keys.key_problem(b_in(i["public_key"]))),
+    "check_signing_key": lambda i: (lambda p: ok() if p is None else no("KEY_INVALID", p))(
+        keys.key_problem(b_in(i["public_key"]))
+    ),
     "check_encryption_key": lambda i: (lambda p: ok() if p is None else no("ENCRYPTION_KEY_INVALID", p))(
-        keys.encryption_key_problem(b_in(i["encryption_key"]))),
+        keys.encryption_key_problem(b_in(i["encryption_key"]))
+    ),
     "short_fingerprint": lambda i: ok({"short_fingerprint": keys.short_fingerprint(b_in(i["public_key"]))}),
     "verify_message": op_verify_message,
     "key_move": op_key_move,
@@ -952,13 +1070,18 @@ OPS = {
 }
 
 
-def main():
+def main() -> None:
     for line in sys.stdin:
         request = json.loads(line)
         rid, op, i = request["id"], request["op"], request["input"]
         if op == "hello":
-            answer = {"id": rid, "output": {"name": "AXT reference adapter (conformance/reference/adapter.py)",
-                                            "categories": CATEGORIES}}
+            answer: dict[str, Any] = {
+                "id": rid,
+                "output": {
+                    "name": "AXT reference adapter (conformance/reference/adapter.py)",
+                    "categories": CATEGORIES,
+                },
+            }
         elif op not in OPS:
             answer = {"id": rid, "unsupported": True}
         else:

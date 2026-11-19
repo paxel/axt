@@ -10,7 +10,7 @@ A library brings an adapter: a program that reads one JSON request per line on i
 python3 conformance/run.py -- <the adapter's command>
 ```
 
-`--category NAME` runs one category, `--vectors DIR` another set of vector files, and `--verbose` names every vector. The runner needs Python 3.10 or later with fastavro and cryptography.
+`--category NAME` runs one category, `--vectors DIR` another set of vector files, and `--verbose` names every vector. The runner needs Python 3.11 or later with fastavro and cryptography.
 
 The reference adapter passes every vector:
 
@@ -35,6 +35,14 @@ python3 conformance/run.py -- python3 conformance/reference/adapter.py
 | [tools/protocol_examples.py](tools/protocol_examples.py)     | Produces and checks the examples of [spec/protocol.md](../spec/protocol.md), with a model of an app                      |
 | [tools/transports_examples.py](tools/transports_examples.py) | Produces and checks the examples of [spec/transports.md](../spec/transports.md), with models of the frames and the relay |
 
-The scripts and the reference adapter need Python 3.10 or later with fastavro 1.13.1, avro 1.12.2, PyNaCl 1.6.2 and cryptography 50.0.2, the versions the specification's examples were checked with, and a time zone database that Python's `zoneinfo` finds, such as the system's or the package `tzdata`.
+The scripts and the reference adapter need Python 3.11 or later with fastavro 1.13.1, avro 1.12.2, PyNaCl 1.6.2 and cryptography 50.0.2, the versions the specification's examples were checked with, and a time zone database that Python's `zoneinfo` finds, such as the system's or the package `tzdata`. [pyproject.toml](../pyproject.toml) and `uv.lock` pin them; with [uv](https://docs.astral.sh/uv/), `uv sync` installs them and `uv run` starts a script with them:
+
+```text
+uv sync
+uv run python conformance/run.py -- python conformance/reference/adapter.py
+uv run pytest
+```
+
+`uv run pytest` runs what CI runs: the suite against the reference adapter and the reference relay, the comparison of the committed vectors with the generator's output, every example script, the relay's tests and the changelog check ([tests/test_conformance.py](../tests/test_conformance.py)).
 
 Licence: Apache-2.0 OR MIT, see [LICENSING.md](../LICENSING.md).

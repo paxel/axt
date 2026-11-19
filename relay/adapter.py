@@ -12,7 +12,7 @@ the hook's requests do not count. It sends exactly the vector's headers and a Ho
 header; a request without Content-Length is sent without a body, since in HTTP/1.1 such a request has
 none (RFC 9112, section 6.3). The relay's log goes to a buffer, never to the standard output.
 
-It needs Python 3.10 or later and nothing beyond the standard library.
+It needs Python 3.11 or later and nothing beyond the standard library.
 """
 
 import collections
@@ -26,6 +26,7 @@ import tempfile
 import threading
 import zlib
 from pathlib import Path
+from typing import IO, Any, cast
 from urllib.parse import urlsplit
 
 RELAY = Path(__file__).resolve().parent / "axt_relay.py"
@@ -33,7 +34,7 @@ LISTENING = re.compile(r"listening on 127\.0\.0\.1:([0-9]+)/")
 HEX = re.compile(r"^(?:[0-9a-f]{2})*$")
 
 
-def to_bytes(v):
+def to_bytes(v: Any) -> bytes:
     """The bytes of a hex string or a deflate object (spec/conformance.md, section 3.2)."""
     if isinstance(v, str):
         if not HEX.match(v):
@@ -48,16 +49,36 @@ def to_bytes(v):
 class Relay:
     """A running reference relay in test mode."""
 
-    def __init__(self, base_path, quota_bytes):
+    def __init__(self, base_path: str, quota_bytes: int) -> None:
         self.dir = tempfile.mkdtemp(prefix="axt-relay-")
-        self.proc = subprocess.Popen(
-            [sys.executable, str(RELAY), "--host", "127.0.0.1", "--port", "0", "--storage", self.dir,
-             "--base-path", base_path, "--quota-bytes", str(quota_bytes), "--rate-requests", "0",
-             "--rate-creations", "0", "--test"],
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
-        self.log = collections.deque(maxlen=40)
-        self.port = None
-        for line in self.proc.stderr:
+        self.proc = subprocess.Popen(  # noqa: S603 the adapter builds the arguments itself
+            [
+                sys.executable,
+                str(RELAY),
+                "--host",
+                "127.0.0.1",
+                "--port",
+                "0",
+                "--storage",
+                self.dir,
+                "--base-path",
+                base_path,
+                "--quota-bytes",
+                str(quota_bytes),
+                "--rate-requests",
+                "0",
+                "--rate-creations",
+                "0",
+                "--test",
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        self.log: collections.deque[str] = collections.deque(maxlen=40)
+        self.port: int | None = None
+        for line in cast(IO[str], self.proc.stderr):  # stderr=PIPE: it is a pipe
             self.log.append(line.rstrip())
             m = LISTENING.search(line)
             if m:
@@ -68,11 +89,13 @@ class Relay:
             raise RuntimeError("the relay did not start: " + " | ".join(self.log))
         threading.Thread(target=self._drain, daemon=True).start()
 
-    def _drain(self):
-        for line in self.proc.stderr:
+    def _drain(self) -> None:
+        for line in cast(IO[str], self.proc.stderr):  # stderr=PIPE: it is a pipe
             self.log.append(line.rstrip())
 
-    def request(self, method, path, headers, body):
+    def request(
+        self, method: str, path: str, headers: list[tuple[str, str]], body: bytes
+    ) -> tuple[int, bytes]:
         conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=90)
         try:
             conn.putrequest(method, path, skip_host=True, skip_accept_encoding=True)
@@ -86,13 +109,15 @@ class Relay:
         finally:
             conn.close()
 
-    def set_clock(self, now):
+    def set_clock(self, now: int | float) -> None:
         text = repr(now).encode("ascii") if isinstance(now, float) else str(now).encode("ascii")
-        status, _ = self.request("PUT", "/_test/now", [("Host", "127.0.0.1"), ("Content-Length", str(len(text)))], text)
+        status, _ = self.request(
+            "PUT", "/_test/now", [("Host", "127.0.0.1"), ("Content-Length", str(len(text)))], text
+        )
         if status != 204:
             raise RuntimeError(f"the test hook answered {status}")
 
-    def close(self):
+    def close(self) -> None:
         if self.proc.poll() is None:
             self.proc.terminate()
             try:
@@ -102,16 +127,16 @@ class Relay:
         shutil.rmtree(self.dir, ignore_errors=True)
 
 
-def op_relay(i):
+def op_relay(i: dict[str, Any]) -> dict[str, Any]:
     base = urlsplit(i["base_url"])
     relay = Relay(base.path, i["quota_bytes"])
     try:
-        steps = []
+        steps: list[dict[str, Any]] = []
         for r in i["requests"]:
             relay.set_clock(r["now"])
             headers = [("Host", base.netloc)] + list(r["headers"].items())
             status, body = relay.request(r["method"], base.path + r["target"], headers, to_bytes(r["body"]))
-            out = {"status": status}
+            out: dict[str, Any] = {"status": status}
             if status == 200 and r["target"].split("?")[0].endswith("/messages"):
                 out["messages"] = json.loads(body)["messages"]
             elif status == 200:
@@ -124,13 +149,18 @@ def op_relay(i):
         relay.close()
 
 
-def main():
+def main() -> None:
     for line in sys.stdin:
         req = json.loads(line)
         rid, op = req["id"], req["op"]
         if op == "hello":
-            answer = {"id": rid, "output": {"name": "AXT reference relay (relay/axt_relay.py)",
-                                            "categories": ["relay-server"]}}
+            answer = {
+                "id": rid,
+                "output": {
+                    "name": "AXT reference relay (relay/axt_relay.py)",
+                    "categories": ["relay-server"],
+                },
+            }
         elif op == "relay":
             try:
                 answer = {"id": rid, "output": op_relay(req["input"])}

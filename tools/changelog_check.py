@@ -23,9 +23,9 @@ LINK = re.compile(r"(\s*\((\[[a-z]+-\d+\]\([^)]*\)|#\d+)(,\s*(\[[a-z]+-\d+\]\([^
 SENTENCE_BREAK = re.compile(r"[.!?…][\"'”»)]*\s+[\"'„«(]*[A-ZÄÖÜ0-9]")
 
 
-def current_entries(text):
+def current_entries(text: str) -> list[str]:
     """The entries of the first version section, each joined to one line."""
-    entries = []
+    entries: list[str] = []
     inside = False
     for line in text.splitlines():
         if line.startswith("## "):
@@ -44,7 +44,7 @@ def current_entries(text):
     return entries
 
 
-def problems(entry):
+def problems(entry: str) -> list[str]:
     """What is wrong with one entry; empty when it is fine."""
     body = LINK.sub("", entry).strip()
     found = []
@@ -56,7 +56,7 @@ def problems(entry):
     return found
 
 
-def check(path):
+def check(path: str) -> list[str]:
     with open(path, encoding="utf-8") as file:
         entries = current_entries(file.read())
     failures = []
@@ -66,7 +66,7 @@ def check(path):
     return failures
 
 
-def main(paths):
+def main(paths: list[str]) -> int:
     if not paths:
         print("usage: changelog_check.py CHANGELOG.md [more changelogs]", file=sys.stderr)
         return 2
