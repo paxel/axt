@@ -6444,7 +6444,7 @@ def check_messages(out: list[str]) -> None:
     backup = copy.deepcopy(phone)  # the phone's data before the change of section 16.2
 
     # 16.2: the phone's user sets start and location in one step, with the stamps 110 and 111.
-    phone.at(0, [110 - 102, 111 - 111])
+    phone.at(0, [110 - 102, 0])  # the second stamp has a random part of 0
     values = {"start": VALUE_1030, "location": VALUE_WEBER}
     made, sent = phone.user_change(RECORD_ID, APPOINTMENT_TYPE, "set", values, SCHEMA_1)
     assert made and len(sent) == 1 and phone.highest == 111
@@ -6538,7 +6538,7 @@ def check_messages(out: list[str]) -> None:
     assert meanings(sent) == meaning(m), "the tablet of the model sends this CHANGE"
     show(out, "16.4: the tablet's whole CHANGE", parts, m)
     EXAMPLE_MESSAGES["the whole CHANGE of sync.md, section 16.4"] = m
-    phone.at(0, [118 - 118])
+    phone.at(0, [0])  # a random part of 0: the stamp is the base itself
     assert phone.receive(m) == ("APPLIED", []), phone.what
     merged = merge(
         before,
@@ -6593,7 +6593,7 @@ def check_messages(out: list[str]) -> None:
     part = {**d, "whole": False, "fields": entries(state, ["start", "location"])}
     part_m = message(TABLET_SEED, "CHANGE", (RECORD_ID, 117), body_of("Change", part))
     again = copy.deepcopy(backup)
-    again.at(0, [118 - 118])
+    again.at(0, [0])  # a random part of 0: the stamp is the base itself
     assert (
         again.receive(part_m)[0] == "APPLIED"
         and again.records[key].state.fields == phone.records[key].state.fields
