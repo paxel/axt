@@ -665,7 +665,7 @@ def keys_category() -> Category:
     # The chain a new device gets in answer to its DEVICE_JOIN (spec/keys.md, section 5.2, step 5).
     earlier = [pe.device_add(OLDER_SEED, CAT_SEED), pe.device_remove(CAT_SEED, OLDER)]
     no_add = "no DEVICE_ADD of the new device by the scanned key with its proof"
-    removed_again = "a DEVICE_REMOVE of the new device after its addition"
+    removed_again = "a DEVICE_REMOVE of the new device"
     chains: list[tuple[str, list[bytes], str | None]] = [
         ("a chain of the DEVICE_ADD of keys.md, section 7.5, alone", [ADD_MSG], None),
         (
@@ -681,6 +681,11 @@ def keys_category() -> Category:
         (
             "reject a chain with a DEVICE_REMOVE of the new device after its DEVICE_ADD",
             [ADD_MSG, pe.device_remove(CAT_SEED, NEW)],
+            removed_again,
+        ),
+        (
+            "reject a chain with a DEVICE_REMOVE of the new device before its DEVICE_ADD",
+            [pe.device_remove(CAT_SEED, NEW), ADD_MSG],
             removed_again,
         ),
         ("reject an empty chain", [], no_add),
@@ -4036,7 +4041,7 @@ COUNTS = {
             "verify_message": 8,
             "device_add": 8,
             "device_join": 11,
-            "join_chain": 10,
+            "join_chain": 11,
             "device_sets": 57,
             "padded_length": 10,
             "seal": 2,
@@ -4049,7 +4054,7 @@ COUNTS = {
             "verify_message": 3,
             "device_add": 6,
             "device_join": 5,
-            "join_chain": 7,
+            "join_chain": 8,
             "open": 8,
         },
     ),

@@ -271,7 +271,7 @@ A `DATA` message in a live connection that carries the Memo with the text `Vet, 
 
 ### 10.3 A file
 
-The same message in an AXT file with the codec `null`; 5,112 bytes, SHA-256 `3112dfd846a5bd572299ff9a0be0e42d5cd9aa55ab47d83834b85484a90e5f71`. A writer picks the 16-byte sync marker at random; the example uses `00 01 … 0f` so that its bytes can be reproduced. The two JSON values are shown shortened; the first is the Memo schema of section 10.1, the second the envelope schema of [types/axt/Envelope.avsc](../types/axt/Envelope.avsc) with its keys in the file's order, as Python's `json.dumps` writes it. The two hexadecimal texts are shortened as well.
+The same message in an AXT file with the codec `null`; 5,020 bytes, SHA-256 `37074c1f86d048a02e906441adc37f41599d1c9776fb2ae594a3f068f257a94c`. A writer picks the 16-byte sync marker at random; the example uses `00 01 … 0f` so that its bytes can be reproduced. The two JSON values are shown shortened; the first is the Memo schema of section 10.1, the second the envelope schema of [types/axt/Envelope.avsc](../types/axt/Envelope.avsc) with its keys in the file's order, as Python's `json.dumps` writes it. The two hexadecimal texts are shortened as well.
 
 ```text
 0000  4f 62 6a 01              magic "Obj" 01
@@ -299,17 +299,17 @@ The same message in an AXT file with the codec `null`; 5,112 bytes, SHA-256 `311
 08de  16                       key: string length 11
 08df  61 76 72 6f 2e 73 63 68  "avro.schema"
       65 6d 61
-08ea  c0 28                    value: bytes length 2592
-08ec  7b 22 74 79 ... 5d 7d    {"type": "record", "name": "Envelope", "namespace": "axt", ...}  (2592 bytes of UTF-8 JSON)
-130c  00                       end of the metadata map
-130d  00 01 02 03 04 05 06 07  sync marker
+08ea  88 27                    value: bytes length 2500
+08ec  7b 22 74 79 ... 5d 7d    {"type": "record", "name": "Envelope", "namespace": "axt", ...}  (2500 bytes of UTF-8 JSON)
+12b0  00                       end of the metadata map
+12b1  00 01 02 03 04 05 06 07  sync marker
       08 09 0a 0b 0c 0d 0e 0f
-131d  02                       block: 1 datum
-131e  90 03                    block: 200 bytes
-1320  02 08 1b 84 ... c1 06    the datum: bytes 000a to 00d1 of the message in 10.2
-13e8  00 01 02 03 04 05 06 07  sync marker
+12c1  02                       block: 1 datum
+12c2  90 03                    block: 200 bytes
+12c4  02 08 1b 84 ... c1 06    the datum: bytes 000a to 00d1 of the message in 10.2
+138c  00 01 02 03 04 05 06 07  sync marker
       08 09 0a 0b 0c 0d 0e 0f
-13f8  end
+139c  end
 ```
 
 ## References

@@ -479,7 +479,9 @@ def join_chain_problem(
     member is the scanned key, own the new device's."""
     if not all(verifies for *_, verifies in chain):
         return "a signature does not verify"
-    for i, (kind, signer, device, proof, _) in enumerate(chain):
+    if any(kind == REMOVE and device == own for kind, _, device, _, _ in chain):
+        return "a DEVICE_REMOVE of the new device"
+    for kind, signer, device, proof, _ in chain:
         if (
             kind == ADD
             and signer == member
@@ -487,8 +489,6 @@ def join_chain_problem(
             and proof is not None
             and verify_problem(own, proof_bytes(member, own), proof) is None
         ):
-            if any(k == REMOVE and d == own for k, _, d, _, _ in chain[i + 1 :]):
-                return "a DEVICE_REMOVE of the new device after its addition"
             return None
     return "no DEVICE_ADD of the new device by the scanned key with its proof"
 

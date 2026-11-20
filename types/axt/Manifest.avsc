@@ -142,7 +142,7 @@
                 "name": "proposals",
                 "type": "boolean",
                 "default": false,
-                "doc": "Whether the app takes proposals of changes to the records of this type it sends, as PROPOSAL messages, to come with axt-1027. False when it takes none."
+                "doc": "Whether the app takes proposals of changes to the records of this type it sends, as PROPOSAL messages. False when it takes none."
               }
             ]
           }

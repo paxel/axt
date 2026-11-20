@@ -307,7 +307,7 @@ fastavro.writer(
 )
 axt_file = file_buf.getvalue()
 assert (
-    hashlib.sha256(axt_file).hexdigest() == "3112dfd846a5bd572299ff9a0be0e42d5cd9aa55ab47d83834b85484a90e5f71"
+    hashlib.sha256(axt_file).hexdigest() == "37074c1f86d048a02e906441adc37f41599d1c9776fb2ae594a3f068f257a94c"
 ), "not the file of spec/keys.md, section 7.3"
 
 # Read back with fastavro.

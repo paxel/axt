@@ -14,7 +14,7 @@
       "type": {
         "type": "enum",
         "name": "Kind",
-        "doc": "What the message is. Each kind is defined in the document named in spec/envelope.md, section 2.2. DEVICE_JOIN, DEVICE_ADD and DEVICE_REMOVE: the devices of one sender, spec/keys.md, section 5. CHANGE and RESYNC: records between the devices of one sender, to come with axt-1024. FORWARD: a message of another app passed on between the devices of one sender, to come with axt-1025. WITHDRAW: a record its sender no longer shares, to come with axt-1026. PROPOSAL and PROPOSAL_REPLY: a change a receiver proposes to a record's sender, and the answer, to come with axt-1027.",
+        "doc": "What the message is. Each kind is defined in the document named in spec/envelope.md, section 2.2. DEVICE_JOIN, DEVICE_ADD and DEVICE_REMOVE: the devices of one sender, spec/keys.md, section 5. CHANGE and RESYNC: records between the devices of one sender. FORWARD: a message of another app passed on between the devices of one sender. WITHDRAW: a record its sender no longer shares. PROPOSAL and PROPOSAL_REPLY: a change a receiver proposes to a record's sender, and the answer.",
         "symbols": [
           "MANIFEST",
           "OFFER",

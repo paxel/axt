@@ -1007,7 +1007,24 @@
     "device": "bc8213b9e5a1325c8ac9877a72555aa19f7b8b6841cbffb9345aad04328e1f7b"
    },
    "expected": {
-    "reject": {"error": "JOIN_INVALID", "note": "a DEVICE_REMOVE of the new device after its addition"}
+    "reject": {"error": "JOIN_INVALID", "note": "a DEVICE_REMOVE of the new device"}
+   }
+  },
+  {
+   "id": "keys/join_chain/reject-a-chain-with-a-device-remove-of-the-new-device-before-its-device",
+   "op": "join_chain",
+   "description": "reject a chain with a DEVICE_REMOVE of the new device before its DEVICE_ADD",
+   "refs": ["keys.md 5.2", "transports.md 4.7"],
+   "input": {
+    "chain": [
+     "c30116306f71b9ce9ea802141b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a0054c301dcaab2aa8275f5d0bc8213b9e5a1325c8ac9877a72555aa19f7b8b6841cbffb9345aad04328e1f7be0052e9cb8cf7f29082e8ecbd3569a6c9982123398b4d9b51740d222a107dfdce8dd6dfb571043573410e592325915662ed59e93fff7a6625db5fbda23b19704",
+     "c30116306f71b9ce9ea802121b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a00d401c30131317b4bf41e0dc6bc8213b9e5a1325c8ac9877a72555aa19f7b8b6841cbffb9345aad04328e1f7bee8c71c13d21cf982e632830a71c3748f7488b1923e372dfe4f4dc00ed6c15ac43f2580ed03415886763ef1cf748dcdf842dfa19da2ae8b19571d1a4131ab60fca992fc513506231039e35d932a471d01b55f708cbb653555c102284b1941a630a76a6351b244cf29507102b01c3a0b5ab23b14424dfc7bc2627d861b2eda609"
+    ],
+    "member": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+    "device": "bc8213b9e5a1325c8ac9877a72555aa19f7b8b6841cbffb9345aad04328e1f7b"
+   },
+   "expected": {
+    "reject": {"error": "JOIN_INVALID", "note": "a DEVICE_REMOVE of the new device"}
    }
   },
   {

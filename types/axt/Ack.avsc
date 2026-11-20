@@ -41,7 +41,7 @@
               "type": {
                 "type": "enum",
                 "name": "AckOutcome",
-                "doc": "What the receiver did with the message, as spec/records.md, section 7, defines. APPLIED: took the record or deleted it as the message says. MERGED: took it except fields its user had changed. KEPT: took nothing, because its user's change covers the whole record. DUPLICATE: already had this version. STALE: already had a higher version. WITHDRAWN: removed its copy of a record its sender no longer shares, for a WITHDRAW message, to come with axt-1026. The default is for schema resolution only; within one envelope format every symbol is known.",
+                "doc": "What the receiver did with the message, as spec/records.md, section 7, defines. APPLIED: took the record or deleted it as the message says. MERGED: took it except fields its user had changed. KEPT: took nothing, because its user's change covers the whole record. DUPLICATE: already had this version. STALE: already had a higher version. WITHDRAWN: removed its copy of a record its sender no longer shares, for a WITHDRAW message. The default is for schema resolution only; within one envelope format every symbol is known.",
                 "symbols": [
                   "APPLIED",
                   "MERGED",
