@@ -18,29 +18,31 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 - **Reply**: an `ACCEPT`, `DECLINE`, `ACK` or `ERROR` message; it is about messages of the app it goes to.
 - **Addressee**: the app a message is for, and of its devices the one whose key is in the `to` field of the body (section 9.1).
 
-The receiver's user confirms the other app's key before the two apps exchange records ([keys.md](keys.md), section 3.2). Nothing in this document applies to a message from a key that the receiver's user has not accepted, except that the receiver reads the app name from its `MANIFEST` and MAY keep its messages until the user decides, as [keys.md](keys.md), section 3.2, says.
+The receiver's user confirms the other app's key before the two apps exchange records ([keys.md](keys.md), section 3.2). Nothing in this document applies to a message from a key that the receiver's user has not accepted, except that the receiver reads the app name from its `MANIFEST` and MAY keep its messages until the user decides, as [keys.md](keys.md), section 3.2, says. The key of another device of the app's own device set needs no such confirmation; [sync.md](sync.md), section 7, says how the devices of one set exchange and where their exchange differs from this document.
 
 ## 2. Messages
 
-| Kind            | `record` | Body                                                 | `to` in the body | Sent by                    | In a file                    |
-| --------------- | -------- | ---------------------------------------------------- | ---------------- | -------------------------- | ---------------------------- |
-| `MANIFEST`      | `null`   | `axt.Manifest` ([manifest.md](manifest.md))          | no               | each app, about itself     | at most one, after the chain |
-| `OFFER`         | `null`   | `axt.Offer` (section 4)                              | yes              | the sender                 | no                           |
-| `ACCEPT`        | `null`   | `axt.Accept` (section 5)                             | yes              | the receiver               | no                           |
-| `DECLINE`       | `null`   | `axt.Decline` (section 5)                            | yes              | the receiver               | no                           |
-| `DATA`          | required | the record ([records.md](records.md), section 4.1)   | no               | the sender                 | yes                          |
-| `DELETE`        | required | empty ([records.md](records.md), section 4.2)        | no               | the sender                 | yes                          |
-| `ACK`           | `null`   | `axt.Ack` (section 7)                                | yes              | the receiver               | no                           |
-| `ERROR`         | `null`   | `axt.Error` (section 8)                              | yes              | the app that got a message | no                           |
-| `DEVICE_JOIN`   | `null`   | `axt.DeviceJoin` ([keys.md](keys.md), section 5.2)   | yes              | a new device               | no                           |
-| `DEVICE_ADD`    | `null`   | `axt.DeviceAdd` ([keys.md](keys.md), section 5.2)    | no               | a device of the sender     | at the start                 |
-| `DEVICE_REMOVE` | `null`   | `axt.DeviceRemove` ([keys.md](keys.md), section 5.3) | no               | a device of the sender     | at the start                 |
+| Kind            | `record` | Body                                                 | `to` in the body | Sent by                              | In a file                    |
+| --------------- | -------- | ---------------------------------------------------- | ---------------- | ------------------------------------ | ---------------------------- |
+| `MANIFEST`      | `null`   | `axt.Manifest` ([manifest.md](manifest.md))          | no               | each app, about itself               | at most one, after the chain |
+| `OFFER`         | `null`   | `axt.Offer` (section 4)                              | yes              | the sender                           | no                           |
+| `ACCEPT`        | `null`   | `axt.Accept` (section 5)                             | yes              | the receiver                         | no                           |
+| `DECLINE`       | `null`   | `axt.Decline` (section 5)                            | yes              | the receiver                         | no                           |
+| `DATA`          | required | the record ([records.md](records.md), section 4.1)   | no               | the sender                           | yes                          |
+| `DELETE`        | required | empty ([records.md](records.md), section 4.2)        | no               | the sender                           | yes                          |
+| `ACK`           | `null`   | `axt.Ack` (section 7)                                | yes              | the receiver                         | no                           |
+| `ERROR`         | `null`   | `axt.Error` (section 8)                              | yes              | the app that got a message           | no                           |
+| `DEVICE_JOIN`   | `null`   | `axt.DeviceJoin` ([keys.md](keys.md), section 5.2)   | yes              | a new device                         | no                           |
+| `DEVICE_ADD`    | `null`   | `axt.DeviceAdd` ([keys.md](keys.md), section 5.2)    | no               | a device of the sender               | at the start                 |
+| `DEVICE_REMOVE` | `null`   | `axt.DeviceRemove` ([keys.md](keys.md), section 5.3) | no               | a device of the sender               | at the start                 |
+| `CHANGE`        | required | `axt.Change` ([sync.md](sync.md), section 8)         | yes              | a device, to a device of its own set | no                           |
+| `RESYNC`        | required | `axt.Resync` ([sync.md](sync.md), section 11)        | yes              | a device, to a device of its own set | no                           |
 
 The column "In a file" is that of [transports.md](transports.md), section 2.1. The schemas are in [types/axt/](../types/axt/); their fingerprints are in section 16. Each is a schema of the specification and changes only with a new envelope format ([manifest.md](manifest.md), section 2). An app MUST reject a message whose `record` is present where the table says `null` or absent where it is required, and a message whose body fingerprint is not the one of its kind and format ([envelope.md](envelope.md), section 3.1), with the error `INVALID_MESSAGE` (section 8).
 
-The kinds `CHANGE`, `RESYNC`, `FORWARD`, `WITHDRAW`, `PROPOSAL` and `PROPOSAL_REPLY` of [envelope.md](envelope.md), section 2.2, come with their tickets and are not in the table yet.
+The kinds `FORWARD`, `WITHDRAW`, `PROPOSAL` and `PROPOSAL_REPLY` of [envelope.md](envelope.md), section 2.2, come with their tickets and are not in the table yet.
 
-`MANIFEST`, `DATA`, `DELETE`, `DEVICE_ADD` and `DEVICE_REMOVE` are the same for every receiver: a manifest says what an app takes, a record message is sent under the same id to every receiver ([records.md](records.md), section 2), and an addition or a removal of a device is for every app that knows the sender. They carry no addressee, so that they keep their signature when they are passed on or put into a file ([keys.md](keys.md), sections 2.2 and 2.6). An offer depends on the receiver's manifest and the replies on the messages of one app, so their bodies name the device they are for; a `DEVICE_JOIN` is for the one device whose join code was scanned.
+`MANIFEST`, `DATA`, `DELETE`, `DEVICE_ADD` and `DEVICE_REMOVE` are the same for every receiver: a manifest says what an app takes, a record message is sent under the same id to every receiver ([records.md](records.md), section 2), and an addition or a removal of a device is for every app that knows the sender. They carry no addressee, so that they keep their signature when they are passed on or put into a file ([keys.md](keys.md), sections 2.2 and 2.6). An offer depends on the receiver's manifest and the replies on the messages of one app, so their bodies name the device they are for; a `DEVICE_JOIN` is for the one device whose join code was scanned. A `CHANGE` and a `RESYNC` travel only between the devices of one set: each holds what one of them has not acknowledged, or asks one of them, and names that device ([sync.md](sync.md), sections 8 and 11). No other app sends or takes them.
 
 ## 3. Opening a live connection
 
@@ -56,7 +58,7 @@ In a connection that a join code opened, these steps wait: neither app sends its
 
 Neither app waits for the other before it sends these. An app MUST send its `MANIFEST` before any message of another kind except `DEVICE_ADD`, `DEVICE_REMOVE` and `DEVICE_JOIN`. An app MUST NOT process a message of another kind than `MANIFEST`, `DEVICE_ADD`, `DEVICE_REMOVE`, `DEVICE_JOIN` or `ERROR` that arrives before the other app's valid `MANIFEST`; it MAY close the connection.
 
-A `DEVICE_ADD` or a `DEVICE_REMOVE` MAY also come later in the connection, after messages of other kinds, and MAY carry a `sender` other than the connection key; neither closes the connection ([transports.md](transports.md), section 4.5). A `DEVICE_JOIN` is not exempt: one whose `sender` is not the connection key closes the connection, and one in a connection that no join code opened is ignored without an error, before the `MANIFEST` and after it (section 3.3).
+A `DEVICE_ADD` or a `DEVICE_REMOVE` MAY also come later in the connection, after messages of other kinds, and MAY carry a `sender` other than the connection key; neither closes the connection ([transports.md](transports.md), section 4.5). The same holds for a `MANIFEST` that a device of the app's own set passes on for another device of that set: it MAY come at any time, carries the key of that other device as its `sender`, and is taken or ignored as [sync.md](sync.md), section 13.2, says. It is not the other app's `MANIFEST` of step 3, and it does not make its `sender` the other end of the connection. A `DEVICE_JOIN` is not exempt: one whose `sender` is not the connection key closes the connection, and one in a connection that no join code opened is ignored without an error, before the `MANIFEST` and after it (section 3.3).
 
 An app MUST NOT send an `OFFER` before it has received a valid `MANIFEST` of the other app in the connection ([manifest.md](manifest.md), section 5.1), and before its user has accepted the other app's key ([keys.md](keys.md), section 3.2). It MAY answer offers and send acknowledgements as soon as it has the other app's valid `MANIFEST` and its user has accepted the key. Errors are reported as section 8.3 says.
 
@@ -143,6 +145,8 @@ Each exchange starts with an offer. The records a sender wants to send, and thei
 
 The receiver keeps, for each sender, channel and type, the **current offer**: the last offer of that type it got from the sender in that channel, its schema and its answer. A sender may make offers through the relay faster than they arrive, and a relay may deliver them out of order. A receiver that gets again an offer it has already answered answers it again as before, and the offer does not become current again (section 9.2). A receiver SHOULD keep the ids of the offers it answered through the relay, with their answers, for at least as long as a relay may hold a message: 15 days ([transports.md](transports.md), section 5.5).
 
+Between the devices of one set, the current offer is kept for each fingerprint of a schema, not for each type, and a later offer ends an earlier one only for a schema with the same fingerprint ([sync.md](sync.md), section 7.2).
+
 ## 5. Accept and decline
 
 ### 5.1 Content
@@ -184,6 +188,8 @@ The sender of an offer takes an answer when its `to` is its own key, the key tha
 - only the answer to its latest offer of that type to that receiver in that channel; it ignores answers to earlier offers of the type, since a later offer replaced them (section 4.3);
 - only the first answer for that offer and type. A later `ACCEPT` or `DECLINE` of the same offer and type, a repeat or a reordered message, is ignored.
 
+Between the devices of one set, "its latest offer of that type" is its latest offer of a schema with that fingerprint: two schemas of one type can be on offer at once ([sync.md](sync.md), section 7.2).
+
 After an `ACCEPT` of a type, the sender may send the type's record messages (section 6.1). After a `DECLINE`, it sends none, and SHOULD NOT offer the type to that receiver again until the cause has changed. For `NOT_WANTED`, that means its user asks to offer it again. For `DOES_NOT_FIT`, the receiver's manifest has a higher revision. For `DOES_NOT_RESOLVE`, the sender has another schema of the type.
 
 ### 5.4 Two kinds
@@ -224,6 +230,8 @@ The receiver decodes a body only with the schema of the current offer whose fing
 
 A receiver MAY stop decoding a body as soon as it exceeds the data depth of 32; it MUST NOT apply any part of it.
 
+The devices of one set send each other no record messages: the records of the set travel between them as `CHANGE` messages, which are processed by the steps of [sync.md](sync.md), section 8.3. An offer that a device accepted from another device of its own set is no accepted offer for a record message, so a `DATA` or a `DELETE` of such a device fails step 5 with `NOT_ACCEPTED` ([sync.md](sync.md), section 7.2).
+
 Step 9 checks the value that step 8 decoded, by the rules set for it rather than by its bytes ([metadata.md](metadata.md), section 7.3). Its error's `field` names the first value that fails, in the order of the encoding, by the field names of the offered schema ([metadata.md](metadata.md), section 7.2). Every receiver checks the rules of the time types. A receiver checks the checks of the attributes only if it chooses to; one that does not, or that takes a record which breaks one, goes on to step 10 and keeps the value as received ([metadata.md](metadata.md), section 7.1).
 
 ## 7. Acknowledgement
@@ -246,7 +254,9 @@ One `ACK` reports record messages signed with one key. The record messages of tw
 
 The outcome `WITHDRAWN` is that of a `WITHDRAW` message, which comes with [axt-1026](https://github.com/paxel/axt/issues/28); no record message has it, and until then a receiver sends none.
 
-An `ACK` is valid when:
+An `ACK` also reports `CHANGE` messages, and the requests made with `RESYNC`, between the devices of one set. An `ACK` whose `sender` is a device of the app's own set reports these only, a `RESYNC` with the id of the request, the version 1, the outcome `APPLIED` or `DUPLICATE` and the `receiver_version` 1 ([sync.md](sync.md), section 11.2), and every other `ACK` reports record messages only; [sync.md](sync.md), section 9.1, defines the entries for a `CHANGE`, whose outcome is `APPLIED`, `DUPLICATE` or `STALE` and whose `receiver_version` is, for every outcome, the acknowledging device's state stamp of the record after the message, and when such an `ACK` is valid. The rules below are for an `ACK` of record messages.
+
+An `ACK` of record messages is valid when:
 
 - `records` has 1 to 4,096 entries;
 - each `id` is a UUID in text form, neither nil nor max, and each `version` is at least 1;
@@ -262,6 +272,7 @@ A sender MUST report an `ACK` that is not valid with `INVALID_MESSAGE` and take 
 - It SHOULD send the `ACK` within 5 seconds of processing the message, and MAY collect the outcomes of the messages it processed in that time into one `ACK`.
 - In a live connection, it SHOULD send the acknowledgements it owes before it closes the connection. A message it processed but did not acknowledge is sent again (section 11) and then gets `DUPLICATE`.
 - A reader of a file sends no acknowledgement ([records.md](records.md), section 7).
+- A device acknowledges every `CHANGE` it processed to an outcome in the same way and within the same time ([sync.md](sync.md), section 9.1).
 
 ### 7.3 Outcomes decided later
 
@@ -271,7 +282,7 @@ When the user later decides to take the message, the receiver sends a further `A
 
 ### 7.4 What the sender does with an acknowledgement
 
-A device takes the entries of a valid `ACK` whose `to` is its own key (section 9.1). For each id and version:
+A device takes the entries of a valid `ACK` whose `to` is its own key (section 9.1). What it does with the entries of an `ACK` of a device of its own set, which are about `CHANGE` messages, is in [sync.md](sync.md), section 9.2. For each id and version of a record message:
 
 - The first outcome it gets stands, with two exceptions: `APPLIED` replaces `KEPT` and `MERGED` (section 7.3), and every other outcome replaces `DUPLICATE`, which a resend can bring before the acknowledgement of the first copy. A repeated entry, and `DUPLICATE` for a message it has another outcome for, change nothing.
 - It MAY show its user that the receiver kept changes of its own (`MERGED`, `KEPT`).
@@ -290,7 +301,7 @@ An `ERROR` message carries `record` `null` and one `axt.Error` as its body ([typ
 | `code`         | enum `axt.ErrorCode`        | Why the message was not processed (section 8.2)                                                                                                                                            |
 | `message_hash` | `fixed` of 32               | The SHA-256 of the reported message as received, from its single-object marker to its last byte; through a relay, after opening and removing the padding ([keys.md](keys.md), section 4.5) |
 | `record`       | `null` or `axt.ErrorRecord` | The `record` field of the reported message, as it carried it: `id` as a plain string and `version`                                                                                         |
-| `fingerprint`  | `null` or `fixed` of 8      | For `SCHEMA_UNKNOWN` the body's fingerprint, for `FORMAT_UNSUPPORTED` the envelope's; `null` otherwise                                                                                     |
+| `fingerprint`  | `null` or `fixed` of 8      | For `SCHEMA_UNKNOWN` the body's fingerprint, or for a `CHANGE` that of the schema it lacks (section 8.2); for `FORMAT_UNSUPPORTED` the envelope's; `null` otherwise                        |
 | `field`        | `null` or `string`          | For `VALUE_INVALID`, the field path of the value that breaks a rule ([metadata.md](metadata.md), section 7.2); `null` otherwise                                                            |
 | `detail`       | `string`                    | A description for logs, in English, on one line of at most 1,024 bytes; may be empty                                                                                                       |
 
@@ -316,8 +327,10 @@ The receiver checks every message in this order: size, envelope, signature, send
 | `UNDECODABLE`         | A `DATA` whose body does not decode with its offered schema: cut short, bytes left over, a string that is not well-formed, a data depth above 32 ([types.md](types.md), section 5.7)                                                                                                                                                                                                                                                                                 | Logs it                                                                                             |
 | `VALUE_INVALID`       | A `DATA` whose body decodes but holds a time value that is not valid ([time.md](time.md), section 8), or, at a receiver that checks them, a value that breaks a check of the offered schema ([metadata.md](metadata.md), section 7.1); `field` names the value                                                                                                                                                                                                       | Shows its user the record and the field if it can; sends the record again only after it has changed |
 | `DEVICE_REJECTED`     | A `DEVICE_ADD` or a `DEVICE_REMOVE` that [keys.md](keys.md), section 5.5, has the receiver reject, or a `DEVICE_JOIN` that the device it is for rejects or whose user declines it ([keys.md](keys.md), section 5.2); reported in a live connection only (section 3.3)                                                                                                                                                                                                | Stops sending that message to that app (section 3.3)                                                |
-| `RECORD_UNKNOWN`      | A `CHANGE` that does not hold the whole record, for a record the receiver does not have; it comes with [axt-1024](https://github.com/paxel/axt/issues/26)                                                                                                                                                                                                                                                                                                            | Sends the record whole; to come with that ticket                                                    |
+| `RECORD_UNKNOWN`      | A `CHANGE` that does not hold the whole record, for a record that the receiving device does not have or of which it holds only the removal ([sync.md](sync.md), section 8.3, step 10)                                                                                                                                                                                                                                                                                | Sends the record whole ([sync.md](sync.md), section 9.3)                                            |
 | `PROPOSALS_NOT_TAKEN` | A `PROPOSAL` for a record whose sender takes none from the proposer; it comes with [axt-1027](https://github.com/paxel/axt/issues/29)                                                                                                                                                                                                                                                                                                                                | To come with that ticket                                                                            |
+
+A `CHANGE` is checked by the steps of [sync.md](sync.md), section 8.3, in their order. Besides `RECORD_UNKNOWN`, they give `RECORD_ID_INVALID`, `VERSION_INVALID`, `INVALID_MESSAGE`, `SCHEMA_UNKNOWN`, `TYPE_CHANGED`, `UNDECODABLE` and `VALUE_INVALID`, each for the failure that the code stands for in a record message. For `SCHEMA_UNKNOWN`, the error's `fingerprint` is then not that of the body, which is `axt.Change`, but that of the first schema that a field state of the message names and that the device does not hold. [sync.md](sync.md), section 9.3, says what the device that sent the `CHANGE` does with each code. A `RESYNC` is checked by the steps of [sync.md](sync.md), section 11.1. A `CHANGE` or a `RESYNC` of a key that is no device of the receiver's own set is ignored or rejected as [sync.md](sync.md), section 7.1, says, without its body being read.
 
 A receiver checks the addressee of the replies and the offer after their signature: one with another key in `to` is ignored without a report (section 9.1). A receiver also ignores, without a report:
 
@@ -332,18 +345,19 @@ A receiver checks the addressee of the replies and the offer after their signatu
 - **Once.** An app sends at most one `ERROR` for each message it gets; a repeated message MAY be reported again.
 - **Closing.** In a live connection, an app MAY close the connection after it has reported `TOO_LARGE` when the transport cannot skip the message ([envelope.md](envelope.md), section 8), after `SIGNATURE_INVALID`, and after `INVALID_MESSAGE`.
 
-A sender that gets an `ERROR` about a record message for whose id and version it already has an outcome ignores it (section 9.2).
+A sender that gets an `ERROR` about a record message for whose id and version it already has an outcome ignores it (section 9.2). The same holds for an `ERROR` about a `CHANGE` ([sync.md](sync.md), section 9.3).
 
 ## 9. Addressees and repeats
 
 ### 9.1 The addressee
 
-A signature names the sender of a message, not its receiver ([keys.md](keys.md), section 2.6). An app that got a reply could pass it on to a third app, which would then hold a genuine message of the first. The bodies of `OFFER`, `ACCEPT`, `DECLINE`, `ACK`, `ERROR` and `DEVICE_JOIN` therefore carry `to`, the Ed25519 public key of the device they are for, and the signature covers it:
+A signature names the sender of a message, not its receiver ([keys.md](keys.md), section 2.6). An app that got a reply could pass it on to a third app, which would then hold a genuine message of the first. The bodies of `OFFER`, `ACCEPT`, `DECLINE`, `ACK`, `ERROR`, `DEVICE_JOIN`, `CHANGE` and `RESYNC` therefore carry `to`, the Ed25519 public key of the device they are for, and the signature covers it:
 
 - An app MUST ignore such a message whose `to` is not its own signing key. It sends no report, since the message was not meant for it. A message for another device of its set is not meant for it either ([keys.md](keys.md), section 5.6).
 - A reply carries in `to` the key that signed the message it is about: an answer the key that signed the offer, an `ACK` the key that signed the record messages. An `ERROR` carries the key of the device that sent the reported message: in a live connection the connection key ([transports.md](transports.md), section 4.5), which is also the key that signed every message but a `DEVICE_ADD` or a `DEVICE_REMOVE` of a chain, and through a relay the key that signed the reported message. The reply goes to that device: on the connection, or into the mailbox of that key.
 - An `OFFER` carries in `to` a current key of the receiver ([keys.md](keys.md), section 3.3), and is judged by the manifest of that key (section 4.2). To a receiver with several current keys, a sender offers to the key from which it last got a valid message; [axt-1025](https://github.com/paxel/axt/issues/27) defines what the devices of the receiver do with it among themselves.
 - A `DEVICE_JOIN` carries in `to` the key of the join code it answers ([keys.md](keys.md), section 5.2).
+- A `CHANGE` and a `RESYNC` carry in `to` the key of the device of the sender's own set that they are for ([sync.md](sync.md), sections 8.1 and 11.1). A `MANIFEST` that a device passes on for another device of its set carries none, like every `MANIFEST` ([sync.md](sync.md), section 13.2).
 
 `to` binds a message to its addressee, not to one connection. The same `ACK` is valid in a live connection and through the relay, and an app that uses both reaches the same result whichever way a reply arrives.
 
@@ -364,6 +378,8 @@ A message carries no time, and a relay or a user can deliver a message again ([k
 | `DEVICE_JOIN`   | Ignored outside the connection its join code opened; in it, a repeat from the same key is answered as the first was, and one from another key is ignored ([keys.md](keys.md), section 5.2)                                                                |
 | `DEVICE_ADD`    | Ignored, not applied again and not reported ([keys.md](keys.md), section 5.5; section 3.3)                                                                                                                                                                |
 | `DEVICE_REMOVE` | The same                                                                                                                                                                                                                                                  |
+| `CHANGE`        | Merged again, which takes nothing: `DUPLICATE`, or `STALE` if the state of the record has moved on ([sync.md](sync.md), sections 4.5 and 8.4)                                                                                                             |
+| `RESYNC`        | Not acted on again: a request whose id the device has acted on is acknowledged again, with `DUPLICATE` once its answer is sent ([sync.md](sync.md), section 11.2)                                                                                         |
 
 ## 10. Versions that went back
 
@@ -374,7 +390,7 @@ The rule:
 - A device that restores its data from a backup, or for another reason cannot rule out that it has given versions higher than those it holds, MUST give versions as state stamps from then on ([sync.md](sync.md), sections 2.4 and 5.1), also when it is a set of its own and counted until then. It MUST NOT count on.
 - Its stamps come from its clock and from the highest stamp it holds, as for every device ([sync.md](sync.md), section 2.2). It draws no jump and marks nothing: a restored device stamps above what it sees.
 - After `STALE`, it counts the receiver's version as a stamp it has seen. If that version is above the highest version it knows of the record, it acts as [records.md](records.md), section 7, says, and in the end sends the record's current state again under a new state stamp, unless a merge with a sibling gave it a version above the receiver's.
-- A device with a sibling ([sync.md](sync.md), section 1) SHOULD, after a restore, merge with a sibling before its first change, and SHOULD ask a sibling for every record of the set and merge what it gets ([sync.md](sync.md), sections 2.4 and 4). The message for that, `RESYNC`, comes with [axt-1024](https://github.com/paxel/axt/issues/26). Until it has merged, a restored device whose clock stands behind the highest stamp of its backup can give a stamp again that it gave before, for another value; the merge then decides between the two by their values ([sync.md](sync.md), section 4.1, rule 3).
+- A device with a sibling ([sync.md](sync.md), section 1) SHOULD, after a restore, merge with a sibling before its first change ([sync.md](sync.md), sections 2.4 and 4). It asks its siblings for every record of the set with a `RESYNC` message, which it MUST send to every sibling, again in each connection and through the relay after each holding time until that sibling has acknowledged it, and before which it sends that sibling no `CHANGE` of its own; each sibling then sends it every record whole, and it merges what it gets ([sync.md](sync.md), sections 11 and 12.1). Until it has merged, a restored device whose clock stands behind the highest stamp of its backup can give a stamp again that it gave before, for another value; the merge then decides between the two by their values ([sync.md](sync.md), section 4.1, rule 3).
 
 Why this is enough:
 
@@ -392,8 +408,9 @@ A sender sends a record message again:
 - **For a schema.** After `SCHEMA_UNKNOWN` (section 8.2), once the type is accepted again.
 - **When a type is accepted again.** When a type that a receiver had stopped taking ([manifest.md](manifest.md), section 6) fits again and is accepted, the sender SHOULD send the current state of each record of the type it had sent to that receiver before: a `DATA` with the current version of a record that exists, a `DELETE` with the version of the deletion of one deleted in between, which for a device that stamps is its current state stamp of the record ([sync.md](sync.md), section 5.1).
 - **After a removal.** When a device is removed from its set, the remaining devices send again what has no outcome, as [keys.md](keys.md), section 5.6, says.
+- **Between the devices of one set.** A `CHANGE` is sent again by the rules of [sync.md](sync.md), section 10.3, which stand beside these: what a device of the set has not acknowledged stays due for it, and travels again in a later connection, through the relay after the holding time, and at once after `RECORD_UNKNOWN`.
 
-A receiver cannot ask for a resend beyond the schema request of `SCHEMA_UNKNOWN`. A record that the receiver could not process for a passing reason, such as a full storage, is neither acknowledged nor reported, and is sent again by the first rule. A receiver that loses records it had acknowledged, for example by restoring an older backup, gets each again when the sender changes it, or when the type is accepted again after it stopped fitting. 0.1.0 has no message for asking for them.
+A receiver cannot ask for a resend beyond the schema request of `SCHEMA_UNKNOWN`. A record that the receiver could not process for a passing reason, such as a full storage, is neither acknowledged nor reported, and is sent again by the first rule. A receiver that loses records it had acknowledged, for example by restoring an older backup, gets each again when the sender changes it, or when the type is accepted again after it stopped fitting. Between two apps, 0.1.0 has no message for asking for them. A device asks the other devices of its own set for every record of the set with `RESYNC` ([sync.md](sync.md), section 11).
 
 ## 12. Timeouts
 
@@ -407,6 +424,12 @@ The protocol relies on few timers. Every step is safe to repeat (section 9.2), s
 | A resend through a relay                                       | After the holding time of 14 days ([transports.md](transports.md), section 5.5), not before                                                                                                                                         |
 | An unanswered offer through a relay                            | The sender MAY offer again after the same time                                                                                                                                                                                      |
 | The chain of a device                                          | Sent in three connections and three times through the relay, counted anew when it grows (section 3.3)                                                                                                                               |
+| An acknowledgement after processing a `CHANGE`                 | Within 5 seconds ([sync.md](sync.md), section 9.1)                                                                                                                                                                                  |
+| The `ACCEPT` for an offer of a device of the own set           | Within 5 seconds ([sync.md](sync.md), section 7.2)                                                                                                                                                                                  |
+| A resend of a `CHANGE` through a relay                         | After the holding time of 14 days, not before ([sync.md](sync.md), section 10.3)                                                                                                                                                    |
+| A `CHANGE` that a device sent, kept for its outcome            | 15 days after it was last sent ([sync.md](sync.md), section 10.1)                                                                                                                                                                   |
+| A `RESYNC` that is not acknowledged                            | Sent again at the start of each live connection, and through a relay each time the holding time of 14 days has passed ([sync.md](sync.md), section 11.3)                                                                            |
+| The acknowledgement of a `RESYNC`                              | After the last `CHANGE` of its answer, with no time limit ([sync.md](sync.md), section 11.2)                                                                                                                                        |
 
 ## 13. What a declined or interrupted exchange leaves
 
@@ -439,6 +462,8 @@ And at the receiver:
 | A type of the current offer | received → answered (once, section 5.2) → ended (a later offer of the type, a manifest of its own in which it no longer fits, or the end of the connection) |
 | A record message            | received → processed to an outcome and acknowledged (sections 6.2 and 7.2), or rejected and reported (section 8)                                            |
 
+Between two devices of one set, the machine is the same with `CHANGE` messages in the place of record messages: a `CHANGE` goes through the states of a record message above, a type of an offer is always accepted, and a `RESYNC`, which the device that gets it acts on in the Open phase, is acknowledged after the last `CHANGE` of its answer and sent again in each connection until then ([sync.md](sync.md), sections 7.2, 10 and 11). The manifest transition below does not apply between them, since no type is held back by a manifest there.
+
 A new `MANIFEST` of the receiver with a higher revision is a transition of both machines. Each type of an accepted offer that no longer fits it ends, at the receiver on sending the manifest and at the sender on receiving it ([manifest.md](manifest.md), section 6). Record messages of such a type that were already on their way get `NOT_ACCEPTED`.
 
 ## 15. Through a relay and in a file
@@ -453,12 +478,14 @@ Through a relay ([transports.md](transports.md), section 5) the messages and the
 - **Errors.** Only messages whose signature verified are reported (section 8.3).
 - **Timers.** Resends follow the time for which the relay holds a message (sections 11 and 12).
 - **Encryption.** Every message is sealed for the receiver's encryption key ([keys.md](keys.md), section 4).
+- **Devices of one set.** A `CHANGE` and a `RESYNC` travel through the relay between two devices of a set, each sealed for the other device and put into its mailbox. An accepted offer between them covers every later `CHANGE` that names its schema ([sync.md](sync.md), sections 7.2 and 13.2).
 
 ### 15.2 In a file
 
 A file has no way back to its sender ([records.md](records.md), section 7). Its header's `axt.schemas`, signed by `axt.signature`, takes the place of the offer ([envelope.md](envelope.md), section 4.1; [keys.md](keys.md), section 2.5). The reader's user, who chooses to open the file, together with the reader's manifest ([manifest.md](manifest.md), section 7), takes the place of the answer. Nothing acknowledges it. Hence:
 
 - `OFFER`, `ACCEPT`, `DECLINE`, `ACK` and `ERROR` are bound to one exchange and need a way back, which a file does not have. A file therefore holds none of them ([transports.md](transports.md), section 2.1).
+- `CHANGE` and `RESYNC` are for one device of the sender's own set and belong to the bookkeeping between two devices. A file holds neither ([sync.md](sync.md), section 13.3).
 - A reader applies the record messages of a file by [records.md](records.md), section 5, and reaches the outcomes there, without the steps 4 and 5 of section 6.2. The schemas are those of the header, and a record is taken only if its type fits the reader's manifest ([manifest.md](manifest.md), section 7). A record message that fails another step of section 6.2 is not applied; a `DATA` whose fingerprint is not in `axt.schemas` makes the whole file invalid ([envelope.md](envelope.md), section 4.3).
 - Reading a file accepts no offer. Records that the same sender later sends through a relay or a connection need an offer there.
 
@@ -466,7 +493,7 @@ A file has no way back to its sender ([records.md](records.md), section 7). Its 
 
 - **The boundaries of each live message** are the frames of [transports.md](transports.md), section 4.4 ([envelope.md](envelope.md), section 3), and a connection opens and ends as [transports.md](transports.md), section 4.6, says (section 3.1 and section 14).
 - **The other app's key** is authenticated before its `MANIFEST`: each app proves its signing key in a `HELLO` bound to the TLS connection ([transports.md](transports.md), section 4.5), and every message in the connection carries that key as its `sender`, apart from the additions and removals of devices.
-- **A file** holds its writer's chain at its start, at most one `MANIFEST`, and record messages, and no `OFFER`, `ACCEPT`, `DECLINE`, `ACK` or `ERROR` ([transports.md](transports.md), section 2.1).
+- **A file** holds its writer's chain at its start, at most one `MANIFEST`, and record messages, and no `OFFER`, `ACCEPT`, `DECLINE`, `ACK`, `ERROR`, `CHANGE` or `RESYNC` ([transports.md](transports.md), section 2.1).
 - **The holding time** of a relay is 14 days ([transports.md](transports.md), section 5.5). It sets the resends of sections 11 and 12, and how long a receiver keeps the ids of the offers it answered (section 4.3).
 
 ## 16. Schemas and fingerprints
@@ -925,7 +952,7 @@ cat-a-log has no outcome for the Pet, so it takes the error. It sends Mimi's rec
 ## 18. What other documents define
 
 - [transports.md](transports.md): the live connection, its `HELLO`, its opening and its end (section 4 there); the kinds a file holds (section 2.1 there); the relay and its holding time, which sets the resends through it (section 5 there; section 15.3).
-- [sync.md](sync.md): the stamps, the state stamp that a device of a set gives a record as its version, and what a device does after `STALE` with a higher version (sections 7.4 and 10; sections 2 and 5 there).
+- [sync.md](sync.md): the stamps, the state stamp that a device of a set gives a record as its version, and what a device does after `STALE` with a higher version (sections 7.4 and 10; sections 2 and 5 there); and the exchange between the devices of one set, with the messages `CHANGE` and `RESYNC`, their acknowledgement, their errors and their resends, and the manifests that the devices pass on to each other (sections 2, 7, 8.2, 9, 11 and 14; sections 7 to 14 there).
 - [conformance.md](conformance.md): test vectors for every message of this document and for the cases of section 16.
 
 ## References

@@ -274,7 +274,7 @@ An owner who runs an app on several devices, such as a phone and a tablet, has s
 - **One set.** An installation belongs to one set. An installation that never added a device and never joined one is a set of its own with one key, and nothing in sections 2 to 4 changes for it. An installation whose set has, or has had, another device MUST NOT join another set. A receiver that knows both sets, each by more than one key or by a removed key, rejects the addition, and so does one that knows the installation's key as a removed or a refused key (section 5.5).
 - **One sender.** For a receiver, all current keys of a set sign for the same sender. It keeps one copy of each record of the set, whichever device sent it (section 5.6).
 
-A device applies the additions and removals of its own set by the rules of section 5.5, as a receiver does. How the devices of a set exchange their records and what they know of other apps is defined with [axt-1024](https://github.com/paxel/axt/issues/26) and [axt-1025](https://github.com/paxel/axt/issues/27), to come; this section defines only how the set is formed and how other apps follow it.
+A device applies the additions and removals of its own set by the rules of section 5.5, as a receiver does. How the devices of a set exchange the records of the set is defined in [sync.md](sync.md), sections 7 to 14. How they exchange what they know of other apps is defined with [axt-1025](https://github.com/paxel/axt/issues/27), to come. This section defines only how the set is formed and how other apps follow it.
 
 ### 5.2 Adding a device
 
@@ -414,23 +414,23 @@ A set is one sender, so what [records.md](records.md) says of a sender holds for
 
 - Record ids and versions belong to the set. An id is unique among all records of the set, and one id and version stand for the same message, whichever device signs it ([records.md](records.md), sections 2 and 3). An addition and a removal therefore carry no versions: nothing starts again.
 - A receiver applies a record message signed with any current key of the sender to the sender's records by the version rule ([records.md](records.md), section 5.2), and keeps one copy of each record. A record that one device sent is updated or deleted by a message of another device of the set.
-- Every device of a set changes and deletes every record of the set. [sync.md](sync.md) defines the stamps of their changes, how two states of a record merge per field, and the state stamp that each device gives a record as its version. The messages that carry the states between the devices of a set are defined with [axt-1024](https://github.com/paxel/axt/issues/26), to come.
+- Every device of a set changes and deletes every record of the set. [sync.md](sync.md) defines the stamps of their changes, how two states of a record merge per field, and the state stamp that each device gives a record as its version. The messages that carry the states between the devices of a set are `CHANGE` and `RESYNC` ([sync.md](sync.md), sections 8 and 11): each device sends every other what that device has not acknowledged to it, a record whole on its first transfer and only its changed fields after that ([sync.md](sync.md), section 10).
 
 What belongs to one device stays with its key:
 
 - A receiver keeps one manifest for each current key of a sender, each with its own revisions ([manifest.md](manifest.md), section 6), and with it that key's encryption key, relay and mailbox (section 4.2).
 - A reply carries in `to` the key that signed the message it answers, and goes to that device ([protocol.md](protocol.md), section 9.1).
-- A message that the removed device sent before its removal and that arrives after it is rejected (section 5.5). The remaining devices SHOULD send again the current state of every record for which they have no outcome from that receiver.
+- A message that the removed device sent before its removal and that arrives after it is rejected (section 5.5). The remaining devices SHOULD send again the current state of every record for which they have no outcome from that receiver. Among themselves, they discard what they kept for the removed device and send it nothing more ([sync.md](sync.md), section 12.2).
 
 ### 5.7 Moving to a new device
 
 A move to a new device, such as a new phone, is an addition followed by a removal:
 
 1. The old device adds the new one (section 5.2).
-2. The new device takes over what it needs of the app's data. How the data moves is up to the app until [axt-1024](https://github.com/paxel/axt/issues/26) defines the exchange between the devices of a set; it includes the state of every record of the set with its stamps ([sync.md](sync.md), section 3), and the known senders with their keys. The old device stamps from the moment it signs the `DEVICE_ADD` ([sync.md](sync.md), section 2.4), so no counted version is left to carry over on its own.
+2. The new device takes over what it needs of the app's data. The records of the set reach it from the old device as whole `CHANGE` messages, each with the state of the record and its stamps, first in the connection in which it joined ([sync.md](sync.md), section 12.3). How the rest moves, such as the known senders with their keys, is up to the app. The old device stamps from the moment it signs the `DEVICE_ADD` ([sync.md](sync.md), section 2.4), so no counted version is left to carry over on its own.
 3. The new device removes the old one (section 5.3). The old device then signs nothing more, and SHOULD delete its private keys.
 
-A receiver applies both steps without asking its user (section 5.5), and the sender's records stay under their ids and versions (section 5.6). The new device has a signing key, an encryption key, a mailbox and manifest revisions of its own; it sends its `MANIFEST` after its chain. Between the two steps both devices are devices of the set, so the owner need not hurry the second.
+A receiver applies both steps without asking its user (section 5.5), and the sender's records stay under their ids and versions (section 5.6). The new device has a signing key, an encryption key, a mailbox and manifest revisions of its own; it sends its `MANIFEST` after its chain. Between the two steps both devices are devices of the set, so the owner need not hurry the second, and SHOULD take it only when the old device shows that every record of the set is known to the new device and every part it holds is delivered to it ([sync.md](sync.md), sections 10.1 and 12.3). The old device passes the kept manifests of the other devices of the set on to the new one, and the new one's to them, so that they reach each other through the relay when the old device is gone ([sync.md](sync.md), section 13.2).
 
 ### 5.8 Restoring the same key
 
@@ -682,6 +682,7 @@ The two signatures with the neutral element as key verify for every message unde
 ## 8. What other documents define
 
 - [protocol.md](protocol.md): the `OFFER` as section 2.4 requires it (section 4 there); the binding of `ACCEPT`, `DECLINE`, `ACK` and `ERROR` to their receiver, and how every kind is made safe to repeat (section 2.6; section 9 there); how a message whose signature does not verify is reported (section 8.3 there); where the chain stands in a connection, how often it is sent, and the error `DEVICE_REJECTED` (sections 5.3 to 5.5; section 3.3 there); the addressee of a reply, which is the key of one device (section 5.6; section 9.1 there).
+- [sync.md](sync.md): the stamps and the merge of the records of a set, and the messages `CHANGE` and `RESYNC` between its devices, among them what a device does when a device of its set is added, removed or restored (section 5.6; sections 7 to 14 there).
 - [transports.md](transports.md): the QR payload with the signing key, the encryption key, the mailbox and the mark of a join code (sections 3.2 and 5.2; section 3 there); the connection in which a device joins a set (section 5.2; section 4.7 there); the TLS connection on the local network, whose certificate has a key of its own, and the `HELLO` that binds it to the signing key (section 2.2; sections 4.3 and 4.5 there); the chain at the start of a file (section 5.4; section 2.1 there); the mailbox, which is bound to no key (section 4.6; section 5.1 there); the size limit of the relay, which accepts sealed messages up to 17,301,553 bytes (section 4.4; section 5.6 there); the holding time of 14 days (section 4.2; section 5.5 there); and the mailbox of each device of a set (section 5.6; section 5.8 there).
 
 ## References

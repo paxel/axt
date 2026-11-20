@@ -923,6 +923,234 @@
    }
   },
   {
+   "id": "protocol/session/old-brain-fix-reports-a-change-of-another-app-and-may-close-the-connecti",
+   "op": "session",
+   "description": "Old Brain Fix reports a CHANGE of another app, and may close the connection",
+   "refs": ["protocol.md 2", "protocol.md 8.2", "protocol.md 8.3", "sync.md 7.1"],
+   "input": {
+    "app": {
+     "seed": "071b538b5d99ab63cc1d39aa21fcc96c3698e2cd0c093baf5fd244af0f813ae7",
+     "manifest": "c3013e1fa5884ceb9ea5021a4f6c6420427261696e204669780002020006346178742e6578616d706c652e76312e4170706f696e746d656e74020044416e204170706f696e746d656e74206265636f6d657320612052656d696e6465722e020464654845696e205465726d696e2077697264207a752065696e6572204572696e6e6572756e672e00266178742e6578616d706c652e76312e5461736b02004c41205461736b206265636f6d65732061204e6f7465207769746820612052656d696e6465722e020464656045696e6520417566676162652077697264207a752065696e6572204e6f74697a206d6974204572696e6e6572756e672e00266178742e6578616d706c652e76312e4e6f746502002c41204e6f7465206265636f6d65732061204e6f74652e020464653e45696e65204e6f74697a2077697264207a752065696e6572204e6f74697a2e00000252416e79206f746865722074797065206265636f6d657320612073656172636861626c65204e6f74652e02046465684a6564657220616e64657265205479702077697264207a752065696e657220647572636873756368626172656e204e6f74697a2e00000000",
+     "formats": [1],
+     "readers": {
+      "axt.example.v1.Appointment": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"axt.label\":\"Appointment\",\"axt.label_translations\":{\"de\":\"Termin\"},\"axt.help\":\"An event at a time and possibly a place, such as a visit to the vet.\",\"axt.help_translations\":{\"de\":\"Ein Ereignis zu einer Zeit und vielleicht an einem Ort, etwa ein Besuch beim Tierarzt.\"},\"axt.emoji\":\"📆\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\",\"axt.label\":\"Title\",\"axt.label_translations\":{\"de\":\"Titel\"},\"axt.help\":\"What the appointment is, on one line.\",\"axt.help_translations\":{\"de\":\"Worum es beim Termin geht, in einer Zeile.\"},\"axt.emoji\":\"🏷️\"},{\"name\":\"start\",\"type\":{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]},\"doc\":\"When the appointment starts, as a date and time on the wall clock, in a time zone or floating. For an all-day appointment, 00:00 of its first day, floating.\",\"axt.label\":\"Start\",\"axt.label_translations\":{\"de\":\"Beginn\"},\"axt.help\":\"When the appointment starts.\",\"axt.help_translations\":{\"de\":\"Wann der Termin beginnt.\"},\"axt.emoji\":\"🕘\",\"axt.anchor\":\"local\"},{\"name\":\"end\",\"type\":[\"null\",\"axt.DateTime\"],\"default\":null,\"doc\":\"When the appointment ends: the first moment after it, which is not part of it. It is in a time zone when start is, possibly another one, as for a flight, and floating when start is floating. For an all-day appointment, 00:00 of the day after its last day, floating. Null when no end is given; an all-day appointment without an end takes one day.\",\"axt.label\":\"End\",\"axt.label_translations\":{\"de\":\"Ende\"},\"axt.help\":\"When the appointment is over.\",\"axt.help_translations\":{\"de\":\"Wann der Termin vorbei ist.\"},\"axt.emoji\":\"🔚\",\"axt.anchor\":\"local\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; start and end are then floating at 00:00, and only their days count.\",\"axt.label\":\"All day\",\"axt.label_translations\":{\"de\":\"Ganztägig\"},\"axt.help\":\"On when the appointment takes whole days.\",\"axt.help_translations\":{\"de\":\"An, wenn der Termin ganze Tage dauert.\"},\"axt.emoji\":\"☀️\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\",\"axt.label\":\"Location\",\"axt.label_translations\":{\"de\":\"Ort\"},\"axt.help\":\"Where the appointment takes place, such as an address or a room.\",\"axt.help_translations\":{\"de\":\"Wo der Termin stattfindet, etwa eine Anschrift oder ein Raum.\"},\"axt.emoji\":\"📍\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\",\"axt.label\":\"Notes\",\"axt.label_translations\":{\"de\":\"Notizen\"},\"axt.help\":\"Anything else about the appointment.\",\"axt.help_translations\":{\"de\":\"Alles Weitere zum Termin.\"},\"axt.emoji\":\"📝\",\"axt.multiline\":true},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"Duration\",\"namespace\":\"axt\",\"doc\":\"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"months\",\"type\":\"int\",\"doc\":\"The number of calendar months, negative for a length back in time. A year is 12 months.\"},{\"name\":\"days\",\"type\":\"int\",\"doc\":\"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\"},{\"name\":\"millis\",\"type\":\"long\",\"doc\":\"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\"}]}},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a duration added to start as spec/time.md, section 7.2, says: negative before start, such as -PT15M for 15 minutes before or -P1D for the day before at the same time on the wall clock, 0 at start, and positive after it. Empty when there are no reminders.\",\"axt.label\":\"Reminders\",\"axt.label_translations\":{\"de\":\"Erinnerungen\"},\"axt.help\":\"When to be reminded, each before or after the start.\",\"axt.help_translations\":{\"de\":\"Wann erinnert werden soll, jeweils vor oder nach dem Beginn.\"},\"axt.emoji\":\"⏰\"}]}"
+     },
+     "user_takes": [
+      "axt.example.v1.Appointment",
+      "axt.example.v1.Task",
+      "com.example.Visit",
+      "org.example.outline.Outline"
+     ],
+     "peer": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a"
+    },
+    "steps": [
+     {
+      "receive": "c30116306f71b9ce9ea802001b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a00a003c3013e1fa5884ceb9ea502126361742d612d6c6f670002020002246178742e6578616d706c652e76312e50657402004e4120506574206265636f6d657320616e20616e696d616c20696e2074686520706574206c6f672e0000000208246178742e6578616d706c652e76312e50657402020200346178742e6578616d706c652e76312e4170706f696e746d656e7402020200346178742e6578616d706c652e76312e4d6561737572656d656e74020202002e6178742e6578616d706c652e76312e446f63756d656e7402020200000000088eeddb40917d25ec103203b84f5f68500fc03c7a10088fe329d4e04a68a3c333c069f133e92a5a98d29626bd0e0523226e2001e3d59af3bc9d97b55b7e5406"
+     },
+     {
+      "receive": "c30116306f71b9ce9ea802161b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024861326434663662382d316333652d346135622d396437662d306532633461366238643166069401c301e8629dfcca9a84d3da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb700346178742e6578616d706c652e76312e4170706f696e746d656e7406010000a57cf2a510637d66f8a153988c809dbb63cb61f9380d7d3aa1c014dcc5dc505e5f1706e15bf72c7dba051a39bd1eac897e88754b9ba916bd87f9ac96c174bb00"
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": null,
+      "close": false,
+      "answers": {},
+      "errors": []
+     },
+     {
+      "outcome": null,
+      "close": {
+       "one_of": [false, true]
+      },
+      "answers": {},
+      "errors": [
+       {
+        "code": "INVALID_MESSAGE",
+        "message_hash": "2f1ebb14cdcffa23af5092378a4a20bf43e4bf7b39a625115451ab86f2bd2789",
+        "record": {"id": "a2d4f6b8-1c3e-4a5b-9d7f-0e2c4a6b8d1f", "version": 3},
+        "fingerprint": null,
+        "field": null
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "protocol/session/old-brain-fix-reports-a-resync-of-another-app-and-may-close-the-connecti",
+   "op": "session",
+   "description": "Old Brain Fix reports a RESYNC of another app, and may close the connection",
+   "refs": ["protocol.md 2", "protocol.md 8.2", "protocol.md 8.3", "sync.md 7.1"],
+   "input": {
+    "app": {
+     "seed": "071b538b5d99ab63cc1d39aa21fcc96c3698e2cd0c093baf5fd244af0f813ae7",
+     "manifest": "c3013e1fa5884ceb9ea5021a4f6c6420427261696e204669780002020006346178742e6578616d706c652e76312e4170706f696e746d656e74020044416e204170706f696e746d656e74206265636f6d657320612052656d696e6465722e020464654845696e205465726d696e2077697264207a752065696e6572204572696e6e6572756e672e00266178742e6578616d706c652e76312e5461736b02004c41205461736b206265636f6d65732061204e6f7465207769746820612052656d696e6465722e020464656045696e6520417566676162652077697264207a752065696e6572204e6f74697a206d6974204572696e6e6572756e672e00266178742e6578616d706c652e76312e4e6f746502002c41204e6f7465206265636f6d65732061204e6f74652e020464653e45696e65204e6f74697a2077697264207a752065696e6572204e6f74697a2e00000252416e79206f746865722074797065206265636f6d657320612073656172636861626c65204e6f74652e02046465684a6564657220616e64657265205479702077697264207a752065696e657220647572636873756368626172656e204e6f74697a2e00000000",
+     "formats": [1],
+     "readers": {
+      "axt.example.v1.Appointment": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"axt.label\":\"Appointment\",\"axt.label_translations\":{\"de\":\"Termin\"},\"axt.help\":\"An event at a time and possibly a place, such as a visit to the vet.\",\"axt.help_translations\":{\"de\":\"Ein Ereignis zu einer Zeit und vielleicht an einem Ort, etwa ein Besuch beim Tierarzt.\"},\"axt.emoji\":\"📆\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\",\"axt.label\":\"Title\",\"axt.label_translations\":{\"de\":\"Titel\"},\"axt.help\":\"What the appointment is, on one line.\",\"axt.help_translations\":{\"de\":\"Worum es beim Termin geht, in einer Zeile.\"},\"axt.emoji\":\"🏷️\"},{\"name\":\"start\",\"type\":{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]},\"doc\":\"When the appointment starts, as a date and time on the wall clock, in a time zone or floating. For an all-day appointment, 00:00 of its first day, floating.\",\"axt.label\":\"Start\",\"axt.label_translations\":{\"de\":\"Beginn\"},\"axt.help\":\"When the appointment starts.\",\"axt.help_translations\":{\"de\":\"Wann der Termin beginnt.\"},\"axt.emoji\":\"🕘\",\"axt.anchor\":\"local\"},{\"name\":\"end\",\"type\":[\"null\",\"axt.DateTime\"],\"default\":null,\"doc\":\"When the appointment ends: the first moment after it, which is not part of it. It is in a time zone when start is, possibly another one, as for a flight, and floating when start is floating. For an all-day appointment, 00:00 of the day after its last day, floating. Null when no end is given; an all-day appointment without an end takes one day.\",\"axt.label\":\"End\",\"axt.label_translations\":{\"de\":\"Ende\"},\"axt.help\":\"When the appointment is over.\",\"axt.help_translations\":{\"de\":\"Wann der Termin vorbei ist.\"},\"axt.emoji\":\"🔚\",\"axt.anchor\":\"local\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; start and end are then floating at 00:00, and only their days count.\",\"axt.label\":\"All day\",\"axt.label_translations\":{\"de\":\"Ganztägig\"},\"axt.help\":\"On when the appointment takes whole days.\",\"axt.help_translations\":{\"de\":\"An, wenn der Termin ganze Tage dauert.\"},\"axt.emoji\":\"☀️\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\",\"axt.label\":\"Location\",\"axt.label_translations\":{\"de\":\"Ort\"},\"axt.help\":\"Where the appointment takes place, such as an address or a room.\",\"axt.help_translations\":{\"de\":\"Wo der Termin stattfindet, etwa eine Anschrift oder ein Raum.\"},\"axt.emoji\":\"📍\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\",\"axt.label\":\"Notes\",\"axt.label_translations\":{\"de\":\"Notizen\"},\"axt.help\":\"Anything else about the appointment.\",\"axt.help_translations\":{\"de\":\"Alles Weitere zum Termin.\"},\"axt.emoji\":\"📝\",\"axt.multiline\":true},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"Duration\",\"namespace\":\"axt\",\"doc\":\"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"months\",\"type\":\"int\",\"doc\":\"The number of calendar months, negative for a length back in time. A year is 12 months.\"},{\"name\":\"days\",\"type\":\"int\",\"doc\":\"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\"},{\"name\":\"millis\",\"type\":\"long\",\"doc\":\"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\"}]}},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a duration added to start as spec/time.md, section 7.2, says: negative before start, such as -PT15M for 15 minutes before or -P1D for the day before at the same time on the wall clock, 0 at start, and positive after it. Empty when there are no reminders.\",\"axt.label\":\"Reminders\",\"axt.label_translations\":{\"de\":\"Erinnerungen\"},\"axt.help\":\"When to be reminded, each before or after the start.\",\"axt.help_translations\":{\"de\":\"Wann erinnert werden soll, jeweils vor oder nach dem Beginn.\"},\"axt.emoji\":\"⏰\"}]}"
+     },
+     "user_takes": [
+      "axt.example.v1.Appointment",
+      "axt.example.v1.Task",
+      "com.example.Visit",
+      "org.example.outline.Outline"
+     ],
+     "peer": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a"
+    },
+    "steps": [
+     {
+      "receive": "c30116306f71b9ce9ea802001b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a00a003c3013e1fa5884ceb9ea502126361742d612d6c6f670002020002246178742e6578616d706c652e76312e50657402004e4120506574206265636f6d657320616e20616e696d616c20696e2074686520706574206c6f672e0000000208246178742e6578616d706c652e76312e50657402020200346178742e6578616d706c652e76312e4170706f696e746d656e7402020200346178742e6578616d706c652e76312e4d6561737572656d656e74020202002e6178742e6578616d706c652e76312e446f63756d656e7402020200000000088eeddb40917d25ec103203b84f5f68500fc03c7a10088fe329d4e04a68a3c333c069f133e92a5a98d29626bd0e0523226e2001e3d59af3bc9d97b55b7e5406"
+     },
+     {
+      "receive": "c30116306f71b9ce9ea802181b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024837633164396534322d356133622d346636632d386432652d3162306139633866376536640254c301f1fd59d5d92b76e8da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb783ccfe048410491378f497783bc52e0efd7c49f9e7c1f13487ba19da54af20d1865452069a43230c953183c9b1ba99a8fe0f9fe34d379ff11f4b407ac2c8f106"
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": null,
+      "close": false,
+      "answers": {},
+      "errors": []
+     },
+     {
+      "outcome": null,
+      "close": {
+       "one_of": [false, true]
+      },
+      "answers": {},
+      "errors": [
+       {
+        "code": "INVALID_MESSAGE",
+        "message_hash": "8d94d9666abcda63628bdaf53d5fcc42d9605c414fc46f8bcffb5a319dc28750",
+        "record": {"id": "7c1d9e42-5a3b-4f6c-8d2e-1b0a9c8f7e6d", "version": 1},
+        "fingerprint": null,
+        "field": null
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "protocol/session/old-brain-fix-reports-a-change-without-a-record-and-may-close-the-connec",
+   "op": "session",
+   "description": "Old Brain Fix reports a CHANGE without a record, and may close the connection",
+   "refs": ["protocol.md 2", "protocol.md 8.2", "protocol.md 8.3", "sync.md 7.1"],
+   "input": {
+    "app": {
+     "seed": "071b538b5d99ab63cc1d39aa21fcc96c3698e2cd0c093baf5fd244af0f813ae7",
+     "manifest": "c3013e1fa5884ceb9ea5021a4f6c6420427261696e204669780002020006346178742e6578616d706c652e76312e4170706f696e746d656e74020044416e204170706f696e746d656e74206265636f6d657320612052656d696e6465722e020464654845696e205465726d696e2077697264207a752065696e6572204572696e6e6572756e672e00266178742e6578616d706c652e76312e5461736b02004c41205461736b206265636f6d65732061204e6f7465207769746820612052656d696e6465722e020464656045696e6520417566676162652077697264207a752065696e6572204e6f74697a206d6974204572696e6e6572756e672e00266178742e6578616d706c652e76312e4e6f746502002c41204e6f7465206265636f6d65732061204e6f74652e020464653e45696e65204e6f74697a2077697264207a752065696e6572204e6f74697a2e00000252416e79206f746865722074797065206265636f6d657320612073656172636861626c65204e6f74652e02046465684a6564657220616e64657265205479702077697264207a752065696e657220647572636873756368626172656e204e6f74697a2e00000000",
+     "formats": [1],
+     "readers": {
+      "axt.example.v1.Appointment": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"axt.label\":\"Appointment\",\"axt.label_translations\":{\"de\":\"Termin\"},\"axt.help\":\"An event at a time and possibly a place, such as a visit to the vet.\",\"axt.help_translations\":{\"de\":\"Ein Ereignis zu einer Zeit und vielleicht an einem Ort, etwa ein Besuch beim Tierarzt.\"},\"axt.emoji\":\"📆\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\",\"axt.label\":\"Title\",\"axt.label_translations\":{\"de\":\"Titel\"},\"axt.help\":\"What the appointment is, on one line.\",\"axt.help_translations\":{\"de\":\"Worum es beim Termin geht, in einer Zeile.\"},\"axt.emoji\":\"🏷️\"},{\"name\":\"start\",\"type\":{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]},\"doc\":\"When the appointment starts, as a date and time on the wall clock, in a time zone or floating. For an all-day appointment, 00:00 of its first day, floating.\",\"axt.label\":\"Start\",\"axt.label_translations\":{\"de\":\"Beginn\"},\"axt.help\":\"When the appointment starts.\",\"axt.help_translations\":{\"de\":\"Wann der Termin beginnt.\"},\"axt.emoji\":\"🕘\",\"axt.anchor\":\"local\"},{\"name\":\"end\",\"type\":[\"null\",\"axt.DateTime\"],\"default\":null,\"doc\":\"When the appointment ends: the first moment after it, which is not part of it. It is in a time zone when start is, possibly another one, as for a flight, and floating when start is floating. For an all-day appointment, 00:00 of the day after its last day, floating. Null when no end is given; an all-day appointment without an end takes one day.\",\"axt.label\":\"End\",\"axt.label_translations\":{\"de\":\"Ende\"},\"axt.help\":\"When the appointment is over.\",\"axt.help_translations\":{\"de\":\"Wann der Termin vorbei ist.\"},\"axt.emoji\":\"🔚\",\"axt.anchor\":\"local\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; start and end are then floating at 00:00, and only their days count.\",\"axt.label\":\"All day\",\"axt.label_translations\":{\"de\":\"Ganztägig\"},\"axt.help\":\"On when the appointment takes whole days.\",\"axt.help_translations\":{\"de\":\"An, wenn der Termin ganze Tage dauert.\"},\"axt.emoji\":\"☀️\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\",\"axt.label\":\"Location\",\"axt.label_translations\":{\"de\":\"Ort\"},\"axt.help\":\"Where the appointment takes place, such as an address or a room.\",\"axt.help_translations\":{\"de\":\"Wo der Termin stattfindet, etwa eine Anschrift oder ein Raum.\"},\"axt.emoji\":\"📍\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\",\"axt.label\":\"Notes\",\"axt.label_translations\":{\"de\":\"Notizen\"},\"axt.help\":\"Anything else about the appointment.\",\"axt.help_translations\":{\"de\":\"Alles Weitere zum Termin.\"},\"axt.emoji\":\"📝\",\"axt.multiline\":true},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"Duration\",\"namespace\":\"axt\",\"doc\":\"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"months\",\"type\":\"int\",\"doc\":\"The number of calendar months, negative for a length back in time. A year is 12 months.\"},{\"name\":\"days\",\"type\":\"int\",\"doc\":\"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\"},{\"name\":\"millis\",\"type\":\"long\",\"doc\":\"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\"}]}},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a duration added to start as spec/time.md, section 7.2, says: negative before start, such as -PT15M for 15 minutes before or -P1D for the day before at the same time on the wall clock, 0 at start, and positive after it. Empty when there are no reminders.\",\"axt.label\":\"Reminders\",\"axt.label_translations\":{\"de\":\"Erinnerungen\"},\"axt.help\":\"When to be reminded, each before or after the start.\",\"axt.help_translations\":{\"de\":\"Wann erinnert werden soll, jeweils vor oder nach dem Beginn.\"},\"axt.emoji\":\"⏰\"}]}"
+     },
+     "user_takes": [
+      "axt.example.v1.Appointment",
+      "axt.example.v1.Task",
+      "com.example.Visit",
+      "org.example.outline.Outline"
+     ],
+     "peer": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a"
+    },
+    "steps": [
+     {
+      "receive": "c30116306f71b9ce9ea802001b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a00a003c3013e1fa5884ceb9ea502126361742d612d6c6f670002020002246178742e6578616d706c652e76312e50657402004e4120506574206265636f6d657320616e20616e696d616c20696e2074686520706574206c6f672e0000000208246178742e6578616d706c652e76312e50657402020200346178742e6578616d706c652e76312e4170706f696e746d656e7402020200346178742e6578616d706c652e76312e4d6561737572656d656e74020202002e6178742e6578616d706c652e76312e446f63756d656e7402020200000000088eeddb40917d25ec103203b84f5f68500fc03c7a10088fe329d4e04a68a3c333c069f133e92a5a98d29626bd0e0523226e2001e3d59af3bc9d97b55b7e5406"
+     },
+     {
+      "receive": "c30116306f71b9ce9ea802161b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a009401c301e8629dfcca9a84d3da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb700346178742e6578616d706c652e76312e4170706f696e746d656e74060100005340e17b0d46f95c172227075daf82d0354d83e42b160be62e2c4955093188edd28320e4d04dc7aeccf377c9c94c3e156f4782f3ec04e6872a76a0c358f1d309"
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": null,
+      "close": false,
+      "answers": {},
+      "errors": []
+     },
+     {
+      "outcome": null,
+      "close": {
+       "one_of": [false, true]
+      },
+      "answers": {},
+      "errors": [
+       {
+        "code": "INVALID_MESSAGE",
+        "message_hash": "dea0bc5e7c56a087d6b794b7c3a0a8b002b75312d77114aa8509c4ed242f2b4c",
+        "record": null,
+        "fingerprint": null,
+        "field": null
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "protocol/session/old-brain-fix-reports-a-resync-without-a-record-and-may-close-the-connec",
+   "op": "session",
+   "description": "Old Brain Fix reports a RESYNC without a record, and may close the connection",
+   "refs": ["protocol.md 2", "protocol.md 8.2", "protocol.md 8.3", "sync.md 7.1"],
+   "input": {
+    "app": {
+     "seed": "071b538b5d99ab63cc1d39aa21fcc96c3698e2cd0c093baf5fd244af0f813ae7",
+     "manifest": "c3013e1fa5884ceb9ea5021a4f6c6420427261696e204669780002020006346178742e6578616d706c652e76312e4170706f696e746d656e74020044416e204170706f696e746d656e74206265636f6d657320612052656d696e6465722e020464654845696e205465726d696e2077697264207a752065696e6572204572696e6e6572756e672e00266178742e6578616d706c652e76312e5461736b02004c41205461736b206265636f6d65732061204e6f7465207769746820612052656d696e6465722e020464656045696e6520417566676162652077697264207a752065696e6572204e6f74697a206d6974204572696e6e6572756e672e00266178742e6578616d706c652e76312e4e6f746502002c41204e6f7465206265636f6d65732061204e6f74652e020464653e45696e65204e6f74697a2077697264207a752065696e6572204e6f74697a2e00000252416e79206f746865722074797065206265636f6d657320612073656172636861626c65204e6f74652e02046465684a6564657220616e64657265205479702077697264207a752065696e657220647572636873756368626172656e204e6f74697a2e00000000",
+     "formats": [1],
+     "readers": {
+      "axt.example.v1.Appointment": "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"axt.title\":\"title\",\"axt.label\":\"Appointment\",\"axt.label_translations\":{\"de\":\"Termin\"},\"axt.help\":\"An event at a time and possibly a place, such as a visit to the vet.\",\"axt.help_translations\":{\"de\":\"Ein Ereignis zu einer Zeit und vielleicht an einem Ort, etwa ein Besuch beim Tierarzt.\"},\"axt.emoji\":\"📆\",\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\",\"axt.label\":\"Title\",\"axt.label_translations\":{\"de\":\"Titel\"},\"axt.help\":\"What the appointment is, on one line.\",\"axt.help_translations\":{\"de\":\"Worum es beim Termin geht, in einer Zeile.\"},\"axt.emoji\":\"🏷️\"},{\"name\":\"start\",\"type\":{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]},\"doc\":\"When the appointment starts, as a date and time on the wall clock, in a time zone or floating. For an all-day appointment, 00:00 of its first day, floating.\",\"axt.label\":\"Start\",\"axt.label_translations\":{\"de\":\"Beginn\"},\"axt.help\":\"When the appointment starts.\",\"axt.help_translations\":{\"de\":\"Wann der Termin beginnt.\"},\"axt.emoji\":\"🕘\",\"axt.anchor\":\"local\"},{\"name\":\"end\",\"type\":[\"null\",\"axt.DateTime\"],\"default\":null,\"doc\":\"When the appointment ends: the first moment after it, which is not part of it. It is in a time zone when start is, possibly another one, as for a flight, and floating when start is floating. For an all-day appointment, 00:00 of the day after its last day, floating. Null when no end is given; an all-day appointment without an end takes one day.\",\"axt.label\":\"End\",\"axt.label_translations\":{\"de\":\"Ende\"},\"axt.help\":\"When the appointment is over.\",\"axt.help_translations\":{\"de\":\"Wann der Termin vorbei ist.\"},\"axt.emoji\":\"🔚\",\"axt.anchor\":\"local\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; start and end are then floating at 00:00, and only their days count.\",\"axt.label\":\"All day\",\"axt.label_translations\":{\"de\":\"Ganztägig\"},\"axt.help\":\"On when the appointment takes whole days.\",\"axt.help_translations\":{\"de\":\"An, wenn der Termin ganze Tage dauert.\"},\"axt.emoji\":\"☀️\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\",\"axt.label\":\"Location\",\"axt.label_translations\":{\"de\":\"Ort\"},\"axt.help\":\"Where the appointment takes place, such as an address or a room.\",\"axt.help_translations\":{\"de\":\"Wo der Termin stattfindet, etwa eine Anschrift oder ein Raum.\"},\"axt.emoji\":\"📍\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\",\"axt.label\":\"Notes\",\"axt.label_translations\":{\"de\":\"Notizen\"},\"axt.help\":\"Anything else about the appointment.\",\"axt.help_translations\":{\"de\":\"Alles Weitere zum Termin.\"},\"axt.emoji\":\"📝\",\"axt.multiline\":true},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"Duration\",\"namespace\":\"axt\",\"doc\":\"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"months\",\"type\":\"int\",\"doc\":\"The number of calendar months, negative for a length back in time. A year is 12 months.\"},{\"name\":\"days\",\"type\":\"int\",\"doc\":\"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\"},{\"name\":\"millis\",\"type\":\"long\",\"doc\":\"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\"}]}},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a duration added to start as spec/time.md, section 7.2, says: negative before start, such as -PT15M for 15 minutes before or -P1D for the day before at the same time on the wall clock, 0 at start, and positive after it. Empty when there are no reminders.\",\"axt.label\":\"Reminders\",\"axt.label_translations\":{\"de\":\"Erinnerungen\"},\"axt.help\":\"When to be reminded, each before or after the start.\",\"axt.help_translations\":{\"de\":\"Wann erinnert werden soll, jeweils vor oder nach dem Beginn.\"},\"axt.emoji\":\"⏰\"}]}"
+     },
+     "user_takes": [
+      "axt.example.v1.Appointment",
+      "axt.example.v1.Task",
+      "com.example.Visit",
+      "org.example.outline.Outline"
+     ],
+     "peer": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a"
+    },
+    "steps": [
+     {
+      "receive": "c30116306f71b9ce9ea802001b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a00a003c3013e1fa5884ceb9ea502126361742d612d6c6f670002020002246178742e6578616d706c652e76312e50657402004e4120506574206265636f6d657320616e20616e696d616c20696e2074686520706574206c6f672e0000000208246178742e6578616d706c652e76312e50657402020200346178742e6578616d706c652e76312e4170706f696e746d656e7402020200346178742e6578616d706c652e76312e4d6561737572656d656e74020202002e6178742e6578616d706c652e76312e446f63756d656e7402020200000000088eeddb40917d25ec103203b84f5f68500fc03c7a10088fe329d4e04a68a3c333c069f133e92a5a98d29626bd0e0523226e2001e3d59af3bc9d97b55b7e5406"
+     },
+     {
+      "receive": "c30116306f71b9ce9ea802181b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a0054c301f1fd59d5d92b76e8da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb795aa6c5cf1cba158ea71d9fd488f1c775ef25a095981ce389003f235dd4e22a72fdff34f983216672fad6efee3691742c34e3b4e7137f55dac39d6fdda10070e"
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": null,
+      "close": false,
+      "answers": {},
+      "errors": []
+     },
+     {
+      "outcome": null,
+      "close": {
+       "one_of": [false, true]
+      },
+      "answers": {},
+      "errors": [
+       {
+        "code": "INVALID_MESSAGE",
+        "message_hash": "2bad98644b11214ef9d0e8f359d220f4662128e8b1ae17dc2fb897721e8ce8e0",
+        "record": null,
+        "fingerprint": null,
+        "field": null
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
    "id": "protocol/session/cat-a-log-offers-takes-the-answers-and-acknowledgements-and-ignores-what",
    "op": "session",
    "description": "cat-a-log offers, takes the answers and acknowledgements, and ignores what is not for it",

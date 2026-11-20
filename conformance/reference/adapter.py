@@ -10,8 +10,8 @@ the Ed25519, X25519 and HPKE of keys_examples.py and its model of a receiver
 that follows the devices of its senders, the model of an app of
 protocol_examples.py, the QR code, frames and relay of
 transports_examples.py, the time types of time_examples.py, and the attributes of spec/metadata.md of
-metadata_rules.py, and the stamps and the merge of spec/sync.md of
-sync_examples.py. Where those scripts have no model, for a receiver's
+metadata_rules.py, and the stamps, the merge and the model of a device with
+its siblings of spec/sync.md of sync_examples.py. Where those scripts have no model, for a receiver's
 own changes to records (spec/records.md, section 6) and for reading a file
 (spec/transports.md, section 2.2), it has its own code below. That it passes
 every vector shows that the vectors agree with the scripts' checks; it is a
@@ -1191,6 +1191,19 @@ def op_pass_version(i: Any) -> dict[str, Any]:
     return ok({"resend": sy.stamp_json(resend), "to_pass": sy.stamp_json(to_pass), "highest": str(highest)})
 
 
+def op_siblings(i: Any) -> dict[str, Any]:
+    """One device of a set with its siblings, as the model of sync_examples.py plays it."""
+    device = sy.device_of_json(i["device"], b_in)
+    out: list[dict[str, Any]] = []
+    for step in i["steps"]:
+        answer = sy.play(device, step, b_in)
+        if "sent" in answer:
+            passed = [{"to": p["to"].hex(), "manifest": b_out(p["manifest"])} for p in answer["passed"]]
+            answer = {**answer, "sent": [b_out(m) for m in answer["sent"]], "passed": passed}
+        out.append(answer)
+    return {"steps": out}
+
+
 OPS: dict[str, Callable[[Any], dict[str, Any]]] = {
     "decode_body": op_decode_body,
     "read_file": op_read_file,
@@ -1252,6 +1265,7 @@ OPS: dict[str, Callable[[Any], dict[str, Any]]] = {
     "begin_stamping": op_begin_stamping,
     "stale": op_stale,
     "pass_version": op_pass_version,
+    "siblings": op_siblings,
 }
 
 

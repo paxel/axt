@@ -2,9 +2,11 @@
 """Produce and check the examples of spec/protocol.md.
 
 Checks the schemas of the protocol messages, types/axt/Offer.avsc,
-Accept.avsc, Decline.avsc, Ack.avsc and Error.avsc, then plays a live
-exchange from cat-a-log to Old Brain Fix with signed messages and prints
-each as annotated hex:
+Accept.avsc, Decline.avsc, Ack.avsc and Error.avsc, and with the same
+schema rules those of the messages between the devices of one set,
+Change.avsc and Resync.avsc, whose examples sync_examples.py produces, then
+plays a live exchange from cat-a-log to Old Brain Fix with signed messages
+and prints each as annotated hex:
 
 - the schema rules of spec/types.md, section 5, with the checks of
   conformance/tools/example_types.py, as spec/manifest.md, section 9, applies
@@ -90,7 +92,8 @@ _spec.loader.exec_module(tm)
 
 PROTOCOL = ["Offer", "Accept", "Decline", "Ack", "Error"]
 DEVICES = ["DeviceJoin", "DeviceAdd", "DeviceRemove"]
-ALL_SPEC = ["Envelope", "Manifest"] + DEVICES + PROTOCOL
+SYNC = ["Change", "Resync"]  # the bodies of spec/sync.md, whose examples sync_examples.py produces
+ALL_SPEC = ["Envelope", "Manifest"] + DEVICES + PROTOCOL + SYNC
 
 # --- the limits of spec/protocol.md -------------------------------------------
 
@@ -145,7 +148,7 @@ for n in ALL_SPEC:
     for full in defined:
         assert full not in defined_by, f"{full} is defined in {n}.avsc and {defined_by[full]}.avsc"
         defined_by[full] = n
-for n in PROTOCOL:
+for n in PROTOCOL + SYNC:
     s, where = jsons[n], f"types/axt/{n}.avsc"
     assert s["type"] == "record" and s["name"] == n and s["namespace"] == "axt", where
     assert "axt.version" not in s, f"{where}: a schema of the specification carries no axt.version"
@@ -208,8 +211,11 @@ BODY_SCHEMA = {
     "DEVICE_JOIN": "DeviceJoin",
     "DEVICE_ADD": "DeviceAdd",
     "DEVICE_REMOVE": "DeviceRemove",
+    "CHANGE": "Change",
+    "RESYNC": "Resync",
 }
 RECORD_KINDS = {"DATA", "DELETE"}
+SYNC_KINDS = {"CHANGE", "RESYNC"}  # between the devices of one set only (spec/sync.md, section 7.1)
 DEVICE_KINDS = {"DEVICE_JOIN", "DEVICE_ADD", "DEVICE_REMOVE"}
 CHAIN_KINDS = {"DEVICE_ADD", "DEVICE_REMOVE"}  # signed with a key of a device set, not the connection's
 
@@ -703,8 +709,13 @@ class App:
             raise Rejected("INVALID_MESSAGE", "a message before the MANIFEST", report=False)
         if kind not in BODY_SCHEMA and kind not in RECORD_KINDS:
             raise Rejected("INVALID_MESSAGE", f"no document defines the kind {kind} yet", record)
-        if (rec is None) == (kind in RECORD_KINDS):
+        if (rec is None) == (kind in RECORD_KINDS or kind in SYNC_KINDS):
             raise Rejected("INVALID_MESSAGE", "record field present or missing", record)
+        if kind in SYNC_KINDS:
+            # The app of this model has no sibling: the other app is another known sender, and only the
+            # devices of the app's own set send it these kinds (spec/sync.md, section 7.1). The model of
+            # a device with siblings is that of sync_examples.py.
+            raise Rejected("INVALID_MESSAGE", f"a {kind} of another app", record)
         body = env["body"]
         if kind == "DELETE":
             if body:

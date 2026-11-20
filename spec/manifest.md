@@ -191,17 +191,21 @@ A type with the full name N, in a writer schema of version V (section 3.4), fits
 - A sender SHOULD show its user, for each type it would send, the receiver's purpose sentence in the user's language (section 3.6), before the user chooses what to send.
 - What fits is the most a sender may offer. It MAY offer less, for example only the types its user chose.
 
+These rules are about two apps. Between the devices of one device set no type is held back by a manifest: a device offers another device of its set the schemas of every type ([sync.md](sync.md), section 7.2).
+
 ### 5.4 The receiver confirms each offer
 
 A fit is not an acceptance. The receiver confirms or declines each offer ([protocol.md](protocol.md), section 5). It MAY decline an offer that fits, for example when the schemas do not resolve ([envelope.md](envelope.md), section 6) or when its user does not want the records.
 
 A receiver judges each offer by the manifest it has at that moment, not by the one it sent: through a relay an offer can arrive after the receiver's manifest has changed. It MUST decline an offer whose type, in the offered version, does not fit its current manifest.
 
+This section is about two apps as well: a device accepts every type that another device of its own set offers, whatever its manifest says ([sync.md](sync.md), section 7.2).
+
 ## 6. Changes between connections
 
 An app's manifest changes when what the app takes changes: an update of the app adds a type, its user turns a type off, or the app adds a language.
 
-A sender MAY keep the last valid manifest it has of each app, under that app's key, to use it outside a live connection: to show its user what the other app takes, to write a file for it, or to offer through a relay. It keeps one manifest for each current key of a known sender: each device of a sender has a manifest of its own, with its own revisions, its own `encryption_key` and its own `relay` ([keys.md](keys.md), section 5.6). A manifest signed with one key never replaces the kept manifest of another key, also not of another key of the same sender. A key added to a sender has no kept manifest until a `MANIFEST` signed with it arrives, and the kept manifest of a key is deleted when the key is removed ([keys.md](keys.md), section 5.5). A sender offers to a device by the manifest of that device's key ([protocol.md](protocol.md), section 9.1).
+A sender MAY keep the last valid manifest it has of each app, under that app's key, to use it outside a live connection: to show its user what the other app takes, to write a file for it, or to offer through a relay. It keeps one manifest for each current key of a known sender: each device of a sender has a manifest of its own, with its own revisions, its own `encryption_key` and its own `relay` ([keys.md](keys.md), section 5.6). A manifest signed with one key never replaces the kept manifest of another key, also not of another key of the same sender. A key added to a sender has no kept manifest until a `MANIFEST` signed with it arrives, and the kept manifest of a key is deleted when the key is removed ([keys.md](keys.md), section 5.5). A sender offers to a device by the manifest of that device's key ([protocol.md](protocol.md), section 9.1). The devices of one set pass the kept manifests of their set on to each other, each as the signed message it is, and take a passed-on manifest, one whose `sender` is not the connection key, like one that comes through a relay, only if its revision is higher than that of the kept one; a manifest that a device of the set sends itself in a live connection applies as below, whatever its revision ([sync.md](sync.md), section 13.2).
 
 Which manifest of a key applies:
 
@@ -230,6 +234,8 @@ A file can also be the first contact between two apps that exchange through a re
 - It is a manifest received outside a live connection, so the revision rule of section 6 applies to it.
 - It does not filter or change how the reader applies the file's records; it says what the writer takes, for what the reader sends back.
 - Its schema is not in `axt.schemas` (section 2).
+
+The reading rule above is about a file of another app. A device that reads a file of its own device set does not look at whether a type fits its manifest ([sync.md](sync.md), section 13.4).
 
 A file without a `MANIFEST` is complete as far as this document is concerned. A reader MUST NOT reject a file because it holds no `MANIFEST`.
 

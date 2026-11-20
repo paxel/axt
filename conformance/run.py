@@ -327,11 +327,14 @@ BODY_FPS = {
     "Error": "83f3bc3dd1b3a57c",
 }
 BODY_OF = {"OFFER": "Offer", "ACCEPT": "Accept", "DECLINE": "Decline", "ACK": "Ack", "ERROR": "Error"}
+# Between the devices of one set (spec/sync.md, section 15).
+SYNC_FPS = {"Change": "e8629dfcca9a84d3", "Resync": "f1fd59d5d92b76e8"}
+SYNC_OF = {"CHANGE": "Change", "RESYNC": "Resync"}
 
 
-def reply(hexed: Any, own: bytes, peer: bytes) -> tuple[str, Any]:
-    """The kind and body of a message the adapter wrote; raises ValueError if it is not a valid message of
-    its own key, signed, and addressed to the peer."""
+def written(hexed: Any, own: bytes, bodies: dict[str, str], fps: dict[str, str]) -> tuple[Any, Any]:
+    """The envelope and the body of a message the adapter wrote; raises ValueError if it is not a valid
+    message of its own key, signed, of one of the kinds given. Only a CHANGE and a RESYNC name a record."""
     import fastavro
 
     m = to_bytes(hexed)
@@ -345,20 +348,116 @@ def reply(hexed: Any, own: bytes, peer: bytes) -> tuple[str, Any]:
         raise ValueError("a reply whose sender is not the adapter's key")
     if keys.verify_problem(own, keys.MESSAGE_PREFIX + m[10:-64], m[-64:]):
         raise ValueError("a reply whose signature does not verify")
-    name = BODY_OF.get(env["kind"])
+    name = bodies.get(env["kind"])
     if (
         name is None
-        or env["record"] is not None
-        or env["body"][:10] != b"\xc3\x01" + bytes.fromhex(BODY_FPS[name])
+        or (env["record"] is None) == (env["kind"] in SYNC_OF)
+        or env["body"][:10] != b"\xc3\x01" + bytes.fromhex(fps[name])
     ):
         raise ValueError(f"a reply of kind {env['kind']} that is not a valid reply")
     buf = io.BytesIO(env["body"][10:])
     body: Any = fastavro.schemaless_reader(buf, schema(name), schema(name))
     if buf.tell() != len(env["body"]) - 10:
         raise ValueError("a reply body with bytes left over")
+    return env, body
+
+
+def reply(hexed: Any, own: bytes, peer: bytes) -> tuple[str, Any]:
+    """The kind and body of a message the adapter wrote; raises ValueError if it is not a valid message of
+    its own key, signed, and addressed to the peer."""
+    env, body = written(hexed, own, BODY_OF, BODY_FPS)
     if body["to"] != peer:
         raise ValueError("a reply that is not addressed to the other app")
     return env["kind"], body
+
+
+def said(hexed: Any, own: bytes) -> list[dict[str, Any]]:
+    """What a message says that a device wrote in a `siblings` session (section 5.14): one entry for the
+    message, or for an ACK one for each of its entries. Every long is written as a Stamp."""
+    env, d = written(hexed, own, {**BODY_OF, **SYNC_OF}, {**BODY_FPS, **SYNC_FPS})
+    kind, rec = env["kind"], env["record"]
+    base = {"kind": kind, "to": d["to"].hex()}
+    if kind == "CHANGE":
+        if d["origin"] is not None or any(f["value"] is None for f in d["fields"]):
+            raise ValueError("a CHANGE with a key in origin or a null value")
+        if len({f["name"] for f in d["fields"]}) != len(d["fields"]):
+            raise ValueError("a CHANGE with a name twice")
+        r = d["removal"]
+        fields = {
+            f["name"]: {
+                "value": f["value"].hex(),
+                "schema": f["schema"].hex(),
+                "stamp": str(f["stamp"]),
+                "device": f["device"].hex(),
+            }
+            for f in d["fields"]
+        }
+        change = {
+            "record": {"id": rec["id"], "version": str(rec["version"])},
+            "type": d["type"],
+            "state": str(d["state"]),
+            "whole": d["whole"],
+            "removal": r and {"stamp": str(r["stamp"]), "device": r["device"].hex(), "stands": r["stands"]},
+            "fields": fields,
+        }
+        return [{**base, **change}]
+    if kind == "ACK":
+        names = [(int(e["id"].replace("-", ""), 16), e["version"]) for e in d["records"]]
+        if len(set(names)) != len(names):
+            raise ValueError("an ACK with an id and version twice")
+        return [
+            {
+                **base,
+                "id": e["id"],
+                "version": str(e["version"]),
+                "outcome": e["outcome"],
+                "receiver_version": str(e["receiver_version"]),
+                "kept_fields": e["kept_fields"],
+            }
+            for e in d["records"]
+        ]
+    if kind == "ERROR":
+        about = d["record"]
+        error = {
+            "code": d["code"],
+            "message_hash": d["message_hash"].hex(),
+            "record": about and {"id": about["id"], "version": str(about["version"])},
+            "fingerprint": None if d["fingerprint"] is None else d["fingerprint"].hex(),
+            "field": d["field"],
+        }
+        return [{**base, **error}]
+    if kind == "OFFER":
+        return [{**base, "offer_id": d["offer_id"], "schemas": [t["schema"] for t in d["types"]]}]
+    if kind == "ACCEPT":
+        return [{**base, "offer_id": d["offer_id"], "types": sorted(d["types"])}]
+    if kind == "RESYNC":
+        return [{**base, "record": {"id": rec["id"], "version": str(rec["version"])}}]
+    raise ValueError(f"a {kind} in a session of a device with its siblings")
+
+
+def check_siblings(vector: Any, output: Any) -> str | None:
+    """None if every step meets its expected result, else every step that does not. The messages of a
+    step are compared by what they say, in any order."""
+    own = keys.public_key(bytes.fromhex(vector["input"]["device"]["seed"]))
+    want, got = vector["expected"]["steps"], output.get("steps")
+    if not isinstance(got, list) or len(got) != len(want):
+        return f"expected {len(want)} step results, got {short(got)}"
+    problems: list[str] = []
+    for n, (w, g) in enumerate(zip(want, got, strict=True)):
+        try:
+            if "sent" in w:
+                entries = [entry for m in g["sent"] for entry in said(m, own)]
+                entries.sort(key=lambda e: json.dumps(e, sort_keys=True))
+                passed = [{"to": p["to"], "manifest": to_bytes(p["manifest"]).hex()} for p in g["passed"]]
+                passed.sort(key=lambda p: (p["to"], p["manifest"]))
+                g = {**g, "sent": entries, "passed": passed}
+                w = {**w, "passed": [{**p, "manifest": to_bytes(p["manifest"]).hex()} for p in w["passed"]]}
+            problem = diff(w, g, f"step {n}")
+        except (ValueError, KeyError, TypeError) as e:
+            problem = f"step {n}: {e}"
+        if problem:
+            problems.append(problem)
+    return "; ".join(problems) if problems else None
 
 
 def check_session(vector: Any, output: Any) -> str | None:
@@ -440,7 +539,7 @@ def check_step(step: Any, w: Any, g: Any, own: bytes, peer: bytes, where: str) -
     return diff(w, g, where)
 
 
-SPECIAL = {"seal": check_seal, "session": check_session}
+SPECIAL = {"seal": check_seal, "session": check_session, "siblings": check_siblings}
 
 
 def check(vector: Any, output: Any) -> str | None:

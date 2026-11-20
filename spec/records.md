@@ -49,7 +49,7 @@ A device SHOULD keep the highest version it has given each record through whatev
 
 ### 4.1 Data
 
-A `DATA` message carries the whole record, every field, in its body ([envelope.md](envelope.md), section 2.2), and the record's id and version in `record`. The first version of a record and every update have the same form; there is no message that carries only the changed fields.
+A `DATA` message carries the whole record, every field, in its body ([envelope.md](envelope.md), section 2.2), and the record's id and version in `record`. The first version of a record and every update have the same form; toward another app there is no message that carries only the changed fields. Only the devices of one sender send each other the changed fields of a record alone, in a `CHANGE` message ([sync.md](sync.md), section 8); a receiver never gets one.
 
 An update does not name the version it is based on. It carries the whole state of the record, and the receiver merges it against what it kept of the record itself (section 6). Neither side needs the other's history for that.
 

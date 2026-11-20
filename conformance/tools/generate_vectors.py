@@ -61,6 +61,7 @@ env = load("envelope_examples")
 tm = load("time_examples")
 mx = load("metadata_examples")
 sy = load("sync_examples")
+sy.check()  # the examples of spec/sync.md hold; fills its examples, messages and sessions for the vectors
 mr = mx.mr
 assert mr.LANGTAG.pattern == me.LANGTAG.pattern and mr.LANGTAG.flags == me.LANGTAG.flags, (
     "two language tag rules"
@@ -1023,6 +1024,8 @@ def encoding_category() -> Category:
         "Ack": 0x38DD09198076E05C,
         "Error": 0x7CA5B3D13DBCF383,
         "QrPayload": 0xDDBCA858F745D131,
+        "Change": 0xD3849ACAFC9D62E8,
+        "Resync": 0xE8762BD9D559FDF1,
     }
     sections = {
         "Envelope": "envelope.md 10.1",
@@ -1031,6 +1034,8 @@ def encoding_category() -> Category:
         "DeviceAdd": "keys.md 6",
         "DeviceRemove": "keys.md 6",
         "QrPayload": "transports.md 6",
+        "Change": "sync.md 15",
+        "Resync": "sync.md 15",
     }
     for name, want in published.items():
         text = (REPO / "types" / "axt" / f"{name}.avsc").read_text(encoding="utf-8")
@@ -1074,7 +1079,7 @@ def encoding_category() -> Category:
     goods.append(("a message of exactly 16 MiB", at_limit, ["envelope.md 8"]))
     # The kinds that come with later tickets: format 1 has their symbols, and no document their bodies.
     later = [k for k in pe.KINDS if k not in pe.BODY_SCHEMA and k not in pe.RECORD_KINDS]
-    assert later == ["CHANGE", "RESYNC", "FORWARD", "WITHDRAW", "PROPOSAL", "PROPOSAL_REPLY"]
+    assert later == ["FORWARD", "WITHDRAW", "PROPOSAL", "PROPOSAL_REPLY"]
     goods += [
         (
             f"an envelope of the kind {kind}, which no document defines yet, with an empty body",
@@ -1083,6 +1088,14 @@ def encoding_category() -> Category:
         )
         for kind in later
     ]
+    # The messages between the devices of one set (spec/sync.md, section 16).
+    sync_messages = [
+        ("the CHANGE of sync.md, section 16.2", ["sync.md 8.1", "sync.md 16.2"]),
+        ("the RESYNC of sync.md, section 16.3", ["sync.md 11.1", "sync.md 16.3"]),
+        ("the whole CHANGE of sync.md, section 16.4", ["sync.md 8.1", "sync.md 16.4"]),
+    ]
+    assert [pe.fp8(pe.fingerprints[n][1]) for n in pe.SYNC] == [sy.SPEC_FP[n] for n in pe.SYNC]
+    goods += [(label, sy.EXAMPLE_MESSAGES[label], refs) for label, refs in sync_messages]
     for label, m, refs in goods:
         c.add(
             "decode_message",
@@ -1193,6 +1206,11 @@ def encoding_category() -> Category:
         ack_body.index(bytes.fromhex("0200"), 10 + 32 + 1 + 1 + 36) + 1
     )  # version 1, then outcome APPLIED
     assert ack_body[outcome_at] == 0
+    change_body, resync_body = (
+        cast(bytes, sy.read_all("Envelope", sy.EXAMPLE_MESSAGES[label][10:])["body"])
+        for label in ("the CHANGE of sync.md, section 16.2", "the RESYNC of sync.md, section 16.3")
+    )
+    assert change_body[10 + 32] == 0  # origin: union index 0, null
     for label, kind, body in [
         ("an ACK body with a byte left over", "ACK", ack_body + b"\x00"),
         ("an ACK body cut short", "ACK", ack_body[:-1]),
@@ -1207,6 +1225,20 @@ def encoding_category() -> Category:
             ack_body[:outcome_at] + keys.zigzag(len(pe.OUTCOME["symbols"])) + ack_body[outcome_at + 1 :],
         ),
         ("an empty body for an ACK", "ACK", b""),
+        ("a CHANGE body with a byte left over", "CHANGE", change_body + b"\x00"),
+        ("a CHANGE body cut short", "CHANGE", change_body[:-1]),
+        (
+            "a CHANGE body with the fingerprint of axt.Resync",
+            "CHANGE",
+            change_body[:2] + sy.SPEC_FP["Resync"] + change_body[10:],
+        ),
+        (
+            "a CHANGE body with origin union index 2",
+            "CHANGE",
+            change_body[: 10 + 32] + keys.zigzag(2) + change_body[10 + 33 :],
+        ),
+        ("a RESYNC body whose key has 31 bytes", "RESYNC", resync_body[:-1]),
+        ("a RESYNC body of the CHANGE schema", "RESYNC", change_body),
         (
             "a MANIFEST body of the DEVICE_ADD schema",
             "MANIFEST",
@@ -2357,6 +2389,27 @@ def protocol_category() -> Category:
             obf_takes,
             CAT,
             [r(pe.m1, "taken"), r(m, want, **opts, **may_close)],
+        )
+    # A CHANGE and a RESYNC travel between the devices of one set only: one of another app is rejected
+    # (spec/sync.md, section 7.1), and so is one whose record is missing or does not belong.
+    to_obf = {"to": OBF, "origin": None, "type": A, "state": 3, "whole": True, "removal": None, "fields": []}
+    change_body, resync_body = sy.body_of("Change", to_obf), sy.body_of("Resync", {"to": OBF})
+    for label, m in [
+        ("a CHANGE of another app", sy.message(CAT_SEED, "CHANGE", (AID, 3), change_body)),
+        ("a RESYNC of another app", sy.message(CAT_SEED, "RESYNC", (sy.REQUEST_ID, 1), resync_body)),
+        ("a CHANGE without a record", sy.message(CAT_SEED, "CHANGE", None, change_body)),
+        ("a RESYNC without a record", sy.message(CAT_SEED, "RESYNC", None, resync_body)),
+    ]:
+        run_session(
+            c,
+            f"Old Brain Fix reports {label}, and may close the connection",
+            ["protocol.md 2", "protocol.md 8.2", "protocol.md 8.3", "sync.md 7.1"],
+            OBF_SEED,
+            me.OLD_BRAIN_FIX,
+            obf_readers,
+            obf_takes,
+            CAT,
+            [r(pe.m1, "taken"), r(m, "ERROR INVALID_MESSAGE", **may_close)],
         )
 
     cat_steps = [
@@ -3819,6 +3872,18 @@ def file_category() -> Category:
         )[0],
         check=False,
     )[1]
+    # A CHANGE and a RESYNC of the file's sender, for a device of its set: a file holds neither.
+    whole_change = {
+        "to": NEW,
+        "origin": None,
+        "type": sy.APPOINTMENT_TYPE,
+        "state": 3,
+        "whole": True,
+        "removal": None,
+        "fields": [],
+    }
+    sync_change = sy.message(CAT_SEED, "CHANGE", (RECORD_IDS["r1"], 3), sy.body_of("Change", whole_change))
+    sync_resync = sy.message(CAT_SEED, "RESYNC", (sy.REQUEST_ID, 1), sy.body_of("Resync", {"to": NEW}))
     offer = pe.make_message(
         "OFFER",
         CAT_SEED,
@@ -3905,6 +3970,16 @@ def file_category() -> Category:
         ),
         ("an ACK", container([ack], None), ["transports.md 2.1"]),
         ("an OFFER", container([offer], [schema(PT)]), ["transports.md 2.1"]),
+        (
+            "a CHANGE",
+            container([sync_change, D(28)], [schema(A_)]),
+            ["transports.md 2.1", "transports.md 2.2", "sync.md 13.3"],
+        ),
+        (
+            "a RESYNC",
+            container([sync_resync, D(29)], [schema(A_)]),
+            ["transports.md 2.1", "transports.md 2.2", "sync.md 13.3"],
+        ),
         ("a message of another sender", container([D(14, seed=OBF_SEED)], [schema(A_)]), ["keys.md 2.5"]),
         (
             "a DEVICE_ADD after a record message",
@@ -3966,9 +4041,9 @@ def sync_category() -> Category:
         "sync",
         "The devices of one owner: the next stamp, what a change stamps, the merge of two states of a "
         "record per field and for the removal, when a record is deleted, the record message of a "
-        "state, beginning to stamp, and what a device does after STALE (spec/sync.md).",
+        "state, beginning to stamp, what a device does after STALE, and one device with its siblings: "
+        "the CHANGE and RESYNC messages it processes and sends (spec/sync.md).",
     )
-    sy.check()  # the examples of section 6 hold; fills the merges and changes of those examples
     S, J = sy.stamp_json, sy.state_json
     # The schemas of the field states: version 1 of the example type, and a version 2 made for the cases.
     assert sy.SCHEMA_1 == pe.fp8(pe.canonical_fp(sy.APPOINTMENT_1)) == pe.fp8(TYPE_FPS["Appointment"])
@@ -4210,6 +4285,27 @@ def sync_category() -> Category:
             },
             accept({"resend": S(resend), "to_pass": S(kept), "highest": S(top)}),
         )
+
+    # One device with its siblings: the sessions of the script, which has checked what each step says.
+    def wire(v: Any) -> Any:
+        """A step as a vector holds it: its messages and values as Bytes."""
+        if isinstance(v, bytes):
+            return B(v)
+        if isinstance(v, dict):
+            return {k: wire(x) for k, x in v.items()}
+        if isinstance(v, list):
+            return [wire(x) for x in v]
+        return v
+
+    assert len(sy.PLAYED) == len(sy.SAID)
+    for played in sy.PLAYED:
+        c.add(
+            "siblings",
+            played.label,
+            played.refs,
+            {"device": played.device, "steps": wire(played.steps)},
+            {"steps": played.answers},
+        )
     return c
 
 
@@ -4276,8 +4372,8 @@ def same_values(v: Any) -> Any:
 # spec/conformance.md, section 7.4, counts them.
 COUNTS = {
     "encoding": (
-        {"fingerprint": 18, "decode_message": 38, "decode_body": 16, "encode_message": 5},
-        {"decode_message": 17, "decode_body": 6},
+        {"fingerprint": 20, "decode_message": 39, "decode_body": 25, "encode_message": 5},
+        {"decode_message": 17, "decode_body": 12},
     ),
     "types": ({"fingerprint": 8, "decode_record": 63}, {"decode_record": 21}),
     "time": (
@@ -4315,8 +4411,8 @@ COUNTS = {
             "open": 8,
         },
     ),
-    "protocol": ({"choose_format": 3, "session": 30}, {}),
-    "file": ({"read_file": 53}, {"read_file": 35}),
+    "protocol": ({"choose_format": 3, "session": 34}, {}),
+    "file": ({"read_file": 55}, {"read_file": 37}),
     "qr": ({"parse_qr": 28, "qr_text": 4}, {"parse_qr": 21}),
     "local": ({"hello_frame": 2, "connection": 20}, {}),
     "relay": ({"mailbox_id": 2, "request": 7, "reaction": 28, "listing": 3}, {}),
@@ -4325,11 +4421,12 @@ COUNTS = {
         {
             "next_stamp": 23,
             "change": 34,
-            "merge": 81,
+            "merge": 87,
             "deleted": 22,
             "begin_stamping": 3,
             "stale": 10,
             "pass_version": 5,
+            "siblings": 206,
         },
         {},
     ),

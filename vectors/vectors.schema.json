@@ -665,6 +665,20 @@
     {
      "if": {
       "properties": {
+       "op": {"const": "siblings"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["device", "steps"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
        "op": {"const": "sign"}
       }
      },
@@ -1055,7 +1069,7 @@
       "items": {
        "properties": {
         "op": {
-         "enum": ["begin_stamping", "change", "deleted", "merge", "next_stamp", "pass_version", "stale"]
+         "enum": ["begin_stamping", "change", "deleted", "merge", "next_stamp", "pass_version", "siblings", "stale"]
         }
        }
       }

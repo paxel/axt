@@ -20,6 +20,12 @@ The vocabulary of this repository. The specification in [spec/](spec/README.md) 
 
 **State stamp**: the stamp a device takes whenever the state of a record changes on it, by a change of its user or by a merge with a sibling's state. It is the record's version toward other apps.
 
+**Part**: one field state of a record, or its removal, as one device of a set holds it. A part is **delivered** to a sibling once that sibling has acknowledged it or sent it, and **due** for the sibling until then.
+
+**Change message**: a `CHANGE`, in which a device sends a sibling the parts of one record that are due for it: every field state on the first transfer, a **whole** message, and only the changed ones after that.
+
+**Resync**: a `RESYNC` message, with which a device that fell behind, such as after restoring a backup, asks a sibling to send every record whole again.
+
 **Tombstone**: what a receiver keeps of a record its sender deleted: its id and the version of the deletion.
 
 **Local change**: a change the receiver's user makes to a received record in the receiver. It stays there and is not sent back.
