@@ -6734,7 +6734,7 @@ def check_received(out: list[str]) -> None:
     assert before.receive(other) == ("APPLIED", [])
 
     # 16.7: the tablet's user sets the location, with the stamps 200 and 201.
-    tablet.at(0, [200 - 191, 201 - 201])
+    tablet.at(0, [200 - 191, 0])  # the second stamp has a random part of 0
     made, sent = tablet.layer_change(KEY_OBF, RECORD_ID, "set", {"location": VALUE_WEBER})
     assert made and len(sent) == 1 and tablet.highest == 201
     layer = FieldState(VALUE_WEBER, 200, TABLET, SCHEMA_1)
