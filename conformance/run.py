@@ -238,7 +238,8 @@ class Adapter:
 
     def close(self) -> None:
         try:
-            assert self.proc.stdin is not None  # a pipe
+            if self.proc.stdin is None:  # never: the adapter is started with a pipe
+                raise RuntimeError("the adapter has no standard input")
             self.proc.stdin.close()
             self.proc.wait(30)
         except Exception:
