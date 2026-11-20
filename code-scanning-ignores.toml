@@ -34,3 +34,74 @@ ignoreUntil = 2027-05-19
 reason = """Single maintainer: the ruleset blocks deletion and force-pushes and requires a \
 pull request with green CI, but no approval, since nobody else can give one. Scorecard scores \
 the missing approvers and stale-review dismissal, so it stays below maximal."""
+
+[[IgnoredAlerts]]
+tool = "Scorecard"
+rule = "MaintainedID"
+ignoreUntil = 2027-02-15
+reason = """The repository was created on 2026-11-15; Scorecard rates a repository younger \
+than 90 days as not maintained whatever its activity. The finding clears by itself then."""
+
+[[IgnoredAlerts]]
+tool = "SonarQube Cloud"
+rule = "secrets:S8217"
+path = "vectors/relay-server/relay-server.json"
+ignoreUntil = 2027-05-19
+reason = """Mailbox secrets and bearer tokens of the relay vectors are test values of \
+spec/keys.md, section 7.1, derived from public labels; they open no real mailbox."""
+
+[[IgnoredAlerts]]
+tool = "SonarQube Cloud"
+rule = "secrets:S8217"
+path = "vectors/relay/relay.json"
+ignoreUntil = 2027-05-19
+reason = """Mailbox secrets and bearer tokens of the relay vectors are test values of \
+spec/keys.md, section 7.1, derived from public labels; they open no real mailbox."""
+
+[[IgnoredAlerts]]
+tool = "SonarQube Cloud"
+rule = "json:S6418"
+path = "vectors/relay/relay.json"
+ignoreUntil = 2027-05-19
+reason = """The fields named secret hold the test mailbox secrets of spec/keys.md, section 7.1; \
+a vector has to carry them, since the operation under test computes with them."""
+
+[[IgnoredAlerts]]
+tool = "SonarQube Cloud"
+rule = "python:S6418"
+path = "conformance/tools/keys_examples.py"
+ignoreUntil = 2027-05-19
+reason = """The HPKE secret of the sealing example of spec/keys.md, section 7.4, a test value \
+that the specification prints; the script checks the example against it."""
+
+[[IgnoredAlerts]]
+tool = "CodeQL"
+rule = "py/insecure-protocol"
+path = "conformance/tools/transports_examples.py"
+ignoreUntil = 2027-05-19
+reason = """The example lets a client offer TLS 1.2 on purpose, to show that a server of \
+spec/transports.md, section 4.3, refuses it; the server accepts TLS 1.3 only."""
+
+[[IgnoredAlerts]]
+tool = "SonarQube Cloud"
+rule = "python:S5527"
+path = "conformance/tools/transports_examples.py"
+ignoreUntil = 2027-05-19
+reason = """No host name check by design: the local connection is pinned to the key of the \
+scanned QR code and authenticated by HELLO (spec/transports.md, sections 4.3 and 4.5)."""
+
+[[IgnoredAlerts]]
+tool = "SonarQube Cloud"
+rule = "python:S4830"
+path = "conformance/tools/transports_examples.py"
+ignoreUntil = 2027-05-19
+reason = """No certificate chain check by design: the local connection is pinned to the key of \
+the scanned QR code and authenticated by HELLO (spec/transports.md, sections 4.3 and 4.5)."""
+
+[[IgnoredAlerts]]
+tool = "SonarQube Cloud"
+rule = "python:S1313"
+path = "conformance/tools/transports_examples.py"
+ignoreUntil = 2027-05-19
+reason = """192.168.1.20 is the example address of the QR code of spec/transports.md, section 7.2, \
+a private address that the example only encodes."""
