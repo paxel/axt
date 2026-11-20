@@ -8,7 +8,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 ## 1. Terms
 
-- **Manifest**: one datum of the record `axt.Manifest`, carried in the body of a `MANIFEST` message ([envelope.md](envelope.md), section 2.2). It is the statement of one installation, the one whose key is the message's `sender`.
+- **Manifest**: one datum of the record `axt.Manifest`, carried in the body of a `MANIFEST` message ([envelope.md](envelope.md), section 2.2). It is the statement of one installation, the one whose key is the message's `sender`; the devices of one sender each have a manifest of their own ([keys.md](keys.md), section 5.6).
 - **Take**: an app takes a type when it accepts records of that type and does something with them. The manifest names the types an app takes by full name and a range of versions ([types.md](types.md), sections 1 and 3), or states that the app takes any type.
 - **Fit**: a type in one version fits a manifest when section 5.2 says so.
 - **Purpose sentence**: the sentence an app gives for each type it takes, and for any type, on what it does with the records, such as "An Appointment becomes a Reminder."
@@ -40,7 +40,7 @@ A `MANIFEST` message is signed like every message, as [keys.md](keys.md) defines
 | `encryption_key` | `null` or `axt.ManifestEncryptionKey` | The X25519 public key for messages through a relay, or `null`                  | 3.9     |
 | `relay`          | `null` or `axt.ManifestRelay`         | The relay and the mailbox for messages through a relay, or `null`              | 3.10    |
 
-`axt.ManifestTake` has the fields `type`, `min_version`, `max_version`, `purpose` and `purpose_translations`; `axt.ManifestAnyType` has `purpose` and `purpose_translations`; `axt.ManifestSend` has `type`, `min_version` and `max_version`; `axt.ManifestEncryptionKey` is a `fixed` of 32 bytes; `axt.ManifestRelay` has `url` and `mailbox`, a `fixed` of 32 bytes named `axt.ManifestRelayMailbox`. Each field's meaning is also in its `doc` in the schema.
+`axt.ManifestTake` has the fields `type`, `min_version`, `max_version`, `purpose` and `purpose_translations`; `axt.ManifestAnyType` has `purpose` and `purpose_translations`; `axt.ManifestSend` has `type`, `min_version`, `max_version` and `proposals`; `axt.ManifestEncryptionKey` is a `fixed` of 32 bytes; `axt.ManifestRelay` has `url` and `mailbox`, a `fixed` of 32 bytes named `axt.ManifestRelayMailbox`. Each field's meaning is also in its `doc` in the schema.
 
 ### 3.1 The app
 
@@ -102,7 +102,9 @@ The app name and the sentences are plain text. An app MUST show them as text and
 
 `sends` lists the types the app may send, each with the versions it writes. `null` means that the app does not say; an empty array means that it sends no type. A manifest MUST NOT name a full name twice in `sends`. `max_version` `null` means that the app does not say up to which version it writes.
 
-`sends` is for display only. An app MAY show its user what the other app can send. It does not limit what the app offers: a receiver MUST NOT decline an offer only because its type is not in the sender's `sends`.
+`proposals` says whether the app takes proposals of changes to the records of the type that it sends, as `PROPOSAL` messages of [shares.md](shares.md), section 13, from every receiver with which it shares such a record. `false`, the field's default, means that it takes none. A receiver sends a proposal for a record only to a device whose manifest has an entry for the record's type with `proposals` `true`, and the device that gets one judges by its own current manifest ([shares.md](shares.md), section 12.2). A manifest whose `sends` is `null`, or has no entry for a type, takes no proposals for that type.
+
+Apart from `proposals`, `sends` is for display only. An app MAY show its user what the other app can send. It does not limit what the app offers: a receiver MUST NOT decline an offer only because its type is not in the sender's `sends`.
 
 ### 3.8 Revision
 
@@ -111,7 +113,7 @@ The app name and the sentences are plain text. An app MUST show them as text and
 - A revision MUST be at least 1.
 - Each change of the manifest's content MUST get a revision higher than every revision the app has sent before. The app SHOULD add one for each change.
 - One revision MUST always stand for the same content.
-- The highest revision an app has sent MUST survive what the app's data goes through, including a restore from a backup and a key move to a new installation ([keys.md](keys.md)).
+- The highest revision an app has sent MUST survive what the app's data goes through, including a restore from a backup. Each device of a sender numbers the revisions of its own manifest ([keys.md](keys.md), section 5.6).
 
 Section 6 says how an app uses the revisions of the manifests it receives.
 
@@ -120,7 +122,7 @@ Section 6 says how an app uses the revisions of the manifests it receives.
 `encryption_key` is the X25519 public key of the installation, with which other apps encrypt the messages they send to it through a relay ([keys.md](keys.md), section 4). It is `null` when the app takes no messages through a relay.
 
 - An app that takes messages through a relay MUST put its current encryption key in its manifest. A new encryption key is a change of the manifest's content and takes a higher revision (section 3.8).
-- The manifest is signed with the sender's signing key (section 2), and this binds the encryption key to it. An app takes the encryption key of another app from its manifest, from a QR code, or from a key move, as [keys.md](keys.md), section 4.2, says.
+- The manifest is signed with the sender's signing key (section 2), and this binds the encryption key to it. An app takes the encryption key of another app's device from that device's manifest or from a QR code, as [keys.md](keys.md), section 4.2, says.
 
 ### 3.10 Relay
 
@@ -189,19 +191,23 @@ A type with the full name N, in a writer schema of version V (section 3.4), fits
 - A sender SHOULD show its user, for each type it would send, the receiver's purpose sentence in the user's language (section 3.6), before the user chooses what to send.
 - What fits is the most a sender may offer. It MAY offer less, for example only the types its user chose.
 
+These rules are about two apps. Between the devices of one device set no type is held back by a manifest: a device offers another device of its set the schemas of every type ([sync.md](sync.md), section 7.2).
+
 ### 5.4 The receiver confirms each offer
 
 A fit is not an acceptance. The receiver confirms or declines each offer ([protocol.md](protocol.md), section 5). It MAY decline an offer that fits, for example when the schemas do not resolve ([envelope.md](envelope.md), section 6) or when its user does not want the records.
 
 A receiver judges each offer by the manifest it has at that moment, not by the one it sent: through a relay an offer can arrive after the receiver's manifest has changed. It MUST decline an offer whose type, in the offered version, does not fit its current manifest.
 
+This section is about two apps as well: a device accepts every type that another device of its own set offers, whatever its manifest says ([sync.md](sync.md), section 7.2).
+
 ## 6. Changes between connections
 
 An app's manifest changes when what the app takes changes: an update of the app adds a type, its user turns a type off, or the app adds a language.
 
-A sender MAY keep the last valid manifest it has of each app, under that app's key, to use it outside a live connection: to show its user what the other app takes, to write a file for it, or to offer through a relay. A kept manifest follows the moves of its key ([keys.md](keys.md), section 5) until the new installation sends a manifest of its own; its `encryption_key` is then the one the key move carries ([keys.md](keys.md), section 4.2), and its `relay` stays as it is, since the mailbox moves to the new installation with the app's data ([transports.md](transports.md), section 5.8).
+A sender MAY keep the last valid manifest it has of each app, under that app's key, to use it outside a live connection: to show its user what the other app takes, to write a file for it, or to offer through a relay. It keeps one manifest for each current key of a known sender: each device of a sender has a manifest of its own, with its own revisions, its own `encryption_key` and its own `relay` ([keys.md](keys.md), section 5.6). A manifest signed with one key never replaces the kept manifest of another key, also not of another key of the same sender. A key added to a sender has no kept manifest until a `MANIFEST` signed with it arrives, and the kept manifest of a key is deleted when the key is removed ([keys.md](keys.md), section 5.5). A sender offers to a device by the manifest of that device's key ([protocol.md](protocol.md), section 9.1). The devices of one set pass the kept manifests of their set on to each other, each as the signed message it is, and take a passed-on manifest, one whose `sender` is not the connection key, like one that comes through a relay, only if its revision is higher than that of the kept one; a manifest that a device of the set sends itself in a live connection applies as below, whatever its revision ([sync.md](sync.md), section 13.2). A device also passes the kept manifests of other apps on to the devices of its own set, each as the message it got, inside a `FORWARD` message. A device takes such a manifest as one received outside a live connection, only if its revision is higher than that of the manifest it keeps of that key and it did not take the kept one from that key itself in a live connection, so every device of a set comes to keep the manifest of each device of another app that one of them got ([sync.md](sync.md), sections 19.4 and 20.1).
 
-Which manifest applies:
+Which manifest of a key applies:
 
 - **In a live connection**, the manifest received in that connection applies, whatever its revision, and replaces the kept one.
 - **Outside a live connection**, through a relay or in a file, a received manifest replaces the kept one only if its revision is higher. One with a lower or equal revision is ignored.
@@ -210,7 +216,7 @@ A relay may deliver messages late or out of order, and a user may open an old fi
 
 When the manifest of the receiver changes, the sender compares the types that fit before and after:
 
-- **A type no longer fits.** The sender stops offering it, updates and deletions included. The records it has sent stay at the receiver, and [records.md](records.md) still applies to them; what the receiver does with records of a type it no longer takes is up to the receiver. When the type fits again and a new offer of it is accepted ([protocol.md](protocol.md), section 11), the sender SHOULD send the current state of each record of the type that it sent before: a `DATA` with the current version of a record that exists, a `DELETE` with the version of the deletion of one it deleted in between. The version rule ([records.md](records.md), section 5.2) then brings the receiver to the current state.
+- **A type no longer fits.** The sender stops offering it, updates and deletions included. The records it has sent stay at the receiver, and [records.md](records.md) still applies to them; what the receiver does with records of a type it no longer takes is up to the receiver. When the type fits again and a new offer of it is accepted ([protocol.md](protocol.md), section 11), the sender SHOULD send the current state of each record of the type that it sent before: a `DATA` with the current version of a record that exists, a `DELETE` with the version of the deletion of one it deleted in between, and, to an app of another user, what it owes that app of each record: nothing of a record that is not shared with it, and a `WITHDRAW` under the version of its withdrawal for one withdrawn from it ([shares.md](shares.md), section 5.3). The version rule ([records.md](records.md), section 5.2) then brings the receiver to the current state.
 - **A type now fits.** The sender MAY offer it, as section 5.3 says.
 - **A purpose sentence changed.** The sender SHOULD show the new sentence the next time its user chooses what to send.
 - **The formats changed.** The sender writes its further messages in a format of the new list ([envelope.md](envelope.md), section 2.1).
@@ -222,19 +228,22 @@ A file has no connection: its reader cannot tell the writer which types it takes
 - **Writing.** A writer that keeps a manifest of the app a file is meant for (section 6) SHOULD put only types that fit that manifest into the file, as it would offer them. A file meant for any reader, such as an export, is not filtered.
 - **Reading.** A reader MUST NOT apply a record whose type, in the version of its writer schema in `axt.schemas`, does not fit its own current manifest (section 5.2). Like a receiver in a live connection, it MAY take fewer than fit.
 
-A file can also be the first contact between two apps that exchange through a relay afterwards ([keys.md](keys.md), section 3.2). The app that reads such a file needs the writer's manifest to send anything back. Every file may therefore hold a `MANIFEST` message, right after the key moves at its start ([transports.md](transports.md), section 2.1); [transports.md](transports.md), section 2.3, says when a writer puts one in. Where a file holds a `MANIFEST`:
+A file can also be the first contact between two apps that exchange through a relay afterwards ([keys.md](keys.md), section 3.2). The app that reads such a file needs the writer's manifest to send anything back. Every file may therefore hold a `MANIFEST` message, right after the chain at its start ([transports.md](transports.md), section 2.1); [transports.md](transports.md), section 2.3, says when a writer puts one in. Where a file holds a `MANIFEST`:
 
 - It holds at most one, and it is the writer's own: its `sender` is the key of the file's other messages.
 - It is a manifest received outside a live connection, so the revision rule of section 6 applies to it.
 - It does not filter or change how the reader applies the file's records; it says what the writer takes, for what the reader sends back.
 - Its schema is not in `axt.schemas` (section 2).
 
+The reading rule above is about a file of another app. A device that reads a file of its own device set does not look at whether a type fits its manifest ([sync.md](sync.md), section 13.4).
+
 A file without a `MANIFEST` is complete as far as this document is concerned. A reader MUST NOT reject a file because it holds no `MANIFEST`.
 
 ## 8. What other documents define
 
 - [protocol.md](protocol.md): the order of the first messages of a connection (section 3.1 there), how a manifest that cannot be read or is invalid is reported (sections 3.2 and 8.2 there), the `OFFER`, `ACCEPT` and `DECLINE` messages (sections 4 and 5 there), and the choice of the envelope format from the two apps' `formats` (section 3.2 there).
-- [keys.md](keys.md): the signature of the `MANIFEST` message, the key moves a kept manifest follows, and the use of the encryption key.
+- [keys.md](keys.md): the signature of the `MANIFEST` message, the devices of a sender, each of which has a manifest of its own, and the use of the encryption key.
+- [shares.md](shares.md): the proposals that the field `proposals` of `sends` lets other apps send (sections 12 to 18 there).
 - [transports.md](transports.md): where a file holds a `MANIFEST` and when a writer puts one in (sections 2.1 and 2.3 there), and the relay and the mailbox that `relay` names (section 5 there). It adds no case to those of section 5.1 in which an app sends a `MANIFEST` through a relay.
 
 ## 9. Schema and fingerprint
@@ -244,12 +253,12 @@ The schema is [types/axt/Manifest.avsc](../types/axt/Manifest.avsc). It follows 
 Its Parsing Canonical Form:
 
 ```json
-{"name":"axt.Manifest","type":"record","fields":[{"name":"revision","type":"long"},{"name":"app_name","type":"string"},{"name":"app_url","type":["null","string"]},{"name":"formats","type":{"type":"array","items":"int"}},{"name":"takes","type":{"type":"array","items":{"name":"axt.ManifestTake","type":"record","fields":[{"name":"type","type":"string"},{"name":"min_version","type":"int"},{"name":"max_version","type":["null","int"]},{"name":"purpose","type":"string"},{"name":"purpose_translations","type":{"type":"map","values":"string"}}]}}},{"name":"any_type","type":["null",{"name":"axt.ManifestAnyType","type":"record","fields":[{"name":"purpose","type":"string"},{"name":"purpose_translations","type":{"type":"map","values":"string"}}]}]},{"name":"sends","type":["null",{"type":"array","items":{"name":"axt.ManifestSend","type":"record","fields":[{"name":"type","type":"string"},{"name":"min_version","type":"int"},{"name":"max_version","type":["null","int"]}]}}]},{"name":"encryption_key","type":["null",{"name":"axt.ManifestEncryptionKey","type":"fixed","size":32}]},{"name":"relay","type":["null",{"name":"axt.ManifestRelay","type":"record","fields":[{"name":"url","type":"string"},{"name":"mailbox","type":{"name":"axt.ManifestRelayMailbox","type":"fixed","size":32}}]}]}]}
+{"name":"axt.Manifest","type":"record","fields":[{"name":"revision","type":"long"},{"name":"app_name","type":"string"},{"name":"app_url","type":["null","string"]},{"name":"formats","type":{"type":"array","items":"int"}},{"name":"takes","type":{"type":"array","items":{"name":"axt.ManifestTake","type":"record","fields":[{"name":"type","type":"string"},{"name":"min_version","type":"int"},{"name":"max_version","type":["null","int"]},{"name":"purpose","type":"string"},{"name":"purpose_translations","type":{"type":"map","values":"string"}}]}}},{"name":"any_type","type":["null",{"name":"axt.ManifestAnyType","type":"record","fields":[{"name":"purpose","type":"string"},{"name":"purpose_translations","type":{"type":"map","values":"string"}}]}]},{"name":"sends","type":["null",{"type":"array","items":{"name":"axt.ManifestSend","type":"record","fields":[{"name":"type","type":"string"},{"name":"min_version","type":"int"},{"name":"max_version","type":["null","int"]},{"name":"proposals","type":"boolean"}]}}]},{"name":"encryption_key","type":["null",{"name":"axt.ManifestEncryptionKey","type":"fixed","size":32}]},{"name":"relay","type":["null",{"name":"axt.ManifestRelay","type":"record","fields":[{"name":"url","type":"string"},{"name":"mailbox","type":{"name":"axt.ManifestRelayMailbox","type":"fixed","size":32}}]}]}]}
 ```
 
 | Schema         | Envelope format | CRC-64-AVRO          | As bytes                  |
 | -------------- | --------------- | -------------------- | ------------------------- |
-| `axt.Manifest` | 1               | `0x6b08ecb5d38003b3` | `b3 03 80 d3 b5 ec 08 6b` |
+| `axt.Manifest` | 1               | `0xa59eeb4c88a51f3e` | `3e 1f a5 88 4c eb 9e a5` |
 
 The fingerprint and the examples of section 10 were produced with [conformance/tools/manifest_examples.py](../conformance/tools/manifest_examples.py). The script:
 
@@ -283,10 +292,10 @@ cat-a-log takes Pets from other apps and says what it sends. It names no URL and
   ],
   "any_type": null,
   "sends": [
-    {"type": "axt.example.v1.Pet", "min_version": 1, "max_version": 1},
-    {"type": "axt.example.v1.Appointment", "min_version": 1, "max_version": 1},
-    {"type": "axt.example.v1.Measurement", "min_version": 1, "max_version": 1},
-    {"type": "axt.example.v1.Document", "min_version": 1, "max_version": 1}
+    {"type": "axt.example.v1.Pet", "min_version": 1, "max_version": 1, "proposals": false},
+    {"type": "axt.example.v1.Appointment", "min_version": 1, "max_version": 1, "proposals": false},
+    {"type": "axt.example.v1.Measurement", "min_version": 1, "max_version": 1, "proposals": false},
+    {"type": "axt.example.v1.Document", "min_version": 1, "max_version": 1, "proposals": false}
   ],
   "encryption_key": null,
   "relay": null
@@ -343,11 +352,11 @@ Had Old Brain Fix listed `axt.example.v1.Appointment` with `min_version` 2, cat-
 
 Both messages are `MANIFEST` messages in a live connection, in envelope format 1. cat-a-log signs with its test key of [keys.md](keys.md), section 7.1, Old Brain Fix with its test key of [protocol.md](protocol.md), section 17.1; the messages are those of the exchange in [protocol.md](protocol.md), section 17.2. Offsets are hexadecimal.
 
-cat-a-log's manifest: 315 bytes, of which 204 are the body; SHA-256 `1ee7dfafb7a27b1ba7f1dd7fedb04e822d4cbc3f23033f8908b1b8691a163771`.
+cat-a-log's manifest: 319 bytes, of which 208 are the body; SHA-256 `b1305f014fc6a6f5fd33334cb8ecdbe6f7cdaa32b978773f7abcc56cfa45f678`.
 
 ```text
 0000  c3 01                    single-object marker
-0002  7d 0c e4 e5 4f e8 e1 a2  fingerprint of axt.Envelope, format 1
+0002  16 30 6f 71 b9 ce 9e a8  fingerprint of axt.Envelope, format 1
 000a  02                       format: int 1
 000b  00                       kind: enum index 0, MANIFEST
 000c  1b 84 a6 00 f3 50 3e 22  sender: fixed(32), cat-a-log's test key
@@ -355,9 +364,9 @@ cat-a-log's manifest: 315 bytes, of which 204 are the body; SHA-256 `1ee7dfafb7a
       4b f6 bd 69 af f1 47 1c
       ce 64 10 d5 3c 26 ec 4a
 002c  00                       record: union index 0, null
-002d  98 03                    body: bytes length 204
+002d  a0 03                    body: bytes length 208
 002f  c3 01                    body: single-object marker
-0031  b3 03 80 d3 b5 ec 08 6b  body: fingerprint of axt.Manifest, format 1
+0031  3e 1f a5 88 4c eb 9e a5  body: fingerprint of axt.Manifest, format 1
 0039  02                       body: revision: long 1
 003a  12                       body: app_name: string length 9
 003b  63 61 74 2d 61 2d 6c 6f  body: "cat-a-log"
@@ -391,48 +400,52 @@ cat-a-log's manifest: 315 bytes, of which 204 are the body; SHA-256 `1ee7dfafb7a
 009e  02                       body: sends[0].min_version: int 1
 009f  02                       body: sends[0].max_version: union index 1, int
 00a0  02                       body: sends[0].max_version: int 1
-00a1  34                       body: sends[1].type: string length 26
-00a2  61 78 74 2e 65 78 61 6d  body: "axt.example.v1.Appointment"
+00a1  00                       body: sends[0].proposals: boolean false
+00a2  34                       body: sends[1].type: string length 26
+00a3  61 78 74 2e 65 78 61 6d  body: "axt.example.v1.Appointment"
       70 6c 65 2e 76 31 2e 41
       70 70 6f 69 6e 74 6d 65
       6e 74
-00bc  02                       body: sends[1].min_version: int 1
-00bd  02                       body: sends[1].max_version: union index 1, int
-00be  02                       body: sends[1].max_version: int 1
-00bf  34                       body: sends[2].type: string length 26
-00c0  61 78 74 2e 65 78 61 6d  body: "axt.example.v1.Measurement"
+00bd  02                       body: sends[1].min_version: int 1
+00be  02                       body: sends[1].max_version: union index 1, int
+00bf  02                       body: sends[1].max_version: int 1
+00c0  00                       body: sends[1].proposals: boolean false
+00c1  34                       body: sends[2].type: string length 26
+00c2  61 78 74 2e 65 78 61 6d  body: "axt.example.v1.Measurement"
       70 6c 65 2e 76 31 2e 4d
       65 61 73 75 72 65 6d 65
       6e 74
-00da  02                       body: sends[2].min_version: int 1
-00db  02                       body: sends[2].max_version: union index 1, int
-00dc  02                       body: sends[2].max_version: int 1
-00dd  2e                       body: sends[3].type: string length 23
-00de  61 78 74 2e 65 78 61 6d  body: "axt.example.v1.Document"
+00dc  02                       body: sends[2].min_version: int 1
+00dd  02                       body: sends[2].max_version: union index 1, int
+00de  02                       body: sends[2].max_version: int 1
+00df  00                       body: sends[2].proposals: boolean false
+00e0  2e                       body: sends[3].type: string length 23
+00e1  61 78 74 2e 65 78 61 6d  body: "axt.example.v1.Document"
       70 6c 65 2e 76 31 2e 44
       6f 63 75 6d 65 6e 74
-00f5  02                       body: sends[3].min_version: int 1
-00f6  02                       body: sends[3].max_version: union index 1, int
-00f7  02                       body: sends[3].max_version: int 1
-00f8  00                       body: sends: end of the array
-00f9  00                       body: encryption_key: union index 0, null
-00fa  00                       body: relay: union index 0, null
-00fb  21 cc f8 c7 3d 1f f7 c7  signature: fixed(64)
-      56 20 75 68 0d 2d d2 8f
-      db d8 d7 2a 00 fa 89 f8
-      76 11 43 de 49 5a d5 bb
-      85 33 a6 b5 e5 45 99 2d
-      f2 0b a4 cd 86 b9 6e 53
-      32 44 54 56 7f fe 19 c2
-      f2 a6 f7 8c 46 2e 3a 0a
-013b  end
+00f8  02                       body: sends[3].min_version: int 1
+00f9  02                       body: sends[3].max_version: union index 1, int
+00fa  02                       body: sends[3].max_version: int 1
+00fb  00                       body: sends[3].proposals: boolean false
+00fc  00                       body: sends: end of the array
+00fd  00                       body: encryption_key: union index 0, null
+00fe  00                       body: relay: union index 0, null
+00ff  08 8e ed db 40 91 7d 25  signature: fixed(64)
+      ec 10 32 03 b8 4f 5f 68
+      50 0f c0 3c 7a 10 08 8f
+      e3 29 d4 e0 4a 68 a3 c3
+      33 c0 69 f1 33 e9 2a 5a
+      98 d2 96 26 bd 0e 05 23
+      22 6e 20 01 e3 d5 9a f3
+      bc 9d 97 b5 5b 7e 54 06
+013f  end
 ```
 
-Old Brain Fix's manifest: 549 bytes, of which 438 are the body; SHA-256 `d8d61697a0189e3afe3b500901b634a356ac1af1986b42bdf9d62d358e59dcaf`.
+Old Brain Fix's manifest: 549 bytes, of which 438 are the body; SHA-256 `3af8b09e06d556e993c33d1bf00f744645b8eb7e049c2f91c90f8fec96d23f6a`.
 
 ```text
 0000  c3 01                    single-object marker
-0002  7d 0c e4 e5 4f e8 e1 a2  fingerprint of axt.Envelope, format 1
+0002  16 30 6f 71 b9 ce 9e a8  fingerprint of axt.Envelope, format 1
 000a  02                       format: int 1
 000b  00                       kind: enum index 0, MANIFEST
 000c  da 9e 54 c9 aa 2d b4 32  sender: fixed(32), Old Brain Fix's test key
@@ -442,7 +455,7 @@ Old Brain Fix's manifest: 549 bytes, of which 438 are the body; SHA-256 `d8d6169
 002c  00                       record: union index 0, null
 002d  ec 06                    body: bytes length 438
 002f  c3 01                    body: single-object marker
-0031  b3 03 80 d3 b5 ec 08 6b  body: fingerprint of axt.Manifest, format 1
+0031  3e 1f a5 88 4c eb 9e a5  body: fingerprint of axt.Manifest, format 1
 0039  02                       body: revision: long 1
 003a  1a                       body: app_name: string length 13
 003b  4f 6c 64 20 42 72 61 69  body: "Old Brain Fix"
@@ -541,14 +554,14 @@ Old Brain Fix's manifest: 549 bytes, of which 438 are the body; SHA-256 `d8d6169
 01e2  00                       body: sends: union index 0, null
 01e3  00                       body: encryption_key: union index 0, null
 01e4  00                       body: relay: union index 0, null
-01e5  dc 24 c3 04 4b 0b 8d 06  signature: fixed(64)
-      cc 61 3b aa a7 43 6e 26
-      ff ca 67 f2 96 2c a1 d4
-      c8 46 d8 e1 d4 fc ec 5c
-      c5 3f ba e6 d0 3d 50 10
-      4d c1 56 38 fd f6 2c 61
-      a0 70 f3 41 83 7c 61 b1
-      6e b7 df 50 28 0a 95 00
+01e5  2a 69 59 e6 3d 0e 2c dd  signature: fixed(64)
+      0b 49 f5 bf e8 36 a6 13
+      88 3e 04 5c 8e 67 53 6e
+      4e 22 ca 6a c9 1b f6 8d
+      30 a9 1f 81 e9 29 7a 3d
+      f3 22 e7 3c 2a 3b 22 cc
+      b9 ae cb 79 5b 2a 3c 86
+      75 82 59 b9 eb 93 ac 06
 0225  end
 ```
 

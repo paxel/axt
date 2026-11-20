@@ -15,8 +15,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - The example types hold their times in the time types and carry labels, help, emoji and checks in English and German. ([axt-1018](https://github.com/paxel/axt/issues/19))
 - Records with a stable id and a rising version, sent whole, with updates, deletions and the receiver's own changes. ([axt-1003](https://github.com/paxel/axt/issues/4))
 - The manifest, in which an app names the types it takes and what it does with them. ([axt-1004](https://github.com/paxel/axt/issues/5))
-- Ed25519 signatures, relay encryption with HPKE, trust on first use and moving a key to a new installation. ([axt-1006](https://github.com/paxel/axt/issues/7))
+- Ed25519 signatures, relay encryption with HPKE and trust on first use. ([axt-1006](https://github.com/paxel/axt/issues/7))
 - The protocol of offer, accept, decline, data, acknowledgement and errors. ([axt-1005](https://github.com/paxel/axt/issues/6))
 - Three transports: a file, the local network found by QR code, and a relay. ([axt-1007](https://github.com/paxel/axt/issues/8))
 - Test vectors for every category, the time types and invalid values among them, and a conformance runner with a reference adapter. ([axt-1009](https://github.com/paxel/axt/issues/10), [axt-1019](https://github.com/paxel/axt/issues/20))
 - The reference relay, a sealed mailbox anyone can run. ([axt-1008](https://github.com/paxel/axt/issues/9))
+- Device sets: an owner's devices, each with its own key, count as one sender, joined by QR code and removable by any other. ([axt-1022](https://github.com/paxel/axt/issues/24))
+- Stamps: every device of an owner changes every record, the later change wins per field, and a record's version is its state stamp. ([axt-1023](https://github.com/paxel/axt/issues/25))
+- Sibling sync: an owner's devices send each other only the changed fields of a record, track acknowledgements, and can ask for everything again. ([axt-1024](https://github.com/paxel/axt/issues/26))
+- Received records between an owner's devices: another app reaches one device, which passes its messages on, and the owner's changes sync too. ([axt-1025](https://github.com/paxel/axt/issues/27))
+- Shares: another user gets only the records the owner shared with them, and the owner can withdraw a record again. ([axt-1026](https://github.com/paxel/axt/issues/28))
+- Proposals: another user suggests changes to a shared record, which the owner's user takes or refuses; a taken change goes out as an ordinary update. ([axt-1027](https://github.com/paxel/axt/issues/29))
+
+---
+
+Historical changes have been moved to [OLDER_CHANGES.md](OLDER_CHANGES.md).

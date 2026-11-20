@@ -12,14 +12,14 @@
         "size": 32,
         "doc": "An Ed25519 public key in the encoding of RFC 8032. Defined in spec/keys.md."
       },
-      "doc": "The Ed25519 public key of the app that sent the reported message. An app ignores an error that names another key."
+      "doc": "The Ed25519 public key of the device that sent the reported message: in a live connection the key its HELLO proved, through a relay the key that signed the message. A device ignores an error that names another key."
     },
     {
       "name": "code",
       "type": {
         "type": "enum",
         "name": "ErrorCode",
-        "doc": "Why the receiver could not process the message; spec/protocol.md defines each code. INVALID_MESSAGE: not a valid message of its kind. FORMAT_UNSUPPORTED: an envelope format the receiver does not read. TOO_LARGE: above a size limit of spec/envelope.md. SIGNATURE_INVALID: the signature does not verify. MANIFEST_INVALID: an invalid manifest. OFFER_INVALID: an invalid offer. RECORD_ID_INVALID: an invalid record id. VERSION_INVALID: a version below 1. SCHEMA_UNKNOWN: a body fingerprint the receiver has no schema for. NOT_ACCEPTED: a record message without an accepted offer of its type. TYPE_CHANGED: a record under another type than before. UNDECODABLE: a record body that cannot be decoded. KEY_MOVE_REJECTED: a key move the receiver did not apply. VALUE_INVALID: a record that decodes but holds a value that breaks a rule of its type, named in field. The default is for schema resolution only; within one envelope format every symbol is known.",
+        "doc": "Why the receiver could not process the message; spec/protocol.md defines each code. INVALID_MESSAGE: not a valid message of its kind. FORMAT_UNSUPPORTED: an envelope format the receiver does not read. TOO_LARGE: above a size limit of spec/envelope.md. SIGNATURE_INVALID: the signature does not verify. MANIFEST_INVALID: an invalid manifest. OFFER_INVALID: an invalid offer. RECORD_ID_INVALID: an invalid record id. VERSION_INVALID: a version below 1. SCHEMA_UNKNOWN: a fingerprint the receiver has no schema for. NOT_ACCEPTED: a record message without an accepted offer of its type. TYPE_CHANGED: a record under another type than before. UNDECODABLE: a record body that cannot be decoded. DEVICE_REJECTED: a DEVICE_JOIN, DEVICE_ADD or DEVICE_REMOVE the receiver did not apply, as spec/keys.md, section 5, defines. VALUE_INVALID: a record that decodes but holds a value that breaks a rule of its type, named in field. RECORD_UNKNOWN: a CHANGE that does not hold the whole record, for a record the receiver does not have or holds only its removal. PROPOSALS_NOT_TAKEN: a PROPOSAL for a record whose sender takes none from the proposer. The default is for schema resolution only; within one envelope format every symbol is known.",
         "symbols": [
           "INVALID_MESSAGE",
           "FORMAT_UNSUPPORTED",
@@ -33,8 +33,10 @@
           "NOT_ACCEPTED",
           "TYPE_CHANGED",
           "UNDECODABLE",
-          "KEY_MOVE_REJECTED",
-          "VALUE_INVALID"
+          "DEVICE_REJECTED",
+          "VALUE_INVALID",
+          "RECORD_UNKNOWN",
+          "PROPOSALS_NOT_TAKEN"
         ],
         "default": "INVALID_MESSAGE"
       },
@@ -87,7 +89,7 @@
         }
       ],
       "default": null,
-      "doc": "For SCHEMA_UNKNOWN, the fingerprint of the body; for FORMAT_UNSUPPORTED, the fingerprint of the envelope. Null for every other code."
+      "doc": "The fingerprint the code is about, as spec/protocol.md says for the code: for SCHEMA_UNKNOWN, that of the schema the receiver lacks; for FORMAT_UNSUPPORTED, the fingerprint of the envelope. Null for every other code."
     },
     {
       "name": "field",

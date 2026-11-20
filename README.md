@@ -1,5 +1,15 @@
 # AXT: Avro eXchange Transfer
 
+[![CI](https://github.com/paxel/axt/actions/workflows/ci.yml/badge.svg?branch=summer)](https://github.com/paxel/axt/actions/workflows/ci.yml)
+[![Security](https://github.com/paxel/axt/actions/workflows/security.yml/badge.svg?branch=summer)](https://github.com/paxel/axt/actions/workflows/security.yml)
+[![CodeQL](https://github.com/paxel/axt/actions/workflows/codeql.yml/badge.svg?branch=summer)](https://github.com/paxel/axt/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/paxel/axt/badge)](https://scorecard.dev/viewer/?uri=github.com/paxel/axt)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=paxel_axt&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=paxel_axt)
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpaxel%2Faxt%2Fsummer%2F.github%2Fbadges%2Fcoverage-python.json)](coverage-floors.toml)
+[![Fuzz](https://github.com/paxel/axt/actions/workflows/fuzz.yml/badge.svg?branch=summer)](https://github.com/paxel/axt/actions/workflows/fuzz.yml)
+[![Release](https://img.shields.io/github/v/release/paxel/axt)](https://github.com/paxel/axt/releases)
+[![License](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT%20%C2%B7%20CC0--1.0-blue)](LICENSING.md)
+
 AXT is an open standard that lets small, independent apps exchange typed records with each other.
 
 Status: draft, 0.1.0 in progress. The documents in [spec/](spec/README.md) are stubs or drafts and may still change in incompatible ways. See [CHANGELOG.md](CHANGELOG.md).
@@ -15,8 +25,9 @@ An example: an appointment kept in cat-a-log, such as a visit to the vet, is sen
 - Every record type is an [Apache Avro](https://avro.apache.org/) schema. Avro 1.12 schema resolution applies: fields are matched by name, and a field the receiver's version of a type adds takes its default.
 - In a live connection the schema is sent once with the offer; each record after it carries only a fingerprint of its schema. A file is an Avro object container file with the schema in its header.
 - When two apps connect, each sends a manifest of the types it takes and one sentence per type on what it does with them. The sender offers only what fits, and the receiver confirms each offer.
-- Every record has a stable id and a version. The sender can send updates and deletions later; the receiver applies them or keeps what its user changed there.
-- Every message is signed with the sending app's Ed25519 key. The receiver accepts updates and deletions of a record only with the key it saw first. A key can be moved to a new installation.
+- Every record has a stable id and a version. The sender can send updates and deletions later; the receiver applies them or keeps what its user changed there. An owner can change a record on any of their devices: each change carries a stamp from a clock that never runs backwards, and per field the later change wins. Between the owner's devices only the changed fields travel, and each device sends another what that one has not acknowledged. Another app has to reach only one of the owner's devices: that device passes the record on to the others, and what the owner changes in it shows on all of them.
+- To another user, only what the owner chose beforehand leaves: the owner shares single records, or the records a rule of the app picks, with each other user's app, and can withdraw a record again. The other app removes its copy, or keeps it if its user changed it. Its user can propose a change of a shared record; the owner takes or refuses it, and a change taken goes out as an ordinary update.
+- Every message is signed with the sending app's Ed25519 key. The receiver accepts updates and deletions of a record only from the sender it has the record from. The devices of one owner each have a key of their own and count as one sender: a device adds a new one, and any device can remove another, such as a lost one.
 - The repository brings example types (Note, Task, Appointment, Person and more) that work without prior agreement. Anyone may evolve or replace them, at the cost of compatibility.
 
 ## Three ways to exchange
@@ -46,6 +57,8 @@ An example: an appointment kept in cat-a-log, such as a visit to the vet, is sen
 - [Manifest](spec/manifest.md)
 - [Protocol](spec/protocol.md)
 - [Keys, signatures and encryption](spec/keys.md)
+- [Sync between the devices of one owner](spec/sync.md)
+- [Shares between users](spec/shares.md)
 - [Transports](spec/transports.md)
 - [Relay](spec/relay.md)
 - [Conformance](spec/conformance.md)

@@ -28,7 +28,9 @@
     "qr",
     "local",
     "relay",
-    "relay-server"
+    "relay-server",
+    "sync",
+    "shares"
    ]
   },
   "description": {"type": "string"},
@@ -90,6 +92,20 @@
     {
      "if": {
       "properties": {
+       "op": {"const": "acked"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["sent", "held", "outcome", "receiver_version", "shared", "withdrawal", "state_stamp", "sibling_stamp", "sibling"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
        "op": {"const": "add_duration"}
       }
      },
@@ -111,6 +127,34 @@
       "properties": {
        "input": {
         "required": ["policy", "events"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "begin_stamping"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["device", "states", "now_ms", "highest", "r"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "change"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["state", "device", "action", "values", "schema", "now_ms", "now_ms_state", "highest", "r", "to_pass"]
        }
       }
      }
@@ -188,6 +232,34 @@
     {
      "if": {
       "properties": {
+       "op": {"const": "contact_key"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["current", "manifests", "got"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "resend_after_removal"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["records", "removed"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
        "op": {"const": "connection"}
       }
      },
@@ -244,6 +316,20 @@
     {
      "if": {
       "properties": {
+       "op": {"const": "deleted"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["state", "writer_fields", "writer_version", "versions"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
        "op": {"const": "describe"}
       }
      },
@@ -265,6 +351,48 @@
       "properties": {
        "input": {
         "required": ["format", "kind", "sender", "record", "body", "signature"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "device_add"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["message"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "device_join"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["message", "member", "first"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "device_sets"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["senders", "refused", "steps"]
        }
       }
      }
@@ -314,13 +442,13 @@
     {
      "if": {
       "properties": {
-       "op": {"const": "key_move"}
+       "op": {"const": "join_chain"}
       }
      },
      "then": {
       "properties": {
        "input": {
-        "required": ["message"]
+        "required": ["chain", "member", "device"]
        }
       }
      }
@@ -356,6 +484,76 @@
     {
      "if": {
       "properties": {
+       "op": {"const": "join_receivers"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["receivers"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "merge"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["own", "other", "now_ms", "highest", "r", "sibling_stamp", "to_pass"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "next_stamp"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["now_ms", "highest", "r"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"enum": ["owner", "proposer"]}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["device", "steps"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "offer_types"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["records"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
        "op": {"const": "open"}
       }
      },
@@ -363,6 +561,20 @@
       "properties": {
        "input": {
         "required": ["sealed", "private_keys"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "owed"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["shared", "deleted", "version", "withdrawal", "last"]
        }
       }
      }
@@ -391,6 +603,34 @@
       "properties": {
        "input": {
         "required": ["text"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "pass_withdrawal"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["shared", "withdrawal", "to_pass", "state_stamp"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "pass_version"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["state_stamp", "to_pass", "may_send", "now_ms", "highest", "r"]
        }
       }
      }
@@ -447,6 +687,20 @@
       "properties": {
        "input": {
         "required": ["file", "reader"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "receive"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["policy", "events"]
        }
       }
      }
@@ -538,6 +792,34 @@
     {
      "if": {
       "properties": {
+       "op": {"const": "shown"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["sender", "layer"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "siblings"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["device", "steps"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
        "op": {"const": "sign"}
       }
      },
@@ -545,6 +827,20 @@
       "properties": {
        "input": {
         "required": ["seed", "data"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "stale"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["receiver_version", "state_stamp", "sibling_stamp", "to_pass", "counted", "sibling", "may_send", "now_ms", "highest", "r"]
        }
       }
      }
@@ -573,6 +869,34 @@
       "properties": {
        "input": {
         "required": ["message"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "withdrawal_stamp"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["occasion", "now_ms", "highest", "r", "withdrawals", "state_stamp"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "take_version"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["occasion", "highest_given", "state_stamp"]
        }
       }
      }
@@ -762,7 +1086,10 @@
          "enum": [
           "check_encryption_key",
           "check_signing_key",
-          "key_move",
+          "device_add",
+          "device_join",
+          "device_sets",
+          "join_chain",
           "open",
           "padded_length",
           "public_key",
@@ -791,7 +1118,7 @@
       "items": {
        "properties": {
         "op": {
-         "enum": ["choose_format", "session"]
+         "enum": ["choose_format", "contact_key", "resend_after_removal", "session"]
         }
        }
       }
@@ -892,6 +1219,46 @@
        "properties": {
         "op": {
          "enum": ["relay"]
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "if": {
+    "properties": {
+     "category": {"const": "sync"}
+    }
+   },
+   "then": {
+    "properties": {
+     "vectors": {
+      "items": {
+       "properties": {
+        "op": {
+         "enum": ["begin_stamping", "change", "deleted", "merge", "next_stamp", "pass_version", "shown", "siblings", "stale", "withdrawal_stamp"]
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "if": {
+    "properties": {
+     "category": {"const": "shares"}
+    }
+   },
+   "then": {
+    "properties": {
+     "vectors": {
+      "items": {
+       "properties": {
+        "op": {
+         "enum": ["acked", "join_receivers", "offer_types", "owed", "owner", "pass_withdrawal", "proposer", "receive", "take_version"]
         }
        }
       }

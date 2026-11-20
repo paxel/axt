@@ -9,19 +9,20 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 ## 1. Terms
 
 - **Record**: one datum of a type ([types.md](types.md)), such as one Appointment, together with its id and its version. A record travels in the body of a `DATA` message; its id and version travel in the envelope's `record` field ([envelope.md](envelope.md), section 2).
-- **Record message**: a `DATA` or a `DELETE` message.
-- **Sender** of a record: the installation that created the record and sends its versions. A receiver knows a sender by the key it saw first from it, followed through the key moves that [keys.md](keys.md) defines. Where this document says "the same sender", it means that key and the keys it moved to.
-- **Receiver**: an app that takes records from a sender, through a live connection, a relay or a file.
+- **Record message**: a `DATA`, a `DELETE` or a `WITHDRAW` message.
+- **Withdrawal**: the sender's taking back of one record from one receiver with which it no longer shares the record, in a `WITHDRAW` message ([shares.md](shares.md), section 3).
+- **Sender** of a record: the app that created the record and sends its versions: one installation, or the installations of one owner on several devices, which [keys.md](keys.md), section 5, makes one device set. A receiver knows a sender by the first key it accepted from it and by the keys added to it and removed from it since. Where this document says "the same sender", it means any current key of that set.
+- **Receiver**: an app that takes records from a sender, through a live connection, a relay or a file: one installation, or the devices of one set, of which the sender has to reach only one ([sync.md](sync.md), section 17.2).
 - **Local change**: a change the receiver's user makes to a received record in the receiver, including its deletion there.
-- **Tombstone**: what a receiver keeps of a record its sender deleted: its id and the version of the deletion.
+- **Tombstone**: what a receiver keeps of a record its sender deleted, or withdrew from it: its id and the version of the deletion or of the withdrawal. A tombstone is of a deletion or of a withdrawal ([shares.md](shares.md), section 1).
 
-A record has one sender. Only its sender sends versions of it. A receiver's local changes stay in the receiver and are not sent back as versions of the record; a receiver that sends a record of its own, even one copied from a received record, sends it as a new record with an id of its own.
+A record has one sender. Only its sender sends versions of it; where the sender is a device set, each of its devices does, and [sync.md](sync.md) defines how they change the same record. A receiver's local changes stay in the receiver: they are never versions of the record, and the receiver sends no record message of them back to the sender. Where the sender takes proposals for the record's type, the receiver may propose them to the sender, whose user takes or refuses them; a proposal that is taken becomes the sender's own change and comes back as an ordinary update ([shares.md](shares.md), section 12). Where the receiver is a device set, the record messages that one of its devices got and the local changes travel between its own devices, and only there ([sync.md](sync.md), sections 17 to 22). A receiver that sends a record of its own, even one copied from a received record, sends it as a new record with an id of its own.
 
 ## 2. Record ids
 
 The id of a record is a UUID, carried as a `string` with the logical type `uuid` in the representation of [envelope.md](envelope.md), section 7.
 
-- The sender generates the id when it creates the record, and the record keeps it for its whole life: through every update, a deletion and a return after it (section 5.3), and through key moves ([keys.md](keys.md)).
+- The sender generates the id when it creates the record, and the record keeps it for its whole life: through every update, a deletion and a return after it (section 5.3), and whichever device of its sender sends it ([keys.md](keys.md), section 5.6).
 - A sender MUST generate ids as UUIDs of version 4 (random) or version 7 (time-ordered, with random bits) of [RFC 9562](https://www.rfc-editor.org/rfc/rfc9562). It MUST NOT use the nil UUID or the max UUID.
 - An id MUST be unique among all records of the sender, of all types. A sender MUST NOT use an id for a second record, also not after the first one was deleted.
 - A sender MUST send a record under the same id to every receiver.
@@ -34,21 +35,22 @@ Random ids let every installation create records without a counter or coordinati
 
 The version of a record is a `long`. It names one state of the record at its sender.
 
-- A version MUST be at least 1. The first version a sender sends of a record SHOULD be 1.
-- Each change of a record at its sender MUST get a version higher than every version the sender has given the record before. A deletion is a change and takes a version as well.
+- A version MUST be at least 1.
+- Each change of a record on a device of its sender MUST get a version higher than every version of the record that this device has given or has seen from another device of its set. For a sender with one device, that is every version the sender has given the record before. A deletion is a change and takes a version as well. A withdrawal takes a version too, which no `DATA` and no `DELETE` of the record carries ([shares.md](shares.md), section 3.2).
+- Two devices of a set that change a record while apart each give it a version without knowing the other's. Their versions are state stamps ([sync.md](sync.md), section 5), whose random part makes two of them that are taken from the same base differ in all but one of 32,768 cases per pair ([sync.md](sync.md), section 2.2). When the two devices merge, each device that takes something from the other's state gives the merged state a version above both; a device that takes nothing keeps its version ([sync.md](sync.md), section 4.4).
 - A sender MAY send the same version again, to the same or to another receiver, for example when a message may have been lost, when a receiver is connected later, or in a file.
 - Versions MAY have gaps. A sender that changes a record several times before it can send sends only the last state, under its last version.
 - One id and version MUST always stand for the same message: the same kind and, for `DATA`, the same record. A sender MAY encode that record with another compatible writer schema of the same full name.
-- A sender SHOULD count the versions of each record and add one for every change it sends. Any rising value meets the rules above, but a clock time used as a version goes back when the clock does.
+- An installation that is a set of its own MAY count the versions of each record, from 1, adding one for every change it sends, for every withdrawal and for every sharing again of a withdrawn record ([shares.md](shares.md), sections 3.2 and 6.2), or give state stamps from its first record on. A device whose set has, or has had, a second device MUST give the state stamp of the record as its version, and so MUST an installation that may have lost versions it gave ([sync.md](sync.md), section 2.4). A state stamp is far above any count, so the versions of a record keep rising when its sender begins to stamp. A plain clock time is no version: it goes back when the clock does, which a stamp does not.
 - A receiver MUST accept a first version above 1: a receiver that is connected later, or misses messages, sees a record first at a later version. A receiver MUST reject a record message whose version is below 1, with the error `VERSION_INVALID` ([protocol.md](protocol.md), section 8.2).
 
-The highest version of each record that a sender has sent MUST survive whatever the sender's data goes through, including a restore from a backup and a key move to a new installation ([keys.md](keys.md)). A sender whose versions went back can learn it from the outcome `STALE` (section 7), but not in every case: a new version that happens to equal the receiver's version is taken for a duplicate, and the change is lost at that receiver. [protocol.md](protocol.md), section 10, therefore makes a sender that may have lost versions, such as after a restore from a backup, continue them above a random jump.
+A device SHOULD keep the highest version it has given each record through whatever its data goes through, including a move to a new device ([keys.md](keys.md), section 5.7). The devices of one sender give the versions of a record as one sender ([keys.md](keys.md), section 5.6): each gives its state stamp of the record, as [sync.md](sync.md), section 5, defines. A device that may have lost versions it gave, such as after a restore from a backup, would give them a second time if it counted on, and a new version that happens to equal the receiver's version is taken for a duplicate, so that the change is lost at that receiver. [protocol.md](protocol.md), section 10, therefore makes such a device give state stamps from then on, which a clock that is not far behind puts above every version it gave before; a version that is still below the receiver's is answered with `STALE` (section 7).
 
 ## 4. Sending records
 
 ### 4.1 Data
 
-A `DATA` message carries the whole record, every field, in its body ([envelope.md](envelope.md), section 2.2), and the record's id and version in `record`. The first version of a record and every update have the same form; there is no message that carries only the changed fields.
+A `DATA` message carries the whole record, every field, in its body ([envelope.md](envelope.md), section 2.2), and the record's id and version in `record`. The first version of a record and every update have the same form; toward another app there is no message that carries only the changed fields. Only the devices of one sender send each other the changed fields of a record alone, in a `CHANGE` message ([sync.md](sync.md), section 8); a receiver never gets one.
 
 An update does not name the version it is based on. It carries the whole state of the record, and the receiver merges it against what it kept of the record itself (section 6). Neither side needs the other's history for that.
 
@@ -60,6 +62,10 @@ A `DELETE` message carries the record's id and the version of the deletion in `r
 
 A record keeps the full name of its type for its whole life ([types.md](types.md), section 1). A sender MUST send every version of a record with a writer schema of the same full name; a compatible later version of the type ([types.md](types.md), section 3.3) has the same full name. A receiver MUST NOT apply a `DATA` message whose type has another full name than the one it keeps for that id (section 5.1), also when the message brings the record back from a tombstone, and rejects it with the error `TYPE_CHANGED` ([protocol.md](protocol.md), section 8.2).
 
+### 4.4 Withdrawal
+
+A `WITHDRAW` message carries the record's id and the version of the withdrawal in `record`, and a body `axt.Withdraw` that names in `to` the receiver's device it is for ([envelope.md](envelope.md), section 2.2). It tells one receiver that the sender no longer shares the record with it ([shares.md](shares.md), section 3). A `DELETE` is the same for every receiver; a `WITHDRAW` goes only to the receivers from which the sender withdraws the record, and its version is one that no `DATA` and no `DELETE` of the record carries. A `DATA` with a higher version shares the record again (section 5.3).
+
 ## 5. Applying records
 
 ### 5.1 What a receiver keeps
@@ -67,23 +73,25 @@ A record keeps the full name of its type for its whole life ([types.md](types.md
 For every record of every sender, a receiver keeps:
 
 - the sender and the id;
-- the full name of the record's type, once a `DATA` message has brought it; a tombstone that a `DELETE` left for an id the receiver did not have holds none, and the first `DATA` that brings the record back sets it;
-- the highest version of the record it has seen in a `DATA` or a `DELETE` message, called the receiver's version below;
-- whether the record is there, deleted by its sender (a tombstone), or deleted by the receiver's user;
+- the full name of the record's type, once a `DATA` message has brought it; a tombstone that a `DELETE` or a `WITHDRAW` left for an id the receiver did not have holds none, and the first `DATA` that brings the record back sets it;
+- the highest version of the record it has seen in a record message, called the receiver's version below;
+- whether the record is there, deleted by its sender (a tombstone of a deletion), withdrawn by its sender (a tombstone of a withdrawal), or deleted by the receiver's user;
 - for a record that is there, what it needs to tell local changes from values it took from the sender (section 6).
+
+A receiver that is a device set keeps this on each of its devices. The device that gets a record message passes it on to the others, so that all come to the same receiver's version of the record, and the local changes are kept apart from what the sender sent, as a layer that the devices merge among themselves ([sync.md](sync.md), sections 17.1 and 21.1).
 
 ### 5.2 The version rule
 
 A receiver compares the version of each record message with its own version of the record:
 
-| Version in the message                   | The receiver                                          | Outcome                     |
-| ---------------------------------------- | ----------------------------------------------------- | --------------------------- |
-| No record under this id from this sender | Takes the record, or keeps a tombstone for a `DELETE` | `APPLIED`                   |
-| Higher than the receiver's version       | Applies the message as sections 5.3 and 6 say         | `APPLIED`, `MERGED`, `KEPT` |
-| Equal to the receiver's version          | Changes nothing; the message is a duplicate           | `DUPLICATE`                 |
-| Lower than the receiver's version        | Changes nothing; the message is older than its state  | `STALE`                     |
+| Version in the message                   | The receiver                                                          | Outcome                                                             |
+| ---------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| No record under this id from this sender | Takes the record, or keeps a tombstone for a `DELETE` or a `WITHDRAW` | `APPLIED`; `WITHDRAWN` for a `WITHDRAW`                             |
+| Higher than the receiver's version       | Applies the message as sections 5.3 and 6 say                         | `APPLIED`, `MERGED`, `KEPT`; `WITHDRAWN` or `KEPT` for a `WITHDRAW` |
+| Equal to the receiver's version          | Changes nothing; the message is a duplicate                           | `DUPLICATE`                                                         |
+| Lower than the receiver's version        | Changes nothing; the message is older than its state                  | `STALE`                                                             |
 
-The rule is the same for `DATA` and `DELETE`. Whenever the message's version is higher, the receiver's version becomes the message's version, also when the receiver keeps local changes against it (section 6). A receiver MAY skip decoding the body of a `DATA` message that is a duplicate or stale.
+The rule is the same for `DATA`, `DELETE` and `WITHDRAW`. Whenever the message's version is higher, the receiver's version becomes the message's version, also when the receiver keeps local changes against it (section 6). A receiver MAY skip decoding the body of a `DATA` message that is a duplicate or stale. A receiver that keeps the messages of its senders for the other devices of its set keeps a few duplicate or stale messages all the same, such as a `DATA` below a deletion, and decodes those; the outcome stays as the table gives it ([sync.md](sync.md), sections 19.5 and 20.1).
 
 Transports may deliver a message twice, late or out of order: a relay holds messages, and a user may open an old file again. The version rule makes the result independent of that order: as long as the receiver's user changes nothing, a receiver that has got any set of messages about a record ends in the state of the one with the highest version.
 
@@ -91,13 +99,16 @@ Transports may deliver a message twice, late or out of order: a relay holds mess
 
 - A `DELETE` with a higher version deletes the record at the receiver, and the receiver keeps a tombstone with the deletion's version. Section 6.4 says when the receiver keeps the record instead.
 - A `DELETE` for an id the receiver does not have from that sender leaves a tombstone as well, so that a `DATA` with a lower version that arrives later does not create the record.
-- A `DATA` with a version higher than the tombstone's brings the record back: the receiver takes it as a new record under the same id, and the tombstone ends. A `DATA` with a lower or equal version is stale or a duplicate.
-- A receiver MUST keep a tombstone for as long as it keeps the sender, that is, as long as it would accept messages from that sender's key ([keys.md](keys.md)). A tombstone is an id, a version and the sender; a fixed retention time would let an old file or a delayed message bring a deleted record back after it.
+- A `WITHDRAW` with a higher version, or for an id the receiver does not have from that sender, leaves a tombstone of a withdrawal in the same way, with the withdrawal's version ([shares.md](shares.md), section 4.2). Section 6.4 says when the receiver keeps the record instead.
+- A `DATA` with a version higher than the tombstone's, of either kind, brings the record back: the receiver takes it as a new record under the same id, and the tombstone ends. A `DATA` with a lower or equal version is stale or a duplicate.
+- A receiver MUST keep a tombstone for as long as it keeps the sender, that is, as long as it would accept messages from one of that sender's keys ([keys.md](keys.md)). A tombstone is an id, a version and the sender; a fixed retention time would let an old file or a delayed message bring a deleted record back after it.
 - A receiver that forgets a sender MAY forget its records and tombstones with it.
 
 ## 6. The receiver's own changes
 
-A receiver MAY let its user change received records. If it does, it either keeps its user's changes when an update or a deletion arrives, or takes the sender's message over them. It SHOULD keep them, as far as it can per field (section 6.1). This section says how a receiver keeps them; section 7 says how it reports what it did.
+A receiver MAY let its user change received records. If it does, it either keeps its user's changes when an update, a deletion or a withdrawal arrives, or takes the sender's message over them. It SHOULD keep them, as far as it can per field (section 6.1). This section says how a receiver keeps them; section 7 says how it reports what it did.
+
+Where the receiver runs on several devices of one owner, the devices of the set are one receiver. Wherever this section lets a receiver choose, per field or the whole record in sections 6.1 and 6.2, and to delete or to keep in section 6.4, the devices of one set MUST choose alike. The device that got the message from the sender applies this section and reports the outcome; the user's changes, and the user's decisions where a receiver asks, reach the other devices of the set, so that all of them show the same record ([sync.md](sync.md), section 22).
 
 ### 6.1 Per field
 
@@ -114,11 +125,11 @@ The outcome is `MERGED` if the receiver kept at least one value that differs fro
 
 ### 6.2 Whole record
 
-A receiver that does not track changes per field treats any local change as a change of the whole record. It then either takes the whole record from the message, outcome `APPLIED`, or keeps the whole record as its user left it, outcome `KEPT`.
+A receiver that does not track changes per field treats any local change as a change of the whole record. It then either takes the whole record from the message, outcome `APPLIED`, or keeps the whole record as its user left it, outcome `KEPT`. An app that lets its user propose changes to records of a type merges per field for that type ([shares.md](shares.md), section 17.2).
 
 ### 6.3 A record the user deleted
 
-A record the receiver's user deleted stays deleted: a `DATA` with a higher version MUST NOT bring it back unless the user agrees, and the outcome is `KEPT`. The receiver MAY offer its user to take the record again. The receiver keeps the id and its version of such a record as long as it would keep a tombstone (section 5.3), so that a later update does not create the record again. A `DELETE` with a higher version turns such a record into a tombstone, outcome `APPLIED`.
+A record the receiver's user deleted stays deleted: a `DATA` with a higher version MUST NOT bring it back unless the user agrees, and the outcome is `KEPT`. The receiver MAY offer its user to take the record again. The receiver keeps the id and its version of such a record as long as it would keep a tombstone (section 5.3), so that a later update does not create the record again. A `DELETE` with a higher version has the outcome `APPLIED`, and a `WITHDRAW` with a higher version the outcome `WITHDRAWN`: the receiver keeps the sender's tombstone (section 5.3), and the user's deletion goes on standing beside it, so a later `DATA` with a higher version has the outcome `KEPT` again until the user takes the record again. A receiver that keeps an owner's layer of its received records keeps the user's deletion there as a removal that stands, on one device or on several ([sync.md](sync.md), sections 21.1 and 22.2); a record that its user deleted while the installation counted gets such a removal when the installation begins to keep an owner's layer.
 
 ### 6.4 A deletion meets local changes
 
@@ -126,17 +137,20 @@ When a `DELETE` with a higher version reaches a record that the receiver's user 
 
 A receiver whose user has not changed the record MUST delete it.
 
+A `WITHDRAW` with a higher version that reaches a record the receiver's user has changed is handled in the same way, with the outcome `WITHDRAWN` in the place of `APPLIED`: the receiver removes the record or keeps it with its user's changes, and a receiver whose user has not changed it MUST remove it ([shares.md](shares.md), section 4.3).
+
 ## 7. Outcomes and the acknowledgement
 
-Every record message a receiver processes has one of these outcomes:
+Every record message a receiver processes has one of these outcomes. `WITHDRAWN` is the outcome of a `WITHDRAW` only, and `APPLIED` and `MERGED` are never the outcome of one:
 
-| Outcome     | Meaning                                                                                                          |
-| ----------- | ---------------------------------------------------------------------------------------------------------------- |
-| `APPLIED`   | The receiver took the record, or deleted it, as the message says                                                 |
-| `MERGED`    | The receiver took the record except the fields its user had changed; in those it kept its user's values          |
-| `KEPT`      | The receiver took nothing from the message, because its user's change covers the whole record (sections 6.2–6.4) |
-| `DUPLICATE` | The receiver already had this version and changed nothing                                                        |
-| `STALE`     | The receiver already had a higher version and changed nothing                                                    |
+| Outcome     | Meaning                                                                                                                                                                    |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `APPLIED`   | The receiver took the record, or deleted it, as the message says                                                                                                           |
+| `MERGED`    | The receiver took the record except the fields its user had changed; in those it kept its user's values                                                                    |
+| `KEPT`      | The receiver took nothing from the message, because its user's change covers the whole record (sections 6.2–6.4)                                                           |
+| `DUPLICATE` | The receiver already had this version and changed nothing                                                                                                                  |
+| `STALE`     | The receiver already had a higher version and changed nothing                                                                                                              |
+| `WITHDRAWN` | The receiver removed its copy of a record that its sender withdrew from it, or held no copy, and keeps a tombstone of the withdrawal ([shares.md](shares.md), section 5.1) |
 
 A message the receiver cannot process, such as one with an invalid id or version, a changed type, a body it cannot decode or a value that is not valid, has no outcome; the receiver reports it as an error ([protocol.md](protocol.md), section 8) and does not change its version of the record.
 
@@ -147,7 +161,14 @@ A reader of a file applies the same rules and reaches the same outcomes, but a f
 - the receiver's version of the record after the message, which differs from the acknowledged version only for `STALE`;
 - for `MERGED`, the names of the fields whose values the receiver kept and that differ from the values in the message, as the writer schema of the message names them.
 
-A sender MAY show its user that a receiver kept changes of its own. After `STALE` with a receiver's version above the highest version the sender knows of for the record, the sender's versions have gone back (section 3). It MUST then send further versions of the record above the receiver's version, and SHOULD send the record's current state again under such a version. After `STALE` with a receiver's version the sender has sent itself, an older message arrived late, and nothing needs to be done.
+A sender MAY show its user that a receiver kept changes of its own.
+
+After `STALE`, a device counts the receiver's version as a stamp it has seen, whatever that version is ([sync.md](sync.md), section 2.2). It then compares the receiver's version with the highest version it knows of the record: the higher of its own current version of the record and the highest state stamp of the record it saw from another device of its set ([sync.md](sync.md), section 5.3). It need not remember the versions it gave before.
+
+- **Not above the highest version it knows.** An older message arrived late, or another device of its set sent a state the device has merged. Nothing more needs to be done.
+- **Above it.** Another device of its set has sent the receiver a newer state, or the device has lost versions it gave ([protocol.md](protocol.md), section 10), or a device that was removed since gave the version. The device gives state stamps as versions from then on ([sync.md](sync.md), section 2.4), so every version it gives afterwards is above the receiver's. If it is the only current device of its set, it MUST at once take a new state stamp for the record and send the record's current state under it. If its set has other current devices, it waits for them: once it has merged the state of the record with every other current device of its set, and its version of the record is still below the receiver's, it MUST take a new state stamp for the record and send the record's current state under it ([sync.md](sync.md), section 5.3). The receiver would otherwise stay behind for good where the device that gave the higher version was removed, or lost that state, before any merge.
+
+Toward a receiver from which the record is withdrawn, the versions of its withdrawals count among the versions the device knows, and the current state it sends is a withdrawal under a new version ([shares.md](shares.md), section 5.3). To an app of another user, a device sends a record message only while the record is shared with that app, or a `WITHDRAW` while it is withdrawn from it, every resend included ([shares.md](shares.md), section 2.2).
 
 ## 8. References between records
 

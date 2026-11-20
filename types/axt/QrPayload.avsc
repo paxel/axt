@@ -2,7 +2,7 @@
   "type": "record",
   "name": "QrPayload",
   "namespace": "axt",
-  "doc": "What a QR code shown by an app carries: its signing key and how to reach it on the local network and through a relay. Defined in spec/transports.md. It is not a message and is not signed; scanning it in person confirms the key. Its schema changes only with a new payload version.",
+  "doc": "What a QR code shown by an app carries: its signing key, how to reach it on the local network and through a relay, and whether the code is for adding a device to the sender of the device that shows it. Defined in spec/transports.md. It is not a message and is not signed; scanning it in person confirms the key. Its schema changes only with a new payload version.",
   "fields": [
     {
       "name": "signing_key",
@@ -85,6 +85,12 @@
       ],
       "default": null,
       "doc": "Where to put messages for the installation through a relay. Null when the code names no relay; it is present exactly when encryption_key is."
+    },
+    {
+      "name": "join",
+      "type": "boolean",
+      "default": false,
+      "doc": "True when the code is shown to a new device of the same owner, which scans it to join the devices of the sender, as spec/keys.md, section 5.2, defines; local is then present. False for a code shown to another app."
     }
   ]
 }

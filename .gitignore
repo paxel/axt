@@ -17,3 +17,13 @@ __pycache__/
 
 # Swift
 .build/
+
+# Python tools: caches and coverage reports
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage/
+coverage.lcov
+coverage.xml

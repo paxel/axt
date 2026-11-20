@@ -1,0 +1,52 @@
+[project]
+name = "axt"
+version = "0.1.0"
+description = "The conformance suite, the example scripts and the reference relay of AXT"
+requires-python = ">=3.11"
+license = "Apache-2.0 OR MIT"
+# What the scripts in conformance/ need, in the versions the specification's examples were
+# checked with. The reference relay (relay/axt_relay.py) uses the standard library only.
+dependencies = [
+  "fastavro==1.13.1",
+  "avro==1.12.2",
+  "pynacl==1.6.2",
+  "cryptography==50.0.2",
+  "tzdata==2026.2",
+]
+
+[dependency-groups]
+dev = [
+  "ruff==0.17.3",
+  "mypy==2.4.1",
+  "pytest==9.2.0",
+  "pytest-cov==7.1.0",
+  "atheris==3.1.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.mypy]
+strict = true
+python_version = "3.11"
+# The scripts are not a package: each directory is a base of its own, and two files may share
+# a name (relay/adapter.py, conformance/reference/adapter.py).
+explicit_package_bases = true
+namespace_packages = true
+
+[[tool.mypy.overrides]]
+module = ["atheris", "avro.*", "fastavro.*", "nacl.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "relay", "tools"]
+python_files = ["test_*.py"]
+
+[tool.coverage.run]
+source = ["conformance", "relay", "tools"]
+# The suite's adapters and the relay run as processes of their own.
+patch = ["subprocess"]
+parallel = true
+# The Cobertura XML then names the repository's paths, not the runner's; SonarQube Cloud reads
+# it in another job.
+relative_files = true

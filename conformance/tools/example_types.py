@@ -55,7 +55,10 @@ import importlib.util
 import io
 import json
 import re
+from collections.abc import Iterator
 from pathlib import Path
+from types import ModuleType
+from typing import Any, cast
 
 import avro.errors
 import avro.io
@@ -68,14 +71,20 @@ REPO = Path(__file__).resolve().parents[2]
 EXAMPLES = REPO / "types" / "axt" / "example"
 
 # The rules of the attributes of spec/metadata.md; a module that imports none of the other scripts.
-_spec = importlib.util.spec_from_file_location("metadata_rules", Path(__file__).resolve().parent / "metadata_rules.py")
+_spec = importlib.util.spec_from_file_location(
+    "metadata_rules", Path(__file__).resolve().parent / "metadata_rules.py"
+)
+if _spec is None or _spec.loader is None:
+    raise ImportError("metadata_rules.py cannot be loaded")
 mr = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(mr)
 
 LOGICAL_TYPES = {("string", "uuid")}  # spec/types.md, section 5.5
 # The published schemas of the time types, which a type defines in place (spec/time.md, section 3.1).
-TIME_TYPES = {f"axt.{n}": json.loads((REPO / "types" / "axt" / f"{n}.avsc").read_text(encoding="utf-8"))
-              for n in ("Date", "Time", "DateTime", "Duration")}
+TIME_TYPES = {
+    f"axt.{n}": json.loads((REPO / "types" / "axt" / f"{n}.avsc").read_text(encoding="utf-8"))
+    for n in ("Date", "Time", "DateTime", "Duration")
+}
 NUMBERS = {"int", "long", "float", "double"}
 MAX_SCHEMA_BYTES = 262144  # spec/envelope.md, section 8
 MAX_JSON_DEPTH = 64  # spec/envelope.md, section 8
@@ -86,15 +95,25 @@ UPPER = re.compile(r"^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$")
 FILE = re.compile(r"^([A-Z][A-Za-z0-9]*)\.([1-9][0-9]*)\.avsc$")
 
 
-
-def zoned(y, mo, d, h, mi, zone, offset):
-    """An axt.DateTime in a zone, with its instant computed from the wall clock and the offset (spec/time.md, section 6.2)."""
+def zoned(y: int, mo: int, d: int, h: int, mi: int, zone: str, offset: int) -> dict[str, Any]:
+    """An axt.DateTime in a zone, with its instant computed from the wall clock and the offset
+    (spec/time.md, section 6.2)."""
     instant = calendar.timegm((y, mo, d, h, mi, 0)) * 1000 - offset * 1000
-    return {"year": y, "month": mo, "day": d, "hour": h, "minute": mi, "second": 0, "millisecond": 0,
-            "zone": zone, "offset_seconds": offset, "instant_ms": instant}
+    return {
+        "year": y,
+        "month": mo,
+        "day": d,
+        "hour": h,
+        "minute": mi,
+        "second": 0,
+        "millisecond": 0,
+        "zone": zone,
+        "offset_seconds": offset,
+        "instant_ms": instant,
+    }
 
 
-def date(year=None, month=None, day=None):
+def date(year: int | None = None, month: int | None = None, day: int | None = None) -> dict[str, Any]:
     return {"year": year, "month": month, "day": day}
 
 
@@ -102,7 +121,7 @@ BERLIN, CET = "Europe/Berlin", 3600
 HOUR = 3600000
 
 # One example datum per type, as fastavro takes and returns it. Every value keeps the checks of its field.
-DATA = {
+DATA: dict[str, dict[str, Any]] = {
     "Note": {
         "title": "Cat food",
         "text": "Mimi eats the **salmon** one, not the chicken.",
@@ -190,25 +209,36 @@ DATA = {
     },
 }
 
-def floating(y, mo, d, h, mi):
+
+def floating(y: int, mo: int, d: int, h: int, mi: int) -> dict[str, Any]:
     """A floating axt.DateTime: a wall clock without zone, offset and instant (spec/time.md, section 6.5)."""
-    return {"year": y, "month": mo, "day": d, "hour": h, "minute": mi, "second": 0, "millisecond": 0,
-            "zone": None, "offset_seconds": None, "instant_ms": None}
+    return {
+        "year": y,
+        "month": mo,
+        "day": d,
+        "hour": h,
+        "minute": mi,
+        "second": 0,
+        "millisecond": 0,
+        "zone": None,
+        "offset_seconds": None,
+        "instant_ms": None,
+    }
 
 
-def duration(months=0, days=0, millis=0):
+def duration(months: int = 0, days: int = 0, millis: int = 0) -> dict[str, int]:
     return {"months": months, "days": days, "millis": millis}
 
 
 CEST = 7200
 
 
-def variant(name, **fields):
+def variant(name: str, **fields: Any) -> dict[str, Any]:
     """The example datum of the type with some fields replaced."""
     return dict(copy.deepcopy(DATA[name]), **fields)
 
 
-def nested(name, field, index, **fields):
+def nested(name: str, field: str, index: int, **fields: Any) -> dict[str, Any]:
     """The example datum with fields of one item of an array of nested records replaced."""
     datum = copy.deepcopy(DATA[name])
     datum[field][index] = dict(datum[field][index], **fields)
@@ -217,72 +247,184 @@ def nested(name, field, index, **fields):
 
 # Further records of the example types that keep every rule: (label, type, datum).
 VALID = [
-    ("an all-day appointment: floating times at 00:00, the end at 00:00 of the day after", "Appointment",
-     variant("Appointment", start=floating(2026, 11, 24, 0, 0), end=floating(2026, 11, 25, 0, 0), all_day=True,
-             reminders=[duration(days=-1)])),
-    ("an appointment over two days, its end in another zone", "Appointment",
-     variant("Appointment", end=zoned(2026, 11, 25, 9, 0, "Europe/London", 0))),
-    ("an appointment whose offset is not that of its zone at the instant, but whose instant is that of its offset",
-     "Appointment", variant("Appointment", start=zoned(2026, 11, 24, 10, 0, BERLIN, CEST),
-                            end=zoned(2026, 11, 24, 10, 30, BERLIN, CEST))),
-    ("a task due all day: a floating time at 00:00", "Task",
-     variant("Task", due=floating(2026, 12, 1, 0, 0), due_all_day=True)),
-    ("a task due at 08:00 wherever its user is: a floating time", "Task", variant("Task", due=floating(2026, 12, 1, 8, 0))),
-    ("a task done, with the instant it was done", "Task",
-     variant("Task", done=True, done_at=zoned(2026, 11, 30, 19, 12, BERLIN, CET))),
+    (
+        "an all-day appointment: floating times at 00:00, the end at 00:00 of the day after",
+        "Appointment",
+        variant(
+            "Appointment",
+            start=floating(2026, 11, 24, 0, 0),
+            end=floating(2026, 11, 25, 0, 0),
+            all_day=True,
+            reminders=[duration(days=-1)],
+        ),
+    ),
+    (
+        "an appointment over two days, its end in another zone",
+        "Appointment",
+        variant("Appointment", end=zoned(2026, 11, 25, 9, 0, "Europe/London", 0)),
+    ),
+    (
+        "an appointment whose offset is not that of its zone at the instant, "
+        "but whose instant is that of its offset",
+        "Appointment",
+        variant(
+            "Appointment",
+            start=zoned(2026, 11, 24, 10, 0, BERLIN, CEST),
+            end=zoned(2026, 11, 24, 10, 30, BERLIN, CEST),
+        ),
+    ),
+    (
+        "a task due all day: a floating time at 00:00",
+        "Task",
+        variant("Task", due=floating(2026, 12, 1, 0, 0), due_all_day=True),
+    ),
+    (
+        "a task due at 08:00 wherever its user is: a floating time",
+        "Task",
+        variant("Task", due=floating(2026, 12, 1, 8, 0)),
+    ),
+    (
+        "a task done, with the instant it was done",
+        "Task",
+        variant("Task", done=True, done_at=zoned(2026, 11, 30, 19, 12, BERLIN, CET)),
+    ),
     ("a pet born in March 2021, the day not known", "Pet", variant("Pet", birthday=date(2021, 3))),
     ("a document dated 2026 only", "Document", variant("Document", dated=date(2026))),
-    ("a measurement taken in summer time", "Measurement", variant("Measurement", measured_at=zoned(2026, 7, 1, 8, 0, BERLIN, CEST))),
+    (
+        "a measurement taken in summer time",
+        "Measurement",
+        variant("Measurement", measured_at=zoned(2026, 7, 1, 8, 0, BERLIN, CEST)),
+    ),
     ("a car of the year 1886 and an odometer of 0", "Car", variant("Car", year=1886, odometer=0)),
 ]
 
-# Records of the example types with a value that breaks a rule: (label, type, datum, path, rule). The rule is a
-# time type, for a time value that is not valid, which every receiver rejects (spec/time.md, section 8), or the
-# attribute of a check, which a receiver that checks reports (spec/metadata.md, section 7.1). The path and the
-# rule are those of the first value in the order of the encoding.
+# Records of the example types with a value that breaks a rule: (label, type, datum, path, rule). The rule is
+# a time type, for a time value that is not valid, which every receiver rejects (spec/time.md, section 8), or
+# the attribute of a check, which a receiver that checks reports (spec/metadata.md, section 7.1). The path and
+# the rule are those of the first value in the order of the encoding.
 start = DATA["Appointment"]["start"]
 BREACHES = [
-    ("an appointment whose start has an instant an hour off", "Appointment",
-     variant("Appointment", start=dict(start, instant_ms=start["instant_ms"] + HOUR)), "start", "axt.DateTime"),
-    ("an appointment whose start has the offset 7200, which Berlin does not have then, and the instant of 3600",
-     "Appointment", variant("Appointment", start=dict(start, offset_seconds=CEST)), "start", "axt.DateTime"),
-    ("an appointment that ends on 31 November", "Appointment",
-     variant("Appointment", end=dict(DATA["Appointment"]["end"], day=31)), "end", "axt.DateTime"),
-    ("an appointment whose start has a zone but no offset and no instant", "Appointment",
-     variant("Appointment", start=dict(start, offset_seconds=None, instant_ms=None)), "start", "axt.DateTime"),
-    ("an appointment whose second reminder has parts of both signs", "Appointment",
-     variant("Appointment", reminders=[duration(days=-1), duration(days=-1, millis=HOUR)]), "reminders[1]", "axt.Duration"),
-    ("a person born on 29 February 2027", "Person", variant("Person", birthday=date(2027, 2, 29)), "birthday", "axt.Date"),
-    ("a pet whose birthday has a day and a year but no month", "Pet", variant("Pet", birthday=date(2021, None, 3)),
-     "birthday", "axt.Date"),
-    ("a task done at the second 60", "Task",
-     variant("Task", done=True, done_at=dict(zoned(2026, 11, 30, 19, 12, BERLIN, CET), second=60)), "done_at", "axt.DateTime"),
-    ("a person whose phone number has spaces", "Person", nested("Person", "phones", 0, number="+49 30 1234567"),
-     "phones[0].number", "axt.format"),
-    ("a person whose country is a name, not a code", "Person", nested("Person", "addresses", 0, country="Germany"),
-     "addresses[0].country", "axt.format"),
-    ("a person whose e-mail address has no domain", "Person", nested("Person", "emails", 0, address="anna"),
-     "emails[0].address", "axt.format"),
-    ("a car whose VIN holds the letter O", "Car", variant("Car", vin="WVWZZZ1KZAW00000O"), "vin", "axt.pattern"),
+    (
+        "an appointment whose start has an instant an hour off",
+        "Appointment",
+        variant("Appointment", start=dict(start, instant_ms=start["instant_ms"] + HOUR)),
+        "start",
+        "axt.DateTime",
+    ),
+    (
+        "an appointment whose start has the offset 7200, which Berlin does not have then, "
+        "and the instant of 3600",
+        "Appointment",
+        variant("Appointment", start=dict(start, offset_seconds=CEST)),
+        "start",
+        "axt.DateTime",
+    ),
+    (
+        "an appointment that ends on 31 November",
+        "Appointment",
+        variant("Appointment", end=dict(DATA["Appointment"]["end"], day=31)),
+        "end",
+        "axt.DateTime",
+    ),
+    (
+        "an appointment whose start has a zone but no offset and no instant",
+        "Appointment",
+        variant("Appointment", start=dict(start, offset_seconds=None, instant_ms=None)),
+        "start",
+        "axt.DateTime",
+    ),
+    (
+        "an appointment whose second reminder has parts of both signs",
+        "Appointment",
+        variant("Appointment", reminders=[duration(days=-1), duration(days=-1, millis=HOUR)]),
+        "reminders[1]",
+        "axt.Duration",
+    ),
+    (
+        "a person born on 29 February 2027",
+        "Person",
+        variant("Person", birthday=date(2027, 2, 29)),
+        "birthday",
+        "axt.Date",
+    ),
+    (
+        "a pet whose birthday has a day and a year but no month",
+        "Pet",
+        variant("Pet", birthday=date(2021, None, 3)),
+        "birthday",
+        "axt.Date",
+    ),
+    (
+        "a task done at the second 60",
+        "Task",
+        variant("Task", done=True, done_at=dict(zoned(2026, 11, 30, 19, 12, BERLIN, CET), second=60)),
+        "done_at",
+        "axt.DateTime",
+    ),
+    (
+        "a person whose phone number has spaces",
+        "Person",
+        nested("Person", "phones", 0, number="+49 30 1234567"),
+        "phones[0].number",
+        "axt.format",
+    ),
+    (
+        "a person whose country is a name, not a code",
+        "Person",
+        nested("Person", "addresses", 0, country="Germany"),
+        "addresses[0].country",
+        "axt.format",
+    ),
+    (
+        "a person whose e-mail address has no domain",
+        "Person",
+        nested("Person", "emails", 0, address="anna"),
+        "emails[0].address",
+        "axt.format",
+    ),
+    (
+        "a car whose VIN holds the letter O",
+        "Car",
+        variant("Car", vin="WVWZZZ1KZAW00000O"),
+        "vin",
+        "axt.pattern",
+    ),
     ("a car of the year 1800", "Car", variant("Car", year=1800), "year", "axt.min"),
     ("a car with a negative odometer", "Car", variant("Car", odometer=-1), "odometer", "axt.min"),
-    ("a document whose media type has no subtype", "Document", variant("Document", media_type="pdf"), "media_type", "axt.format"),
-    ("a measurement with a time that is not valid, after a unit with a space", "Measurement",
-     variant("Measurement", unit="kg m", measured_at=dict(DATA["Measurement"]["measured_at"], month=13)), "unit", "axt.format"),
-    ("a document with a date that is not valid, after a media type without a subtype", "Document",
-     variant("Document", media_type="pdf", dated=date(2026, 2, 30)), "media_type", "axt.format"),
+    (
+        "a document whose media type has no subtype",
+        "Document",
+        variant("Document", media_type="pdf"),
+        "media_type",
+        "axt.format",
+    ),
+    (
+        "a measurement with a time that is not valid, after a unit with a space",
+        "Measurement",
+        variant("Measurement", unit="kg m", measured_at=dict(DATA["Measurement"]["measured_at"], month=13)),
+        "unit",
+        "axt.format",
+    ),
+    (
+        "a document with a date that is not valid, after a media type without a subtype",
+        "Document",
+        variant("Document", media_type="pdf", dated=date(2026, 2, 30)),
+        "media_type",
+        "axt.format",
+    ),
 ]
 del start
 
 
-def check_cases(schemas):
-    """The records of VALID keep every rule; each of BREACHES breaks the rule named, first at the path named."""
+def check_cases(schemas: dict[str, Any]) -> None:
+    """The records of VALID keep every rule; each of BREACHES breaks the rule named, first at the path
+    named."""
     tm = time_rules()
     for label, name, datum in VALID:
         if mr.breaches(schemas[name], datum, tm.time_check):
             fail(name, f"{label}: {mr.breaches(schemas[name], datum, tm.time_check)}")
-    # Each zoned time has the offset of its zone at its instant, except in the third case, whose offsets are not
-    # those of Berlin at the instant: a receiver does not reject such a value (spec/time.md, section 6.2).
+    # Each zoned time has the offset of its zone at its instant, except in the third case, whose offsets are
+    # not those of Berlin at the instant: a receiver does not reject such a value (spec/time.md, section 6.2).
     for i, (label, name, datum) in enumerate(VALID):
         for v in zoned_values(datum):
             if (tm.offset_at(v["zone"], v["instant_ms"]) == v["offset_seconds"]) != (i != 2):
@@ -291,10 +433,13 @@ def check_cases(schemas):
         found = mr.breaches(schemas[name], datum, tm.time_check)
         if not found or found[0][:2] != (path, rule):
             fail(name, f"{label}: {found}")
-        elif rule.startswith("axt.") and rule[4:] in ("Date", "Time", "DateTime", "Duration") and \
-                tm.value_breaches(schemas[name], datum)[0][:2] != (path, rule):
+        elif (
+            rule.startswith("axt.")
+            and rule[4:] in ("Date", "Time", "DateTime", "Duration")
+            and tm.value_breaches(schemas[name], datum)[0][:2] != (path, rule)
+        ):
             fail(name, f"{label}: not the first time value that is not valid")
-    for label, name, datum in VALID + [b[:3] for b in BREACHES]:
+    for _label, name, datum in VALID + [b[:3] for b in BREACHES]:
         buf = io.BytesIO()  # every case is a value of the schema, whatever rule it breaks
         fastavro.schemaless_writer(buf, fastavro.parse_schema(schemas[name], _write_hint=False), datum)
 
@@ -332,15 +477,15 @@ def apache_fingerprint(schema_json: str) -> bytes:
 
 # --- the rules ----------------------------------------------------------------
 
-failures = []
-findings = set()  # library behaviour that differs from the Avro specification
+failures: list[str] = []
+findings: set[str] = set()  # library behaviour that differs from the Avro specification
 
 
-def fail(where, message):
+def fail(where: str, message: str) -> None:
     failures.append(f"{where}: {message}")
 
 
-def json_depth(value, depth=1):
+def json_depth(value: Any, depth: int = 1) -> int:
     if isinstance(value, dict):
         return max([depth] + [json_depth(v, depth + 1) for v in value.values()])
     if isinstance(value, list):
@@ -348,7 +493,7 @@ def json_depth(value, depth=1):
     return depth
 
 
-def time_type(t):
+def time_type(t: Any) -> str | None:
     """The full name of the time type that the node defines in place, or None (spec/time.md, section 3.1)."""
     if isinstance(t, dict) and t.get("type") == "record":
         name = t["name"]
@@ -357,15 +502,16 @@ def time_type(t):
     return None
 
 
-def check_type(t, where, top, path, defined):
+def check_type(t: Any, where: str, top: Any, path: set[str], defined: list[str]) -> int:
     """Check a schema node; return the data depth it adds (record, array, map count 1)."""
     if t is top:
         # The axt.* attributes of the whole schema (spec/metadata.md; spec/types.md, section 5.9).
         for here, message in mr.schema_problems(top):
             fail(f"{where}.{here}" if here else where, message)
     elif time_type(t):
-        # A time type, defined in place at its first occurrence as its published schema (spec/time.md, section 3.1).
-        full = time_type(t)
+        # A time type, defined in place at its first occurrence as its published schema (spec/time.md,
+        # section 3.1).
+        full = cast(str, time_type(t))
         if full in defined:
             fail(where, f"{full} defined a second time; a later occurrence refers to it by its full name")
         if t != TIME_TYPES[full]:
@@ -380,7 +526,10 @@ def check_type(t, where, top, path, defined):
         if t in path or f"{top['namespace']}.{t}" in path:
             fail(where, f"recursive reference to {t}")
         elif t not in {"null", "boolean", "int", "long", "float", "double", "bytes", "string"}:
-            fail(where, f"reference to the named type {t}; an example type defines each nested type once, in place")
+            fail(
+                where,
+                f"reference to the named type {t}; an example type defines each nested type once, in place",
+            )
         return 0
     if isinstance(t, list):
         if len(t) != 2 or t[0] != "null" or t[1] == "null":
@@ -434,12 +583,12 @@ def check_type(t, where, top, path, defined):
     return 0
 
 
-def check_schema(path: Path, schema: dict, text: str):
+def check_schema(path: Path, schema: dict[str, Any], text: str) -> tuple[list[str], int] | None:
     where = str(path.relative_to(REPO))
     m = FILE.match(path.name)
     if not m:
         fail(where, "file name is not <Type>.<version>.avsc")
-        return
+        return None
     namespace = "axt." + ".".join(path.parent.relative_to(REPO / "types" / "axt").parts)
     if schema.get("type") != "record":
         fail(where, "not a record")
@@ -458,7 +607,7 @@ def check_schema(path: Path, schema: dict, text: str):
         fail(where, "schema above the size limit")
     if json_depth(schema) > MAX_JSON_DEPTH:
         fail(where, "schema JSON nested above the depth limit")
-    defined = []
+    defined: list[str] = []
     depth = check_type(schema, where, schema, set(), defined)
     if depth > MAX_DATA_DEPTH:
         fail(where, f"data depth {depth} above {MAX_DATA_DEPTH}")
@@ -467,13 +616,13 @@ def check_schema(path: Path, schema: dict, text: str):
     return defined, depth
 
 
-def presence_problems(schema):
+def presence_problems(schema: Any) -> list[tuple[str, str]]:
     """What spec/types.md, section 5.9, requires of an example type beyond the rules of the attributes:
     axt.label and axt.emoji on its record, on each nested record and on each field, except the time types
     and their fields; axt.symbols on each enum, with a label for each symbol. Returns (where, why)."""
-    out = []
+    out: list[tuple[str, str]] = []
 
-    def walk(t, where):
+    def walk(t: Any, where: str) -> None:
         if isinstance(t, list):
             for b in t:
                 walk(b, where)
@@ -511,7 +660,7 @@ def presence_problems(schema):
 # --- defaults through schema resolution ---------------------------------------
 
 
-def without_defaults(t, nested_only=False):
+def without_defaults(t: Any, nested_only: bool = False) -> Any:
     """The schema with every field that has a default removed.
 
     With nested_only, the fields of the type's own record are all kept and
@@ -532,7 +681,7 @@ def without_defaults(t, nested_only=False):
     return t
 
 
-def project(t, datum, nested_only=False):
+def project(t: Any, datum: Any, nested_only: bool = False) -> Any:
     """The part of a datum that a reduced writer schema keeps."""
     if isinstance(t, dict) and t["type"] == "record" and not time_type(t):
         keep = [f for f in t["fields"] if nested_only or "default" not in f]
@@ -542,17 +691,19 @@ def project(t, datum, nested_only=False):
     return datum
 
 
-def resolve(writer, schema, parsed, datum):
+def resolve(writer: Any, schema: Any, parsed: Any, datum: Any) -> tuple[Any, Any]:
     """Write datum with the writer schema; read it with the full schema, with both libraries."""
     buf = io.BytesIO()
     fastavro.schemaless_writer(buf, fastavro.parse_schema(writer, _write_hint=False), datum)
     data = buf.getvalue()
-    back = fastavro.schemaless_reader(io.BytesIO(data), fastavro.parse_schema(writer, _write_hint=False), parsed)
+    back = fastavro.schemaless_reader(
+        io.BytesIO(data), fastavro.parse_schema(writer, _write_hint=False), parsed
+    )
     apache = avro.io.DatumReader(avro.schema.parse(json.dumps(writer)), avro.schema.parse(json.dumps(schema)))
     return back, apache.read(avro.io.BinaryDecoder(io.BytesIO(data)))
 
 
-def expect_defaults(name, where, record_schema, values, library):
+def expect_defaults(name: str, where: str, record_schema: Any, values: Any, library: str) -> None:
     for field in record_schema["fields"]:
         if "default" not in field:
             continue
@@ -566,14 +717,20 @@ def expect_defaults(name, where, record_schema, values, library):
             fail(name, f"{library} read {got!r} for the default of {where}{field['name']}")
 
 
-def nested_arrays(schema):
+def nested_arrays(schema: Any) -> list[Any]:
     """The fields of the type's record that hold an array of nested records other than a time type."""
-    return [f for f in schema["fields"] if isinstance(f["type"], dict) and f["type"]["type"] == "array"
-            and isinstance(f["type"]["items"], dict) and f["type"]["items"]["type"] == "record"
-            and not time_type(f["type"]["items"])]
+    return [
+        f
+        for f in schema["fields"]
+        if isinstance(f["type"], dict)
+        and f["type"]["type"] == "array"
+        and isinstance(f["type"]["items"], dict)
+        and f["type"]["items"]["type"] == "record"
+        and not time_type(f["type"]["items"])
+    ]
 
 
-def check_defaults(name, schema, parsed):
+def check_defaults(name: str, schema: Any, parsed: Any) -> tuple[list[str], int]:
     """Use every default once: of the fields, of nested records' fields, of every enum."""
     checked = 0
     # 1. The type's own fields.
@@ -585,9 +742,15 @@ def check_defaults(name, schema, parsed):
     nested = nested_arrays(schema)
     if nested:
         datum = dict(DATA[name], **{f["name"]: DATA[name][f["name"]][:1] for f in nested})
-        assert all(datum[f["name"]] for f in nested), f"{name}: the example datum needs an item in every array of records"
-        back, apache_back = resolve(without_defaults(schema, nested_only=True), schema, parsed,
-                                    project(schema, datum, nested_only=True))
+        assert all(datum[f["name"]] for f in nested), (
+            f"{name}: the example datum needs an item in every array of records"
+        )
+        back, apache_back = resolve(
+            without_defaults(schema, nested_only=True),
+            schema,
+            parsed,
+            project(schema, datum, nested_only=True),
+        )
         for library, values in (("fastavro", back), ("avro", apache_back)):
             for f in nested:
                 expect_defaults(name, f"{f['name']}[0].", f["type"]["items"], values[f["name"]][0], library)
@@ -598,17 +761,25 @@ def check_defaults(name, schema, parsed):
             writer = copy.deepcopy(schema)
             writer["fields"][i]["type"]["symbols"].append("SYMBOL_OF_A_LATER_VERSION")
             datum = dict(DATA[name], **{f["name"]: "SYMBOL_OF_A_LATER_VERSION"})
+            results: tuple[tuple[str, Any], ...]
             try:
                 back, apache_back = resolve(writer, schema, parsed, datum)
                 results = (("fastavro", back), ("avro", apache_back))
             except avro.errors.SchemaResolutionException:
                 # avro 1.12.2 for Python does not apply the enum default of
                 # the Avro specification and raises instead; fastavro does.
-                findings.add("avro 1.12.2 raises SchemaResolutionException for an enum symbol the reader "
-                             "does not know, instead of reading the enum's default symbol")
+                findings.add(
+                    "avro 1.12.2 raises SchemaResolutionException for an enum symbol the reader "
+                    "does not know, instead of reading the enum's default symbol"
+                )
                 buf = io.BytesIO()
                 fastavro.schemaless_writer(buf, fastavro.parse_schema(writer, _write_hint=False), datum)
-                back = fastavro.schemaless_reader(io.BytesIO(buf.getvalue()), fastavro.parse_schema(writer, _write_hint=False), parsed)
+                back = cast(
+                    dict[str, Any],
+                    fastavro.schemaless_reader(
+                        io.BytesIO(buf.getvalue()), fastavro.parse_schema(writer, _write_hint=False), parsed
+                    ),
+                )
                 results = (("fastavro", back),)
             for library, values in results:
                 if values[f["name"]] != f["type"]["default"]:
@@ -619,13 +790,17 @@ def check_defaults(name, schema, parsed):
 
 # --- the example data ---------------------------------------------------------
 
-_time = []
+_time: list[ModuleType] = []
 
 
-def time_rules():
+def time_rules() -> ModuleType:
     """time_examples.py, loaded on first use: it imports this file, so it cannot be imported at the top."""
     if not _time:
-        spec = importlib.util.spec_from_file_location("time_examples", Path(__file__).resolve().parent / "time_examples.py")
+        spec = importlib.util.spec_from_file_location(
+            "time_examples", Path(__file__).resolve().parent / "time_examples.py"
+        )
+        if spec is None or spec.loader is None:
+            raise ImportError("time_examples.py cannot be loaded")
         module = importlib.util.module_from_spec(spec)
         with contextlib.redirect_stdout(io.StringIO()):
             spec.loader.exec_module(module)
@@ -633,7 +808,7 @@ def time_rules():
     return _time[0]
 
 
-def zoned_values(value):
+def zoned_values(value: Any) -> Iterator[dict[str, Any]]:
     """Every zoned axt.DateTime inside a value, as fastavro gives it."""
     if isinstance(value, dict):
         if value.keys() >= {"zone", "offset_seconds", "instant_ms"} and value["zone"] is not None:
@@ -645,7 +820,7 @@ def zoned_values(value):
             yield from zoned_values(v)
 
 
-def check_datum(name, schema):
+def check_datum(name: str, schema: Any) -> None:
     """The example datum keeps the rules of the time types and every check of its schema; each zoned time
     has the offset of its zone at its instant by this system's zone rules (spec/time.md, section 6.3)."""
     tm = time_rules()
@@ -659,16 +834,16 @@ def check_datum(name, schema):
 # --- run ----------------------------------------------------------------------
 
 
-def main():
+def main() -> None:
     rows = []
-    all_defined = {}
-    named_schemas = {}
-    schemas = {}
+    all_defined: dict[str, str] = {}
+    named_schemas: dict[str, Any] = {}
+    schemas: dict[str, Any] = {}
     for path in sorted(EXAMPLES.rglob("*.avsc")):
         text = path.read_text(encoding="utf-8")
         schema = json.loads(text)
         name = schema["name"]
-        defined, depth = check_schema(path, schema, text)
+        defined, depth = cast(tuple[list[str], int], check_schema(path, schema, text))
         for full in defined:
             if full in TIME_TYPES:
                 continue  # defined in each type that holds it, always as its published schema
@@ -680,9 +855,13 @@ def main():
         parsed = fastavro.parse_schema(schema, named_schemas=named_schemas)
 
         pcf = to_parsing_canonical_form(parsed)
-        assert avro.schema.parse(pcf).canonical_form == pcf, f"{name}: the two libraries disagree on the canonical form"
+        assert avro.schema.parse(pcf).canonical_form == pcf, (
+            f"{name}: the two libraries disagree on the canonical form"
+        )
         fp = crc64_avro(pcf.encode())
-        assert fa_fingerprint(pcf, "CRC-64-AVRO") == fp.to_bytes(8, "little").hex(), f"{name}: fastavro fingerprint differs"
+        assert fa_fingerprint(pcf, "CRC-64-AVRO") == fp.to_bytes(8, "little").hex(), (
+            f"{name}: fastavro fingerprint differs"
+        )
         assert apache_fingerprint(text) == fp.to_bytes(8, "little"), f"{name}: avro fingerprint differs"
 
         # The example datum: fastavro round trip, then the same bytes through avro.
@@ -702,7 +881,20 @@ def main():
         check_datum(name, schema)
         schemas[name] = schema
         required, defaults = check_defaults(name, schema, parsed)
-        rows.append((schema["namespace"], name, schema["axt.version"], path, pcf, fp, len(data), required, depth, defaults))
+        rows.append(
+            (
+                schema["namespace"],
+                name,
+                schema["axt.version"],
+                path,
+                pcf,
+                fp,
+                len(data),
+                required,
+                depth,
+                defaults,
+            )
+        )
 
     check_cases(schemas)
     if failures:
@@ -712,21 +904,26 @@ def main():
         print(f"{namespace}.{name} {version}: {path.relative_to(REPO)}")
         print(f"  canonical form: {pcf}")
         print(f"  CRC-64-AVRO 0x{fp:016x}, bytes {fp.to_bytes(8, 'little').hex(' ')}")
-        print(f"  example datum: {size} bytes; data depth {depth}; defaults resolved: {defaults}; "
-              f"fields without a default: {', '.join(required) or 'none'}")
+        print(
+            f"  example datum: {size} bytes; data depth {depth}; defaults resolved: {defaults}; "
+            f"fields without a default: {', '.join(required) or 'none'}"
+        )
     print()
     print("| Type | Version | Schema | CRC-64-AVRO | As bytes |")
     print("| --- | --- | --- | --- | --- |")
-    for namespace, name, version, path, pcf, fp, size, required, depth, defaults in rows:
+    for namespace, name, version, path, _pcf, fp, _size, _required, _depth, _defaults in rows:
         link = "../" + path.relative_to(REPO).as_posix()  # relative to spec/types.md
-        print(f"| `{namespace}.{name}` | {version} | [{path.name}]({link}) | `0x{fp:016x}` | `{fp.to_bytes(8, 'little').hex(' ')}` |")
+        print(
+            f"| `{namespace}.{name}` | {version} | [{path.name}]({link}) | `0x{fp:016x}` | "
+            f"`{fp.to_bytes(8, 'little').hex(' ')}` |"
+        )
     print()
     print(f"{len(VALID)} further records that keep every rule:")
-    for label, name, datum in VALID:
+    for label, name, _datum in VALID:
         print(f"  {name}: {label}")
     print(f"{len(BREACHES)} records with a value that breaks a rule, the first such value:")
-    for label, name, datum, path, rule in BREACHES:
-        print(f"  {name}: {label}: {path}, {rule}")
+    for label, name, _datum, breach_path, rule in BREACHES:
+        print(f"  {name}: {label}: {breach_path}, {rule}")
     for finding in sorted(findings):
         print(f"library finding: {finding}")
     print("all checks passed")

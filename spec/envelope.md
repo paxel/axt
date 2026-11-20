@@ -18,7 +18,7 @@ Every AXT message is one datum of the record `axt.Envelope`. Its schema is [type
 | ----------- | ------------------------------------------ | ----------------------------------------------------------------------------------------- | -------------------------- |
 | `format`    | `int`                                      | The envelope format; `1` for the envelope defined here                                    | this document, section 2.1 |
 | `kind`      | enum `axt.Kind`                            | What the message is, and so which schema its body has                                     | this document, section 2.2 |
-| `sender`    | `fixed` of 32 bytes, `axt.PublicKey`       | The Ed25519 public key of the sending installation                                        | [keys.md](keys.md)         |
+| `sender`    | `fixed` of 32 bytes, `axt.PublicKey`       | The Ed25519 public key of the sending device                                              | [keys.md](keys.md)         |
 | `record`    | union of `null` and record `axt.RecordRef` | The id (`uuid` string) and version (`long`) of the record the message is about, or `null` | [records.md](records.md)   |
 | `body`      | `bytes`                                    | Empty, or one datum in single-object encoding                                             | this document, section 2.3 |
 | `signature` | `fixed` of 64 bytes, `axt.Signature`       | The sender's Ed25519 signature                                                            | [keys.md](keys.md)         |
@@ -33,22 +33,34 @@ A sender MUST write each message in a format the receiver supports. In a live co
 
 ### 2.2 Kind
 
-| Kind       | Purpose                                                    | Defined in                                                       |
-| ---------- | ---------------------------------------------------------- | ---------------------------------------------------------------- |
-| `MANIFEST` | The types an app takes and what it does with them          | [manifest.md](manifest.md)                                       |
-| `OFFER`    | Types and their writer schemas the sender wants to send    | [protocol.md](protocol.md), section 4                            |
-| `ACCEPT`   | The receiver takes offered types                           | [protocol.md](protocol.md), section 5                            |
-| `DECLINE`  | The receiver does not take offered types                   | [protocol.md](protocol.md), section 5                            |
-| `DATA`     | One record, new or updated                                 | [records.md](records.md), [protocol.md](protocol.md), section 6  |
-| `DELETE`   | The deletion of one record                                 | [records.md](records.md), [protocol.md](protocol.md), section 6  |
-| `ACK`      | The receiver reports what it did with record messages      | [protocol.md](protocol.md), section 7                            |
-| `ERROR`    | The receiver reports a message it could not process        | [protocol.md](protocol.md), section 8                            |
-| `KEY_MOVE` | The sender's key moves to a new installation               | [keys.md](keys.md)                                               |
+| Kind             | Purpose                                                               | Defined in                                                      |
+| ---------------- | --------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `MANIFEST`       | The types an app takes and what it does with them                     | [manifest.md](manifest.md)                                      |
+| `OFFER`          | Types and their writer schemas the sender wants to send               | [protocol.md](protocol.md), section 4                           |
+| `ACCEPT`         | The receiver takes offered types                                      | [protocol.md](protocol.md), section 5                           |
+| `DECLINE`        | The receiver does not take offered types                              | [protocol.md](protocol.md), section 5                           |
+| `DATA`           | One record, new or updated                                            | [records.md](records.md), [protocol.md](protocol.md), section 6 |
+| `DELETE`         | The deletion of one record                                            | [records.md](records.md), [protocol.md](protocol.md), section 6 |
+| `ACK`            | The receiver reports what it did with record messages                 | [protocol.md](protocol.md), section 7                           |
+| `ERROR`          | The receiver reports a message it could not process                   | [protocol.md](protocol.md), section 8                           |
+| `DEVICE_JOIN`    | A new device asks a device of its owner to add its key                | [keys.md](keys.md), section 5.2                                 |
+| `DEVICE_ADD`     | A device adds the key of a new device to its sender                   | [keys.md](keys.md), section 5.2                                 |
+| `DEVICE_REMOVE`  | A device removes a key from its sender                                | [keys.md](keys.md), section 5.3                                 |
+| `CHANGE`         | Changed fields of one record, between the devices of one sender       | [sync.md](sync.md), section 8                                   |
+| `RESYNC`         | A device asks another device of its sender for every record again     | [sync.md](sync.md), section 11                                  |
+| `FORWARD`        | A message of another app, passed on between the devices of one sender | [sync.md](sync.md), section 18                                  |
+| `WITHDRAW`       | The sender no longer shares one record with the receiver              | [shares.md](shares.md), section 3                               |
+| `PROPOSAL`       | A receiver proposes a change of one record to its sender              | [shares.md](shares.md), section 13                              |
+| `PROPOSAL_REPLY` | The sender accepts or declines a proposal                             | [shares.md](shares.md), section 14                              |
 
-The document that defines a kind also defines whether its messages carry `record` and which schema their body has. Two rules hold already:
+The document that defines a kind also defines whether its messages carry `record` and which schema their body has. In particular:
 
 - A `DATA` message MUST carry `record`, and its body MUST be the record in single-object encoding with a writer schema the receiver has from an offer (section 3) or the file header (section 4).
 - A `DELETE` message MUST carry `record` and MUST have an empty body.
+- A `WITHDRAW` message MUST carry `record`, and its body MUST be one `axt.Withdraw` ([shares.md](shares.md), section 3.1).
+- A `PROPOSAL` and a `PROPOSAL_REPLY` MUST carry `record`, which names the record they are about, and their bodies MUST be one `axt.Proposal` and one `axt.ProposalReply` ([shares.md](shares.md), sections 13.1 and 14.1). They are no record messages ([shares.md](shares.md), section 12.1).
+
+A `CHANGE`, a `RESYNC` and a `FORWARD` travel only between the devices of one sender; an app rejects one of another app as [sync.md](sync.md), section 7.1, says.
 
 New kinds come only with a new envelope format.
 
@@ -56,7 +68,7 @@ New kinds come only with a new envelope format.
 
 The body is either empty or exactly one datum in single-object encoding: the two bytes `C3 01`, the 8-byte little-endian CRC-64-AVRO fingerprint of the datum's writer schema (section 5), then the datum in binary encoding. A receiver MUST reject a body that is neither empty nor a complete single-object encoding with no bytes left over.
 
-For `DATA`, the writer schema is the record type's schema as offered. For every other kind with a body, the schema is the one the defining document publishes under [types/axt/](../types/axt/); those fingerprints are fixed by the specification and are not offered.
+For `DATA`, the writer schema is the record type's schema as offered. The body of a `CHANGE` has a schema of the specification and carries the values of single fields, each as bytes with the fingerprint of the offered schema it was written with ([sync.md](sync.md), section 8.1). The body of a `FORWARD` has a schema of the specification as well and carries one whole message of another app as bytes, signature included, with the text of the writer schema of its body where that message is a `DATA` ([sync.md](sync.md), section 18.1). The body of a `DELETE` is empty. The body of a `PROPOSAL` has a schema of the specification and carries the proposed values of single fields, each as bytes with the fingerprint of the schema it was written with ([shares.md](shares.md), section 13.1). For every other kind with a body, the bodies of a `WITHDRAW` and a `PROPOSAL_REPLY` among them ([shares.md](shares.md), section 10), the schema is the one the defining document publishes under [types/axt/](../types/axt/); those fingerprints are fixed by the specification and are not offered.
 
 ### 2.4 Sender and signature
 
@@ -72,7 +84,7 @@ What the signature covers, and how a receiver verifies it, is defined in [keys.m
 In a live connection, the schema of each record type is sent in the offer that starts each exchange ([protocol.md](protocol.md), section 4), not with each record. Every message, the offer included, is one envelope in single-object encoding:
 
 1. the marker `C3 01`;
-2. the 8-byte little-endian CRC-64-AVRO fingerprint of the envelope schema, which for format 1 is `7d 0c e4 e5 4f e8 e1 a2` (section 10.1);
+2. the 8-byte little-endian CRC-64-AVRO fingerprint of the envelope schema, which for format 1 is `16 30 6f 71 b9 ce 9e a8` (section 10.1);
 3. the envelope in binary encoding.
 
 The envelope carries no length and no terminator; the transport supplies the boundaries of each message, on the local network a frame ([transports.md](transports.md), section 4.4). A receiver MUST reject a message with bytes left over after the envelope.
@@ -105,9 +117,9 @@ An AXT file is an Avro object container file: the magic `Obj` followed by the by
 
 A reader identifies the envelope format by the fingerprint of `avro.schema` and MUST reject a file whose envelope fingerprint it does not support. It MUST NOT depend on the exact text of `avro.schema`, since Avro libraries write it in different ways. It MUST compare the Parsing Canonical Form of `avro.schema` byte for byte with that of the format, and MUST decode the file's messages with its own copy of the format's schema, not with the schema from the file ([keys.md](keys.md), section 2.5). Metadata keys that start with `axt.` are reserved for this specification. A reader MUST ignore metadata keys it does not know.
 
-The metadata is not part of any message, so no message signature covers it. `axt.signature` signs the value of `axt.schemas` with the key in `axt.sender`, and every message of a file has that sender, apart from key moves at its start ([keys.md](keys.md), sections 2.5 and 5.2). The fingerprint alone would not protect the schemas (section 5).
+The metadata is not part of any message, so no message signature covers it. `axt.signature` signs the value of `axt.schemas` with the key in `axt.sender`, and every message of a file has that sender, apart from the additions and removals of devices at its start ([keys.md](keys.md), sections 2.5 and 5.4). The fingerprint alone would not protect the schemas (section 5).
 
-A file holds `KEY_MOVE` messages at its start, at most one `MANIFEST` and record messages, and no other kind; [transports.md](transports.md), section 2, defines their order and what a reader rejects.
+A file holds `DEVICE_ADD` and `DEVICE_REMOVE` messages at its start, at most one `MANIFEST` and record messages, and no other kind; [transports.md](transports.md), section 2, defines their order and what a reader rejects.
 
 ### 4.2 Codecs
 
@@ -202,12 +214,12 @@ Its Parsing Canonical Form:
 The Parsing Canonical Form of `axt.Envelope`, format 1:
 
 ```json
-{"name":"axt.Envelope","type":"record","fields":[{"name":"format","type":"int"},{"name":"kind","type":{"name":"axt.Kind","type":"enum","symbols":["MANIFEST","OFFER","ACCEPT","DECLINE","DATA","DELETE","ACK","ERROR","KEY_MOVE"]}},{"name":"sender","type":{"name":"axt.PublicKey","type":"fixed","size":32}},{"name":"record","type":["null",{"name":"axt.RecordRef","type":"record","fields":[{"name":"id","type":"string"},{"name":"version","type":"long"}]}]},{"name":"body","type":"bytes"},{"name":"signature","type":{"name":"axt.Signature","type":"fixed","size":64}}]}
+{"name":"axt.Envelope","type":"record","fields":[{"name":"format","type":"int"},{"name":"kind","type":{"name":"axt.Kind","type":"enum","symbols":["MANIFEST","OFFER","ACCEPT","DECLINE","DATA","DELETE","ACK","ERROR","DEVICE_JOIN","DEVICE_ADD","DEVICE_REMOVE","CHANGE","RESYNC","FORWARD","WITHDRAW","PROPOSAL","PROPOSAL_REPLY"]}},{"name":"sender","type":{"name":"axt.PublicKey","type":"fixed","size":32}},{"name":"record","type":["null",{"name":"axt.RecordRef","type":"record","fields":[{"name":"id","type":"string"},{"name":"version","type":"long"}]}]},{"name":"body","type":"bytes"},{"name":"signature","type":{"name":"axt.Signature","type":"fixed","size":64}}]}
 ```
 
 | Schema                   | CRC-64-AVRO          | As bytes                  |
 | ------------------------ | -------------------- | ------------------------- |
-| `axt.Envelope`, format 1 | `0xa2e1e84fe5e40c7d` | `7d 0c e4 e5 4f e8 e1 a2` |
+| `axt.Envelope`, format 1 | `0xa89eceb9716f3016` | `16 30 6f 71 b9 ce 9e a8` |
 | `com.example.Memo`       | `0x37f20e16cadcac73` | `73 ac dc ca 16 0e f2 37` |
 
 ### 10.2 A data message
@@ -216,7 +228,7 @@ A `DATA` message in a live connection that carries the Memo with the text `Vet, 
 
 ```text
 0000  c3 01                    single-object marker
-0002  7d 0c e4 e5 4f e8 e1 a2  fingerprint of axt.Envelope, format 1
+0002  16 30 6f 71 b9 ce 9e a8  fingerprint of axt.Envelope, format 1
 000a  02                       format: int 1
 000b  08                       kind: enum index 4, DATA
 000c  1b 84 a6 00 f3 50 3e 22  sender: fixed(32), cat-a-log's test key
@@ -263,7 +275,7 @@ A `DATA` message in a live connection that carries the Memo with the text `Vet, 
 
 ### 10.3 A file
 
-The same message in an AXT file with the codec `null`; 4,526 bytes, SHA-256 `6b1083ab16ed95a2299d4f0e0621cc3c86e9656b4658099fc220db928af6e969`. A writer picks the 16-byte sync marker at random; the example uses `00 01 … 0f` so that its bytes can be reproduced. The two JSON values are shown shortened; the first is the Memo schema of section 10.1, the second the envelope schema of [types/axt/Envelope.avsc](../types/axt/Envelope.avsc) with its keys in the file's order, as Python's `json.dumps` writes it. The two hexadecimal texts are shortened as well.
+The same message in an AXT file with the codec `null`; 5,020 bytes, SHA-256 `37074c1f86d048a02e906441adc37f41599d1c9776fb2ae594a3f068f257a94c`. A writer picks the 16-byte sync marker at random; the example uses `00 01 … 0f` so that its bytes can be reproduced. The two JSON values are shown shortened; the first is the Memo schema of section 10.1, the second the envelope schema of [types/axt/Envelope.avsc](../types/axt/Envelope.avsc) with its keys in the file's order, as Python's `json.dumps` writes it. The two hexadecimal texts are shortened as well.
 
 ```text
 0000  4f 62 6a 01              magic "Obj" 01
@@ -291,17 +303,17 @@ The same message in an AXT file with the codec `null`; 4,526 bytes, SHA-256 `6b1
 08de  16                       key: string length 11
 08df  61 76 72 6f 2e 73 63 68  "avro.schema"
       65 6d 61
-08ea  ac 1f                    value: bytes length 2006
-08ec  7b 22 74 79 ... 5d 7d    {"type": "record", "name": "Envelope", "namespace": "axt", ...}  (2006 bytes of UTF-8 JSON)
-10c2  00                       end of the metadata map
-10c3  00 01 02 03 04 05 06 07  sync marker
+08ea  88 27                    value: bytes length 2500
+08ec  7b 22 74 79 ... 5d 7d    {"type": "record", "name": "Envelope", "namespace": "axt", ...}  (2500 bytes of UTF-8 JSON)
+12b0  00                       end of the metadata map
+12b1  00 01 02 03 04 05 06 07  sync marker
       08 09 0a 0b 0c 0d 0e 0f
-10d3  02                       block: 1 datum
-10d4  90 03                    block: 200 bytes
-10d6  02 08 1b 84 ... c1 06    the datum: bytes 000a to 00d1 of the message in 10.2
-119e  00 01 02 03 04 05 06 07  sync marker
+12c1  02                       block: 1 datum
+12c2  90 03                    block: 200 bytes
+12c4  02 08 1b 84 ... c1 06    the datum: bytes 000a to 00d1 of the message in 10.2
+138c  00 01 02 03 04 05 06 07  sync marker
       08 09 0a 0b 0c 0d 0e 0f
-11ae  end
+139c  end
 ```
 
 ## References

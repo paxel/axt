@@ -2,7 +2,7 @@
 
 Status: written, 0.1.0. Until 0.1.0 is released, the schema of `axt.QrPayload` may still change in place; its fingerprint (section 6) and the examples (section 7) are then produced again.
 
-This document defines the three ways in which two apps reach each other: a file sent through any messenger, a connection on the local network, and a relay. For the file, it defines which messages a file holds and in which order, and what a reader rejects. For the local network, it defines the QR code that carries an app's key and address, discovery, the TLS connection, the frames on it, the HELLO that authenticates both apps' keys, liveness and the end of a connection. For the relay, it defines mailboxes and the relay's HTTP interface, the holding time, limits, and what a relay may log.
+This document defines the three ways in which two apps reach each other: a file sent through any messenger, a connection on the local network, and a relay. For the file, it defines which messages a file holds and in which order, and what a reader rejects. For the local network, it defines the QR code that carries an app's key and address, discovery, the TLS connection, the frames on it, the HELLO that authenticates both apps' keys, liveness and the end of a connection, and the connection in which a new device joins the devices of its owner. For the relay, it defines mailboxes and the relay's HTTP interface, the holding time, limits, and what a relay may log.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in BCP 14 ([RFC 2119](https://www.rfc-editor.org/rfc/rfc2119), [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174)) when, and only when, they appear in all capitals, as shown here.
 
@@ -26,43 +26,47 @@ An AXT file is an Avro object container file of `axt.Envelope` datums ([envelope
 
 A file holds, in this order:
 
-1. zero or more `KEY_MOVE` messages: the chain of key moves of [keys.md](keys.md), section 5.2, oldest first, whose last move is to the key in `axt.sender`;
+1. zero or more `DEVICE_ADD` and `DEVICE_REMOVE` messages: the chain of the device that writes the file ([keys.md](keys.md), section 5.4), oldest first;
 2. at most one `MANIFEST`, the writer's own ([manifest.md](manifest.md), section 7);
-3. zero or more record messages, `DATA` and `DELETE`, in any order.
+3. zero or more record messages, `DATA`, `DELETE` and `WITHDRAW`, in any order. A file holds a `WITHDRAW` only when it is meant for the receiver from which its writer withdraws the record, whose key is its `to` ([shares.md](shares.md), section 8.2).
 
-A file MUST NOT hold `OFFER`, `ACCEPT`, `DECLINE`, `ACK` or `ERROR` messages. They are bound to one exchange and need a way back to their sender, which a file does not have ([protocol.md](protocol.md), section 15.2).
+A file MUST NOT hold `OFFER`, `ACCEPT`, `DECLINE`, `ACK`, `ERROR` or `DEVICE_JOIN` messages. They are bound to one exchange or one connection and need a way back to their sender, which a file does not have ([protocol.md](protocol.md), section 15.2). A file MUST NOT hold `CHANGE`, `RESYNC` or `FORWARD` messages either: they travel between the devices of one set, on the local network and through the relay only ([sync.md](sync.md), sections 13.3 and 24.2). Nor does it hold `PROPOSAL` or `PROPOSAL_REPLY` messages: a proposal needs a way back for its reply, and a reply is for the one device that sent the proposal ([shares.md](shares.md), section 18.2). A file holds whole records, also when a device reads a file of its own set ([sync.md](sync.md), section 13.4).
 
-Every message of a file MUST be from the file's sender, the key in `axt.sender`, apart from the `KEY_MOVE` messages at its start ([keys.md](keys.md), section 2.5): one sender per file. A file that only carries its writer's manifest, for example to introduce the writer for exchanges through a relay (section 2.3), holds no record message; a reader MUST NOT reject a file for that.
+Every message of a file MUST be from the file's sender, the key in `axt.sender`, apart from the `DEVICE_ADD` and `DEVICE_REMOVE` messages at its start ([keys.md](keys.md), section 2.5): one sender per file. A file that only carries its writer's manifest, for example to introduce the writer for exchanges through a relay (section 2.3), holds no record message; a reader MUST NOT reject a file for that.
 
 ### 2.2 Reading a file
 
 A reader MUST check the whole file before it applies any record from it, since it MUST NOT apply any record from a file it rejects ([envelope.md](envelope.md), section 8). A failure either rejects the whole file, or only the message that fails:
 
-| The reader finds                                                                                                                                                                                                   | Result                      | Rule                                                |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------- | --------------------------------------------------- |
-| Bytes that are not an Avro object container file, a codec other than `null` or `deflate`, or an `avro.schema` that is not a supported envelope format                                                              | The whole file is rejected  | [envelope.md](envelope.md), sections 4.1 and 4.2    |
-| A file, a block or the decompressed data above a size limit                                                                                                                                                        | The whole file is rejected  | [envelope.md](envelope.md), section 8               |
-| A header signature that is missing, not lower-case hexadecimal of the right length, or does not verify                                                                                                             | The whole file is rejected  | [keys.md](keys.md), section 2.5                     |
-| Two schemas with one fingerprint in `axt.schemas`, or a `DATA` whose body fingerprint is not in it                                                                                                                 | The whole file is rejected  | [envelope.md](envelope.md), sections 4.1 and 4.3    |
-| A datum that is not a valid message of its kind: bytes left over, a `format` that is not the file's format, a `record` where none belongs or none where one is required, a body fingerprint that is not its kind's | The whole file is rejected  | this section; [protocol.md](protocol.md), section 2 |
-| A message whose signature does not verify                                                                                                                                                                          | The whole file is rejected  | this section                                        |
-| An `OFFER`, `ACCEPT`, `DECLINE`, `ACK` or `ERROR`                                                                                                                                                                  | The whole file is rejected  | section 2.1                                         |
-| A message whose `sender` is not the key in `axt.sender`, other than a `KEY_MOVE` at the start                                                                                                                      | The whole file is rejected  | [keys.md](keys.md), section 2.5                     |
-| A `KEY_MOVE` after another kind of message, a chain that does not end at `axt.sender`, or a `KEY_MOVE` that fails step 4 or 5 of [keys.md](keys.md), section 5.3                                                   | The whole file is rejected  | [keys.md](keys.md), section 5.2; this section       |
-| A second `MANIFEST`, or a `MANIFEST` after a record message                                                                                                                                                        | The whole file is rejected  | section 2.1                                         |
-| A `MANIFEST` that is not valid ([manifest.md](manifest.md), section 4)                                                                                                                                             | The reader does not use it  | this section                                        |
-| A record message that fails step 2, 3, 6, 8 or 9 of [protocol.md](protocol.md), section 6.2: an invalid id or version, a changed type, a body that does not decode, a value that is not valid                      | That message is not applied | [protocol.md](protocol.md), section 15.2            |
-| A record whose type does not fit the reader's manifest                                                                                                                                                             | That record is not applied  | [manifest.md](manifest.md), section 7               |
+| The reader finds                                                                                                                                                                                                                                                            | Result                                                           | Rule                                                |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------- |
+| Bytes that are not an Avro object container file, a codec other than `null` or `deflate`, or an `avro.schema` that is not a supported envelope format                                                                                                                       | The whole file is rejected                                       | [envelope.md](envelope.md), sections 4.1 and 4.2    |
+| A file, a block or the decompressed data above a size limit                                                                                                                                                                                                                 | The whole file is rejected                                       | [envelope.md](envelope.md), section 8               |
+| A header signature that is missing, not lower-case hexadecimal of the right length, or does not verify                                                                                                                                                                      | The whole file is rejected                                       | [keys.md](keys.md), section 2.5                     |
+| Two schemas with one fingerprint in `axt.schemas`, or a `DATA` whose body fingerprint is not in it                                                                                                                                                                          | The whole file is rejected                                       | [envelope.md](envelope.md), sections 4.1 and 4.3    |
+| A datum that is not a valid message of its kind: bytes left over, a `format` that is not the file's format, a `record` where none belongs or none where one is required, a body fingerprint that is not its kind's                                                          | The whole file is rejected                                       | this section; [protocol.md](protocol.md), section 2 |
+| A message whose signature does not verify                                                                                                                                                                                                                                   | The whole file is rejected                                       | this section                                        |
+| An `OFFER`, `ACCEPT`, `DECLINE`, `ACK`, `ERROR`, `DEVICE_JOIN`, `CHANGE`, `RESYNC`, `FORWARD`, `PROPOSAL` or `PROPOSAL_REPLY`                                                                                                                                               | The whole file is rejected                                       | section 2.1                                         |
+| A message whose `sender` is not the key in `axt.sender`, other than a `DEVICE_ADD` or a `DEVICE_REMOVE` at the start                                                                                                                                                        | The whole file is rejected                                       | [keys.md](keys.md), section 2.5                     |
+| A `DEVICE_ADD` or a `DEVICE_REMOVE` after another kind of message, or a message that fails step 2 of [keys.md](keys.md), section 5.5: a `DEVICE_ADD` with a key of the new device that is not valid or a proof that does not verify, or a `DEVICE_REMOVE` of its own signer | The whole file is rejected                                       | [keys.md](keys.md), sections 5.4 and 5.5            |
+| A `DEVICE_ADD` or a `DEVICE_REMOVE` that step 3 or the table of [keys.md](keys.md), section 5.5, has the reader ignore or reject: a repeat, an unknown signer, a signer or a device that the reader's state does not allow                                                  | That message is not applied                                      | [keys.md](keys.md), section 5.5                     |
+| A key in `axt.sender` that is, after the chain, a removed key of a known sender                                                                                                                                                                                             | No record of the file is applied, and its `MANIFEST` is not used | [keys.md](keys.md), sections 3.3 and 5.5            |
+| A second `MANIFEST`, or a `MANIFEST` after a record message                                                                                                                                                                                                                 | The whole file is rejected                                       | section 2.1                                         |
+| A `MANIFEST` that is not valid ([manifest.md](manifest.md), section 4)                                                                                                                                                                                                      | The reader does not use it                                       | this section                                        |
+| A record message that fails step 2, 3, 6, 8 or 9 of [protocol.md](protocol.md), section 6.2: an invalid id or version, a changed type, a body that does not decode, a value that is not valid                                                                               | That message is not applied                                      | [protocol.md](protocol.md), section 15.2            |
+| A `WITHDRAW` whose `to` is not a current or a removed key of the reader's own set                                                                                                                                                                                           | That message is not applied; the file is not rejected for it     | [shares.md](shares.md), section 8.2                 |
+| A `WITHDRAW` in a file whose sender is the reader's own set                                                                                                                                                                                                                 | That message is not applied                                      | [shares.md](shares.md), section 8.2                 |
+| A record whose type does not fit the reader's manifest                                                                                                                                                                                                                      | That record is not applied                                       | [manifest.md](manifest.md), section 7               |
 
 What makes a file unreadable as a whole, or what a writer cannot have produced honestly, rejects the whole file: a message whose signature does not verify has been damaged or changed after its writer signed it, and nothing else in the file can be relied on then. A record message that its writer signed but that the reader cannot apply is the writer's fault in that one record; the other records are applied, as [protocol.md](protocol.md), section 15.2, says. An invalid `MANIFEST` is not used, as in a live connection ([protocol.md](protocol.md), section 3.1), and does not keep the records from being applied.
 
-A reader confirms the file's sender before it applies any record ([keys.md](keys.md), section 3.2). It sends nothing back: a file has no acknowledgement and no error report ([records.md](records.md), section 7). A reader SHOULD tell its user how many record messages of a file it did not apply, and why.
+A reader confirms the file's sender before it applies any record ([keys.md](keys.md), section 3.2), unless the key in `axt.sender` is a current key of a sender it knows, as it is or by the chain at the start of the file ([keys.md](keys.md), section 5.5). A file whose sender is the reader's own device set is read as [sync.md](sync.md), section 13.4, says. A reader that is one device of a set passes what it took from a file of another app on to the other devices of its set, so the owner opens the file on one device only ([sync.md](sync.md), section 24.2). It sends nothing back: a file has no acknowledgement and no error report ([records.md](records.md), section 7). A reader SHOULD tell its user how many record messages of a file it did not apply, and why.
 
 ### 2.3 Writing a file
 
-- **One record, one message.** A writer MUST put at most one message of each record id into a file: the one with the highest version the writer has given the record, a `DATA` for a record that exists and a `DELETE` for one it deleted. Older versions of the record would only make the file longer. A reader MUST NOT reject a file because it holds several messages of one id; it applies them by the version rule, which gives the same result in any order ([records.md](records.md), section 5.2).
+- **One record, one message.** A writer MUST put at most one message of each record id into a file: the one with the highest version the writer has given the record, a `DATA` for a record that exists and a `DELETE` for one it deleted. A file meant for an app of another user holds instead what the writer owes that app of each record: a `DATA` or a `DELETE` of a record shared with it, a `WITHDRAW` of one withdrawn from it, and nothing of any other record ([shares.md](shares.md), sections 5.3 and 8.2). A file is written for a receiver or for no particular one. A file for no particular receiver, such as an export, holds only the records that the user chose for it: that choice is its share, the file is treated as going to an app of another user, and it holds no `WITHDRAW` ([shares.md](shares.md), sections 2.2 and 8.2). Older versions of the record would only make the file longer. A reader MUST NOT reject a file because it holds several messages of one id; it applies them by the version rule, which gives the same result in any order ([records.md](records.md), section 5.2).
 - **The manifest.** A writer MAY put its `MANIFEST` into any file. It SHOULD do so in a file meant for an app it wants to exchange with afterwards, since the reader needs the writer's manifest to send anything back ([manifest.md](manifest.md), section 7). It SHOULD NOT put a `MANIFEST` that names a relay into a file meant for anyone, such as an export or a file it publishes: everyone who holds the file learns the mailbox and can put messages into it (section 5.6).
-- **Key moves.** A writer whose key has moved SHOULD begin the file with the chain of its `KEY_MOVE` messages ([keys.md](keys.md), section 5.2).
+- **The chain.** A writer that has a chain MUST begin every file with it, so that a reader that knows the writer's device set by another key takes the file for the same sender's ([keys.md](keys.md), section 5.4).
 - **Records.** A writer that knows the manifest of the app a file is meant for puts only types into the file that fit it ([manifest.md](manifest.md), section 7).
 
 ## 3. QR code
@@ -73,16 +77,17 @@ An app shows a QR code so that another app can learn its signing key in person, 
 
 The payload is the byte `01`, the payload version, followed by one datum of the record `axt.QrPayload` in Avro binary encoding, with the schema [types/axt/QrPayload.avsc](../types/axt/QrPayload.avsc):
 
-| Field             | Avro type                                                   | Content                                                                                                     |
-| ----------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `signing_key`     | `fixed` of 32 bytes, `axt.QrPayloadSigningKey`              | The Ed25519 public key of the installation that shows the code ([keys.md](keys.md), section 2.1)            |
-| `encryption_key`  | `null` or `fixed` of 32 bytes, `axt.QrPayloadEncryptionKey` | Its X25519 public key for messages through a relay ([keys.md](keys.md), section 4.2), or `null`             |
-| `local`           | `null` or `axt.QrPayloadLocal`                              | Where it listens on the local network while it shows the code (section 4.1), or `null`                      |
-| `local.addresses` | array of `bytes`                                            | One to four IP addresses, 4 bytes for IPv4 or 16 bytes for IPv6, in network byte order, in the order to try |
-| `local.port`      | `int`                                                       | The TCP port, 1 to 65535                                                                                    |
-| `relay`           | `null` or `axt.QrPayloadRelay`                              | The relay and the mailbox for messages to it (section 5.1), as in the manifest's `relay`, or `null`         |
-| `relay.url`       | `string`                                                    | The base URL of the relay (section 5.2), at most 256 bytes                                                  |
-| `relay.mailbox`   | `fixed` of 32 bytes, `axt.QrPayloadRelayMailbox`            | The mailbox id (section 5.1)                                                                                |
+| Field             | Avro type                                                   | Content                                                                                                                |
+| ----------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `signing_key`     | `fixed` of 32 bytes, `axt.QrPayloadSigningKey`              | The Ed25519 public key of the installation that shows the code ([keys.md](keys.md), section 2.1)                       |
+| `encryption_key`  | `null` or `fixed` of 32 bytes, `axt.QrPayloadEncryptionKey` | Its X25519 public key for messages through a relay ([keys.md](keys.md), section 4.2), or `null`                        |
+| `local`           | `null` or `axt.QrPayloadLocal`                              | Where it listens on the local network while it shows the code (section 4.1), or `null`                                 |
+| `local.addresses` | array of `bytes`                                            | One to four IP addresses, 4 bytes for IPv4 or 16 bytes for IPv6, in network byte order, in the order to try            |
+| `local.port`      | `int`                                                       | The TCP port, 1 to 65535                                                                                               |
+| `relay`           | `null` or `axt.QrPayloadRelay`                              | The relay and the mailbox for messages to it (section 5.1), as in the manifest's `relay`, or `null`                    |
+| `relay.url`       | `string`                                                    | The base URL of the relay (section 5.2), at most 256 bytes                                                             |
+| `relay.mailbox`   | `fixed` of 32 bytes, `axt.QrPayloadRelayMailbox`            | The mailbox id (section 5.1)                                                                                           |
+| `join`            | `boolean`                                                   | `true` for a join code, shown to a new device of the same owner (section 4.7); `false` for a code shown to another app |
 
 A payload is valid when:
 
@@ -92,7 +97,8 @@ A payload is valid when:
 - `encryption_key` and `relay` are both present or both `null`, as in a manifest ([manifest.md](manifest.md), section 3.10);
 - `local`, if present, has 1 to 4 addresses of 4 or 16 bytes each and a port from 1 to 65535;
 - `relay.url`, if present, meets the rule of section 5.2;
-- the payload has at most 431 bytes, the length of a payload with every field present and at its largest and its array in one block; the length limit of the text (section 3.2) ensures it. Avro lets an array be written in several blocks, so a payload of valid fields could otherwise be longer.
+- `local` is present if `join` is `true`: a device joins on the local network (section 4.7);
+- the payload has at most 432 bytes, the length of a payload with every field present and at its largest and its array in one block; the length limit of the text (section 3.2) ensures it. Avro lets an array be written in several blocks, so a payload of valid fields could otherwise be longer.
 
 A code with the signing key alone, without `local` and `relay`, is valid: it serves to compare a key in person.
 
@@ -108,13 +114,13 @@ A scanner:
 
 - MUST accept the scheme and the letters of base32 in either case, since URI schemes are case-insensitive ([RFC 3986, section 3.1](https://www.rfc-editor.org/rfc/rfc3986#section-3.1));
 - MUST reject a text with any other character, with padding, with a length that base32 cannot produce, or whose last character carries bits that are not zero, so that every payload has exactly one text;
-- MUST reject a text longer than 694 characters, the text of the largest valid payload, before it decodes it.
+- MUST reject a text longer than 696 characters, the text of the largest valid payload, before it decodes it.
 
-The text is a URI with the scheme `axt`, so that a phone's camera can hand it to the app registered for the scheme. [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986) recommends lower-case schemes; `AXT:` is written in upper case because lower-case letters are not in the alphanumeric mode. Base32 in alphanumeric mode takes 8.8 bits of the code for each byte of the payload; base64 would need the byte mode and 10.7 bits. The payload of section 7.2 gives a text of 230 characters, which fits a code of version 9. The scheme `axt` is not registered with IANA ([RFC 7595](https://www.rfc-editor.org/rfc/rfc7595)) yet; apps use it as defined here until it is.
+The text is a URI with the scheme `axt`, so that a phone's camera can hand it to the app registered for the scheme. [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986) recommends lower-case schemes; `AXT:` is written in upper case because lower-case letters are not in the alphanumeric mode. Base32 in alphanumeric mode takes 8.8 bits of the code for each byte of the payload; base64 would need the byte mode and 10.7 bits. The payload of section 7.2 gives a text of 232 characters, which fits a code of version 9. The scheme `axt` is not registered with IANA ([RFC 7595](https://www.rfc-editor.org/rfc/rfc7595)) yet; apps use it as defined here until it is.
 
 ### 3.3 Scanning
 
-An app that scans a valid code:
+An app that scans a valid code whose `join` is `false`:
 
 - takes `signing_key` as the other app's key, confirmed by its user in person; it MAY remember the key without asking again ([keys.md](keys.md), section 3.2);
 - takes `encryption_key` and `relay`, if present, as the other app's until a valid `MANIFEST` of that app brings its own, by the rule that the latest source wins ([keys.md](keys.md), section 4.2);
@@ -122,6 +128,8 @@ An app that scans a valid code:
 - otherwise, if `relay` is present, sends its `MANIFEST` through the relay ([protocol.md](protocol.md), section 15.1).
 
 The app that showed the code learns the scanner's key from the scanner's `HELLO` or from its first message through the relay, and meets it as a first contact ([keys.md](keys.md), section 3.2). An app SHOULD show its code only while its user asks for it. A code shows the mailbox id, so a photo of it lets anyone put messages into the mailbox (section 5.6).
+
+A code whose `join` is `true` is a join code: it is not for another app, but for a new device of the same owner (section 4.7). An app acts on a join code only when its user has asked it to join the devices of the app that shows the code. An app that scans one otherwise MUST NOT connect and MUST NOT take the key as another app's, and SHOULD tell its user that the code adds a device.
 
 ## 4. Local network
 
@@ -156,7 +164,7 @@ The connection is TLS 1.3 ([RFC 8446](https://www.rfc-editor.org/rfc/rfc8446)) o
 - **No client certificate.** The server MUST NOT request a client certificate. The client is authenticated by its `HELLO`.
 - **No resumption.** Both apps MUST NOT resume a session and MUST NOT send 0-RTT data. Every connection has a full handshake, in which the server presents its certificate.
 
-**Why a key of its own.** [RFC 8446, section 9.1](https://www.rfc-editor.org/rfc/rfc8446#section-9.1), requires every TLS 1.3 implementation to support certificates and handshake signatures with ECDSA on P-256; Ed25519 is optional there. A certificate of the signing key would also need a TLS library that can sign with the signing key, also where it is kept in a device's protected key store ([keys.md](keys.md), section 5.5). With a key of its own, the connection works with any TLS 1.3 library, and the signing key signs nothing but the prefixed bytes of [keys.md](keys.md), section 2.2, and of section 4.5. The `HELLO` binds the signing keys of both apps to the connection.
+**Why a key of its own.** [RFC 8446, section 9.1](https://www.rfc-editor.org/rfc/rfc8446#section-9.1), requires every TLS 1.3 implementation to support certificates and handshake signatures with ECDSA on P-256; Ed25519 is optional there. A certificate of the signing key would also need a TLS library that can sign with the signing key, also where it is kept in a device's protected key store ([keys.md](keys.md), section 5.8). With a key of its own, the connection works with any TLS 1.3 library, and the signing key signs nothing but the prefixed bytes of [keys.md](keys.md), section 2.2, and of section 4.5. The `HELLO` binds the signing keys of both apps to the connection.
 
 ### 4.4 Frames
 
@@ -193,7 +201,7 @@ An app that gets the other app's `HELLO`:
 
 If any check fails, it MUST close the connection without sending any further frame. An app MUST NOT send any frame but its `HELLO` before it has verified the other app's `HELLO`. After that, the key of the other app's `HELLO` is the connection key.
 
-Every message the other app sends in the connection MUST have the connection key as its `sender`, except the `KEY_MOVE` messages it sends first ([protocol.md](protocol.md), section 3.3), each signed with an earlier key of the chain whose last move is to the connection key. An app that gets a message with another `sender` MUST close the connection without processing it.
+Every message the other app sends in the connection MUST have the connection key as its `sender`, except `DEVICE_ADD` and `DEVICE_REMOVE` messages ([protocol.md](protocol.md), section 3.3) and a `MANIFEST` that a device passes on for another device of its own set ([sync.md](sync.md), section 13.2): each is signed with a key of a device set, which need not be the connection key, and is the same whoever sends it ([keys.md](keys.md), section 5.4). They MAY come at any time in the connection, also after messages of other kinds, and do not close it ([protocol.md](protocol.md), section 3.1). A `MANIFEST` with another `sender` than the connection key is taken only if that `sender` is another current device of the app's own set, and is ignored without a report otherwise ([sync.md](sync.md), section 13.2). An app that gets a message of any other kind with another `sender`, a `DEVICE_JOIN` included, MUST close the connection without processing it.
 
 **What the HELLO proves.** The signature covers the server's certificate, whose private key the server proved in the TLS handshake. A machine in the middle has to present a certificate of its own to each app. A `HELLO` it gets is bound to its own certificate, and fails at the other app, which sees another certificate. The role keeps a server's `HELLO` from being sent back to it as a client's. The prefix keeps the signature apart from every other signature of the key ([keys.md](keys.md), section 2.2). The server's `HELLO` is the same for every client for as long as the server keeps its certificate, and with the certificate's private key it would let another machine pose as the server; a new key for each time the server listens, never stored, keeps this to the time it listens (section 4.3).
 
@@ -207,6 +215,21 @@ Every message the other app sends in the connection MUST have the connection key
 - **The end.** A connection ends when either app sends or gets `close_notify`, when the TCP connection is closed or reset, on a TLS alert, and when the liveness time runs out. A frame cut short by the end is discarded, and the message in it is not processed. The connection is then in the phase Closed of [protocol.md](protocol.md), section 14, in which the offers made in it end.
 
 Two apps MAY hold several connections at the same time; each is a channel of its own ([protocol.md](protocol.md), section 1).
+
+### 4.7 Joining a device set
+
+A device adds a new device of its owner to its device set in a live connection that a join code opens ([keys.md](keys.md), section 5.2). The device that shows the code is the member and the server; the new installation is the client:
+
+1. The member's user asks it to add a device. The member shows a code whose `join` is `true` and whose `local` is present (section 3.1), and listens (section 4.1).
+2. The user of the new installation asks it to join and scans the code. The new installation connects to `local` as the client. TLS, the frames and the `HELLO` are those of sections 4.3 to 4.5; the new installation MUST close the connection unless the server's `HELLO` carries the code's `signing_key`.
+3. When the connection is open (section 4.6), the new installation sends a `DEVICE_JOIN` as its first `MESSAGE` ([protocol.md](protocol.md), section 3.3).
+4. The member asks its user whether to add the device whose key the client's `HELLO` proved, and shows that key's short fingerprint ([keys.md](keys.md), section 3.1). The connection stays open by its `PING` frames while the question waits (section 4.6).
+5. The member answers with its chain, which holds the `DEVICE_ADD` of the new device, or with the error `DEVICE_REJECTED`, after which it closes the connection. The new installation checks the chain by step 5 of [keys.md](keys.md), section 5.2. It sends this error although it has no `MANIFEST` of the connection, the exception of [protocol.md](protocol.md), section 8.3.
+
+- **Only by the code.** The member acts on a `DEVICE_JOIN` only in a connection that was opened to the address and port of the join code while it showed the code, and for one new device for each code it shows ([keys.md](keys.md), section 5.2). It SHOULD stop showing the code when it has a `DEVICE_JOIN`. A `DEVICE_JOIN` in a connection found by discovery (section 4.2), in any other connection, or through a relay is ignored without an error, before the `MANIFEST` and after it.
+- **Two confirmations.** The scan confirms the member's key to the new installation, and the member's user confirms the new installation's key by the question. Whoever photographs a join code and reaches the local network can send a `DEVICE_JOIN`; the question, with the short fingerprint, keeps a stranger out. A member SHOULD show a join code only while its user asks for it.
+- **Before the answer.** Neither device sends its chain or its `MANIFEST` before the member has answered the `DEVICE_JOIN`, and the 30 seconds of [protocol.md](protocol.md), section 12, do not run while the member's user decides.
+- **Afterwards.** After an answer with the chain, the connection goes on as a live connection between two devices of one set, with the first messages of [protocol.md](protocol.md), section 3.1. A sent `DEVICE_JOIN` binds the new installation whatever the answer, also when the connection breaks off ([keys.md](keys.md), section 5.2). What the devices of a set exchange then is in [sync.md](sync.md), sections 7 and 12.3.
 
 ## 5. Relay
 
@@ -222,7 +245,7 @@ A mailbox holds sealed messages ([keys.md](keys.md), section 4.3) for one instal
 - **What the relay keeps.** The relay keeps the id, not the secret: it checks a secret by computing the id from it. A copy of a relay's storage gives away no secret.
 - **Not bound to a key.** The mailbox is not bound to the encryption key or to the signing key, and the relay learns neither. The mailbox and the encryption key can therefore be replaced independently of each other ([keys.md](keys.md), section 4.2).
 
-An installation has one mailbox at a time, the same for every app that sends to it. Section 5.8 says how it moves to another.
+An installation has one mailbox at a time, the same for every app that sends to it; each device of a device set has a mailbox of its own. Section 5.8 says how an installation moves to another mailbox.
 
 ### 5.2 Interface
 
@@ -311,12 +334,13 @@ A put token separate from the mailbox id would travel the same way, in the manif
 - **Logs.** A relay MUST NOT log mailbox secrets or the value of `Authorization` headers, and MUST NOT keep a message beyond section 5.5, also not in a backup. It SHOULD NOT log mailbox ids together with client addresses, and MUST delete every log entry that holds both within 7 days.
 - **What it learns.** A relay learns the mailbox ids, the size of each message, when it is put, fetched and deleted, and the addresses of the clients that do so ([keys.md](keys.md), section 4.6). From the addresses it can tell which client puts into which mailbox, and which client fetches from it. It learns neither the signing key nor the encryption key of a mailbox's owner or of a sender. An app that wants to hide its address from the relay needs a means outside this specification, such as an anonymizing network.
 
-### 5.8 Changing the relay, and key moves
+### 5.8 Changing the relay, and device sets
 
 - **Another relay or mailbox.** An app that moves to another relay or another mailbox creates the new mailbox and puts it into a manifest with a higher revision ([manifest.md](manifest.md), section 3.10). It sends that manifest to every app it exchanges with through the relay, into their mailboxes, and in every live connection. It keeps fetching the old mailbox for 15 days after it has sent the manifest to all of them, and then deletes the old mailbox.
-- **A key move.** The mailbox secret is part of the app's data that moves to the new installation ([keys.md](keys.md), section 5.2, step 2). The new installation fetches the same mailbox, so the relay of the kept manifest stays valid ([manifest.md](manifest.md), section 6), and the acknowledgement of the move reaches it ([protocol.md](protocol.md), section 3.3). After it has signed the `KEY_MOVE`, the old installation MUST NOT list, fetch or delete messages of the mailbox. Messages sealed for the old encryption key do not open at the new installation, whose private key differs; it discards them, and their senders send them again ([keys.md](keys.md), section 5.4; [protocol.md](protocol.md), section 11).
-- **Without the secret.** A new installation that did not get the secret creates a mailbox of its own and names it in its `MANIFEST`, which it sends after the `KEY_MOVE`. Replies that reach the old mailbox before a receiver has that manifest are lost, and their senders send them again.
-- **Restoring.** An app that restores its signing key ([keys.md](keys.md), section 5.5) restores the mailbox secret with it.
+- **A device set.** Each device of a set has a mailbox secret, a mailbox and an encryption key of its own, and names its mailbox in its own `MANIFEST` ([keys.md](keys.md), section 5.6). A device MUST NOT give its mailbox secret to another device of its set (section 5.1). A message is sealed for one device and put into that device's mailbox.
+- **A new device.** A device that joins a set, also one that takes the place of an old device ([keys.md](keys.md), section 5.7), creates a mailbox of its own and names it in its `MANIFEST`, which it sends after its chain. Nothing of another device's mailbox moves to it.
+- **A removed device.** An app puts no further message into the mailbox of a removed key ([keys.md](keys.md), section 5.5). Messages that wait there get no outcome; their senders send them again to a remaining device ([keys.md](keys.md), section 5.6; [protocol.md](protocol.md), section 11).
+- **Restoring.** An app that restores its signing key ([keys.md](keys.md), section 5.8) restores the mailbox secret with it.
 
 ## 6. Schema and fingerprint
 
@@ -325,20 +349,20 @@ The schema of the QR payload is [types/axt/QrPayload.avsc](../types/axt/QrPayloa
 Its Parsing Canonical Form:
 
 ```json
-{"name":"axt.QrPayload","type":"record","fields":[{"name":"signing_key","type":{"name":"axt.QrPayloadSigningKey","type":"fixed","size":32}},{"name":"encryption_key","type":["null",{"name":"axt.QrPayloadEncryptionKey","type":"fixed","size":32}]},{"name":"local","type":["null",{"name":"axt.QrPayloadLocal","type":"record","fields":[{"name":"addresses","type":{"type":"array","items":"bytes"}},{"name":"port","type":"int"}]}]},{"name":"relay","type":["null",{"name":"axt.QrPayloadRelay","type":"record","fields":[{"name":"url","type":"string"},{"name":"mailbox","type":{"name":"axt.QrPayloadRelayMailbox","type":"fixed","size":32}}]}]}]}
+{"name":"axt.QrPayload","type":"record","fields":[{"name":"signing_key","type":{"name":"axt.QrPayloadSigningKey","type":"fixed","size":32}},{"name":"encryption_key","type":["null",{"name":"axt.QrPayloadEncryptionKey","type":"fixed","size":32}]},{"name":"local","type":["null",{"name":"axt.QrPayloadLocal","type":"record","fields":[{"name":"addresses","type":{"type":"array","items":"bytes"}},{"name":"port","type":"int"}]}]},{"name":"relay","type":["null",{"name":"axt.QrPayloadRelay","type":"record","fields":[{"name":"url","type":"string"},{"name":"mailbox","type":{"name":"axt.QrPayloadRelayMailbox","type":"fixed","size":32}}]}]},{"name":"join","type":"boolean"}]}
 ```
 
 | Schema          | Payload version | CRC-64-AVRO          | As bytes                  |
 | --------------- | --------------- | -------------------- | ------------------------- |
-| `axt.QrPayload` | 1               | `0x6bbd68fe56640b90` | `90 0b 64 56 fe 68 bd 6b` |
+| `axt.QrPayload` | 1               | `0xddbca858f745d131` | `31 d1 45 f7 58 a8 bc dd` |
 
 The fingerprint and the examples of section 7 were produced with [conformance/tools/transports_examples.py](../conformance/tools/transports_examples.py). The script:
 
 - checks the rules of [types.md](types.md), section 5, named above, with the checks of [conformance/tools/example_types.py](../conformance/tools/example_types.py), and that no name of the schema is defined in another schema of the specification;
 - computes the Parsing Canonical Form and the CRC-64-AVRO fingerprint, compares them with those of the Python libraries fastavro 1.13.1 and `avro` 1.12.2, and uses every default of the schema once in schema resolution, with both libraries;
-- builds the payload field by field, compares it with fastavro's encoding, decodes it with fastavro and with `avro`, and checks the validity rules of section 3.1 and the text of section 3.2 on the example and on 20 payloads and texts that each break one rule; it computes the QR version from the numbers of data codewords at level M, transcribed from ISO/IEC 18004;
+- builds the payload field by field, compares it with fastavro's encoding, decodes it with fastavro and with `avro`, and checks the validity rules of section 3.1 and the text of section 3.2 on the example and on 21 payloads and texts that each break one rule; it computes the QR version from the numbers of data codewords at level M, transcribed from ISO/IEC 18004;
 - builds the server's certificate with the Python package cryptography 50.0.2, with deterministic ECDSA ([RFC 6979](https://www.rfc-editor.org/rfc/rfc6979)) so that its bytes can be reproduced; signs both `HELLO` frames with the Ed25519 implementation of [conformance/tools/keys_examples.py](../conformance/tools/keys_examples.py), with PyNaCl 1.6.2 and with cryptography 50.0.2, which give the same signatures; and frames the `DATA` of [protocol.md](protocol.md), section 17.5;
-- runs a model of the frames of section 4 over the example, over 15 cases that must close the connection, and over a key move at the start and a `MESSAGE` above 16 MiB, which must not;
+- runs a model of the frames of section 4 over the example, over 15 cases that must close the connection, and over a chain at the start and a `MESSAGE` above 16 MiB, which must not;
 - opens a TLS 1.3 connection over a local socket pair with Python's `ssl` module and OpenSSL 3.5, with the certificate, ALPN `axt/1`, both `HELLO` frames, the `MESSAGE` and a `PING`, and closes it with `close_notify`; and checks that a client limited to TLS 1.2 cannot connect;
 - seals the message of [keys.md](keys.md), section 7.2, again and checks it against the sealed message of [keys.md](keys.md), section 7.4; runs a model of the relay's interface over 28 requests, among them those of section 7.5, and checks their status codes; and opens the fetched message with Old Brain Fix's X25519 test key and verifies its signature.
 
@@ -362,7 +386,7 @@ Old Brain Fix's signing key is `da9e54c9aa2db43244df99889d9138c1ca7175d4ca090816
 
 ### 7.2 The QR code
 
-Old Brain Fix's payload: 141 bytes, SHA-256 `b0b4532e94ef4100f516cd5a30baf83ea44c7fe251421dfd7620b28422231314`.
+Old Brain Fix's payload: 142 bytes, SHA-256 `84ae530c880870eac0e3010a9f220bbd08c836409ec0dfaa5335f92cea1aa30b`.
 
 ```text
 0000  01                       payload version 1
@@ -391,13 +415,14 @@ Old Brain Fix's payload: 141 bytes, SHA-256 `b0b4532e94ef4100f516cd5a30baf83ea44
       21 a9 b3 98 cd 04 f6 d4
       00 af b0 9c b8 cf f3 e2
       16 c3 a3 ba 77 c6 00 63
-008d  end
+008d  00                       join: boolean false
+008e  end
 ```
 
-Its text, 230 characters, which fits a QR code of version 9 at the error correction level M in alphanumeric mode:
+Its text, 232 characters, which fits a QR code of version 9 at the error correction level M in alphanumeric mode:
 
 ```text
-AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBAECGAVAARIAFA4MCQEPDIOR2HA4Z2F4XXEZLMMF4S4ZLYMFWXA3DFFZXXEZZPMF4HIL5TO5H77LUQLVLSDKNTTDGQJ5WUACX3BHFYZ7Z6EFWDUO5HPRQAMM
+AXT:AHNJ4VGJVIW3IMSE36MYRHMRHDA4U4LV2TFASCAWR5RVGDSKPXW3OARU7J7HC5YNRWKMOYABVSGVOVQJ6ACZQH4AYEK3W6UP4MJGQ7VEBMBAECGAVAARIAFA4MCQEPDIOR2HA4Z2F4XXEZLMMF4S4ZLYMFWXA3DFFZXXEZZPMF4HIL5TO5H77LUQLVLSDKNTTDGQJ5WUACX3BHFYZ7Z6EFWDUO5HPRQAMMAA
 ```
 
 ### 7.3 The connection
@@ -473,7 +498,7 @@ The `DATA` of [protocol.md](protocol.md), section 17.5, 321 bytes, in a `MESSAGE
 ```text
 0000  02                       frame type 2, MESSAGE
 0001  00 00 01 41              length 321
-0005  c3 01 7d 0c ... 41 0d    the DATA of spec/protocol.md, section 17.5
+0005  c3 01 16 30 ... 41 0d    the DATA of spec/protocol.md, section 17.5
 0146  end
 ```
 
@@ -487,7 +512,7 @@ A `PING`:
 
 ### 7.5 Through the relay
 
-Old Brain Fix creates its mailbox. cat-a-log puts the sealed message of [keys.md](keys.md), section 7.4, 1,073 bytes with the SHA-256 `7cbe47862344527d93735c97159cc8cf4d3631647233cac735553c968e6c2bc8`, into it. Old Brain Fix lists its mailbox, fetches the message and deletes it. The requests are shown in HTTP/1.1 with the headers this document names; the body of the put and of the fetch is shown as a note.
+Old Brain Fix creates its mailbox. cat-a-log puts the sealed message of [keys.md](keys.md), section 7.4, 1,073 bytes with the SHA-256 `64a9988bd3e1e8210d592e29115d5b3252d2e75be5c219ca67583608cfdb878a`, into it. Old Brain Fix lists its mailbox, fetches the message and deletes it. The requests are shown in HTTP/1.1 with the headers this document names; the body of the put and of the fetch is shown as a note.
 
 Old Brain Fix creates its mailbox:
 
@@ -506,7 +531,7 @@ Content-Length: 0
 cat-a-log puts the sealed message:
 
 ```text
-PUT /axt/v1/mailboxes/b3774fffae905d5721a9b398cd04f6d400afb09cb8cff3e216c3a3ba77c60063/messages/7cbe47862344527d93735c97159cc8cf4d3631647233cac735553c968e6c2bc8 HTTP/1.1
+PUT /axt/v1/mailboxes/b3774fffae905d5721a9b398cd04f6d400afb09cb8cff3e216c3a3ba77c60063/messages/64a9988bd3e1e8210d592e29115d5b3252d2e75be5c219ca67583608cfdb878a HTTP/1.1
 Host: relay.example.org
 Content-Type: application/octet-stream
 Content-Length: 1073
@@ -532,13 +557,13 @@ HTTP/1.1 200 OK
 Content-Type: application/json
 Content-Length: 100
 
-{"messages":[{"id":"7cbe47862344527d93735c97159cc8cf4d3631647233cac735553c968e6c2bc8","size":1073}]}
+{"messages":[{"id":"64a9988bd3e1e8210d592e29115d5b3252d2e75be5c219ca67583608cfdb878a","size":1073}]}
 ```
 
 It fetches the message:
 
 ```text
-GET /axt/v1/mailboxes/b3774fffae905d5721a9b398cd04f6d400afb09cb8cff3e216c3a3ba77c60063/messages/7cbe47862344527d93735c97159cc8cf4d3631647233cac735553c968e6c2bc8 HTTP/1.1
+GET /axt/v1/mailboxes/b3774fffae905d5721a9b398cd04f6d400afb09cb8cff3e216c3a3ba77c60063/messages/64a9988bd3e1e8210d592e29115d5b3252d2e75be5c219ca67583608cfdb878a HTTP/1.1
 Host: relay.example.org
 Authorization: Bearer 72a36fdb88d435e53e3576b0c25662e14c9e4fba632cdda6019acbb851861441
 ```
@@ -554,7 +579,7 @@ Content-Length: 1073
 It deletes the message:
 
 ```text
-DELETE /axt/v1/mailboxes/b3774fffae905d5721a9b398cd04f6d400afb09cb8cff3e216c3a3ba77c60063/messages/7cbe47862344527d93735c97159cc8cf4d3631647233cac735553c968e6c2bc8 HTTP/1.1
+DELETE /axt/v1/mailboxes/b3774fffae905d5721a9b398cd04f6d400afb09cb8cff3e216c3a3ba77c60063/messages/64a9988bd3e1e8210d592e29115d5b3252d2e75be5c219ca67583608cfdb878a HTTP/1.1
 Host: relay.example.org
 Authorization: Bearer 72a36fdb88d435e53e3576b0c25662e14c9e4fba632cdda6019acbb851861441
 ```
@@ -570,6 +595,7 @@ Old Brain Fix opens the fetched message with its X25519 key and gets the `DATA` 
 - [envelope.md](envelope.md): the live message that a `MESSAGE` frame carries (section 3 there), and the file (section 4 there).
 - [keys.md](keys.md): the signatures the `HELLO` and the file use, the confirmation of a scanned key (section 3.2 there), and the sealed messages the relay holds (section 4 there).
 - [protocol.md](protocol.md): what happens in a live connection after the `HELLO`, and through the relay (sections 3, 14 and 15 there).
+- [sync.md](sync.md): the messages `CHANGE`, `RESYNC` and `FORWARD` between the devices of one set, which travel on the local network and through the relay and never in a file (sections 13 and 24 there), and what a device of a set does with a file of another app that it read (section 24.2 there).
 - [relay.md](relay.md): the reference relay of the repository, its storage, its limits and how it is run. Apps depend only on section 5 of this document; [relay.md](relay.md) adds nothing that an app needs.
 - [conformance.md](conformance.md): test vectors for the QR payload, the frames and the relay's interface.
 

@@ -12,7 +12,7 @@
         "size": 32,
         "doc": "An Ed25519 public key in the encoding of RFC 8032. Defined in spec/keys.md."
       },
-      "doc": "The Ed25519 public key of the app that made the offer. An app ignores an answer that names another key."
+      "doc": "The Ed25519 public key that signed the offer, the key of one device of its sender. A device ignores an answer that names another key."
     },
     {
       "name": "offer_id",
