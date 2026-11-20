@@ -25,6 +25,7 @@ EXAMPLE_SCRIPTS = [
     "manifest_examples",
     "protocol_examples",
     "transports_examples",
+    "sync_examples",
 ]
 
 
@@ -42,7 +43,7 @@ def last_line(text: str) -> str:
 def test_the_reference_adapter_passes_every_vector() -> None:
     done = run(RUNNER, "--", sys.executable, REPO / "conformance" / "reference" / "adapter.py")
     assert done.returncode == 0, done.stdout[-2000:] + done.stderr[-2000:]
-    assert " vectors passed in 13 categories" in last_line(done.stdout)
+    assert " vectors passed in 14 categories" in last_line(done.stdout)
 
 
 def test_the_reference_relay_passes_the_relay_server_vectors() -> None:

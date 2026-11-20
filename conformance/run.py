@@ -44,6 +44,7 @@ CATEGORIES = [
     "local",
     "relay",
     "relay-server",
+    "sync",
 ]
 HEX = re.compile(r"^(?:[0-9a-f]{2})*$")
 

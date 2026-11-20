@@ -414,7 +414,7 @@ A set is one sender, so what [records.md](records.md) says of a sender holds for
 
 - Record ids and versions belong to the set. An id is unique among all records of the set, and one id and version stand for the same message, whichever device signs it ([records.md](records.md), sections 2 and 3). An addition and a removal therefore carry no versions: nothing starts again.
 - A receiver applies a record message signed with any current key of the sender to the sender's records by the version rule ([records.md](records.md), section 5.2), and keeps one copy of each record. A record that one device sent is updated or deleted by a message of another device of the set.
-- How the devices of a set keep their records and versions in step is defined with [axt-1023](https://github.com/paxel/axt/issues/25) and [axt-1024](https://github.com/paxel/axt/issues/26), to come.
+- Every device of a set changes and deletes every record of the set. [sync.md](sync.md) defines the stamps of their changes, how two states of a record merge per field, and the state stamp that each device gives a record as its version. The messages that carry the states between the devices of a set are defined with [axt-1024](https://github.com/paxel/axt/issues/26), to come.
 
 What belongs to one device stays with its key:
 
@@ -427,14 +427,14 @@ What belongs to one device stays with its key:
 A move to a new device, such as a new phone, is an addition followed by a removal:
 
 1. The old device adds the new one (section 5.2).
-2. The new device takes over what it needs of the app's data. How the data moves is up to the app until [axt-1024](https://github.com/paxel/axt/issues/26) defines the exchange between the devices of a set; it includes the highest version of every record ([records.md](records.md), section 3) and the known senders with their keys.
+2. The new device takes over what it needs of the app's data. How the data moves is up to the app until [axt-1024](https://github.com/paxel/axt/issues/26) defines the exchange between the devices of a set; it includes the state of every record of the set with its stamps ([sync.md](sync.md), section 3), and the known senders with their keys. The old device stamps from the moment it signs the `DEVICE_ADD` ([sync.md](sync.md), section 2.4), so no counted version is left to carry over on its own.
 3. The new device removes the old one (section 5.3). The old device then signs nothing more, and SHOULD delete its private keys.
 
 A receiver applies both steps without asking its user (section 5.5), and the sender's records stay under their ids and versions (section 5.6). The new device has a signing key, an encryption key, a mailbox and manifest revisions of its own; it sends its `MANIFEST` after its chain. Between the two steps both devices are devices of the set, so the owner need not hurry the second.
 
 ### 5.8 Restoring the same key
 
-An app MAY carry the signing key itself to a new installation, for example in an encrypted backup that the new installation restores. The new installation is then the same device, with the same key, and no addition is needed. The old installation MUST NOT use the key again (section 2.1). The addition of section 5.2 is for the case in which the key does not leave its device, such as a key kept in a device's protected key store.
+An app MAY carry the signing key itself to a new installation, for example in an encrypted backup that the new installation restores. The new installation is then the same device, with the same key, and no addition is needed. The old installation MUST NOT use the key again (section 2.1). An installation that restores its data from a backup gives state stamps as versions from then on, also when it counted before ([protocol.md](protocol.md), section 10; [sync.md](sync.md), section 2.4). The addition of section 5.2 is for the case in which the key does not leave its device, such as a key kept in a device's protected key store.
 
 ### 5.9 A lost device
 

@@ -10,7 +10,8 @@ the Ed25519, X25519 and HPKE of keys_examples.py and its model of a receiver
 that follows the devices of its senders, the model of an app of
 protocol_examples.py, the QR code, frames and relay of
 transports_examples.py, the time types of time_examples.py, and the attributes of spec/metadata.md of
-metadata_rules.py. Where those scripts have no model, for a receiver's
+metadata_rules.py, and the stamps and the merge of spec/sync.md of
+sync_examples.py. Where those scripts have no model, for a receiver's
 own changes to records (spec/records.md, section 6) and for reading a file
 (spec/transports.md, section 2.2), it has its own code below. That it passes
 every vector shows that the vectors agree with the scripts' checks; it is a
@@ -51,6 +52,7 @@ def load(name: str) -> ModuleType:
 tx = load("transports_examples")
 pe, me, keys, rules = tx.pe, tx.me, tx.keys, tx.rules
 tm = load("time_examples")
+sy = load("sync_examples")
 mr = rules.mr
 
 import fastavro  # noqa: E402
@@ -70,6 +72,7 @@ CATEGORIES = [
     "local",
     "relay",
     "relay-server",
+    "sync",
 ]
 OUT_INLINE = 1 << 20  # bytes above which an answer carries raw DEFLATE rather than hex
 
@@ -1082,6 +1085,112 @@ def op_open(i: Any) -> dict[str, Any]:
     return no("NOT_OPENED")
 
 
+# --- sync (spec/sync.md) -----------------------------------------------------------------
+
+
+def stamp_in(v: Any) -> int | None:
+    return None if v is None else int(v)
+
+
+def op_change(i: Any) -> dict[str, Any]:
+    done = sy.change(
+        sy.state_of_json(i["state"]),
+        b_in(i["device"]),
+        i["action"],
+        {name: b_in(value) for name, value in i["values"].items()},
+        int(i["now_ms"]),
+        int(i["highest"]),
+        (i["r"][0], i["r"][1]),
+        b_in(i["schema"]),
+        int(i["now_ms_state"]),
+        stamp_in(i["to_pass"]),
+    )
+    return ok(
+        {
+            "made": done.made,
+            "state": sy.state_json(done.state),
+            "highest": str(done.highest),
+            "to_pass": sy.stamp_json(done.to_pass),
+        }
+    )
+
+
+def op_merge(i: Any) -> dict[str, Any]:
+    done = sy.device_merge(
+        sy.state_of_json(i["own"]),
+        sy.state_of_json(i["other"]),
+        int(i["now_ms"]),
+        int(i["highest"]),
+        i["r"],
+        stamp_in(i["sibling_stamp"]),
+        stamp_in(i["to_pass"]),
+    )
+    return ok(
+        {
+            "state": sy.state_json(done.state),
+            "stands": done.merged.stands,
+            "removal_taken": done.merged.removal_taken,
+            "deleted": done.deleted,
+            "highest": str(done.highest),
+            "sibling_stamp": sy.stamp_json(done.sibling_stamp),
+            "to_pass": sy.stamp_json(done.to_pass),
+        }
+    )
+
+
+def op_deleted(i: Any) -> dict[str, Any]:
+    state = sy.state_of_json(i["state"])
+    versions = {b_in(fp): version for fp, version in i["versions"].items()}
+    message = sy.record_message(state, i["writer_fields"], i["writer_version"], versions)
+    return ok(
+        {
+            "deleted": sy.deleted(state.fields, state.removal),
+            "message": message and {"kind": message[0], "version": str(message[1])},
+        }
+    )
+
+
+def op_begin_stamping(i: Any) -> dict[str, Any]:
+    begun, states, highest = sy.begin_stamping(
+        b_in(i["device"]),
+        [sy.state_of_json(s) for s in i["states"]],
+        int(i["now_ms"]),
+        int(i["highest"]),
+        i["r"],
+    )
+    return ok({"begun": begun, "states": [sy.state_json(s) for s in states], "highest": str(highest)})
+
+
+def op_stale(i: Any) -> dict[str, Any]:
+    after = sy.stale(
+        int(i["receiver_version"]),
+        stamp_in(i["state_stamp"]),
+        stamp_in(i["sibling_stamp"]),
+        stamp_in(i["to_pass"]),
+        i["counted"],
+        i["sibling"],
+        int(i["now_ms"]),
+        int(i["highest"]),
+        i["r"],
+        i["may_send"],
+    )
+    return ok(
+        {
+            "highest": str(after.highest),
+            "stamps": after.stamps,
+            "to_pass": sy.stamp_json(after.to_pass),
+            "resend": sy.stamp_json(after.resend),
+        }
+    )
+
+
+def op_pass_version(i: Any) -> dict[str, Any]:
+    resend, to_pass, highest = sy.pass_version(
+        int(i["state_stamp"]), int(i["to_pass"]), i["may_send"], int(i["now_ms"]), int(i["highest"]), i["r"]
+    )
+    return ok({"resend": sy.stamp_json(resend), "to_pass": sy.stamp_json(to_pass), "highest": str(highest)})
+
+
 OPS: dict[str, Callable[[Any], dict[str, Any]]] = {
     "decode_body": op_decode_body,
     "read_file": op_read_file,
@@ -1134,6 +1243,15 @@ OPS: dict[str, Callable[[Any], dict[str, Any]]] = {
     "padded_length": lambda i: ok({"padded_length": keys.padded_length(i["length"])}),
     "seal": op_seal,
     "open": op_open,
+    "next_stamp": lambda i: ok(
+        {"stamp": sy.stamp_json(sy.next_stamp(int(i["now_ms"]), int(i["highest"]), i["r"]))}
+    ),
+    "change": op_change,
+    "merge": op_merge,
+    "deleted": op_deleted,
+    "begin_stamping": op_begin_stamping,
+    "stale": op_stale,
+    "pass_version": op_pass_version,
 }
 
 

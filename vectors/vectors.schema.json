@@ -28,7 +28,8 @@
     "qr",
     "local",
     "relay",
-    "relay-server"
+    "relay-server",
+    "sync"
    ]
   },
   "description": {"type": "string"},
@@ -111,6 +112,34 @@
       "properties": {
        "input": {
         "required": ["policy", "events"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "begin_stamping"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["device", "states", "now_ms", "highest", "r"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "change"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["state", "device", "action", "values", "schema", "now_ms", "now_ms_state", "highest", "r", "to_pass"]
        }
       }
      }
@@ -237,6 +266,20 @@
       "properties": {
        "input": {
         "required": ["writer_schema", "reader_schema", "body"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "deleted"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["state", "writer_fields", "writer_version", "versions"]
        }
       }
      }
@@ -398,6 +441,34 @@
     {
      "if": {
       "properties": {
+       "op": {"const": "merge"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["own", "other", "now_ms", "highest", "r", "sibling_stamp", "to_pass"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "next_stamp"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["now_ms", "highest", "r"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
        "op": {"const": "open"}
       }
      },
@@ -433,6 +504,20 @@
       "properties": {
        "input": {
         "required": ["text"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "pass_version"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["state_stamp", "to_pass", "may_send", "now_ms", "highest", "r"]
        }
       }
      }
@@ -587,6 +672,20 @@
       "properties": {
        "input": {
         "required": ["seed", "data"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "stale"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["receiver_version", "state_stamp", "sibling_stamp", "to_pass", "counted", "sibling", "may_send", "now_ms", "highest", "r"]
        }
       }
      }
@@ -937,6 +1036,26 @@
        "properties": {
         "op": {
          "enum": ["relay"]
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "if": {
+    "properties": {
+     "category": {"const": "sync"}
+    }
+   },
+   "then": {
+    "properties": {
+     "vectors": {
+      "items": {
+       "properties": {
+        "op": {
+         "enum": ["begin_stamping", "change", "deleted", "merge", "next_stamp", "pass_version", "stale"]
         }
        }
       }

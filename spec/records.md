@@ -15,7 +15,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 - **Local change**: a change the receiver's user makes to a received record in the receiver, including its deletion there.
 - **Tombstone**: what a receiver keeps of a record its sender deleted: its id and the version of the deletion.
 
-A record has one sender. Only its sender sends versions of it. A receiver's local changes stay in the receiver and are not sent back as versions of the record; a receiver that sends a record of its own, even one copied from a received record, sends it as a new record with an id of its own.
+A record has one sender. Only its sender sends versions of it; where the sender is a device set, each of its devices does, and [sync.md](sync.md) defines how they change the same record. A receiver's local changes stay in the receiver and are not sent back as versions of the record; a receiver that sends a record of its own, even one copied from a received record, sends it as a new record with an id of its own.
 
 ## 2. Record ids
 
@@ -34,15 +34,16 @@ Random ids let every installation create records without a counter or coordinati
 
 The version of a record is a `long`. It names one state of the record at its sender.
 
-- A version MUST be at least 1. The first version a sender sends of a record SHOULD be 1.
-- Each change of a record at its sender MUST get a version higher than every version the sender has given the record before. A deletion is a change and takes a version as well.
+- A version MUST be at least 1.
+- Each change of a record on a device of its sender MUST get a version higher than every version of the record that this device has given or has seen from another device of its set. For a sender with one device, that is every version the sender has given the record before. A deletion is a change and takes a version as well.
+- Two devices of a set that change a record while apart each give it a version without knowing the other's. Their versions are state stamps ([sync.md](sync.md), section 5), whose random part makes two of them that are taken from the same base differ in all but one of 32,768 cases per pair ([sync.md](sync.md), section 2.2). When the two devices merge, each device that takes something from the other's state gives the merged state a version above both; a device that takes nothing keeps its version ([sync.md](sync.md), section 4.4).
 - A sender MAY send the same version again, to the same or to another receiver, for example when a message may have been lost, when a receiver is connected later, or in a file.
 - Versions MAY have gaps. A sender that changes a record several times before it can send sends only the last state, under its last version.
 - One id and version MUST always stand for the same message: the same kind and, for `DATA`, the same record. A sender MAY encode that record with another compatible writer schema of the same full name.
-- A sender SHOULD count the versions of each record and add one for every change it sends. Any rising value meets the rules above, but a clock time used as a version goes back when the clock does.
+- An installation that is a set of its own MAY count the versions of each record, from 1, adding one for every change it sends, or give state stamps from its first record on. A device whose set has, or has had, a second device MUST give the state stamp of the record as its version, and so MUST an installation that may have lost versions it gave ([sync.md](sync.md), section 2.4). A state stamp is far above any count, so the versions of a record keep rising when its sender begins to stamp. A plain clock time is no version: it goes back when the clock does, which a stamp does not.
 - A receiver MUST accept a first version above 1: a receiver that is connected later, or misses messages, sees a record first at a later version. A receiver MUST reject a record message whose version is below 1, with the error `VERSION_INVALID` ([protocol.md](protocol.md), section 8.2).
 
-The highest version of each record that a sender has sent MUST survive whatever the sender's data goes through, including a restore from a backup and a move to a new device ([keys.md](keys.md), section 5.7). The devices of one sender give the versions of a record as one sender ([keys.md](keys.md), section 5.6); how they keep them in step comes with [axt-1023](https://github.com/paxel/axt/issues/25) and [axt-1024](https://github.com/paxel/axt/issues/26). A sender whose versions went back can learn it from the outcome `STALE` (section 7), but not in every case: a new version that happens to equal the receiver's version is taken for a duplicate, and the change is lost at that receiver. [protocol.md](protocol.md), section 10, therefore makes a sender that may have lost versions, such as after a restore from a backup, continue them above a random jump.
+A device SHOULD keep the highest version it has given each record through whatever its data goes through, including a move to a new device ([keys.md](keys.md), section 5.7). The devices of one sender give the versions of a record as one sender ([keys.md](keys.md), section 5.6): each gives its state stamp of the record, as [sync.md](sync.md), section 5, defines. A device that may have lost versions it gave, such as after a restore from a backup, would give them a second time if it counted on, and a new version that happens to equal the receiver's version is taken for a duplicate, so that the change is lost at that receiver. [protocol.md](protocol.md), section 10, therefore makes such a device give state stamps from then on, which a clock that is not far behind puts above every version it gave before; a version that is still below the receiver's is answered with `STALE` (section 7).
 
 ## 4. Sending records
 
@@ -147,7 +148,12 @@ A reader of a file applies the same rules and reaches the same outcomes, but a f
 - the receiver's version of the record after the message, which differs from the acknowledged version only for `STALE`;
 - for `MERGED`, the names of the fields whose values the receiver kept and that differ from the values in the message, as the writer schema of the message names them.
 
-A sender MAY show its user that a receiver kept changes of its own. After `STALE` with a receiver's version above the highest version the sender knows of for the record, the sender's versions have gone back (section 3). It MUST then send further versions of the record above the receiver's version, and SHOULD send the record's current state again under such a version. After `STALE` with a receiver's version the sender has sent itself, an older message arrived late, and nothing needs to be done.
+A sender MAY show its user that a receiver kept changes of its own.
+
+After `STALE`, a device counts the receiver's version as a stamp it has seen, whatever that version is ([sync.md](sync.md), section 2.2). It then compares the receiver's version with the highest version it knows of the record: the higher of its own current version of the record and the highest state stamp of the record it saw from another device of its set ([sync.md](sync.md), section 5.3). It need not remember the versions it gave before.
+
+- **Not above the highest version it knows.** An older message arrived late, or another device of its set sent a state the device has merged. Nothing more needs to be done.
+- **Above it.** Another device of its set has sent the receiver a newer state, or the device has lost versions it gave ([protocol.md](protocol.md), section 10), or a device that was removed since gave the version. The device gives state stamps as versions from then on ([sync.md](sync.md), section 2.4), so every version it gives afterwards is above the receiver's. If it is the only current device of its set, it MUST at once take a new state stamp for the record and send the record's current state under it. If its set has other current devices, it waits for them: once it has merged the state of the record with every other current device of its set, and its version of the record is still below the receiver's, it MUST take a new state stamp for the record and send the record's current state under it ([sync.md](sync.md), section 5.3). The receiver would otherwise stay behind for good where the device that gave the higher version was removed, or lost that state, before any merge.
 
 ## 8. References between records
 

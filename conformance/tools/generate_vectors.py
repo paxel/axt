@@ -60,6 +60,7 @@ pe, me, keys, rules = tx.pe, tx.me, tx.keys, tx.rules
 env = load("envelope_examples")
 tm = load("time_examples")
 mx = load("metadata_examples")
+sy = load("sync_examples")
 mr = mx.mr
 assert mr.LANGTAG.pattern == me.LANGTAG.pattern and mr.LANGTAG.flags == me.LANGTAG.flags, (
     "two language tag rules"
@@ -3957,6 +3958,261 @@ def file_category() -> Category:
     return c
 
 
+# --- sync (spec/sync.md) ------------------------------------------------------------------
+
+
+def sync_category() -> Category:
+    c = Category(
+        "sync",
+        "The devices of one owner: the next stamp, what a change stamps, the merge of two states of a "
+        "record per field and for the removal, when a record is deleted, the record message of a "
+        "state, beginning to stamp, and what a device does after STALE (spec/sync.md).",
+    )
+    sy.check()  # the examples of section 6 hold; fills the merges and changes of those examples
+    S, J = sy.stamp_json, sy.state_json
+    # The schemas of the field states: version 1 of the example type, and a version 2 made for the cases.
+    assert sy.SCHEMA_1 == pe.fp8(pe.canonical_fp(sy.APPOINTMENT_1)) == pe.fp8(TYPE_FPS["Appointment"])
+    assert sy.SCHEMA_2 == pe.fp8(pe.canonical_fp(sy.APPOINTMENT_2)) != sy.SCHEMA_1
+    versions = {H(fp): version for fp, version in sy.SCHEMA_VERSIONS.items()}
+
+    def limit(label: str, refs: list[str]) -> list[str]:
+        at_limit = "limit" in label or "largest long" in label
+        return [*refs, "sync.md 2.3"] if at_limit and "sync.md 2.3" not in refs else refs
+
+    # The next stamp: the 12 cases of spec/sync.md, section 6.1, and the limits.
+    assert len(sy.STAMPS) == 12
+    stamps = [
+        (label.split(". ", 1)[1], n, h, r, want, ["sync.md 2.2", "sync.md 6.1"])
+        for label, n, h, r, _, want in sy.STAMPS
+    ]
+    stamps += [(label, n, h, r, want, ["sync.md 2.2"]) for label, n, h, r, want in sy.MORE_STAMPS]
+    for label, now_ms, highest, r, want, refs in stamps:
+        assert sy.next_stamp(now_ms, highest, r) == want, label
+        c.add(
+            "next_stamp",
+            label,
+            limit(label, refs) if want is not None else limit("limit", refs),
+            {"now_ms": S(now_ms), "highest": S(highest), "r": r},
+            accept({"stamp": S(want)}),
+        )
+
+    # A change: those of the examples, and the cases of the script.
+    def change_vector(
+        label: str,
+        refs: list[str],
+        before: Any,
+        device: bytes,
+        action: str,
+        values: Any,
+        clock: Any,
+        done: Any,
+        schema: bytes = sy.SCHEMA_1,
+        later_clock: int | None = None,
+        to_pass: int | None = None,
+    ) -> None:
+        now_ms, highest, rr = clock
+        c.add(
+            "change",
+            label,
+            refs,
+            {
+                "state": J(before),
+                "device": H(device),
+                "action": action,
+                "values": {name: H(value) for name, value in values.items()},
+                "schema": H(schema),
+                "now_ms": S(now_ms),
+                "now_ms_state": S(now_ms if later_clock is None else later_clock),
+                "highest": S(highest),
+                "r": list(rr),
+                "to_pass": S(to_pass),
+            },
+            accept(
+                {
+                    "made": done.made,
+                    "state": J(done.state),
+                    "highest": S(done.highest),
+                    "to_pass": S(done.to_pass),
+                }
+            ),
+        )
+
+    for label, before, device, action, values, clock, done in sy.EXAMPLE_CHANGES:
+        refs = ["sync.md 3.5", f"sync.md {label[:3]}"]
+        change_vector(f"section {label}", refs, before, device, action, values, clock, done)
+    for label, before, device, action, plain_values, clock, made, after, top in sy.CHANGES:
+        values = {name: sy.encoded(value) for name, value in plain_values.items()}
+        done = sy.change(before, device, action, values, *clock)
+        assert (done.made, done.state, done.highest) == (made, after, top), label
+        change_vector(label, limit(label, ["sync.md 3.5"]), before, device, action, values, clock, done)
+    for label, before, device, action, plain_values, schema, clock, later, to_pass, want in sy.MORE_CHANGES:
+        values = {name: sy.encoded(value) for name, value in plain_values.items()}
+        done = sy.change(before, device, action, values, *clock, schema, later, to_pass)
+        assert done == want, label
+        refs = limit(label, ["sync.md 3.5", "sync.md 3.1", "sync.md 5.3"])
+        change_vector(label, refs, before, device, action, values, clock, done, schema, later, to_pass)
+
+    # A merge: those of the examples, and the cases of the script.
+    def merge_vector(
+        label: str,
+        refs: list[str],
+        own: Any,
+        other: Any,
+        clock: Any,
+        done: Any,
+        sibling_stamp: int | None = None,
+        to_pass: int | None = None,
+    ) -> None:
+        now_ms, highest, r = clock
+        c.add(
+            "merge",
+            label,
+            refs,
+            {
+                "own": J(own),
+                "other": J(other),
+                "now_ms": S(now_ms),
+                "highest": S(highest),
+                "r": r,
+                "sibling_stamp": S(sibling_stamp),
+                "to_pass": S(to_pass),
+            },
+            accept(
+                {
+                    "state": J(done.state),
+                    "stands": done.merged.stands,
+                    "removal_taken": done.merged.removal_taken,
+                    "deleted": done.deleted,
+                    "highest": S(done.highest),
+                    "sibling_stamp": S(done.sibling_stamp),
+                    "to_pass": S(done.to_pass),
+                }
+            ),
+        )
+
+    merge_refs = ["sync.md 4.1", "sync.md 4.2", "sync.md 4.3", "sync.md 4.4"]
+    for label, own, other, clock, done in sy.EXAMPLE_MERGES:
+        merge_vector(f"section {label}", [*merge_refs, f"sync.md {label[:3]}"], own, other, clock, done)
+    for label, own, other, clock, stands, removal_taken, gone, stamp, top in sy.MERGES:
+        done = sy.device_merge(own, other, *clock)
+        got = (done.merged.stands, done.merged.removal_taken, done.deleted, done.state.state_stamp)
+        assert (*got, done.highest) == (stands, removal_taken, gone, stamp, top), label
+        refs = [*merge_refs, "sync.md 3.4"] if "never stamped" in label else merge_refs
+        merge_vector(label, limit(label, refs), own, other, clock, done)
+    for label, own, other, clock, seen, to_pass, seen_after, pass_after, stamp in sy.KEPT:
+        done = sy.device_merge(own, other, *clock, seen, to_pass)
+        assert (done.sibling_stamp, done.to_pass, done.state.state_stamp) == (seen_after, pass_after, stamp)
+        merge_vector(
+            label, ["sync.md 3", "sync.md 4.4", "sync.md 5.3"], own, other, clock, done, seen, to_pass
+        )
+
+    # Whether a record is deleted in a state, and the record message of the state.
+    sending = [(label, state, sorted(state.fields), 1, gone, m) for label, state, _, gone, m in sy.DELETED]
+    for label, state, writer_fields, writer_version, gone, message in [*sending, *sy.SENDING]:
+        assert sy.deleted(state.fields, state.removal) == gone, label
+        assert sy.record_message(state, writer_fields, writer_version) == message, label
+        c.add(
+            "deleted",
+            label,
+            limit(label if state.state_stamp is not None else "limit", ["sync.md 4.3", "sync.md 5.1"]),
+            {
+                "state": J(state),
+                "writer_fields": writer_fields,
+                "writer_version": writer_version,
+                "versions": versions,
+            },
+            accept(
+                {
+                    "deleted": gone,
+                    "message": message and {"kind": message[0], "version": S(message[1])},
+                }
+            ),
+        )
+
+    # An installation that counted begins to stamp.
+    for label, device, states, (now_ms, highest, rs), begun, after, top in sy.BEGINNINGS:
+        assert sy.begin_stamping(device, states, now_ms, highest, rs) == (begun, after, top), label
+        c.add(
+            "begin_stamping",
+            label,
+            limit(label, ["sync.md 2.4", "sync.md 3.2"]),
+            {
+                "device": H(device),
+                "states": [J(s) for s in states],
+                "now_ms": S(now_ms),
+                "highest": S(highest),
+                "r": rs,
+            },
+            accept({"begun": begun, "states": [J(s) for s in after], "highest": S(top)}),
+        )
+
+    # After STALE, and the version to pass once the device has merged with its siblings.
+    stales = [(*case[:8], True, case[8]) for case in sy.STALES]
+    stales += [
+        (label, v, own, None, p, False, False, clock, False, want)
+        for label, v, own, p, clock, want in sy.BARRED
+    ]
+    for (
+        label,
+        version,
+        state_stamp,
+        sibling_stamp,
+        to_pass,
+        counted,
+        sibling,
+        clock,
+        may_send,
+        want,
+    ) in stales:
+        now_ms, highest, r = clock
+        got_stale = sy.stale(version, state_stamp, sibling_stamp, to_pass, counted, sibling, *clock, may_send)
+        assert got_stale == want, label
+        c.add(
+            "stale",
+            label,
+            limit(label, ["sync.md 5.3", "sync.md 2.2", "sync.md 2.4"]),
+            {
+                "receiver_version": S(version),
+                "state_stamp": S(state_stamp),
+                "sibling_stamp": S(sibling_stamp),
+                "to_pass": S(to_pass),
+                "counted": counted,
+                "sibling": sibling,
+                "may_send": may_send,
+                "now_ms": S(now_ms),
+                "highest": S(highest),
+                "r": r,
+            },
+            accept(
+                {
+                    "highest": S(want.highest),
+                    "stamps": want.stamps,
+                    "to_pass": S(want.to_pass),
+                    "resend": S(want.resend),
+                }
+            ),
+        )
+    for label, state_stamp, to_pass, may_send, (now_ms, highest, r), resend, kept, top in sy.PASSES:
+        assert sy.pass_version(state_stamp, to_pass, may_send, now_ms, highest, r) == (resend, kept, top), (
+            label
+        )
+        c.add(
+            "pass_version",
+            label,
+            limit(label, ["sync.md 5.3", "sync.md 3.3"]),
+            {
+                "state_stamp": S(state_stamp),
+                "to_pass": S(to_pass),
+                "may_send": may_send,
+                "now_ms": S(now_ms),
+                "highest": S(highest),
+                "r": r,
+            },
+            accept({"resend": S(resend), "to_pass": S(kept), "highest": S(top)}),
+        )
+    return c
+
+
 # --- output ---------------------------------------------------------------------
 
 CATEGORIES = [
@@ -3973,6 +4229,7 @@ CATEGORIES = [
     local_category,
     relay_category,
     relay_server_category,
+    sync_category,
 ]
 
 
@@ -4064,6 +4321,18 @@ COUNTS = {
     "local": ({"hello_frame": 2, "connection": 20}, {}),
     "relay": ({"mailbox_id": 2, "request": 7, "reaction": 28, "listing": 3}, {}),
     "relay-server": ({"relay": 2}, {}),
+    "sync": (
+        {
+            "next_stamp": 23,
+            "change": 34,
+            "merge": 81,
+            "deleted": 22,
+            "begin_stamping": 3,
+            "stale": 10,
+            "pass_version": 5,
+        },
+        {},
+    ),
 }
 
 

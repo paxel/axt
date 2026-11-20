@@ -275,7 +275,7 @@ A device takes the entries of a valid `ACK` whose `to` is its own key (section 9
 
 - The first outcome it gets stands, with two exceptions: `APPLIED` replaces `KEPT` and `MERGED` (section 7.3), and every other outcome replaces `DUPLICATE`, which a resend can bring before the acknowledgement of the first copy. A repeated entry, and `DUPLICATE` for a message it has another outcome for, change nothing.
 - It MAY show its user that the receiver kept changes of its own (`MERGED`, `KEPT`).
-- After `STALE`, it acts as [records.md](records.md), section 7, says: a `receiver_version` above the highest version it knows of the record means that its versions went back (section 10).
+- After `STALE`, it counts the `receiver_version` as a stamp it has seen and acts as [records.md](records.md), section 7, says: a `receiver_version` above the highest version it knows of the record is a version that another device of its set gave, or one it gave itself and lost (section 10), and can make it send the record again ([sync.md](sync.md), section 5.3).
 - A message with an outcome is delivered. The sender does not send it again, except for the reasons of section 11.
 
 ## 8. Errors
@@ -367,17 +367,22 @@ A message carries no time, and a relay or a user can deliver a message again ([k
 
 ## 10. Versions that went back
 
-The highest version of each record a sender has sent MUST survive whatever the sender's data goes through ([records.md](records.md), section 3). If it does not, for example after a restore from a backup older than the last messages sent, the sender gives versions again that it has given before. A receiver that already has a higher version reports `STALE`, from which the sender learns it ([records.md](records.md), section 7). A version that happens to equal the receiver's is taken for a duplicate, and the change is lost at that receiver.
+A device SHOULD keep the highest version it has given each record, and the highest stamp it has given or seen, through whatever its data goes through ([records.md](records.md), section 3; [sync.md](sync.md), section 2.2). If it does not, for example after a restore from a backup older than the last messages it sent, it holds lower versions than it gave. A device that counted on from there would give versions a second time, for other states of the record. A receiver that already has a higher version reports `STALE`; a version that happens to equal the receiver's is taken for a duplicate, and the change is lost at that receiver.
 
 The rule:
 
-- A sender that restores its data from a backup, or for another reason cannot rule out that it has sent versions higher than those it holds, MUST continue the versions of every record above the version it holds plus a jump.
-- The jump is an integer drawn with a cryptographically secure random number generator, uniformly from 2^32 to 2^48 − 1.
-- The sender draws it anew for every restore and uses the same jump for all records of that restore.
+- A device that restores its data from a backup, or for another reason cannot rule out that it has given versions higher than those it holds, MUST give versions as state stamps from then on ([sync.md](sync.md), sections 2.4 and 5.1), also when it is a set of its own and counted until then. It MUST NOT count on.
+- Its stamps come from its clock and from the highest stamp it holds, as for every device ([sync.md](sync.md), section 2.2). It draws no jump and marks nothing: a restored device stamps above what it sees.
+- After `STALE`, it counts the receiver's version as a stamp it has seen. If that version is above the highest version it knows of the record, it acts as [records.md](records.md), section 7, says, and in the end sends the record's current state again under a new state stamp, unless a merge with a sibling gave it a version above the receiver's.
+- A device with a sibling ([sync.md](sync.md), section 1) SHOULD, after a restore, merge with a sibling before its first change, and SHOULD ask a sibling for every record of the set and merge what it gets ([sync.md](sync.md), sections 2.4 and 4). The message for that, `RESYNC`, comes with [axt-1024](https://github.com/paxel/axt/issues/26). Until it has merged, a restored device whose clock stands behind the highest stamp of its backup can give a stamp again that it gave before, for another value; the merge then decides between the two by their values ([sync.md](sync.md), section 4.1, rule 3).
 
-A jump of at least 2^32 is above any number of changes made since a backup. Drawing it at random keeps two restores of the same backup from giving the same versions again. Two restores collide only if their jumps differ by less than the number of changes made after them, which for about 2^48 possible jumps and a million changes is a chance of about one in a hundred million. A version below the receiver's is answered with `STALE` and corrected as [records.md](records.md), section 7, says. A version long has room for more than 30,000 jumps.
+Why this is enough:
 
-The alternative, a hash of the record's content in each `DUPLICATE`, would make every receiver keep a hash of every record it holds. It would also take a record encoded again with another compatible schema ([records.md](records.md), section 3) for a changed one. The rule above needs nothing from the receiver and leaves the `ACK` as [records.md](records.md), section 7, describes it.
+- **The clock leads.** A stamp taken from the clock is the time in milliseconds times 65,536 plus a random part. Every version the device gave before the restore was a count, far below any stamp, or a stamp of an earlier time. Its new versions are above both unless its clock now stands behind the time of a stamp it gave before.
+- **The clock is behind.** The device gave stamps while its clock, or a sibling's, ran ahead, lost them, and now takes stamps from a clock that shows less. Its versions are then below the receiver's, and `STALE` shows it: the device counts the receiver's version as seen, and its next stamps are above it. A stamp it takes then can equal one that it gave and lost only where both are taken from the same base and draw the same random part, one case in 32,768 per pair of such stamps.
+- **Nothing is needed from the receiver.** The version rule and the `ACK` stay as [records.md](records.md), sections 5.2 and 7, describe them.
+
+A restored device that is the only current device of its set sends the current state of a record again at once after such a `STALE`; one with siblings does so after it has merged with each of them, if its version is then still below the receiver's ([records.md](records.md), section 7). A restored device with a sibling gets from that sibling every state the sibling holds, whichever device made the changes. Changes that the device made after the backup and that reached no sibling before the restore are lost on the devices of the set; another app that got them keeps them until a higher version of the record reaches it.
 
 ## 11. Resends
 
@@ -385,7 +390,7 @@ A sender sends a record message again:
 
 - **Without an acknowledgement.** A record message with neither an outcome nor an error that settles it has not been delivered. In a live connection, the sender sends the record again in a later connection, under an offer accepted there and in its current state. Through a relay, it sends the same message again under the same offer, once the holding time of 14 days ([transports.md](transports.md), section 5.5) has passed without an outcome, not before. A record that has changed since the offer is offered again instead (section 4.3).
 - **For a schema.** After `SCHEMA_UNKNOWN` (section 8.2), once the type is accepted again.
-- **When a type is accepted again.** When a type that a receiver had stopped taking ([manifest.md](manifest.md), section 6) fits again and is accepted, the sender SHOULD send the current state of each record of the type it had sent to that receiver before: a `DATA` with the current version of a record that exists, a `DELETE` with the version of the deletion of one deleted in between.
+- **When a type is accepted again.** When a type that a receiver had stopped taking ([manifest.md](manifest.md), section 6) fits again and is accepted, the sender SHOULD send the current state of each record of the type it had sent to that receiver before: a `DATA` with the current version of a record that exists, a `DELETE` with the version of the deletion of one deleted in between, which for a device that stamps is its current state stamp of the record ([sync.md](sync.md), section 5.1).
 - **After a removal.** When a device is removed from its set, the remaining devices send again what has no outcome, as [keys.md](keys.md), section 5.6, says.
 
 A receiver cannot ask for a resend beyond the schema request of `SCHEMA_UNKNOWN`. A record that the receiver could not process for a passing reason, such as a full storage, is neither acknowledged nor reported, and is sent again by the first rule. A receiver that loses records it had acknowledged, for example by restoring an older backup, gets each again when the sender changes it, or when the type is accepted again after it stopped fitting. 0.1.0 has no message for asking for them.
@@ -920,6 +925,7 @@ cat-a-log has no outcome for the Pet, so it takes the error. It sends Mimi's rec
 ## 18. What other documents define
 
 - [transports.md](transports.md): the live connection, its `HELLO`, its opening and its end (section 4 there); the kinds a file holds (section 2.1 there); the relay and its holding time, which sets the resends through it (section 5 there; section 15.3).
+- [sync.md](sync.md): the stamps, the state stamp that a device of a set gives a record as its version, and what a device does after `STALE` with a higher version (sections 7.4 and 10; sections 2 and 5 there).
 - [conformance.md](conformance.md): test vectors for every message of this document and for the cases of section 16.
 
 ## References

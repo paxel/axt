@@ -12,7 +12,13 @@ The vocabulary of this repository. The specification in [spec/](spec/README.md) 
 
 **Record message**: a `DATA` message, which carries a whole record, or a `DELETE` message.
 
-**Version**: a rising number that names one state of a record at its sender.
+**Version**: a rising number that names one state of a record at its sender: a count from 1, or the state stamp once the sender stamps.
+
+**Sibling**: another device of the same device set.
+
+**Stamp**: a number a device gives to a change, taken from its clock so that it never goes back. Per field of a record, the change with the higher stamp wins; the device's key breaks a tie.
+
+**State stamp**: the stamp a device takes whenever the state of a record changes on it, by a change of its user or by a merge with a sibling's state. It is the record's version toward other apps.
 
 **Tombstone**: what a receiver keeps of a record its sender deleted: its id and the version of the deletion.
 

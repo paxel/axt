@@ -12,6 +12,7 @@ The specification of AXT, Avro eXchange Transfer, as separate documents. Each do
 | [Manifest](manifest.md)       | Which types an app takes and what it does with them                   | written, 0.1.0 | [axt-1004](https://github.com/paxel/axt/issues/5)  |
 | [Protocol](protocol.md)       | The steps of an exchange: offer, accept or decline, data, acknowledge | written, 0.1.0 | [axt-1005](https://github.com/paxel/axt/issues/6)  |
 | [Keys](keys.md)               | Signatures, encryption and the devices of one sender                  | written, 0.1.0 | [axt-1006](https://github.com/paxel/axt/issues/7)  |
+| [Sync](sync.md)               | How an owner's devices change the same records: stamps and merge      | written, 0.1.0 | [axt-1023](https://github.com/paxel/axt/issues/25) |
 | [Transports](transports.md)   | File, local network and relay                                         | written, 0.1.0 | [axt-1007](https://github.com/paxel/axt/issues/8)  |
 | [Relay](relay.md)             | The reference relay; the relay's interface is in Transports           | written, 0.1.0 | [axt-1008](https://github.com/paxel/axt/issues/9)  |
 | [Conformance](conformance.md) | Test vectors and the conformance suite every library must pass        | written, 0.1.0 | [axt-1009](https://github.com/paxel/axt/issues/10) |
