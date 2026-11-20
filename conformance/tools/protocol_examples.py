@@ -4,7 +4,8 @@
 Checks the schemas of the protocol messages, types/axt/Offer.avsc,
 Accept.avsc, Decline.avsc, Ack.avsc and Error.avsc, and with the same
 schema rules those of the messages between the devices of one set,
-Change.avsc, Resync.avsc and Forward.avsc, whose examples sync_examples.py produces, then
+Change.avsc, Resync.avsc and Forward.avsc, whose examples sync_examples.py produces, and
+Withdraw.avsc, whose example shares_examples.py produces, then
 plays a live exchange from cat-a-log to Old Brain Fix with signed messages
 and prints each as annotated hex:
 
@@ -31,7 +32,9 @@ and prints each as annotated hex:
   signature, and verified with all three;
 - a model of both apps that processes every message by the rules of
   spec/protocol.md: the order of the first messages, the format choice,
-  offers, answers, the version rule, acknowledgements and errors; it
+  offers, answers, the version rule, acknowledgements and errors, and a
+  WITHDRAW of spec/shares.md as a record message of an app whose user
+  changes no record; it
   checks the exchange above and a set of messages that must be ignored,
   answered as before, or reported with a given error code.
 
@@ -93,7 +96,8 @@ _spec.loader.exec_module(tm)
 PROTOCOL = ["Offer", "Accept", "Decline", "Ack", "Error"]
 DEVICES = ["DeviceJoin", "DeviceAdd", "DeviceRemove"]
 SYNC = ["Change", "Resync", "Forward"]  # the bodies of spec/sync.md, whose examples sync_examples.py produces
-ALL_SPEC = ["Envelope", "Manifest"] + DEVICES + PROTOCOL + SYNC
+SHARES = ["Withdraw"]  # the body of spec/shares.md, whose example shares_examples.py produces
+ALL_SPEC = ["Envelope", "Manifest"] + DEVICES + PROTOCOL + SYNC + SHARES
 
 # --- the limits of spec/protocol.md -------------------------------------------
 
@@ -148,7 +152,7 @@ for n in ALL_SPEC:
     for full in defined:
         assert full not in defined_by, f"{full} is defined in {n}.avsc and {defined_by[full]}.avsc"
         defined_by[full] = n
-for n in PROTOCOL + SYNC:
+for n in PROTOCOL + SYNC + SHARES:
     s, where = jsons[n], f"types/axt/{n}.avsc"
     assert s["type"] == "record" and s["name"] == n and s["namespace"] == "axt", where
     assert "axt.version" not in s, f"{where}: a schema of the specification carries no axt.version"
@@ -214,8 +218,9 @@ BODY_SCHEMA = {
     "CHANGE": "Change",
     "RESYNC": "Resync",
     "FORWARD": "Forward",
+    "WITHDRAW": "Withdraw",
 }
-RECORD_KINDS = {"DATA", "DELETE"}
+RECORD_KINDS = {"DATA", "DELETE", "WITHDRAW"}  # the record messages (spec/records.md, section 1)
 SYNC_KINDS = {
     "CHANGE",
     "RESYNC",
@@ -735,9 +740,9 @@ class App:
         try:
             d = plain(fastavro.schemaless_reader(buf, raw[name], raw[name]))
         except Exception:
-            raise Rejected("INVALID_MESSAGE", f"the body is not an axt.{name}") from None
+            raise Rejected("INVALID_MESSAGE", f"the body is not an axt.{name}", record) from None
         if buf.tell() != len(body) - 10:
-            raise Rejected("INVALID_MESSAGE", "bytes left over after the body")
+            raise Rejected("INVALID_MESSAGE", "bytes left over after the body", record)
         if kind in DEVICE_KINDS:
             return self._device(kind, env["sender"], d, m)
         if kind == "MANIFEST":
@@ -748,6 +753,10 @@ class App:
             return self._error(d)
         if d["to"] != self.pub:
             return ("ignored: addressed to another key", [])
+        if kind == "WITHDRAW":
+            # Step 1 has checked the body and the addressee; the other steps are those of a DELETE
+            # (spec/shares.md, section 4.1).
+            return self._record(kind, record, rec, None)
         return {"OFFER": self._offer, "ACCEPT": self._answer, "DECLINE": self._answer, "ACK": self._ack}[
             kind
         ](kind, d)
@@ -895,8 +904,12 @@ class App:
                 if name
                 else any(o["accepted"] for o in self.current.values())
             )
+            if kind == "WITHDRAW":
+                # Step 5 checks no offer for an id the receiver holds from that sender, as a record or a
+                # tombstone, and an offer of any type for one it does not hold (spec/shares.md, 4.1).
+                covered = kept is not None or any(o["accepted"] for o in self.current.values())
             if not covered:
-                raise Rejected("NOT_ACCEPTED", "no accepted offer covers the deletion", record)
+                raise Rejected("NOT_ACCEPTED", f"no accepted offer covers the {kind}", record)
         if kept is not None and version <= kept["version"]:
             outcome = "DUPLICATE" if version == kept["version"] else "STALE"
             self.pending_acks.append(
@@ -931,17 +944,21 @@ class App:
                 raise Rejected("VALUE_INVALID", f"{rule}: {why}", record, field=mr.error_field(path))
             self.records[key] = {"type": name, "version": version, "state": "there", "value": value}
         else:
-            self.records[key] = {"type": name, "version": version, "state": "tombstone", "value": None}
+            # A DELETE leaves a tombstone of a deletion, a WITHDRAW one of a withdrawal (spec/shares.md,
+            # section 4.2); the user of this model changes no record, so nothing is kept against either.
+            state = "withdrawn" if kind == "WITHDRAW" else "tombstone"
+            self.records[key] = {"type": name, "version": version, "state": state, "value": None}
+        outcome = "WITHDRAWN" if kind == "WITHDRAW" else "APPLIED"
         self.pending_acks.append(
             {
                 "id": rid,
                 "version": version,
-                "outcome": "APPLIED",
+                "outcome": outcome,
                 "receiver_version": version,
                 "kept_fields": [],
             }
         )
-        return ("APPLIED", [])
+        return (outcome, [])
 
     def _ack(self, kind: str, d: dict[str, Any]) -> tuple[str, list[bytes]]:
         if not 1 <= len(d["records"]) <= MAX_ACK_RECORDS:
@@ -968,6 +985,7 @@ class App:
                 before is None
                 or (before == "DUPLICATE" and r["outcome"] != "DUPLICATE")
                 or (r["outcome"] == "APPLIED" and before in ("KEPT", "MERGED"))
+                or (r["outcome"] == "WITHDRAWN" and before == "KEPT")  # section 7.3
             ):
                 self.outcomes[k] = r["outcome"]
         return ("acknowledged", [])

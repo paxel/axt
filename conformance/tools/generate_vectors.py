@@ -62,6 +62,9 @@ tm = load("time_examples")
 mx = load("metadata_examples")
 sy = load("sync_examples")
 sy.check()  # the examples of spec/sync.md hold; fills its examples, messages and sessions for the vectors
+se = load("shares_examples")  # runs none of its checks on import; the receiver and sender of spec/shares.md
+se.check()  # the examples of spec/shares.md hold
+WITHDRAW_MSG = se.withdraw_message(pe.CAT_SEED, pe.OBF, se.REC_ID, 4)[1]  # spec/shares.md, section 11.2
 mr = mx.mr
 assert mr.LANGTAG.pattern == me.LANGTAG.pattern and mr.LANGTAG.flags == me.LANGTAG.flags, (
     "two language tag rules"
@@ -1027,6 +1030,7 @@ def encoding_category() -> Category:
         "Change": 0x4D094DAFC5F888C1,
         "Resync": 0xE8762BD9D559FDF1,
         "Forward": 0x57476ABF6B053BAD,
+        "Withdraw": se.WITHDRAW_FP,
     }
     sections = {
         "Envelope": "envelope.md 10.1",
@@ -1038,6 +1042,7 @@ def encoding_category() -> Category:
         "Change": "sync.md 15",
         "Resync": "sync.md 15",
         "Forward": "sync.md 15",
+        "Withdraw": "shares.md 10",
     }
     for name, want in published.items():
         text = (REPO / "types" / "axt" / f"{name}.avsc").read_text(encoding="utf-8")
@@ -1080,8 +1085,11 @@ def encoding_category() -> Category:
     assert len(above) == MAX_MESSAGE + 1
     goods.append(("a message of exactly 16 MiB", at_limit, ["envelope.md 8"]))
     # The kinds that come with later tickets: format 1 has their symbols, and no document their bodies.
+    goods.append(
+        ("the WITHDRAW of shares.md, section 11.2", WITHDRAW_MSG, ["shares.md 3.1", "shares.md 11.2"])
+    )
     later = [k for k in pe.KINDS if k not in pe.BODY_SCHEMA and k not in pe.RECORD_KINDS]
-    assert later == ["WITHDRAW", "PROPOSAL", "PROPOSAL_REPLY"]
+    assert later == ["PROPOSAL", "PROPOSAL_REPLY"]
     goods += [
         (
             f"an envelope of the kind {kind}, which no document defines yet, with an empty body",
@@ -1219,6 +1227,7 @@ def encoding_category() -> Category:
         for label in ("the CHANGE of sync.md, section 16.2", "the RESYNC of sync.md, section 16.3")
     )
     assert change_body[10 + 32] == 0  # origin: union index 0, null
+    withdraw_body = cast(bytes, sy.read_all("Envelope", WITHDRAW_MSG[10:])["body"])
     forward: bytes = sy.EXAMPLE_MESSAGES["the FORWARD of sync.md, section 16.5"]
     forward_body = cast(bytes, sy.read_all("Envelope", forward[10:])["body"])
     schema_at = len(forward_body) - len(sy.APPOINTMENT_OFFERED.encode()) - 3  # the union index of schema
@@ -1245,6 +1254,15 @@ def encoding_category() -> Category:
             ack_body[:outcome_at] + keys.zigzag(len(pe.OUTCOME["symbols"])) + ack_body[outcome_at + 1 :],
         ),
         ("an empty body for an ACK", "ACK", b""),
+        ("a WITHDRAW body with a byte left over", "WITHDRAW", withdraw_body + b"\x00"),
+        ("a WITHDRAW body whose key has 31 bytes", "WITHDRAW", withdraw_body[:-1]),
+        (
+            "a WITHDRAW body with the fingerprint of axt.Resync",
+            "WITHDRAW",
+            withdraw_body[:2] + sy.SPEC_FP["Resync"] + withdraw_body[10:],
+        ),
+        ("a WITHDRAW body of the RESYNC schema", "WITHDRAW", resync_body),
+        ("an empty body for a WITHDRAW", "WITHDRAW", b""),
         ("a CHANGE body with a byte left over", "CHANGE", change_body + b"\x00"),
         ("a CHANGE body cut short", "CHANGE", change_body[:-1]),
         (
@@ -1303,6 +1321,7 @@ def encoding_category() -> Category:
         ("the DEVICE_ADD of keys.md, section 7.5", ADD_MSG),
         ("the MANIFEST of cat-a-log of manifest.md, section 10.3", pe.m1),
         ("a DELETE, with an empty body", pe.del_unknown),
+        ("the WITHDRAW of shares.md, section 11.2", WITHDRAW_MSG),
     ]:
         d = message_meaning(msg)
         c.add("encode_message", label, ["envelope.md 2", "envelope.md 3"], d, accept({"message": B(msg)}))
@@ -2143,6 +2162,9 @@ def session_config(
     }
 
 
+RECORD_OUTCOMES = ("APPLIED", "DUPLICATE", "STALE", "WITHDRAWN")  # of a record message in a session
+
+
 def run_session(
     c: Category,
     label: str,
@@ -2167,9 +2189,9 @@ def run_session(
             opts = step[3] if len(step) > 3 else {}
             what, replies = app.receive(m)
             answers, errors = normalize_replies(replies)
-            outcome = what if what in ("APPLIED", "DUPLICATE", "STALE") else None
+            outcome = what if what in RECORD_OUTCOMES else None
             close = what.endswith(": close")
-            if want in ("APPLIED", "DUPLICATE", "STALE") and not opts.get("device"):
+            if want in RECORD_OUTCOMES and not opts.get("device"):
                 assert what == want, (label, what, want)
             elif want == "taken":
                 assert not replies and (
@@ -2746,6 +2768,8 @@ def protocol_category() -> Category:
         ("APPLIED", "KEPT", "APPLIED"),
         ("DUPLICATE", "MERGED", "MERGED"),
         ("MERGED", "DUPLICATE", "MERGED"),
+        ("KEPT", "WITHDRAWN", "WITHDRAWN"),
+        ("WITHDRAWN", "KEPT", "WITHDRAWN"),
     ]:
         acks = [
             pe.obf_app.reply(
@@ -2876,7 +2900,152 @@ def protocol_category() -> Category:
             ("query", "accepted", A, {"accepted": False}),
         ],
     )
+    withdraw_sessions(c, r, OBF_SEED, obf_readers, obf_takes, ambiguous, may_close)
     return c
+
+
+def withdraw_sessions(
+    c: Category,
+    r: Callable[..., tuple[str, bytes, str, dict[str, Any]]],
+    seed: bytes,
+    readers: dict[str, Any],
+    takes: set[str],
+    ambiguous: dict[str, Any],
+    may_close: dict[str, Any],
+) -> None:
+    """Old Brain Fix gets WITHDRAW messages of cat-a-log (spec/shares.md, sections 3.3 and 4)."""
+    rid, A, T = se.REC_ID, "axt.example.v1.Appointment", "axt.example.v1.Task"
+    ap, ap_text, OID = pe.APPOINTMENT, pe.APPOINTMENT_TEXT, pe.OFFER_ID
+    accepted = [
+        r(pe.m1, "taken"),
+        r(pe.offer_msg, "answers", answers={OID: {A: "ACCEPT", "axt.example.v1.Pet": "NOT_WANTED"}}),
+    ]
+
+    def wd(version: int, to: bytes = OBF, record_id: str = rid) -> bytes:
+        return cast(bytes, se.withdraw_message(CAT_SEED, to, record_id, version)[1])
+
+    def broken(record: tuple[str, int] | None, body: bytes) -> bytes:
+        return cast(bytes, pe.make_message("WITHDRAW", CAT_SEED, record, [(body, "a body")], check=False)[1])
+
+    body = cast(bytes, sy.read_all("Envelope", WITHDRAW_MSG[10:])["body"])
+
+    def session(label: str, refs: list[str], steps: list[Any]) -> None:
+        run_session(c, label, refs, seed, me.OLD_BRAIN_FIX, readers, takes, CAT, steps)
+
+    def ack(version: int, outcome: str, receiver_version: int | None = None) -> dict[str, Any]:
+        return {
+            "id": rid,
+            "version": version,
+            "outcome": outcome,
+            "receiver_version": version if receiver_version is None else receiver_version,
+            "kept_fields": [],
+        }
+
+    session(
+        "a WITHDRAW through the version rule: an unknown id, repeats, a DATA, a DELETE and a WITHDRAW "
+        "after it",
+        [
+            "shares.md 4.1",
+            "shares.md 4.2",
+            "shares.md 5.1",
+            "shares.md 6.2",
+            "shares.md 6.3",
+            "records.md 5.2",
+        ],
+        accepted
+        + [
+            r(wd(4), "WITHDRAWN"),
+            ("query", "record", rid, {"record": {"version": 4, "state": "withdrawn"}}),
+            r(wd(4), "DUPLICATE"),
+            r(wd(3), "STALE"),
+            r(pe.obf_data(rid, 3, ap_text, ap), "STALE"),
+            r(pe.obf_data(rid, 4, ap_text, ap), "DUPLICATE"),
+            (
+                "flush",
+                [
+                    ack(4, "WITHDRAWN"),
+                    ack(4, "DUPLICATE"),
+                    ack(3, "STALE", 4),
+                    ack(3, "STALE", 4),
+                    ack(4, "DUPLICATE"),
+                ],
+            ),
+            r(pe.obf_data(rid, 5, ap_text, ap), "APPLIED"),
+            ("query", "record", rid, {"record": {"version": 5, "state": "there"}}),
+            r(wd(6), "WITHDRAWN"),
+            ("query", "record", rid, {"record": {"version": 6, "state": "withdrawn"}}),
+            r(pe.make_message("DELETE", CAT_SEED, (rid, 7), [], check=False)[1], "APPLIED"),
+            ("query", "record", rid, {"record": {"version": 7, "state": "tombstone"}}),
+            r(wd(8), "WITHDRAWN"),
+            ("query", "record", rid, {"record": {"version": 8, "state": "withdrawn"}}),
+            ("flush", [ack(5, "APPLIED"), ack(6, "WITHDRAWN"), ack(7, "APPLIED"), ack(8, "WITHDRAWN")]),
+        ],
+    )
+    session(
+        "a WITHDRAW whose to is another key is ignored, before its id is checked",
+        ["shares.md 3.3", "shares.md 4.1", "protocol.md 9.1"],
+        accepted
+        + [
+            r(wd(4, pe.OTHER), "ignored"),
+            r(wd(4, pe.OTHER, "vet-appointment"), "ignored"),
+            ("query", "record", rid, {"record": None}),
+            ("flush", []),
+        ],
+    )
+    session(
+        "a WITHDRAW with an id or a version that is not valid",
+        ["shares.md 4.1", "records.md 2", "records.md 3"],
+        accepted
+        + [
+            r(wd(4, OBF, "vet-appointment"), "ERROR RECORD_ID_INVALID"),
+            r(wd(4, OBF, "00000000-0000-0000-0000-000000000000"), "ERROR RECORD_ID_INVALID"),
+            r(wd(4, OBF, "ffffffff-ffff-ffff-ffff-ffffffffffff"), "ERROR RECORD_ID_INVALID"),
+            r(wd(0), "ERROR VERSION_INVALID"),
+            r(wd(-1), "ERROR VERSION_INVALID"),
+            ("query", "record", rid, {"record": None}),
+        ],
+    )
+    session(
+        "a WITHDRAW without any accepted offer",
+        ["shares.md 4.1", "shares.md 8.1", "protocol.md 6.2"],
+        [r(pe.m1, "taken"), r(wd(4), "ERROR NOT_ACCEPTED")],
+    )
+    other = "5d6e7f80-91a2-4b3c-8d4e-5f60718293a4"
+    third = "6e7f8091-a2b3-4c4d-9e5f-60718293a4b5"
+    session(
+        "step 5 checks no offer for an id the receiver holds from that sender, and an offer of any type "
+        "for an id it does not hold",
+        ["shares.md 4.1", "shares.md 8.1", "protocol.md 6.2"],
+        accepted
+        + [
+            r(pe.obf_data(rid, 3, ap_text, ap), "APPLIED"),
+            r(wd(4, OBF, third), "WITHDRAWN"),
+            ("close",),
+            r(pe.m1, "taken"),
+            r(wd(5, OBF, other), "ERROR NOT_ACCEPTED"),
+            r(wd(4), "WITHDRAWN"),
+            r(wd(5, OBF, third), "WITHDRAWN"),
+            r(pe.task_offer, "answers", answers={"0c9b8a7f-6e5d-4c3b-a291-8f7e6d5c4b3a": {T: "ACCEPT"}}),
+            r(wd(4, OBF, other), "WITHDRAWN"),
+            ("query", "record", rid, {"record": {"version": 4, "state": "withdrawn"}}),
+            ("query", "record", third, {"record": {"version": 5, "state": "withdrawn"}}),
+        ],
+    )
+    for label, m in [
+        ("without a record", broken(None, body)),
+        ("with an empty body", broken((rid, 4), b"")),
+        (
+            "with a body of the fingerprint of axt.Resync",
+            broken((rid, 4), body[:2] + sy.SPEC_FP["Resync"] + body[10:]),
+        ),
+        ("with a byte left over in its body", broken((rid, 4), body + b"\x00")),
+        ("whose to has 31 bytes", broken((rid, 4), body[:-1])),
+    ]:
+        session(
+            f"a WITHDRAW {label} is rejected with INVALID_MESSAGE",
+            ["shares.md 3.3", "shares.md 4.1", "envelope.md 2.2"],
+            accepted + [r(m, "ERROR INVALID_MESSAGE", **may_close)],
+        )
 
 
 # --- QR code (spec/transports.md, section 3) -----------------------------------------------
@@ -3616,6 +3785,681 @@ def records_category() -> Category:
     return c
 
 
+# --- shares (spec/shares.md) ------------------------------------------------------------------
+# The expected results are written out from spec/shares.md; the receiver and the sender of
+# shares_examples.py must reach each of them.
+
+
+def withdrawal_versions() -> list[tuple[str, list[str], dict[str, Any], Any]]:
+    """The versions of a withdrawal and of a sharing again (spec/shares.md, sections 3.2 and 6.2): the
+    cases of an installation that counts go to the category shares, those of a device that stamps,
+    which needs the stamps of spec/sync.md, to the category sync."""
+    now = 1763459400000  # 2025-11-18 09:50 UTC
+    clock = now * 65536
+    cases: list[tuple[str, list[str], dict[str, Any], Any]] = [
+        (
+            "an installation that counts withdraws with the next count, and its state stays",
+            ["shares.md 3.2"],
+            {"occasion": "withdraw", "counted": True, "highest_given": "3", "state_stamp": "3"},
+            ("4", "3"),
+        ),
+        (
+            "an installation that counts shares again with the next count, its new version",
+            ["shares.md 6.2"],
+            {"occasion": "share_again", "counted": True, "highest_given": "4", "state_stamp": "3"},
+            ("5", "5"),
+        ),
+        (
+            "a device that stamps withdraws with the next stamp, which is no state stamp",
+            ["shares.md 3.2", "sync.md 2.2"],
+            {
+                "occasion": "withdraw",
+                "counted": False,
+                "now_ms": str(now),
+                "highest": str(clock - 9),
+                "r": 7,
+                "withdrawals": [],
+                "state_stamp": str(clock - 9),
+            },
+            (str(clock + 7), str(clock - 9)),
+        ),
+        (
+            "a device that stamps counts the recorded withdrawals as stamps it has seen",
+            ["shares.md 3.2", "shares.md 2.1"],
+            {
+                "occasion": "withdraw",
+                "counted": False,
+                "now_ms": str(now),
+                "highest": str(clock - 9),
+                "r": 7,
+                "withdrawals": [str(clock + 500), str(clock + 100)],
+                "state_stamp": str(clock - 9),
+            },
+            (str(clock + 508), str(clock - 9)),
+        ),
+        (
+            "a device that stamps shares again with a new state stamp above the withdrawal",
+            ["shares.md 6.2", "sync.md 3.3"],
+            {
+                "occasion": "share_again",
+                "counted": False,
+                "now_ms": str(now - 1),
+                "highest": str(clock - 9),
+                "r": 3,
+                "withdrawals": [str(clock + 500)],
+                "state_stamp": str(clock - 9),
+            },
+            (str(clock + 504), str(clock + 504)),
+        ),
+        (
+            "a device that can take no stamp sends no WITHDRAW",
+            ["shares.md 3.2", "sync.md 2.3"],
+            {
+                "occasion": "withdraw",
+                "counted": False,
+                "now_ms": str(now),
+                "highest": str(sy.LAST_BASE),
+                "r": 0,
+                "withdrawals": [],
+                "state_stamp": "5",
+            },
+            (None, "5"),
+        ),
+    ]
+    out: list[tuple[str, list[str], dict[str, Any], Any]] = []
+    for label, refs, i, want in cases:
+        full = {"highest_given": "0", "now_ms": "0", "highest": "0", "r": 0, "withdrawals": [], **i}
+        version, state, highest = se.take_version(
+            full["occasion"],
+            full["counted"],
+            int(full["highest_given"]),
+            int(full["now_ms"]),
+            int(full["highest"]),
+            full["r"],
+            [int(w) for w in full["withdrawals"]],
+            int(full["state_stamp"]),
+        )
+        assert (sy.stamp_json(version), str(state)) == want, (label, version, state)
+        out.append((label, refs, dict(i), (*want, str(highest))))
+    return out
+
+
+def shares_category() -> Category:
+    c = Category(
+        "shares",
+        "A receiver applying the withdrawals of one sender among its other record messages, and what a "
+        "sender does: the version of a withdrawal, what it owes a receiver, what it does with an outcome "
+        "(spec/shares.md).",
+    )
+    rid, other = se.REC_ID, "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+    v1 = {
+        "title": "Vet",
+        "start": tm.zoned(2025, 11, 18, 10, 0, tm.BERLIN, tm.CET),
+        "end": None,
+        "all_day": False,
+        "location": "",
+        "notes": "",
+        "reminders": [],
+    }
+    v3 = dict(v1, start=tm.zoned(2025, 11, 18, 10, 30, tm.BERLIN, tm.CET), notes="Bring the vaccination card")
+    task = json.loads(json.dumps(rules.DATA["Task"]))
+    mine = "Dr. Weber, Hauptstr. 5"
+    merged = dict(v3, location=mine)
+
+    def withdraw(version: int, record_id: str = rid) -> dict[str, Any]:
+        return {"message": {"kind": "WITHDRAW", "id": record_id, "version": version}}
+
+    def take(record_id: str = rid) -> dict[str, Any]:
+        return {"local_take": {"id": record_id}}
+
+    def policy(on_delete: str, on_withdraw: str | None) -> dict[str, Any]:
+        p = {"local_changes": "per_field", "delete_with_local_changes": on_delete}
+        if on_withdraw is not None:
+            p["withdraw_with_local_changes"] = on_withdraw
+        return p
+
+    def scenario(label: str, refs: list[str], pol: dict[str, Any], steps: list[Any]) -> None:
+        events = [e for e, _ in steps]
+        results = [{} if r is None else r for _, r in steps]
+        assert se.apply(pol, json.loads(json.dumps(events))) == results, label
+        c.add("receive", label, refs, {"policy": pol, "events": events}, {"steps": results})
+
+    gone = "withdrawn"
+    scenario(
+        "the example of shares.md, section 11.1",
+        ["shares.md 4.2", "shares.md 4.3", "shares.md 6.2", "shares.md 11.1", "protocol.md 7.3"],
+        policy("delete", "keep"),
+        [
+            (data(3, v3), done("APPLIED", 3, "there", v3)),
+            (withdraw(4), done("WITHDRAWN", 4, gone, None)),
+            (data(3, v3), done("STALE", 4, gone, None)),
+            (data(5, v3), done("APPLIED", 5, "there", v3)),
+            (change("location", mine), None),
+            (withdraw(6), done("KEPT", 6, "there", merged)),
+            (take(), done("WITHDRAWN", 6, gone, None)),
+        ],
+    )
+    scenario(
+        "a WITHDRAW of an id the receiver does not have leaves a tombstone that older and equal versions "
+        "do not pass, and a later DATA shares the record again",
+        ["shares.md 4.2", "shares.md 6.2", "records.md 5.3"],
+        policy("delete", None),
+        [
+            (withdraw(4, other), done("WITHDRAWN", 4, gone, None)),
+            (data(3, v1, other), done("STALE", 4, gone, None)),
+            (data(4, v1, other), done("DUPLICATE", 4, gone, None)),
+            (withdraw(4, other), done("DUPLICATE", 4, gone, None)),
+            (data(5, task, other, TASK_T), done("APPLIED", 5, "there", task)),
+        ],
+    )
+    scenario(
+        "a WITHDRAW removes a record its user has not changed, also at a receiver that keeps changes",
+        ["shares.md 4.2", "shares.md 4.3"],
+        policy("keep", "keep"),
+        [(data(1, v1), done("APPLIED", 1, "there", v1)), (withdraw(2), done("WITHDRAWN", 2, gone, None))],
+    )
+    scenario(
+        "a WITHDRAW removes a record its user changed at a receiver that removes it",
+        ["shares.md 4.3", "records.md 6.4"],
+        policy("keep", "delete"),
+        [
+            (data(1, v1), done("APPLIED", 1, "there", v1)),
+            (change("location", mine), None),
+            (withdraw(2), done("WITHDRAWN", 2, gone, None)),
+            (data(3, v3), done("APPLIED", 3, "there", v3)),
+        ],
+    )
+    scenario(
+        "a record its user changed is kept against a WITHDRAW, and a later DATA is merged into it",
+        ["shares.md 4.3", "shares.md 6.2"],
+        policy("delete", "keep"),
+        [
+            (data(1, v1), done("APPLIED", 1, "there", v1)),
+            (change("location", mine), None),
+            (withdraw(2), done("KEPT", 2, "there", dict(v1, location=mine))),
+            (data(1, v1), done("STALE", 2, "there", dict(v1, location=mine))),
+            (data(3, v3), done("MERGED", 3, "there", merged, ["location"])),
+        ],
+    )
+    scenario(
+        "a record kept against a DELETE meets a WITHDRAW, and one kept against a WITHDRAW meets a DELETE",
+        ["shares.md 4.2", "shares.md 4.3", "shares.md 6.3"],
+        policy("keep", "keep"),
+        [
+            (data(1, v1), done("APPLIED", 1, "there", v1)),
+            (change("location", mine), None),
+            (delete(2), done("KEPT", 2, "there", dict(v1, location=mine))),
+            (withdraw(3), done("KEPT", 3, "there", dict(v1, location=mine))),
+            (delete(4), done("KEPT", 4, "there", dict(v1, location=mine))),
+            (take(), done("APPLIED", 4, "tombstone", None)),
+        ],
+    )
+    scenario(
+        "a receiver may choose otherwise for a WITHDRAW than for a DELETE",
+        ["shares.md 4.3"],
+        policy("keep", "delete"),
+        [
+            (data(1, v1), done("APPLIED", 1, "there", v1)),
+            (change("location", mine), None),
+            (delete(2), done("KEPT", 2, "there", dict(v1, location=mine))),
+            (withdraw(3), done("WITHDRAWN", 3, gone, None)),
+        ],
+    )
+    scenario(
+        "a WITHDRAW of a record its user deleted: the user's deletion goes on standing beside it",
+        ["shares.md 4.2", "records.md 6.3"],
+        policy("delete", None),
+        [
+            (data(1, v1), done("APPLIED", 1, "there", v1)),
+            (user_delete(), None),
+            (withdraw(2), done("WITHDRAWN", 2, "deleted_by_user", None)),
+            (data(3, v3), done("KEPT", 3, "deleted_by_user", None)),
+        ],
+    )
+    scenario(
+        "a WITHDRAW of a record its user changed and then deleted: the deletion decides, WITHDRAWN, never "
+        "KEPT",
+        ["shares.md 4.2", "records.md 6.3"],
+        policy("keep", "keep"),
+        [
+            (data(1, v1), done("APPLIED", 1, "there", v1)),
+            (change("location", mine), None),
+            (user_delete(), None),
+            (withdraw(2), done("WITHDRAWN", 2, "deleted_by_user", None)),
+        ],
+    )
+    scenario(
+        "a WITHDRAW after a DELETE, a DELETE after a WITHDRAW, and a WITHDRAW after a WITHDRAW",
+        ["shares.md 4.2", "shares.md 6.3"],
+        policy("delete", None),
+        [
+            (data(1, v1), done("APPLIED", 1, "there", v1)),
+            (delete(2), done("APPLIED", 2, "tombstone", None)),
+            (withdraw(3), done("WITHDRAWN", 3, gone, None)),
+            (delete(2), done("STALE", 3, gone, None)),
+            (delete(4), done("APPLIED", 4, "tombstone", None)),
+            (withdraw(5), done("WITHDRAWN", 5, gone, None)),
+            (withdraw(6), done("WITHDRAWN", 6, gone, None)),
+            (data(7, v3), done("APPLIED", 7, "there", v3)),
+        ],
+    )
+    scenario(
+        "one version in two kinds: the first that arrives is applied, the second is a duplicate",
+        ["shares.md 6.3", "records.md 3"],
+        policy("delete", None),
+        [
+            (data(4, v1), done("APPLIED", 4, "there", v1)),
+            (withdraw(4), done("DUPLICATE", 4, "there", v1)),
+            (withdraw(5), done("WITHDRAWN", 5, gone, None)),
+            (delete(5), done("DUPLICATE", 5, gone, None)),
+        ],
+    )
+    scenario(
+        "two devices of the sender send the same withdrawal: the receiver takes the first",
+        ["shares.md 7.2"],
+        policy("delete", None),
+        [
+            (data(1, v1), done("APPLIED", 1, "there", v1)),
+            (withdraw(2), done("WITHDRAWN", 2, gone, None)),
+            (withdraw(2), done("DUPLICATE", 2, gone, None)),
+        ],
+    )
+    scenario(
+        "a record keeps its type through a tombstone of a withdrawal",
+        ["shares.md 4.2", "records.md 4.3"],
+        policy("delete", None),
+        [
+            (data(1, v1), done("APPLIED", 1, "there", v1)),
+            (withdraw(2), done("WITHDRAWN", 2, gone, None)),
+            (data(3, task, rid, TASK_T), failed("TYPE_CHANGED")),
+            (data(3, v1), done("APPLIED", 3, "there", v1)),
+        ],
+    )
+    scenario(
+        "a WITHDRAW that cannot be processed changes nothing",
+        ["shares.md 4.1"],
+        policy("delete", None),
+        [
+            (data(1, v1), done("APPLIED", 1, "there", v1)),
+            (withdraw(2, "vet-appointment"), failed("RECORD_ID_INVALID")),
+            (withdraw(2, "00000000-0000-0000-0000-000000000000"), failed("RECORD_ID_INVALID")),
+            (withdraw(0), failed("VERSION_INVALID")),
+            (withdraw(-1), failed("VERSION_INVALID")),
+            (data(1, v1), done("DUPLICATE", 1, "there", v1)),
+        ],
+    )
+
+    # The version of a withdrawal and of a sharing again by an installation that counts (sections 3.2 and
+    # 6.2); those of a device that stamps are in the category sync.
+    for label, refs, i, want in withdrawal_versions():
+        if i.pop("counted"):
+            c.add("take_version", label, refs, i, accept({"version": want[0], "state_stamp": want[1]}))
+
+    # What a device owes a receiver (sections 5.3 and 6.1).
+    def last(kind: str, version: int) -> dict[str, Any]:
+        return {"kind": kind, "version": str(version)}
+
+    cases_2: list[tuple[str, list[str], dict[str, Any], Any]] = [
+        (
+            "a record that is shared: its DATA under its state stamp",
+            ["shares.md 5.3"],
+            {"shared": True, "deleted": False, "version": "7", "withdrawal": None, "last": None},
+            ("DATA", "7"),
+        ),
+        (
+            "a deleted record that is shared: its DELETE",
+            ["shares.md 5.3"],
+            {"shared": True, "deleted": True, "version": "8", "withdrawal": None, "last": last("DATA", 7)},
+            ("DELETE", "8"),
+        ),
+        (
+            "a record that is shared again: its DATA, though a withdrawal is recorded",
+            ["shares.md 5.3", "shares.md 6.2"],
+            {
+                "shared": True,
+                "deleted": False,
+                "version": "5",
+                "withdrawal": "4",
+                "last": last("WITHDRAW", 4),
+            },
+            ("DATA", "5"),
+        ),
+        (
+            "a record withdrawn from the receiver: the WITHDRAW under the recorded version, not its state "
+            "stamp",
+            ["shares.md 5.3", "shares.md 7.2"],
+            {
+                "shared": False,
+                "deleted": False,
+                "version": "7",
+                "withdrawal": "6",
+                "last": last("WITHDRAW", 6),
+            },
+            ("WITHDRAW", "6"),
+        ),
+        (
+            "a sibling that got the withdrawal by sibling sync owes the recorded WITHDRAW",
+            ["shares.md 6.1", "shares.md 7.2"],
+            {"shared": False, "deleted": False, "version": "3", "withdrawal": "4", "last": None},
+            ("WITHDRAW", "4"),
+        ),
+        (
+            "a device whose last DATA is below the recorded withdrawal owes the recorded WITHDRAW",
+            ["shares.md 6.1", "shares.md 5.3"],
+            {"shared": False, "deleted": False, "version": "7", "withdrawal": "6", "last": last("DATA", 5)},
+            ("WITHDRAW", "6"),
+        ),
+        (
+            "a record never shared with the receiver: nothing",
+            ["shares.md 2.2", "shares.md 5.3"],
+            {"shared": False, "deleted": False, "version": "3", "withdrawal": None, "last": None},
+            ("nothing", None),
+        ),
+        (
+            "a record whose last message to the receiver was a DELETE, without a recorded withdrawal: "
+            "nothing",
+            ["shares.md 5.3", "shares.md 6.1"],
+            {"shared": False, "deleted": True, "version": "4", "withdrawal": None, "last": last("DELETE", 4)},
+            ("nothing", None),
+        ),
+        (
+            "a device that sent a DATA above the recorded withdrawal withdraws the record itself",
+            ["shares.md 6.1"],
+            {"shared": False, "deleted": False, "version": "9", "withdrawal": "6", "last": last("DATA", 8)},
+            ("new_withdrawal", None),
+        ),
+        (
+            "a device whose last message was a DATA and that holds no withdrawal of a record no longer "
+            "shared withdraws it",
+            ["shares.md 5.3", "shares.md 6.1"],
+            {"shared": False, "deleted": False, "version": "3", "withdrawal": None, "last": last("DATA", 3)},
+            ("new_withdrawal", None),
+        ),
+    ]
+    for label, refs, i, want in cases_2:
+        sent = None if i["last"] is None else (i["last"]["kind"], int(i["last"]["version"]))
+        got = se.owed(
+            i["shared"],
+            i["deleted"],
+            int(i["version"]),
+            None if i["withdrawal"] is None else int(i["withdrawal"]),
+            sent,
+        )
+        assert (got[0], sy.stamp_json(got[1])) == want, (label, got)
+        c.add("owed", label, refs, i, accept({"owes": want[0], "version": want[1]}))
+
+    # What a device does with the version to pass after the wait (section 5.3).
+    passes: list[tuple[str, dict[str, Any], str]] = [
+        (
+            "a withdrawn record whose recorded withdrawal is still below the version to pass: a new "
+            "withdrawal, though the state stamp is above it",
+            {"shared": False, "withdrawal": "6", "to_pass": "8", "state_stamp": "9"},
+            "new_withdrawal",
+        ),
+        (
+            "a withdrawn record whose recorded withdrawal a sibling has taken above the version to pass: "
+            "nothing more",
+            {"shared": False, "withdrawal": "9", "to_pass": "8", "state_stamp": "7"},
+            "nothing",
+        ),
+        (
+            "a withdrawn record with no recorded withdrawal: a new withdrawal",
+            {"shared": False, "withdrawal": None, "to_pass": "8", "state_stamp": "9"},
+            "new_withdrawal",
+        ),
+        (
+            "a record shared again by the end of the wait, whose state stamp is above the version to pass: "
+            "what it owes, under that state stamp",
+            {"shared": True, "withdrawal": "6", "to_pass": "8", "state_stamp": "9"},
+            "nothing",
+        ),
+        (
+            "a record shared again by the end of the wait, whose state stamp is below the version to pass: "
+            "its current state under a new state stamp",
+            {"shared": True, "withdrawal": "6", "to_pass": "8", "state_stamp": "7"},
+            "send_state",
+        ),
+    ]
+    for label, i, want in passes:
+        then, to_pass = se.pass_withdrawal(
+            i["shared"],
+            None if i["withdrawal"] is None else int(i["withdrawal"]),
+            int(i["to_pass"]),
+            int(i["state_stamp"]),
+        )
+        assert (then, to_pass) == (want, None), label
+        c.add(
+            "pass_withdrawal",
+            label,
+            ["shares.md 5.3", "sync.md 5.3"],
+            i,
+            accept({"then": want, "to_pass": None}),
+        )
+
+    # Two receivers that join (section 7.3).
+    for label, a, b, want in [
+        (
+            "a record shared with one and withdrawn from the other: shared, sent under a new state stamp",
+            (True, None),
+            (False, 6),
+            (True, "6", True),
+        ),
+        ("a record shared with both: shared", (True, None), (True, None), (True, None, False)),
+        (
+            "a record withdrawn from both: withdrawn, with the higher recorded withdrawal",
+            (False, 6),
+            (False, 9),
+            (False, "9", False),
+        ),
+        (
+            "a record withdrawn from one and never shared with the other: withdrawn",
+            (False, None),
+            (False, 6),
+            (False, "6", False),
+        ),
+        ("a record shared with neither: nothing", (False, None), (False, None), (False, None, False)),
+    ]:
+        got_j = se.joined(a, b)
+        assert (got_j[0], sy.stamp_json(got_j[1]), got_j[2]) == want, label
+        side = [{"shared": x[0], "withdrawal": sy.stamp_json(x[1])} for x in (a, b)]
+        c.add(
+            "join_receivers",
+            label,
+            ["shares.md 7.3", "sync.md 3.3"],
+            {"receivers": side},
+            accept({"shared": want[0], "withdrawal": want[1], "new_state_stamp": want[2]}),
+        )
+
+    # The offer to an app of another user (section 2.2).
+    for label, records, want in [
+        (
+            "a type is offered for a WITHDRAW still owed, and the count counts it",
+            [("Appointment", "WITHDRAW", False), ("Appointment", "DATA", False), ("Pet", "nothing", False)],
+            [("Appointment", 2)],
+        ),
+        (
+            "a type whose only record is withdrawn with an outcome, or never shared, is not offered",
+            [("Appointment", "WITHDRAW", True), ("Pet", "nothing", False), ("Task", "DELETE", False)],
+            [("Task", 1)],
+        ),
+    ]:
+        typed = [(f"axt.example.v1.{t}", o, d) for t, o, d in records]
+        assert se.offer(typed) == [(f"axt.example.v1.{t}", n) for t, n in want], label
+        c.add(
+            "offer_types",
+            label,
+            ["shares.md 2.2", "protocol.md 4.1"],
+            {"records": [{"type": t, "owes": o, "delivered": d} for t, o, d in typed]},
+            accept({"types": [{"type": f"axt.example.v1.{t}", "count": n} for t, n in want]}),
+        )
+
+    # What a device does with an outcome (sections 5.2 and 5.3).
+    base: dict[str, Any] = {
+        "held": None,
+        "receiver_version": "6",
+        "shared": False,
+        "withdrawal": "6",
+        "state_stamp": "5",
+        "sibling_stamp": None,
+        "sibling": False,
+    }
+    cases_3: list[tuple[str, list[str], dict[str, Any], Any]] = [
+        (
+            "WITHDRAWN delivers a WITHDRAW",
+            ["shares.md 5.2"],
+            {"sent": "WITHDRAW", "outcome": "WITHDRAWN"},
+            ("WITHDRAWN", "nothing", None),
+        ),
+        (
+            "KEPT delivers a WITHDRAW",
+            ["shares.md 5.2"],
+            {"sent": "WITHDRAW", "outcome": "KEPT"},
+            ("KEPT", "nothing", None),
+        ),
+        (
+            "a later WITHDRAWN replaces KEPT",
+            ["shares.md 5.2", "protocol.md 7.3"],
+            {"sent": "WITHDRAW", "held": "KEPT", "outcome": "WITHDRAWN"},
+            ("WITHDRAWN", "nothing", None),
+        ),
+        (
+            "a later KEPT does not replace WITHDRAWN",
+            ["shares.md 5.2", "protocol.md 7.4"],
+            {"sent": "WITHDRAW", "held": "WITHDRAWN", "outcome": "KEPT"},
+            ("WITHDRAWN", "nothing", None),
+        ),
+        (
+            "WITHDRAWN replaces DUPLICATE",
+            ["shares.md 5.2", "protocol.md 7.4"],
+            {"sent": "WITHDRAW", "held": "DUPLICATE", "outcome": "WITHDRAWN"},
+            ("WITHDRAWN", "nothing", None),
+        ),
+        (
+            "APPLIED for a WITHDRAW is taken as DUPLICATE",
+            ["shares.md 5.2"],
+            {"sent": "WITHDRAW", "outcome": "APPLIED"},
+            ("DUPLICATE", "nothing", None),
+        ),
+        (
+            "MERGED for a WITHDRAW is taken as DUPLICATE, and does not replace KEPT",
+            ["shares.md 5.2"],
+            {"sent": "WITHDRAW", "held": "KEPT", "outcome": "MERGED"},
+            ("KEPT", "nothing", None),
+        ),
+        (
+            "WITHDRAWN for a DATA is taken as DUPLICATE",
+            ["shares.md 5.2"],
+            {"sent": "DATA", "outcome": "WITHDRAWN"},
+            ("DUPLICATE", "nothing", None),
+        ),
+        (
+            "WITHDRAWN for a DELETE does not replace KEPT",
+            ["shares.md 5.2"],
+            {"sent": "DELETE", "held": "KEPT", "outcome": "WITHDRAWN"},
+            ("KEPT", "nothing", None),
+        ),
+        (
+            "a DATA sent before the withdrawal and answered with STALE and its version: nothing more",
+            ["shares.md 5.3", "shares.md 11.1"],
+            {
+                "sent": "DATA",
+                "held": "APPLIED",
+                "outcome": "STALE",
+                "receiver_version": "4",
+                "withdrawal": "4",
+                "state_stamp": "3",
+            },
+            ("APPLIED", "nothing", None),
+        ),
+        (
+            "STALE for a DATA above every version the device knows: a new withdrawal where it is withdrawn",
+            ["shares.md 5.3", "sync.md 5.3"],
+            {
+                "sent": "DATA",
+                "outcome": "STALE",
+                "receiver_version": "9",
+                "withdrawal": "6",
+                "state_stamp": "7",
+                "sibling_stamp": "8",
+            },
+            ("STALE", "new_withdrawal", None),
+        ),
+        (
+            "STALE for a DATA above every version the device knows: the current state where it is shared",
+            ["shares.md 5.3", "sync.md 5.3"],
+            {
+                "sent": "DATA",
+                "outcome": "STALE",
+                "receiver_version": "9",
+                "shared": True,
+                "withdrawal": "6",
+                "state_stamp": "7",
+            },
+            ("STALE", "send_state", None),
+        ),
+        (
+            "STALE for a DATA at the version of a sibling's state stamp: nothing more",
+            ["shares.md 5.3", "sync.md 5.3"],
+            {
+                "sent": "DATA",
+                "outcome": "STALE",
+                "receiver_version": "8",
+                "withdrawal": "6",
+                "state_stamp": "7",
+                "sibling_stamp": "8",
+            },
+            ("STALE", "nothing", None),
+        ),
+        (
+            "STALE for a WITHDRAW above its version: a new withdrawal, whatever the state stamps",
+            ["shares.md 5.3"],
+            {
+                "sent": "WITHDRAW",
+                "outcome": "STALE",
+                "receiver_version": "7",
+                "withdrawal": "6",
+                "state_stamp": "9",
+                "sibling_stamp": "9",
+            },
+            ("STALE", "new_withdrawal", None),
+        ),
+        (
+            "STALE for a WITHDRAW of an older withdrawal: nothing more",
+            ["shares.md 5.3"],
+            {"sent": "WITHDRAW", "outcome": "STALE", "receiver_version": "6", "withdrawal": "6"},
+            ("STALE", "nothing", None),
+        ),
+        (
+            "STALE for a WITHDRAW above its version at a device with siblings: it waits for them",
+            ["shares.md 5.3", "sync.md 5.3"],
+            {
+                "sent": "WITHDRAW",
+                "outcome": "STALE",
+                "receiver_version": "7",
+                "withdrawal": "6",
+                "sibling": True,
+            },
+            ("STALE", "wait", "7"),
+        ),
+    ]
+    for label, refs, i, want in cases_3:
+        full = {**base, **i}
+        held, then, to_pass = se.acked(
+            full["sent"],
+            full["held"],
+            full["outcome"],
+            int(full["receiver_version"]),
+            full["shared"],
+            None if full["withdrawal"] is None else int(full["withdrawal"]),
+            int(full["state_stamp"]),
+            None if full["sibling_stamp"] is None else int(full["sibling_stamp"]),
+            full["sibling"],
+        )
+        assert (held, then, sy.stamp_json(to_pass)) == want, (label, held, then, to_pass)
+        c.add("acked", label, refs, full, accept({"outcome": want[0], "then": want[1], "to_pass": want[2]}))
+    return c
+
+
 # --- file (spec/transports.md, section 2) ---------------------------------------------------
 # The scripts write one file; the files below are built by hand, so that each broken one breaks one rule. The
 # expected results are written out from the table of spec/transports.md, section 2.2.
@@ -4173,6 +5017,93 @@ def file_category() -> Category:
     ]
     for label, data, more in rejects:
         add(f"reject {label}", data, reject("FILE_REJECTED"), more)
+
+    # A WITHDRAW in a file (spec/shares.md, section 8.2): the reader names the keys of its own set.
+    def W(n: int, v: int, to: bytes = OBF) -> bytes:
+        return cast(bytes, se.withdraw_message(CAT_SEED, to, rid(n), v)[1])
+
+    def keyed(current: list[bytes], removed: list[bytes] = []) -> dict[str, Any]:  # noqa: B006 (never changed)
+        return {
+            **obf_reader,
+            "keys": {"current": [H(k) for k in current], "removed": [H(k) for k in removed]},
+        }
+
+    shares_refs = ["shares.md 8.2", "transports.md 2.1"]
+    add(
+        "a file for its receiver with WITHDRAW messages: applied by the version rule",
+        container([D(30, 3), W(30, 4), D(30, 3), W(31, 2), D(31, 1), W(31, 2)], [schema(A_)]),
+        read(
+            CAT,
+            [
+                rec(30, 3, "APPLIED"),
+                rec(30, 4, "WITHDRAWN"),
+                rec(30, 3, "STALE"),
+                rec(31, 2, "WITHDRAWN"),
+                rec(31, 1, "STALE"),
+                rec(31, 2, "DUPLICATE"),
+            ],
+        ),
+        shares_refs + ["shares.md 4.2"],
+        keyed([OBF]),
+    )
+    add(
+        "a WITHDRAW whose to is a removed key of the reader's own set is applied",
+        container([W(32, 2)], [schema(A_)]),
+        read(CAT, [rec(32, 2, "WITHDRAWN")]),
+        shares_refs + ["shares.md 7.1"],
+        keyed([pe.OTHER], [OBF]),
+    )
+    add(
+        "a WITHDRAW for another app is not applied, and the file stands",
+        container([D(33), W(33, 2), W(34, 2, unknown)], [schema(A_)]),
+        read(CAT, [rec(33, 1, "APPLIED"), rec(33, 2, "IGNORED"), rec(34, 2, "IGNORED")]),
+        shares_refs + ["shares.md 9"],
+        keyed([pe.OTHER]),
+    )
+    add(
+        "a WITHDRAW is not held back by the reader's manifest, and is checked like every record message",
+        container(
+            [
+                D(35, t=NT),
+                W(35, 2),
+                W(36, 0),
+                pe.make_message("WITHDRAW", CAT_SEED, ("vet", 1), [(W(36, 1)[0x54:-64], "")], check=False)[1],
+            ],
+            [schema(A_), schema(NT)],
+        ),
+        read(
+            CAT,
+            [
+                rec(35, 1, "DOES_NOT_FIT"),
+                rec(35, 2, "WITHDRAWN"),
+                rec(36, 0, "VERSION_INVALID"),
+                rec(0, 1, "RECORD_ID_INVALID", "vet"),
+            ],
+        ),
+        shares_refs + ["manifest.md 7"],
+        {**cat_reader, "keys": {"current": [H(OBF)], "removed": []}},
+    )
+    body = W(37, 1)[0x54:-64]
+
+    def broken(record: tuple[str, int] | None, b: bytes) -> bytes:
+        return cast(bytes, pe.make_message("WITHDRAW", CAT_SEED, record, [(b, "")], check=False)[1])
+
+    for label, m in [
+        ("without a record", broken(None, body)),
+        ("with an empty body", broken((rid(37), 1), b"")),
+        (
+            "with a body of the fingerprint of axt.Resync",
+            broken((rid(37), 1), body[:2] + sy.SPEC_FP["Resync"] + body[10:]),
+        ),
+        ("with a byte left over in its body", broken((rid(37), 1), body + b"\x00")),
+    ]:
+        add(
+            f"reject a file with a WITHDRAW {label}",
+            container([D(38), m], [schema(A_)]),
+            reject("FILE_REJECTED"),
+            shares_refs,
+            keyed([OBF]),
+        )
     # The files the readers of the Python libraries take are taken here as well.
     for data in (env.axt_file, full):
         assert len(list(fastavro.reader(io.BytesIO(data)))) >= 1
@@ -4513,6 +5444,13 @@ def sync_category() -> Category:
             {"device": wire(played.device), "steps": wire(played.steps)},
             {"steps": played.answers},
         )
+    # The version of a withdrawal and of a sharing again by a device that stamps (spec/shares.md,
+    # sections 3.2 and 6.2).
+    for label, refs, inp, want in withdrawal_versions():
+        if not inp.pop("counted"):
+            inp.pop("highest_given", None)
+            result = {"version": want[0], "state_stamp": want[1], "highest": want[2]}
+            c.add("withdrawal_stamp", label, refs, inp, accept(result))
     return c
 
 
@@ -4533,6 +5471,7 @@ CATEGORIES = [
     relay_category,
     relay_server_category,
     sync_category,
+    shares_category,
 ]
 
 
@@ -4579,8 +5518,8 @@ def same_values(v: Any) -> Any:
 # spec/conformance.md, section 7.4, counts them.
 COUNTS = {
     "encoding": (
-        {"fingerprint": 21, "decode_message": 40, "decode_body": 37, "encode_message": 5},
-        {"decode_message": 17, "decode_body": 21},
+        {"fingerprint": 22, "decode_message": 40, "decode_body": 43, "encode_message": 6},
+        {"decode_message": 17, "decode_body": 26},
     ),
     "types": ({"fingerprint": 8, "decode_record": 63}, {"decode_record": 21}),
     "time": (
@@ -4618,8 +5557,8 @@ COUNTS = {
             "open": 8,
         },
     ),
-    "protocol": ({"choose_format": 3, "contact_key": 5, "resend_after_removal": 2, "session": 36}, {}),
-    "file": ({"read_file": 56}, {"read_file": 38}),
+    "protocol": ({"choose_format": 3, "contact_key": 5, "resend_after_removal": 2, "session": 48}, {}),
+    "file": ({"read_file": 64}, {"read_file": 42}),
     "qr": ({"parse_qr": 28, "qr_text": 4}, {"parse_qr": 21}),
     "local": ({"hello_frame": 2, "connection": 20}, {}),
     "relay": ({"mailbox_id": 2, "request": 7, "reaction": 28, "listing": 3}, {}),
@@ -4634,7 +5573,20 @@ COUNTS = {
             "stale": 10,
             "pass_version": 5,
             "shown": 23,
-            "siblings": 422,
+            "siblings": 447,
+            "withdrawal_stamp": 4,
+        },
+        {},
+    ),
+    "shares": (
+        {
+            "receive": 14,
+            "take_version": 2,
+            "owed": 10,
+            "acked": 16,
+            "pass_withdrawal": 5,
+            "join_receivers": 5,
+            "offer_types": 2,
         },
         {},
     ),

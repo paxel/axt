@@ -1,0 +1,2684 @@
+{
+ "format": 1,
+ "specification": "0.1.0",
+ "category": "shares",
+ "description": "A receiver applying the withdrawals of one sender among its other record messages, and what a sender does: the version of a withdrawal, what it owes a receiver, what it does with an outcome (spec/shares.md).",
+ "vectors": [
+  {
+   "id": "shares/receive/the-example-of-shares-md-section-11-1",
+   "op": "receive",
+   "description": "the example of shares.md, section 11.1",
+   "refs": ["shares.md 4.2", "shares.md 4.3", "shares.md 6.2", "shares.md 11.1", "protocol.md 7.3"],
+   "input": {
+    "policy": {
+     "local_changes": "per_field",
+     "delete_with_local_changes": "delete",
+     "withdraw_with_local_changes": "keep"
+    },
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 3,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 30,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763458200000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "Bring the vaccination card",
+        "reminders": []
+       }
+      }
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 4}
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 3,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 30,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763458200000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "Bring the vaccination card",
+        "reminders": []
+       }
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 5,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 30,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763458200000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "Bring the vaccination card",
+        "reminders": []
+       }
+      }
+     },
+     {
+      "local_change": {
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "field": "location",
+       "value": "Dr. Weber, Hauptstr. 5"
+      }
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 6}
+     },
+     {
+      "local_take": {"id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80"}
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 3,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 30,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763458200000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "",
+       "notes": "Bring the vaccination card",
+       "reminders": []
+      }
+     },
+     {
+      "outcome": "WITHDRAWN",
+      "receiver_version": 4,
+      "kept_fields": [],
+      "state": "withdrawn",
+      "value": null
+     },
+     {
+      "outcome": "STALE",
+      "receiver_version": 4,
+      "kept_fields": [],
+      "state": "withdrawn",
+      "value": null
+     },
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 5,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 30,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763458200000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "",
+       "notes": "Bring the vaccination card",
+       "reminders": []
+      }
+     },
+     {},
+     {
+      "outcome": "KEPT",
+      "receiver_version": 6,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 30,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763458200000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "Dr. Weber, Hauptstr. 5",
+       "notes": "Bring the vaccination card",
+       "reminders": []
+      }
+     },
+     {
+      "outcome": "WITHDRAWN",
+      "receiver_version": 6,
+      "kept_fields": [],
+      "state": "withdrawn",
+      "value": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "shares/receive/a-withdraw-of-an-id-the-receiver-does-not-have-leaves-a-tombstone-that-o",
+   "op": "receive",
+   "description": "a WITHDRAW of an id the receiver does not have leaves a tombstone that older and equal versions do not pass, and a later DATA shares the record again",
+   "refs": ["shares.md 4.2", "shares.md 6.2", "records.md 5.3"],
+   "input": {
+    "policy": {"local_changes": "per_field", "delete_with_local_changes": "delete"},
+    "events": [
+     {
+      "message": {"kind": "WITHDRAW", "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7", "version": 4}
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+       "version": 3,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 0,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763456400000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "",
+        "reminders": []
+       }
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+       "version": 4,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 0,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763456400000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "",
+        "reminders": []
+       }
+      }
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7", "version": 4}
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+       "version": 5,
+       "type": "axt.example.v1.Task",
+       "value": {
+        "title": "Give Mimi her worm tablet",
+        "notes": "",
+        "due": {
+         "year": 2026,
+         "month": 12,
+         "day": 1,
+         "hour": 8,
+         "minute": 0,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1796108400000
+        },
+        "due_all_day": false,
+        "repeat": "FREQ=MONTHLY;INTERVAL=3",
+        "done": false,
+        "done_at": null,
+        "priority": "HIGH"
+       }
+      }
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "WITHDRAWN",
+      "receiver_version": 4,
+      "kept_fields": [],
+      "state": "withdrawn",
+      "value": null
+     },
+     {
+      "outcome": "STALE",
+      "receiver_version": 4,
+      "kept_fields": [],
+      "state": "withdrawn",
+      "value": null
+     },
+     {
+      "outcome": "DUPLICATE",
+      "receiver_version": 4,
+      "kept_fields": [],
+      "state": "withdrawn",
+      "value": null
+     },
+     {
+      "outcome": "DUPLICATE",
+      "receiver_version": 4,
+      "kept_fields": [],
+      "state": "withdrawn",
+      "value": null
+     },
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 5,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Give Mimi her worm tablet",
+       "notes": "",
+       "due": {
+        "year": 2026,
+        "month": 12,
+        "day": 1,
+        "hour": 8,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1796108400000
+       },
+       "due_all_day": false,
+       "repeat": "FREQ=MONTHLY;INTERVAL=3",
+       "done": false,
+       "done_at": null,
+       "priority": "HIGH"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "shares/receive/a-withdraw-removes-a-record-its-user-has-not-changed-also-at-a-receiver",
+   "op": "receive",
+   "description": "a WITHDRAW removes a record its user has not changed, also at a receiver that keeps changes",
+   "refs": ["shares.md 4.2", "shares.md 4.3"],
+   "input": {
+    "policy": {
+     "local_changes": "per_field",
+     "delete_with_local_changes": "keep",
+     "withdraw_with_local_changes": "keep"
+    },
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 0,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763456400000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "",
+        "reminders": []
+       }
+      }
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 2}
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763456400000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "",
+       "notes": "",
+       "reminders": []
+      }
+     },
+     {
+      "outcome": "WITHDRAWN",
+      "receiver_version": 2,
+      "kept_fields": [],
+      "state": "withdrawn",
+      "value": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "shares/receive/a-withdraw-removes-a-record-its-user-changed-at-a-receiver-that-removes",
+   "op": "receive",
+   "description": "a WITHDRAW removes a record its user changed at a receiver that removes it",
+   "refs": ["shares.md 4.3", "records.md 6.4"],
+   "input": {
+    "policy": {
+     "local_changes": "per_field",
+     "delete_with_local_changes": "keep",
+     "withdraw_with_local_changes": "delete"
+    },
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 0,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763456400000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "",
+        "reminders": []
+       }
+      }
+     },
+     {
+      "local_change": {
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "field": "location",
+       "value": "Dr. Weber, Hauptstr. 5"
+      }
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 2}
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 3,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 30,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763458200000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "Bring the vaccination card",
+        "reminders": []
+       }
+      }
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763456400000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "",
+       "notes": "",
+       "reminders": []
+      }
+     },
+     {},
+     {
+      "outcome": "WITHDRAWN",
+      "receiver_version": 2,
+      "kept_fields": [],
+      "state": "withdrawn",
+      "value": null
+     },
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 3,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 30,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763458200000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "",
+       "notes": "Bring the vaccination card",
+       "reminders": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "shares/receive/a-record-its-user-changed-is-kept-against-a-withdraw-and-a-later-data-is",
+   "op": "receive",
+   "description": "a record its user changed is kept against a WITHDRAW, and a later DATA is merged into it",
+   "refs": ["shares.md 4.3", "shares.md 6.2"],
+   "input": {
+    "policy": {
+     "local_changes": "per_field",
+     "delete_with_local_changes": "delete",
+     "withdraw_with_local_changes": "keep"
+    },
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 0,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763456400000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "",
+        "reminders": []
+       }
+      }
+     },
+     {
+      "local_change": {
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "field": "location",
+       "value": "Dr. Weber, Hauptstr. 5"
+      }
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 2}
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 0,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763456400000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "",
+        "reminders": []
+       }
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 3,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 30,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763458200000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "Bring the vaccination card",
+        "reminders": []
+       }
+      }
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763456400000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "",
+       "notes": "",
+       "reminders": []
+      }
+     },
+     {},
+     {
+      "outcome": "KEPT",
+      "receiver_version": 2,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763456400000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "Dr. Weber, Hauptstr. 5",
+       "notes": "",
+       "reminders": []
+      }
+     },
+     {
+      "outcome": "STALE",
+      "receiver_version": 2,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763456400000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "Dr. Weber, Hauptstr. 5",
+       "notes": "",
+       "reminders": []
+      }
+     },
+     {
+      "outcome": "MERGED",
+      "receiver_version": 3,
+      "kept_fields": ["location"],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 30,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763458200000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "Dr. Weber, Hauptstr. 5",
+       "notes": "Bring the vaccination card",
+       "reminders": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "shares/receive/a-record-kept-against-a-delete-meets-a-withdraw-and-one-kept-against-a-w",
+   "op": "receive",
+   "description": "a record kept against a DELETE meets a WITHDRAW, and one kept against a WITHDRAW meets a DELETE",
+   "refs": ["shares.md 4.2", "shares.md 4.3", "shares.md 6.3"],
+   "input": {
+    "policy": {
+     "local_changes": "per_field",
+     "delete_with_local_changes": "keep",
+     "withdraw_with_local_changes": "keep"
+    },
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 0,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763456400000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "",
+        "reminders": []
+       }
+      }
+     },
+     {
+      "local_change": {
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "field": "location",
+       "value": "Dr. Weber, Hauptstr. 5"
+      }
+     },
+     {
+      "message": {"kind": "DELETE", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 2}
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 3}
+     },
+     {
+      "message": {"kind": "DELETE", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 4}
+     },
+     {
+      "local_take": {"id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80"}
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763456400000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "",
+       "notes": "",
+       "reminders": []
+      }
+     },
+     {},
+     {
+      "outcome": "KEPT",
+      "receiver_version": 2,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763456400000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "Dr. Weber, Hauptstr. 5",
+       "notes": "",
+       "reminders": []
+      }
+     },
+     {
+      "outcome": "KEPT",
+      "receiver_version": 3,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763456400000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "Dr. Weber, Hauptstr. 5",
+       "notes": "",
+       "reminders": []
+      }
+     },
+     {
+      "outcome": "KEPT",
+      "receiver_version": 4,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763456400000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "Dr. Weber, Hauptstr. 5",
+       "notes": "",
+       "reminders": []
+      }
+     },
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 4,
+      "kept_fields": [],
+      "state": "tombstone",
+      "value": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "shares/receive/a-receiver-may-choose-otherwise-for-a-withdraw-than-for-a-delete",
+   "op": "receive",
+   "description": "a receiver may choose otherwise for a WITHDRAW than for a DELETE",
+   "refs": ["shares.md 4.3"],
+   "input": {
+    "policy": {
+     "local_changes": "per_field",
+     "delete_with_local_changes": "keep",
+     "withdraw_with_local_changes": "delete"
+    },
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 0,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763456400000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "",
+        "reminders": []
+       }
+      }
+     },
+     {
+      "local_change": {
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "field": "location",
+       "value": "Dr. Weber, Hauptstr. 5"
+      }
+     },
+     {
+      "message": {"kind": "DELETE", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 2}
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 3}
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763456400000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "",
+       "notes": "",
+       "reminders": []
+      }
+     },
+     {},
+     {
+      "outcome": "KEPT",
+      "receiver_version": 2,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763456400000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "Dr. Weber, Hauptstr. 5",
+       "notes": "",
+       "reminders": []
+      }
+     },
+     {
+      "outcome": "WITHDRAWN",
+      "receiver_version": 3,
+      "kept_fields": [],
+      "state": "withdrawn",
+      "value": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "shares/receive/a-withdraw-of-a-record-its-user-deleted-the-user-s-deletion-goes-on-stan",
+   "op": "receive",
+   "description": "a WITHDRAW of a record its user deleted: the user's deletion goes on standing beside it",
+   "refs": ["shares.md 4.2", "records.md 6.3"],
+   "input": {
+    "policy": {"local_changes": "per_field", "delete_with_local_changes": "delete"},
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 0,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763456400000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "",
+        "reminders": []
+       }
+      }
+     },
+     {
+      "local_delete": {"id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80"}
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 2}
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 3,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 30,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763458200000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "Bring the vaccination card",
+        "reminders": []
+       }
+      }
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763456400000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "",
+       "notes": "",
+       "reminders": []
+      }
+     },
+     {},
+     {
+      "outcome": "WITHDRAWN",
+      "receiver_version": 2,
+      "kept_fields": [],
+      "state": "deleted_by_user",
+      "value": null
+     },
+     {
+      "outcome": "KEPT",
+      "receiver_version": 3,
+      "kept_fields": [],
+      "state": "deleted_by_user",
+      "value": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "shares/receive/a-withdraw-of-a-record-its-user-changed-and-then-deleted-the-deletion-de",
+   "op": "receive",
+   "description": "a WITHDRAW of a record its user changed and then deleted: the deletion decides, WITHDRAWN, never KEPT",
+   "refs": ["shares.md 4.2", "records.md 6.3"],
+   "input": {
+    "policy": {
+     "local_changes": "per_field",
+     "delete_with_local_changes": "keep",
+     "withdraw_with_local_changes": "keep"
+    },
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 0,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763456400000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "",
+        "reminders": []
+       }
+      }
+     },
+     {
+      "local_change": {
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "field": "location",
+       "value": "Dr. Weber, Hauptstr. 5"
+      }
+     },
+     {
+      "local_delete": {"id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80"}
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 2}
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763456400000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "",
+       "notes": "",
+       "reminders": []
+      }
+     },
+     {},
+     {},
+     {
+      "outcome": "WITHDRAWN",
+      "receiver_version": 2,
+      "kept_fields": [],
+      "state": "deleted_by_user",
+      "value": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "shares/receive/a-withdraw-after-a-delete-a-delete-after-a-withdraw-and-a-withdraw-after",
+   "op": "receive",
+   "description": "a WITHDRAW after a DELETE, a DELETE after a WITHDRAW, and a WITHDRAW after a WITHDRAW",
+   "refs": ["shares.md 4.2", "shares.md 6.3"],
+   "input": {
+    "policy": {"local_changes": "per_field", "delete_with_local_changes": "delete"},
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 0,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763456400000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "",
+        "reminders": []
+       }
+      }
+     },
+     {
+      "message": {"kind": "DELETE", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 2}
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 3}
+     },
+     {
+      "message": {"kind": "DELETE", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 2}
+     },
+     {
+      "message": {"kind": "DELETE", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 4}
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 5}
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 6}
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 7,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 30,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763458200000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "Bring the vaccination card",
+        "reminders": []
+       }
+      }
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763456400000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "",
+       "notes": "",
+       "reminders": []
+      }
+     },
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 2,
+      "kept_fields": [],
+      "state": "tombstone",
+      "value": null
+     },
+     {
+      "outcome": "WITHDRAWN",
+      "receiver_version": 3,
+      "kept_fields": [],
+      "state": "withdrawn",
+      "value": null
+     },
+     {
+      "outcome": "STALE",
+      "receiver_version": 3,
+      "kept_fields": [],
+      "state": "withdrawn",
+      "value": null
+     },
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 4,
+      "kept_fields": [],
+      "state": "tombstone",
+      "value": null
+     },
+     {
+      "outcome": "WITHDRAWN",
+      "receiver_version": 5,
+      "kept_fields": [],
+      "state": "withdrawn",
+      "value": null
+     },
+     {
+      "outcome": "WITHDRAWN",
+      "receiver_version": 6,
+      "kept_fields": [],
+      "state": "withdrawn",
+      "value": null
+     },
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 7,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 30,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763458200000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "",
+       "notes": "Bring the vaccination card",
+       "reminders": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "shares/receive/one-version-in-two-kinds-the-first-that-arrives-is-applied-the-second-is",
+   "op": "receive",
+   "description": "one version in two kinds: the first that arrives is applied, the second is a duplicate",
+   "refs": ["shares.md 6.3", "records.md 3"],
+   "input": {
+    "policy": {"local_changes": "per_field", "delete_with_local_changes": "delete"},
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 4,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 0,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763456400000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "",
+        "reminders": []
+       }
+      }
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 4}
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 5}
+     },
+     {
+      "message": {"kind": "DELETE", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 5}
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 4,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763456400000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "",
+       "notes": "",
+       "reminders": []
+      }
+     },
+     {
+      "outcome": "DUPLICATE",
+      "receiver_version": 4,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763456400000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "",
+       "notes": "",
+       "reminders": []
+      }
+     },
+     {
+      "outcome": "WITHDRAWN",
+      "receiver_version": 5,
+      "kept_fields": [],
+      "state": "withdrawn",
+      "value": null
+     },
+     {
+      "outcome": "DUPLICATE",
+      "receiver_version": 5,
+      "kept_fields": [],
+      "state": "withdrawn",
+      "value": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "shares/receive/two-devices-of-the-sender-send-the-same-withdrawal-the-receiver-takes-th",
+   "op": "receive",
+   "description": "two devices of the sender send the same withdrawal: the receiver takes the first",
+   "refs": ["shares.md 7.2"],
+   "input": {
+    "policy": {"local_changes": "per_field", "delete_with_local_changes": "delete"},
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 0,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763456400000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "",
+        "reminders": []
+       }
+      }
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 2}
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 2}
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763456400000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "",
+       "notes": "",
+       "reminders": []
+      }
+     },
+     {
+      "outcome": "WITHDRAWN",
+      "receiver_version": 2,
+      "kept_fields": [],
+      "state": "withdrawn",
+      "value": null
+     },
+     {
+      "outcome": "DUPLICATE",
+      "receiver_version": 2,
+      "kept_fields": [],
+      "state": "withdrawn",
+      "value": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "shares/receive/a-record-keeps-its-type-through-a-tombstone-of-a-withdrawal",
+   "op": "receive",
+   "description": "a record keeps its type through a tombstone of a withdrawal",
+   "refs": ["shares.md 4.2", "records.md 4.3"],
+   "input": {
+    "policy": {"local_changes": "per_field", "delete_with_local_changes": "delete"},
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 0,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763456400000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "",
+        "reminders": []
+       }
+      }
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 2}
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 3,
+       "type": "axt.example.v1.Task",
+       "value": {
+        "title": "Give Mimi her worm tablet",
+        "notes": "",
+        "due": {
+         "year": 2026,
+         "month": 12,
+         "day": 1,
+         "hour": 8,
+         "minute": 0,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1796108400000
+        },
+        "due_all_day": false,
+        "repeat": "FREQ=MONTHLY;INTERVAL=3",
+        "done": false,
+        "done_at": null,
+        "priority": "HIGH"
+       }
+      }
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 3,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 0,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763456400000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "",
+        "reminders": []
+       }
+      }
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763456400000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "",
+       "notes": "",
+       "reminders": []
+      }
+     },
+     {
+      "outcome": "WITHDRAWN",
+      "receiver_version": 2,
+      "kept_fields": [],
+      "state": "withdrawn",
+      "value": null
+     },
+     {"error": "TYPE_CHANGED"},
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 3,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763456400000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "",
+       "notes": "",
+       "reminders": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "shares/receive/a-withdraw-that-cannot-be-processed-changes-nothing",
+   "op": "receive",
+   "description": "a WITHDRAW that cannot be processed changes nothing",
+   "refs": ["shares.md 4.1"],
+   "input": {
+    "policy": {"local_changes": "per_field", "delete_with_local_changes": "delete"},
+    "events": [
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 0,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763456400000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "",
+        "reminders": []
+       }
+      }
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "vet-appointment", "version": 2}
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "00000000-0000-0000-0000-000000000000", "version": 2}
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 0}
+     },
+     {
+      "message": {"kind": "WITHDRAW", "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": -1}
+     },
+     {
+      "message": {
+       "kind": "DATA",
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "version": 1,
+       "type": "axt.example.v1.Appointment",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 0,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763456400000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "",
+        "reminders": []
+       }
+      }
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "outcome": "APPLIED",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763456400000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "",
+       "notes": "",
+       "reminders": []
+      }
+     },
+     {"error": "RECORD_ID_INVALID"},
+     {"error": "RECORD_ID_INVALID"},
+     {"error": "VERSION_INVALID"},
+     {"error": "VERSION_INVALID"},
+     {
+      "outcome": "DUPLICATE",
+      "receiver_version": 1,
+      "kept_fields": [],
+      "state": "there",
+      "value": {
+       "title": "Vet",
+       "start": {
+        "year": 2025,
+        "month": 11,
+        "day": 18,
+        "hour": 10,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": "Europe/Berlin",
+        "offset_seconds": 3600,
+        "instant_ms": 1763456400000
+       },
+       "end": null,
+       "all_day": false,
+       "location": "",
+       "notes": "",
+       "reminders": []
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "shares/take_version/an-installation-that-counts-withdraws-with-the-next-count-and-its-state",
+   "op": "take_version",
+   "description": "an installation that counts withdraws with the next count, and its state stays",
+   "refs": ["shares.md 3.2"],
+   "input": {"occasion": "withdraw", "highest_given": "3", "state_stamp": "3"},
+   "expected": {
+    "accept": {"version": "4", "state_stamp": "3"}
+   }
+  },
+  {
+   "id": "shares/take_version/an-installation-that-counts-shares-again-with-the-next-count-its-new-ver",
+   "op": "take_version",
+   "description": "an installation that counts shares again with the next count, its new version",
+   "refs": ["shares.md 6.2"],
+   "input": {"occasion": "share_again", "highest_given": "4", "state_stamp": "3"},
+   "expected": {
+    "accept": {"version": "5", "state_stamp": "5"}
+   }
+  },
+  {
+   "id": "shares/owed/a-record-that-is-shared-its-data-under-its-state-stamp",
+   "op": "owed",
+   "description": "a record that is shared: its DATA under its state stamp",
+   "refs": ["shares.md 5.3"],
+   "input": {"shared": true, "deleted": false, "version": "7", "withdrawal": null, "last": null},
+   "expected": {
+    "accept": {"owes": "DATA", "version": "7"}
+   }
+  },
+  {
+   "id": "shares/owed/a-deleted-record-that-is-shared-its-delete",
+   "op": "owed",
+   "description": "a deleted record that is shared: its DELETE",
+   "refs": ["shares.md 5.3"],
+   "input": {
+    "shared": true,
+    "deleted": true,
+    "version": "8",
+    "withdrawal": null,
+    "last": {"kind": "DATA", "version": "7"}
+   },
+   "expected": {
+    "accept": {"owes": "DELETE", "version": "8"}
+   }
+  },
+  {
+   "id": "shares/owed/a-record-that-is-shared-again-its-data-though-a-withdrawal-is-recorded",
+   "op": "owed",
+   "description": "a record that is shared again: its DATA, though a withdrawal is recorded",
+   "refs": ["shares.md 5.3", "shares.md 6.2"],
+   "input": {
+    "shared": true,
+    "deleted": false,
+    "version": "5",
+    "withdrawal": "4",
+    "last": {"kind": "WITHDRAW", "version": "4"}
+   },
+   "expected": {
+    "accept": {"owes": "DATA", "version": "5"}
+   }
+  },
+  {
+   "id": "shares/owed/a-record-withdrawn-from-the-receiver-the-withdraw-under-the-recorded-ver",
+   "op": "owed",
+   "description": "a record withdrawn from the receiver: the WITHDRAW under the recorded version, not its state stamp",
+   "refs": ["shares.md 5.3", "shares.md 7.2"],
+   "input": {
+    "shared": false,
+    "deleted": false,
+    "version": "7",
+    "withdrawal": "6",
+    "last": {"kind": "WITHDRAW", "version": "6"}
+   },
+   "expected": {
+    "accept": {"owes": "WITHDRAW", "version": "6"}
+   }
+  },
+  {
+   "id": "shares/owed/a-sibling-that-got-the-withdrawal-by-sibling-sync-owes-the-recorded-with",
+   "op": "owed",
+   "description": "a sibling that got the withdrawal by sibling sync owes the recorded WITHDRAW",
+   "refs": ["shares.md 6.1", "shares.md 7.2"],
+   "input": {"shared": false, "deleted": false, "version": "3", "withdrawal": "4", "last": null},
+   "expected": {
+    "accept": {"owes": "WITHDRAW", "version": "4"}
+   }
+  },
+  {
+   "id": "shares/owed/a-device-whose-last-data-is-below-the-recorded-withdrawal-owes-the-recor",
+   "op": "owed",
+   "description": "a device whose last DATA is below the recorded withdrawal owes the recorded WITHDRAW",
+   "refs": ["shares.md 6.1", "shares.md 5.3"],
+   "input": {
+    "shared": false,
+    "deleted": false,
+    "version": "7",
+    "withdrawal": "6",
+    "last": {"kind": "DATA", "version": "5"}
+   },
+   "expected": {
+    "accept": {"owes": "WITHDRAW", "version": "6"}
+   }
+  },
+  {
+   "id": "shares/owed/a-record-never-shared-with-the-receiver-nothing",
+   "op": "owed",
+   "description": "a record never shared with the receiver: nothing",
+   "refs": ["shares.md 2.2", "shares.md 5.3"],
+   "input": {"shared": false, "deleted": false, "version": "3", "withdrawal": null, "last": null},
+   "expected": {
+    "accept": {"owes": "nothing", "version": null}
+   }
+  },
+  {
+   "id": "shares/owed/a-record-whose-last-message-to-the-receiver-was-a-delete-without-a-recor",
+   "op": "owed",
+   "description": "a record whose last message to the receiver was a DELETE, without a recorded withdrawal: nothing",
+   "refs": ["shares.md 5.3", "shares.md 6.1"],
+   "input": {
+    "shared": false,
+    "deleted": true,
+    "version": "4",
+    "withdrawal": null,
+    "last": {"kind": "DELETE", "version": "4"}
+   },
+   "expected": {
+    "accept": {"owes": "nothing", "version": null}
+   }
+  },
+  {
+   "id": "shares/owed/a-device-that-sent-a-data-above-the-recorded-withdrawal-withdraws-the-re",
+   "op": "owed",
+   "description": "a device that sent a DATA above the recorded withdrawal withdraws the record itself",
+   "refs": ["shares.md 6.1"],
+   "input": {
+    "shared": false,
+    "deleted": false,
+    "version": "9",
+    "withdrawal": "6",
+    "last": {"kind": "DATA", "version": "8"}
+   },
+   "expected": {
+    "accept": {"owes": "new_withdrawal", "version": null}
+   }
+  },
+  {
+   "id": "shares/owed/a-device-whose-last-message-was-a-data-and-that-holds-no-withdrawal-of-a",
+   "op": "owed",
+   "description": "a device whose last message was a DATA and that holds no withdrawal of a record no longer shared withdraws it",
+   "refs": ["shares.md 5.3", "shares.md 6.1"],
+   "input": {
+    "shared": false,
+    "deleted": false,
+    "version": "3",
+    "withdrawal": null,
+    "last": {"kind": "DATA", "version": "3"}
+   },
+   "expected": {
+    "accept": {"owes": "new_withdrawal", "version": null}
+   }
+  },
+  {
+   "id": "shares/pass_withdrawal/a-withdrawn-record-whose-recorded-withdrawal-is-still-below-the-version",
+   "op": "pass_withdrawal",
+   "description": "a withdrawn record whose recorded withdrawal is still below the version to pass: a new withdrawal, though the state stamp is above it",
+   "refs": ["shares.md 5.3", "sync.md 5.3"],
+   "input": {"shared": false, "withdrawal": "6", "to_pass": "8", "state_stamp": "9"},
+   "expected": {
+    "accept": {"then": "new_withdrawal", "to_pass": null}
+   }
+  },
+  {
+   "id": "shares/pass_withdrawal/a-withdrawn-record-whose-recorded-withdrawal-a-sibling-has-taken-above-t",
+   "op": "pass_withdrawal",
+   "description": "a withdrawn record whose recorded withdrawal a sibling has taken above the version to pass: nothing more",
+   "refs": ["shares.md 5.3", "sync.md 5.3"],
+   "input": {"shared": false, "withdrawal": "9", "to_pass": "8", "state_stamp": "7"},
+   "expected": {
+    "accept": {"then": "nothing", "to_pass": null}
+   }
+  },
+  {
+   "id": "shares/pass_withdrawal/a-withdrawn-record-with-no-recorded-withdrawal-a-new-withdrawal",
+   "op": "pass_withdrawal",
+   "description": "a withdrawn record with no recorded withdrawal: a new withdrawal",
+   "refs": ["shares.md 5.3", "sync.md 5.3"],
+   "input": {"shared": false, "withdrawal": null, "to_pass": "8", "state_stamp": "9"},
+   "expected": {
+    "accept": {"then": "new_withdrawal", "to_pass": null}
+   }
+  },
+  {
+   "id": "shares/pass_withdrawal/a-record-shared-again-by-the-end-of-the-wait-whose-state-stamp-is-above",
+   "op": "pass_withdrawal",
+   "description": "a record shared again by the end of the wait, whose state stamp is above the version to pass: what it owes, under that state stamp",
+   "refs": ["shares.md 5.3", "sync.md 5.3"],
+   "input": {"shared": true, "withdrawal": "6", "to_pass": "8", "state_stamp": "9"},
+   "expected": {
+    "accept": {"then": "nothing", "to_pass": null}
+   }
+  },
+  {
+   "id": "shares/pass_withdrawal/a-record-shared-again-by-the-end-of-the-wait-whose-state-stamp-is-below",
+   "op": "pass_withdrawal",
+   "description": "a record shared again by the end of the wait, whose state stamp is below the version to pass: its current state under a new state stamp",
+   "refs": ["shares.md 5.3", "sync.md 5.3"],
+   "input": {"shared": true, "withdrawal": "6", "to_pass": "8", "state_stamp": "7"},
+   "expected": {
+    "accept": {"then": "send_state", "to_pass": null}
+   }
+  },
+  {
+   "id": "shares/join_receivers/a-record-shared-with-one-and-withdrawn-from-the-other-shared-sent-under",
+   "op": "join_receivers",
+   "description": "a record shared with one and withdrawn from the other: shared, sent under a new state stamp",
+   "refs": ["shares.md 7.3", "sync.md 3.3"],
+   "input": {
+    "receivers": [
+     {"shared": true, "withdrawal": null},
+     {"shared": false, "withdrawal": "6"}
+    ]
+   },
+   "expected": {
+    "accept": {"shared": true, "withdrawal": "6", "new_state_stamp": true}
+   }
+  },
+  {
+   "id": "shares/join_receivers/a-record-shared-with-both-shared",
+   "op": "join_receivers",
+   "description": "a record shared with both: shared",
+   "refs": ["shares.md 7.3", "sync.md 3.3"],
+   "input": {
+    "receivers": [
+     {"shared": true, "withdrawal": null},
+     {"shared": true, "withdrawal": null}
+    ]
+   },
+   "expected": {
+    "accept": {"shared": true, "withdrawal": null, "new_state_stamp": false}
+   }
+  },
+  {
+   "id": "shares/join_receivers/a-record-withdrawn-from-both-withdrawn-with-the-higher-recorded-withdraw",
+   "op": "join_receivers",
+   "description": "a record withdrawn from both: withdrawn, with the higher recorded withdrawal",
+   "refs": ["shares.md 7.3", "sync.md 3.3"],
+   "input": {
+    "receivers": [
+     {"shared": false, "withdrawal": "6"},
+     {"shared": false, "withdrawal": "9"}
+    ]
+   },
+   "expected": {
+    "accept": {"shared": false, "withdrawal": "9", "new_state_stamp": false}
+   }
+  },
+  {
+   "id": "shares/join_receivers/a-record-withdrawn-from-one-and-never-shared-with-the-other-withdrawn",
+   "op": "join_receivers",
+   "description": "a record withdrawn from one and never shared with the other: withdrawn",
+   "refs": ["shares.md 7.3", "sync.md 3.3"],
+   "input": {
+    "receivers": [
+     {"shared": false, "withdrawal": null},
+     {"shared": false, "withdrawal": "6"}
+    ]
+   },
+   "expected": {
+    "accept": {"shared": false, "withdrawal": "6", "new_state_stamp": false}
+   }
+  },
+  {
+   "id": "shares/join_receivers/a-record-shared-with-neither-nothing",
+   "op": "join_receivers",
+   "description": "a record shared with neither: nothing",
+   "refs": ["shares.md 7.3", "sync.md 3.3"],
+   "input": {
+    "receivers": [
+     {"shared": false, "withdrawal": null},
+     {"shared": false, "withdrawal": null}
+    ]
+   },
+   "expected": {
+    "accept": {"shared": false, "withdrawal": null, "new_state_stamp": false}
+   }
+  },
+  {
+   "id": "shares/offer_types/a-type-is-offered-for-a-withdraw-still-owed-and-the-count-counts-it",
+   "op": "offer_types",
+   "description": "a type is offered for a WITHDRAW still owed, and the count counts it",
+   "refs": ["shares.md 2.2", "protocol.md 4.1"],
+   "input": {
+    "records": [
+     {"type": "axt.example.v1.Appointment", "owes": "WITHDRAW", "delivered": false},
+     {"type": "axt.example.v1.Appointment", "owes": "DATA", "delivered": false},
+     {"type": "axt.example.v1.Pet", "owes": "nothing", "delivered": false}
+    ]
+   },
+   "expected": {
+    "accept": {
+     "types": [
+      {"type": "axt.example.v1.Appointment", "count": 2}
+     ]
+    }
+   }
+  },
+  {
+   "id": "shares/offer_types/a-type-whose-only-record-is-withdrawn-with-an-outcome-or-never-shared-is",
+   "op": "offer_types",
+   "description": "a type whose only record is withdrawn with an outcome, or never shared, is not offered",
+   "refs": ["shares.md 2.2", "protocol.md 4.1"],
+   "input": {
+    "records": [
+     {"type": "axt.example.v1.Appointment", "owes": "WITHDRAW", "delivered": true},
+     {"type": "axt.example.v1.Pet", "owes": "nothing", "delivered": false},
+     {"type": "axt.example.v1.Task", "owes": "DELETE", "delivered": false}
+    ]
+   },
+   "expected": {
+    "accept": {
+     "types": [
+      {"type": "axt.example.v1.Task", "count": 1}
+     ]
+    }
+   }
+  },
+  {
+   "id": "shares/acked/withdrawn-delivers-a-withdraw",
+   "op": "acked",
+   "description": "WITHDRAWN delivers a WITHDRAW",
+   "refs": ["shares.md 5.2"],
+   "input": {
+    "held": null,
+    "receiver_version": "6",
+    "shared": false,
+    "withdrawal": "6",
+    "state_stamp": "5",
+    "sibling_stamp": null,
+    "sibling": false,
+    "sent": "WITHDRAW",
+    "outcome": "WITHDRAWN"
+   },
+   "expected": {
+    "accept": {"outcome": "WITHDRAWN", "then": "nothing", "to_pass": null}
+   }
+  },
+  {
+   "id": "shares/acked/kept-delivers-a-withdraw",
+   "op": "acked",
+   "description": "KEPT delivers a WITHDRAW",
+   "refs": ["shares.md 5.2"],
+   "input": {
+    "held": null,
+    "receiver_version": "6",
+    "shared": false,
+    "withdrawal": "6",
+    "state_stamp": "5",
+    "sibling_stamp": null,
+    "sibling": false,
+    "sent": "WITHDRAW",
+    "outcome": "KEPT"
+   },
+   "expected": {
+    "accept": {"outcome": "KEPT", "then": "nothing", "to_pass": null}
+   }
+  },
+  {
+   "id": "shares/acked/a-later-withdrawn-replaces-kept",
+   "op": "acked",
+   "description": "a later WITHDRAWN replaces KEPT",
+   "refs": ["shares.md 5.2", "protocol.md 7.3"],
+   "input": {
+    "held": "KEPT",
+    "receiver_version": "6",
+    "shared": false,
+    "withdrawal": "6",
+    "state_stamp": "5",
+    "sibling_stamp": null,
+    "sibling": false,
+    "sent": "WITHDRAW",
+    "outcome": "WITHDRAWN"
+   },
+   "expected": {
+    "accept": {"outcome": "WITHDRAWN", "then": "nothing", "to_pass": null}
+   }
+  },
+  {
+   "id": "shares/acked/a-later-kept-does-not-replace-withdrawn",
+   "op": "acked",
+   "description": "a later KEPT does not replace WITHDRAWN",
+   "refs": ["shares.md 5.2", "protocol.md 7.4"],
+   "input": {
+    "held": "WITHDRAWN",
+    "receiver_version": "6",
+    "shared": false,
+    "withdrawal": "6",
+    "state_stamp": "5",
+    "sibling_stamp": null,
+    "sibling": false,
+    "sent": "WITHDRAW",
+    "outcome": "KEPT"
+   },
+   "expected": {
+    "accept": {"outcome": "WITHDRAWN", "then": "nothing", "to_pass": null}
+   }
+  },
+  {
+   "id": "shares/acked/withdrawn-replaces-duplicate",
+   "op": "acked",
+   "description": "WITHDRAWN replaces DUPLICATE",
+   "refs": ["shares.md 5.2", "protocol.md 7.4"],
+   "input": {
+    "held": "DUPLICATE",
+    "receiver_version": "6",
+    "shared": false,
+    "withdrawal": "6",
+    "state_stamp": "5",
+    "sibling_stamp": null,
+    "sibling": false,
+    "sent": "WITHDRAW",
+    "outcome": "WITHDRAWN"
+   },
+   "expected": {
+    "accept": {"outcome": "WITHDRAWN", "then": "nothing", "to_pass": null}
+   }
+  },
+  {
+   "id": "shares/acked/applied-for-a-withdraw-is-taken-as-duplicate",
+   "op": "acked",
+   "description": "APPLIED for a WITHDRAW is taken as DUPLICATE",
+   "refs": ["shares.md 5.2"],
+   "input": {
+    "held": null,
+    "receiver_version": "6",
+    "shared": false,
+    "withdrawal": "6",
+    "state_stamp": "5",
+    "sibling_stamp": null,
+    "sibling": false,
+    "sent": "WITHDRAW",
+    "outcome": "APPLIED"
+   },
+   "expected": {
+    "accept": {"outcome": "DUPLICATE", "then": "nothing", "to_pass": null}
+   }
+  },
+  {
+   "id": "shares/acked/merged-for-a-withdraw-is-taken-as-duplicate-and-does-not-replace-kept",
+   "op": "acked",
+   "description": "MERGED for a WITHDRAW is taken as DUPLICATE, and does not replace KEPT",
+   "refs": ["shares.md 5.2"],
+   "input": {
+    "held": "KEPT",
+    "receiver_version": "6",
+    "shared": false,
+    "withdrawal": "6",
+    "state_stamp": "5",
+    "sibling_stamp": null,
+    "sibling": false,
+    "sent": "WITHDRAW",
+    "outcome": "MERGED"
+   },
+   "expected": {
+    "accept": {"outcome": "KEPT", "then": "nothing", "to_pass": null}
+   }
+  },
+  {
+   "id": "shares/acked/withdrawn-for-a-data-is-taken-as-duplicate",
+   "op": "acked",
+   "description": "WITHDRAWN for a DATA is taken as DUPLICATE",
+   "refs": ["shares.md 5.2"],
+   "input": {
+    "held": null,
+    "receiver_version": "6",
+    "shared": false,
+    "withdrawal": "6",
+    "state_stamp": "5",
+    "sibling_stamp": null,
+    "sibling": false,
+    "sent": "DATA",
+    "outcome": "WITHDRAWN"
+   },
+   "expected": {
+    "accept": {"outcome": "DUPLICATE", "then": "nothing", "to_pass": null}
+   }
+  },
+  {
+   "id": "shares/acked/withdrawn-for-a-delete-does-not-replace-kept",
+   "op": "acked",
+   "description": "WITHDRAWN for a DELETE does not replace KEPT",
+   "refs": ["shares.md 5.2"],
+   "input": {
+    "held": "KEPT",
+    "receiver_version": "6",
+    "shared": false,
+    "withdrawal": "6",
+    "state_stamp": "5",
+    "sibling_stamp": null,
+    "sibling": false,
+    "sent": "DELETE",
+    "outcome": "WITHDRAWN"
+   },
+   "expected": {
+    "accept": {"outcome": "KEPT", "then": "nothing", "to_pass": null}
+   }
+  },
+  {
+   "id": "shares/acked/a-data-sent-before-the-withdrawal-and-answered-with-stale-and-its-versio",
+   "op": "acked",
+   "description": "a DATA sent before the withdrawal and answered with STALE and its version: nothing more",
+   "refs": ["shares.md 5.3", "shares.md 11.1"],
+   "input": {
+    "held": "APPLIED",
+    "receiver_version": "4",
+    "shared": false,
+    "withdrawal": "4",
+    "state_stamp": "3",
+    "sibling_stamp": null,
+    "sibling": false,
+    "sent": "DATA",
+    "outcome": "STALE"
+   },
+   "expected": {
+    "accept": {"outcome": "APPLIED", "then": "nothing", "to_pass": null}
+   }
+  },
+  {
+   "id": "shares/acked/stale-for-a-data-above-every-version-the-device-knows-a-new-withdrawal-w",
+   "op": "acked",
+   "description": "STALE for a DATA above every version the device knows: a new withdrawal where it is withdrawn",
+   "refs": ["shares.md 5.3", "sync.md 5.3"],
+   "input": {
+    "held": null,
+    "receiver_version": "9",
+    "shared": false,
+    "withdrawal": "6",
+    "state_stamp": "7",
+    "sibling_stamp": "8",
+    "sibling": false,
+    "sent": "DATA",
+    "outcome": "STALE"
+   },
+   "expected": {
+    "accept": {"outcome": "STALE", "then": "new_withdrawal", "to_pass": null}
+   }
+  },
+  {
+   "id": "shares/acked/stale-for-a-data-above-every-version-the-device-knows-the-current-state",
+   "op": "acked",
+   "description": "STALE for a DATA above every version the device knows: the current state where it is shared",
+   "refs": ["shares.md 5.3", "sync.md 5.3"],
+   "input": {
+    "held": null,
+    "receiver_version": "9",
+    "shared": true,
+    "withdrawal": "6",
+    "state_stamp": "7",
+    "sibling_stamp": null,
+    "sibling": false,
+    "sent": "DATA",
+    "outcome": "STALE"
+   },
+   "expected": {
+    "accept": {"outcome": "STALE", "then": "send_state", "to_pass": null}
+   }
+  },
+  {
+   "id": "shares/acked/stale-for-a-data-at-the-version-of-a-sibling-s-state-stamp-nothing-more",
+   "op": "acked",
+   "description": "STALE for a DATA at the version of a sibling's state stamp: nothing more",
+   "refs": ["shares.md 5.3", "sync.md 5.3"],
+   "input": {
+    "held": null,
+    "receiver_version": "8",
+    "shared": false,
+    "withdrawal": "6",
+    "state_stamp": "7",
+    "sibling_stamp": "8",
+    "sibling": false,
+    "sent": "DATA",
+    "outcome": "STALE"
+   },
+   "expected": {
+    "accept": {"outcome": "STALE", "then": "nothing", "to_pass": null}
+   }
+  },
+  {
+   "id": "shares/acked/stale-for-a-withdraw-above-its-version-a-new-withdrawal-whatever-the-sta",
+   "op": "acked",
+   "description": "STALE for a WITHDRAW above its version: a new withdrawal, whatever the state stamps",
+   "refs": ["shares.md 5.3"],
+   "input": {
+    "held": null,
+    "receiver_version": "7",
+    "shared": false,
+    "withdrawal": "6",
+    "state_stamp": "9",
+    "sibling_stamp": "9",
+    "sibling": false,
+    "sent": "WITHDRAW",
+    "outcome": "STALE"
+   },
+   "expected": {
+    "accept": {"outcome": "STALE", "then": "new_withdrawal", "to_pass": null}
+   }
+  },
+  {
+   "id": "shares/acked/stale-for-a-withdraw-of-an-older-withdrawal-nothing-more",
+   "op": "acked",
+   "description": "STALE for a WITHDRAW of an older withdrawal: nothing more",
+   "refs": ["shares.md 5.3"],
+   "input": {
+    "held": null,
+    "receiver_version": "6",
+    "shared": false,
+    "withdrawal": "6",
+    "state_stamp": "5",
+    "sibling_stamp": null,
+    "sibling": false,
+    "sent": "WITHDRAW",
+    "outcome": "STALE"
+   },
+   "expected": {
+    "accept": {"outcome": "STALE", "then": "nothing", "to_pass": null}
+   }
+  },
+  {
+   "id": "shares/acked/stale-for-a-withdraw-above-its-version-at-a-device-with-siblings-it-wait",
+   "op": "acked",
+   "description": "STALE for a WITHDRAW above its version at a device with siblings: it waits for them",
+   "refs": ["shares.md 5.3", "sync.md 5.3"],
+   "input": {
+    "held": null,
+    "receiver_version": "7",
+    "shared": false,
+    "withdrawal": "6",
+    "state_stamp": "5",
+    "sibling_stamp": null,
+    "sibling": true,
+    "sent": "WITHDRAW",
+    "outcome": "STALE"
+   },
+   "expected": {
+    "accept": {"outcome": "STALE", "then": "wait", "to_pass": "7"}
+   }
+  }
+ ]
+}

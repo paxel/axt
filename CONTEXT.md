@@ -10,7 +10,7 @@ The vocabulary of this repository. The specification in [spec/](spec/README.md) 
 
 **Record**: one datum of a type, such as one Appointment, together with its id and its version.
 
-**Record message**: a `DATA` message, which carries a whole record, or a `DELETE` message.
+**Record message**: a `DATA` message, which carries a whole record, a `DELETE` message, or a `WITHDRAW` message.
 
 **Version**: a rising number that names one state of a record at its sender: a count from 1, or the state stamp once the sender stamps.
 
@@ -26,7 +26,7 @@ The vocabulary of this repository. The specification in [spec/](spec/README.md) 
 
 **Resync**: a `RESYNC` message, with which a device that fell behind, such as after restoring a backup, asks a sibling to send every record whole again.
 
-**Tombstone**: what a receiver keeps of a record its sender deleted: its id and the version of the deletion.
+**Tombstone**: what a receiver keeps of a record its sender deleted, or withdrew from it: its id and the version of the deletion or the withdrawal.
 
 **Local change**: a change the receiver's user makes to a received record in the receiver. It stays there and is not sent back to the sender; between the devices of one owner it travels as the owner's layer.
 
@@ -35,6 +35,10 @@ The vocabulary of this repository. The specification in [spec/](spec/README.md) 
 **Forward**: a `FORWARD` message, in which a device passes a message of another app on to a sibling, as the signed message it got. The sibling checks the signature inside, takes the message as if it had received it, and sends nothing to the other app.
 
 **Answering device**: the device of a set that got a message from another app itself. It alone answers the other app, and it forwards the message to its siblings.
+
+**Share**: a rule inside the sending app that names, for one app of another user, the records that go to it: single records, or those a rule of the app picks. Only shared records go to another user. The app keeps its shares as records of its own type, so the owner's devices hold the same shares; the other app sees only ordinary records.
+
+**Withdrawal**: a `WITHDRAW` message, with which a sender takes one record back from one receiver when it leaves a share. The receiver removes its copy, or keeps it if its user changed it; sharing it again brings it back.
 
 **Type**: an Apache Avro schema with a full name. An **example type** is one of the types this repository brings under `axt.example.v1`, so that apps can exchange without agreeing first.
 
@@ -46,7 +50,7 @@ The vocabulary of this repository. The specification in [spec/](spec/README.md) 
 
 **Offer**: the message in which a sender names the types and schemas it wants to send; the receiver answers with accept or decline.
 
-**Outcome**: what a receiver did with a record message: `APPLIED`, `MERGED`, `KEPT`, `DUPLICATE` or `STALE`. It reports outcomes in an `ACK`.
+**Outcome**: what a receiver did with a record message: `APPLIED`, `MERGED`, `KEPT`, `DUPLICATE` or `STALE`, and `WITHDRAWN` for a withdrawal. It reports outcomes in an `ACK`.
 
 **Transport**: one of the three ways messages travel: a file, the local network, a relay.
 

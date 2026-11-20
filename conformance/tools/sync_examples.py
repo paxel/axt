@@ -36,16 +36,16 @@ of the CHANGE, RESYNC and FORWARD messages between the devices of a set. This sc
   its own set; it plays the examples of section 16 and the sessions of `sessions` through
   the model and checks every step against what `SAID` writes out for it. The generator
   turns the sessions into the vectors of the operation `siblings`;
-- extends that model to what a set got from other apps (sections 17 to 24): the 16 steps
-  in which a device checks a FORWARD, a forwarded MANIFEST, DATA, DELETE, DEVICE_ADD and
-  DEVICE_REMOVE by what its sender is to the device, the kept messages with what is
-  delivered and due for each sibling, the owner's layer of a received record with its
-  CHANGE messages that name the sender in `origin`, what a device shows from the two
-  layers, and the answering device, which takes a message from the other app itself. It
-  builds the messages of sections 16.5 to 16.7 in the same way. Not modelled, because the
-  text of these parts is about to change: ending and completing an owner's layer and the
-  later ACK (sections 22.2 and 22.3), a forwarded record message of a key removed since
-  (section 19.2), and two senders that join (section 23.4).
+- extends that model to what a set got from other apps (sections 17 to 24): the 16 steps in
+  which a device checks a FORWARD, a forwarded MANIFEST, DATA, DELETE, WITHDRAW
+  (spec/shares.md, section 7.1), DEVICE_ADD and DEVICE_REMOVE by what its sender is to the
+  device, the kept messages with what is delivered and due for each sibling, the owner's
+  layer of a received record with its CHANGE messages that name the sender in `origin`, what
+  a device shows from the two layers, and the answering device, which takes a message from
+  the other app itself. It builds the messages of sections 16.5 to 16.7 in the same way. Not
+  modelled, because the text of these parts is about to change: ending and completing an
+  owner's layer and the later ACK (sections 22.2 and 22.3), a forwarded record message of a
+  key removed since (section 19.2), and two senders that join (section 23.4).
 
 The device keys are TEST KEYS, derived as spec/keys.md, section 7.1, says, from the
 labels "cat-a-log, phone, Ed25519" and "cat-a-log, tablet, Ed25519", and for the sessions
@@ -2771,6 +2771,7 @@ SPEC_NAMES = (
     "Forward",
     "DeviceAdd",
     "DeviceRemove",
+    "Withdraw",
 )
 SPEC_TEXT = {n: (AXT / f"{n}.avsc").read_text(encoding="utf-8") for n in SPEC_NAMES}
 
@@ -3131,8 +3132,14 @@ class Reject(Exception):
 
 # --- what a set got from other apps (sections 17 to 22) ---------------------------------------------
 
-FORWARDED = ("MANIFEST", "DATA", "DELETE", "DEVICE_ADD", "DEVICE_REMOVE")  # the kinds of section 18.1
-INNER_BODY = {"MANIFEST": "Manifest", "DEVICE_ADD": "DeviceAdd", "DEVICE_REMOVE": "DeviceRemove"}
+FORWARDED = ("MANIFEST", "DATA", "DELETE", "WITHDRAW", "DEVICE_ADD", "DEVICE_REMOVE")  # of section 18.1
+INNER_BODY = {
+    "MANIFEST": "Manifest",
+    "DEVICE_ADD": "DeviceAdd",
+    "DEVICE_REMOVE": "DeviceRemove",
+    "WITHDRAW": "Withdraw",
+}
+RECORD_MESSAGES = ("DATA", "DELETE", "WITHDRAW")  # spec/records.md, section 1
 # A record of the set by its id as a 128-bit value; an owner's layer by its sender and that id.
 Ref = int | tuple[int, int]
 
@@ -3159,7 +3166,7 @@ def inner_message(d: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | N
         raise Reject("INVALID_MESSAGE", "message: not the format of its fingerprint")
     if kind not in FORWARDED:
         raise Reject("INVALID_MESSAGE", f"a {kind} is never forwarded")
-    if (inner["record"] is None) == (kind in ("DATA", "DELETE")):
+    if (inner["record"] is None) == (kind in RECORD_MESSAGES):
         raise Reject("INVALID_MESSAGE", "message: record present or missing")
     if kind == "DELETE":
         if body:
@@ -3319,6 +3326,12 @@ def schema_version(text: str | None) -> int:
     return version if isinstance(version, int) else 0
 
 
+def kind_of(raw: bytes) -> str:
+    """The kind of a kept message."""
+    kind: str = read_all("Envelope", raw[10:])["kind"]
+    return kind
+
+
 def stands_over(raw: bytes, text: str | None, kept: "Received") -> bool:
     """Whether a record message with the id and version of the kept one, in other bytes, stands over it
     (section 20.1): of two DATA messages the one whose writer schema has the higher `axt.version`; with
@@ -3410,6 +3423,7 @@ class SetDevice:
         refused: list[bytes] | None = None,
         forward_ids: list[str] | None = None,
         on_delete: str = "delete",
+        on_withdraw: str | None = None,
     ) -> None:
         self.seed, self.key = seed, bytes(keys.public_key(seed))
         self.siblings = list(siblings)
@@ -3434,6 +3448,8 @@ class SetDevice:
         # What the set does with a DELETE of another app that meets owner's values: "delete" or "keep"
         # (spec/records.md, section 6.4; section 22.3).
         self.on_delete = on_delete
+        # The same for a WITHDRAW (spec/shares.md, section 4.3); as for a DELETE where it is not given.
+        self.on_withdraw = on_delete if on_withdraw is None else on_withdraw
         # For each owner's layer, the message of its sender for which the device reported KEPT and owes
         # the further ACK of section 22.3: the signer, the id, the version and the kind.
         self.later: dict[tuple[int, int], tuple[bytes, str, int, str]] = {}
@@ -4190,7 +4206,7 @@ class SetDevice:
             self._manifest(sender, m, envelope["body"], connection or sender)
             return None, []
         of_other = self.book.key_state(sender)[0]  # what the key is among the other senders it knows
-        if (rec is None) == (kind in ("CHANGE", "RESYNC", "FORWARD", "DATA", "DELETE")):
+        if (rec is None) == (kind in ("CHANGE", "RESYNC", "FORWARD", *RECORD_MESSAGES)):
             # A record where none belongs, or none where one is required: no valid message of its kind.
             # Only a key the device exchanges with gets the report.
             raise Reject(
@@ -4213,7 +4229,18 @@ class SetDevice:
                 raise Reject("INVALID_MESSAGE", f"a {kind} of another sender")
             self.what = "a message of an unknown key"
             return None, []
-        if kind in ("DATA", "DELETE"):
+        if kind == "WITHDRAW":
+            # Step 1 of spec/shares.md, section 4.1: the body and the addressee; then step 5 as for a DELETE.
+            try:
+                to = read_all("Withdraw", envelope["body"][10:])["to"]
+            except ValueError as e:
+                raise Reject("INVALID_MESSAGE", str(e)) from None
+            if envelope["body"][:10] != MARKER + SPEC_FP["Withdraw"]:
+                raise Reject("INVALID_MESSAGE", "the body is not an axt.Withdraw")
+            if to != self.key:
+                self.what = "ignored: for another key"
+                return None, []
+        if kind in RECORD_MESSAGES:
             return self._record_message(sender, kind, rec, envelope["body"])
         # Step 3: the body, and the addressee (spec/protocol.md, section 9.1).
         name, body = BODY_OF[kind], envelope["body"]
@@ -4244,7 +4271,7 @@ class SetDevice:
     def _record_message(
         self, sender: bytes, kind: str, rec: Any, body: bytes
     ) -> tuple[str | None, list[bytes]]:
-        """A DATA or a DELETE of a sibling: no accepted offer between siblings is one for a record
+        """A DATA, a DELETE or a WITHDRAW of a sibling: no accepted offer between siblings is one for a record
         message, so it fails step 5 of spec/protocol.md, section 6.2, if the steps before it pass
         (section 7.2)."""
         if uuid_key(rec["id"]) is None:
@@ -4664,7 +4691,7 @@ class SetDevice:
         and 20.1): a DATA makes the record there, with the full name of its schema as its type, and a
         DELETE leaves a tombstone, which keeps the type the record had."""
         old = sender.records.get(key)
-        if kind == "DELETE" and name is None:
+        if kind in ("DELETE", "WITHDRAW") and name is None:
             name = old.type if old else None
         # A DELETE keeps beside the tombstone the DATA with the highest version below it that the device
         # took; a DATA has nothing beside it.
@@ -4765,7 +4792,7 @@ class SetDevice:
         if signer in self.book.refused and kind not in (keys.ADD, keys.REMOVE):
             raise Reject("NOT_ACCEPTED", "a refused key")  # step 14
         of = self._sender_of(signer)
-        if kind in ("DATA", "DELETE") and of is not None and signer in self._keys(of).removed:
+        if kind in RECORD_MESSAGES and of is not None and signer in self._keys(of).removed:
             if not self._has_removal(sender, of, signer):
                 # Step 14: the sibling has not shown that it has the removal (section 19.2).
                 raise Reject("NOT_ACCEPTED", "a removed key whose removal the sibling has not shown to have")
@@ -5014,6 +5041,15 @@ class SetDevice:
         """A forwarded DATA or DELETE by the steps of section 19.5: whether the device took it into the
         sender's layer. It never changes the owner's layer (section 19.1)."""
         rec, kind = inner["record"], inner["kind"]
+        if kind == "WITHDRAW":
+            # Before step 2: the body decodes as one axt.Withdraw, and its to is a current or a removed key
+            # of the device's own set (section 19.5; spec/shares.md, section 7.1).
+            try:
+                to = read_all("Withdraw", inner["body"][10:])["to"]
+            except ValueError as e:
+                raise Reject("INVALID_MESSAGE", f"message: {e}") from None
+            if to != self.key and to not in self.siblings and to not in self.removed:
+                raise Reject("INVALID_MESSAGE", "a WITHDRAW for a key of no device of the set")
         key = uuid_key(rec["id"])
         if key is None:
             raise Reject("RECORD_ID_INVALID", "the id of the message inside")  # step 2
@@ -5051,7 +5087,7 @@ class SetDevice:
     ) -> bool:
         """Step 7 of section 19.5 for a record message whose version is equal to or below the receiver's
         version, in a FORWARD of `sibling` or, without one, from the sender itself: whether the device
-        takes it all the same, by one of the four cases, after the steps 8 and 9. A message of the sender
+        takes it all the same, by one of the five cases, after the steps 8 and 9. A message of the sender
         itself that fails those steps is not taken; a forwarded one is rejected."""
         schema = None if text is None else json.loads(text)
         name = None if schema is None else full_name(schema)
@@ -5071,7 +5107,9 @@ class SetDevice:
                 self._undeliver(sibling, held.message)  # an older message from the sibling (section 20.2)
         elif kind == "DELETE" and held.there:
             case = 3  # a DELETE stands over a DATA of the same version
-        elif (kind == "DATA") == held.there and raw != held.message and stands_over(raw, text, held):
+        elif kind == "WITHDRAW" and kind_of(held.message) != "WITHDRAW":
+            case = 5  # a WITHDRAW stands over a DATA or a DELETE of the same version
+        elif kind == kind_of(held.message) and raw != held.message and stands_over(raw, text, held):
             case = 2  # the kept message in other bytes
         if case is None:
             return False
@@ -5087,6 +5125,11 @@ class SetDevice:
             held.beside = Received(name, version, True, raw, text, values)
         elif case == 3:
             sender.records[key] = Received(held.type, version, False, raw, None, {}, None)
+        elif case == 5:
+            # In the place of a DATA, that DATA stays beside the tombstone of the withdrawal; in the place of
+            # a DELETE, the DATA beside its tombstone does.
+            beside_now = held if held.there else held.beside
+            sender.records[key] = Received(held.type, version, False, raw, None, {}, beside_now)
         else:
             self._replace_record(sender, key, raw, text, values)
         return True
@@ -5120,16 +5163,23 @@ class SetDevice:
         assert sender is not None and signer in self._keys(sender).current, "a current key of a known sender"
         if kind == "MANIFEST":
             return {"taken": self._manifest_of(signer, body, m, None, not file)}, self._send_due()
-        assert kind in ("DATA", "DELETE"), kind
+        assert kind in RECORD_MESSAGES, kind
         key, version = uuid_key(rec["id"]), rec["version"]
         assert key is not None and version >= 1
         held, ref = sender.records.get(key), (sender.serial, key)
         kept_fields: list[str] = []
         if held is not None and version <= held.version:
             outcome = "DUPLICATE" if version == held.version else "STALE"  # spec/records.md, section 5.2
-            # The four cases of section 19.5, step 7, hold from the sender itself as well; the outcome is
+            # The five cases of section 19.5, step 7, hold from the sender itself as well; the outcome is
             # that of the version rule.
+            case5 = kind == "WITHDRAW" and version == held.version and kind_of(held.message) != "WITHDRAW"
             self._at_or_below(sender, key, held, kind, version, m, text, body, None)
+            if case5:
+                # Case 5: the device decides on the owner's changes as for a WITHDRAW with a higher version;
+                # the outcome stays DUPLICATE (section 22.2; spec/shares.md, section 6.3).
+                layer = self.layers.get(ref)
+                own = layer.state if layer else None
+                self._owner_decides(ref, sender.records[key], own, self.on_withdraw)
         else:
             schema = None if text is None else json.loads(text)
             values = {} if schema is None else record_values(schema, body)
@@ -5146,15 +5196,14 @@ class SetDevice:
                 outcome, kept_fields = answered(kind, values, fp, own, texts)
                 self._keep_record(sender, key, rec, kind, name, m, text, values)
             else:
-                # A DELETE (section 22.2): the record is kept against it, or the layer is tidied.
+                # A DELETE (section 22.2), or a WITHDRAW by the same rows with WITHDRAWN in the place of
+                # APPLIED (spec/shares.md, section 7.1): the record is kept against it, or the layer is
+                # tidied.
                 self._keep_record(sender, key, rec, kind, name, m, text, values)
-                outcome, mine = "APPLIED", owner_values(own)
-                if mine and not owner_deleted(own):
-                    if self.on_delete in ("keep", "ask") and sender.records[key].beside is not None:
-                        if self._layer_step(ref, "keep", {}):
-                            outcome = "KEPT"
-                    else:
-                        self._layer_step(ref, "discard", dict.fromkeys(mine, b""))  # tidying the layer
+                outcome = "WITHDRAWN" if kind == "WITHDRAW" else "APPLIED"
+                choice = self.on_withdraw if kind == "WITHDRAW" else self.on_delete
+                if self._owner_decides(ref, sender.records[key], own, choice):
+                    outcome = "KEPT"
             if outcome == "KEPT":
                 self.later[ref] = (signer, rec["id"], version, kind)
         if not file:
@@ -5167,6 +5216,17 @@ class SetDevice:
             }
             self.app_acks.setdefault(signer, []).append(entry)
         return {"outcome": outcome, "kept_fields": kept_fields}, self._send_due()
+
+    def _owner_decides(self, ref: tuple[int, int], rec: "Received", own: State | None, choice: str) -> bool:
+        """What the answering device does with the owner's changes when a DELETE or a WITHDRAW meets them
+        (section 22.2): it sets a keep, or tidies the layer. Whether it set the keep."""
+        mine = owner_values(own)
+        if not mine or owner_deleted(own):
+            return False
+        if choice in ("keep", "ask") and rec.beside is not None:
+            return self._layer_step(ref, "keep", {})
+        self._layer_step(ref, "discard", dict.fromkeys(mine, b""))  # tidying the layer
+        return False
 
     def _layer_moved(self, ref: tuple[int, int]) -> None:
         """A change or a merge has given an owner's layer a new state stamp: a layer that waited for a
@@ -5257,7 +5317,8 @@ class SetDevice:
             taken = state.keep is not None and state.keep.given_up
         if taken:
             del self.later[ref]
-            entry = {"id": rid, "version": version, "outcome": "APPLIED", "receiver_version": version}
+            outcome = "WITHDRAWN" if kind == "WITHDRAW" else "APPLIED"  # spec/shares.md, section 7.1
+            entry = {"id": rid, "version": version, "outcome": outcome, "receiver_version": version}
             self.app_acks.setdefault(signer, []).append({**entry, "kept_fields": []})
 
     def forget(self, key: bytes) -> list[bytes]:
@@ -5330,7 +5391,9 @@ class SetDevice:
         out["received"] = rec and {
             "type": rec.type,
             "version": str(rec.version),
-            "state": "there" if rec.there else "tombstone",
+            "state": "there"
+            if rec.there
+            else ("withdrawn" if kind_of(rec.message) == "WITHDRAW" else "tombstone"),
             "message_hash": sha(rec.message).hex(),
             "beside": rec.beside
             and {"version": str(rec.beside.version), "message_hash": sha(rec.beside.message).hex()},
@@ -5445,6 +5508,7 @@ def device_of_json(v: dict[str, Any], bytes_in: Callable[[Any], bytes] = bytes.f
         [bytes.fromhex(k) for k in v.get("refused", [])],
         v.get("forward_ids", []),
         v.get("on_delete", "delete"),
+        v.get("on_withdraw"),
     )
     for sender in v.get("senders", []):
         device.know(sender, bytes_in)
@@ -8524,6 +8588,16 @@ def other_delete(version: int, sender: str = "other app", rid: str = RECORD_ID) 
     return named(what, data_message(sender, version, "", {}, rid))
 
 
+def other_withdraw(
+    version: int, to: str = "phone", sender: str = "other app", rid: str = RECORD_ID, more: bytes = b""
+) -> bytes:
+    """A WITHDRAW of another app, addressed to the key `to` (spec/shares.md, section 3.1)."""
+    what = f"WITHDRAW version {version} to the {to}" + ("" if sender == "other app" else f" of the {sender}")
+    what += "" if rid == RECORD_ID else f", id {rid[:8]}"
+    body = body_of("Withdraw", {"to": KEY[to]}) + more
+    return named(what, message(SEEDS[sender], "WITHDRAW", (rid, version), body))
+
+
 def other_manifest(revision: int, sender: str = "other app") -> bytes:
     what = f"MANIFEST revision {revision}" + ("" if sender == "other app" else f" of the {sender}")
     return named(what, manifest_message(sender, revision, "Old Brain Fix"))
@@ -8748,7 +8822,7 @@ def received_sessions() -> list[Session]:
     x_add: bytes = read_all("Envelope", chain_message(keys.ADD, "second app", "stranger")[10:])["body"]
     x_delete = other_delete(1, "second app")
     never = ("OFFER", "ACCEPT", "DECLINE", "ACK", "ERROR", "DEVICE_JOIN", "CHANGE", "RESYNC", "FORWARD")
-    later = ("WITHDRAW", "PROPOSAL", "PROPOSAL_REPLY")
+    later = ("PROPOSAL", "PROPOSAL_REPLY")
     assert sorted((*never, *later, *FORWARDED)) == sorted(KINDS)
     bodies: list[tuple[str, bytes, str | None, str]] = [
         ("step 7: an empty message", b"", text, "INVALID_MESSAGE"),
@@ -8770,7 +8844,8 @@ def received_sessions() -> list[Session]:
                 None,
                 "INVALID_MESSAGE",
             )
-            for kind in (*never, *later)
+            # A WITHDRAW without a record, which its kind requires (spec/shares.md, section 3.3).
+            for kind in (*never, "WITHDRAW", *later)
         ],
         ("step 9: a forwarded DATA without a record", of("DATA", None, x_body), text, "INVALID_MESSAGE"),
         ("step 9: a forwarded DELETE without a record", of("DELETE", None, b""), None, "INVALID_MESSAGE"),
@@ -10319,7 +10394,232 @@ def received_sessions() -> list[Session]:
     s.take(other_delete(2))
     s.acks()
     s.about()
+    withdraw_sessions(new, known, tomb, weber_v3, text, d1, one, moved_away)
     return out
+
+
+def withdraw_sessions(
+    new: Callable[[str, list[str], dict[str, Any]], Session],
+    known: Callable[..., dict[str, Any]],
+    tomb: Callable[..., dict[str, Any]],
+    weber_v3: dict[str, Any],
+    text: str,
+    d1: bytes,
+    one: tuple[str, ...],
+    moved_away: Callable[..., dict[str, Any]],
+) -> None:
+    """The sessions about a WITHDRAW of another app (spec/shares.md, section 7.1)."""
+    w2, w4 = other_withdraw(2, "tablet"), other_withdraw(4)
+    refs = ["shares.md 7.1", "sync.md 19.5"]
+    s = new(
+        "a forwarded WITHDRAW leaves a tombstone of a withdrawal with the DATA beside it",
+        [*refs, "sync.md 20.1", "sync.md 22.1"],
+        known(),
+    )
+    s.receive(forward_message("tablet", w2, None))
+    s.acks()
+    s.about()
+    s = new(
+        "a forwarded WITHDRAW addressed to a removed key of the set is taken",
+        refs,
+        known(removed=("old phone",)),
+    )
+    s.receive(forward_message("tablet", other_withdraw(2, "old phone"), None))
+    s.acks()
+    s.about()
+    for to, what in [("phone", "the device's own key"), ("tablet", "the key of a sibling")]:
+        s = new(f"a forwarded WITHDRAW addressed to {what} is taken", refs, known())
+        s.receive(forward_message("tablet", other_withdraw(2, to), None))
+        s.acks()
+    for label, m in [
+        ("addressed to a key of no device of the set", other_withdraw(2, "stranger")),
+        ("whose body has a byte left over", other_withdraw(2, "tablet", more=b"\x00")),
+        (
+            "whose body is not an axt.Withdraw",
+            named("WITHDRAW with no body", message(SEEDS["other app"], "WITHDRAW", (RECORD_ID, 2), b"")),
+        ),
+    ]:
+        s = new(f"a forwarded WITHDRAW {label} is rejected with INVALID_MESSAGE", refs, known())
+        s.receive(forward_message("tablet", m, None))
+        s.acks()
+        s.about()
+    s = new(
+        "a forwarded DATA below the tombstone of a withdrawal goes beside it",
+        [*refs, "sync.md 20.1"],
+        tomb(None, other_withdraw(3, "tablet")),
+    )
+    s.receive(forward_message("tablet", other_data(2), text))
+    s.acks()
+    s.about()
+    s = new(
+        "two WITHDRAW messages of one version in other bytes: the one with the higher SHA-256 stands",
+        [*refs, "sync.md 20.1"],
+        known(),
+    )
+    s.receive(forward_message("tablet", other_withdraw(2, "tablet"), None))
+    s.receive(forward_message("tablet", other_withdraw(2, "phone"), None, fid=TABLET_FORWARD_2))
+    s.acks()
+    s.about()
+    s = new(
+        "two WITHDRAW messages of one version in other bytes: the later one with the higher SHA-256 takes "
+        "the place of the kept one",
+        [*refs, "sync.md 20.1"],
+        known(),
+    )
+    s.receive(forward_message("tablet", other_withdraw(2, "phone"), None))
+    s.receive(forward_message("tablet", other_withdraw(2, "tablet"), None, fid=TABLET_FORWARD_2))
+    s.acks()
+    s.about()
+    keep = {**received_device([weber_v3], highest=205), "on_withdraw": "keep"}
+    s = new(
+        "a set that keeps: a WITHDRAW that meets an owner's value sets a keep, KEPT, and the record is kept "
+        "against the withdrawal",
+        [*refs, "shares.md 4.3", "sync.md 22.1", "sync.md 22.2", "sync.md 21.2"],
+        keep,
+    )
+    s.take(w4, None, (4, 0))
+    s.acks()
+    s.about()
+    s.take(other_data(5), text)
+    s.acks()
+    s.about()
+    s = new(
+        "the further ACK: after KEPT for a WITHDRAW, the user gives up the keep and the device sends "
+        "WITHDRAWN",
+        [*refs, "sync.md 22.3", "protocol.md 7.3"],
+        keep,
+    )
+    s.take(w4, None, (4, 0))
+    s.acks()
+    s.owner("give_up", {}, (1, 0))
+    s.acks()
+    s.about()
+    s = new(
+        "a keep against a WITHDRAW does not cover a DELETE with a higher version",
+        [*refs, "shares.md 6.3", "sync.md 22.1"],
+        keep,
+    )
+    s.take(w4, None, (4, 0))
+    s.take(other_delete(5), None, (2, 0))
+    s.acks()
+    s.about()
+    s = new(
+        "a set that keeps against a DELETE may remove against a WITHDRAW: WITHDRAWN, and the layer is tidied",
+        [*refs, "shares.md 4.3", "sync.md 22.3"],
+        {**received_device([weber_v3], highest=205, on_delete="keep"), "on_withdraw": "delete"},
+    )
+    s.take(w4, None, (4, 0))
+    s.acks()
+    s.about()
+    s = new(
+        "a WITHDRAW of an id the answering device does not have: WITHDRAWN, a tombstone without a type",
+        [*refs, "shares.md 4.2"],
+        known(),
+    )
+    s.take(other_withdraw(3, rid=OTHER_ID))
+    s.acks()
+    s.about(OTHER_ID)
+    s = new(
+        "a WITHDRAW of another app in a file of that app is taken and forwarded, and nothing is reported",
+        [*refs, "shares.md 8.2", "sync.md 24.2"],
+        known(),
+    )
+    s.take(other_withdraw(2, "tablet"), None, (), True)
+    s.acks()
+    s.about()
+    s = new(
+        "a WITHDRAW of a sibling is rejected with NOT_ACCEPTED, once its body and addressee pass",
+        ["shares.md 4.1", "shares.md 7.2", "sync.md 7.2"],
+        known(),
+    )
+    tablet = SEEDS["tablet"]
+    s.receive(message(tablet, "WITHDRAW", (RECORD_ID, 2), body_of("Withdraw", {"to": KEY["phone"]})))
+    s.receive(message(tablet, "WITHDRAW", (RECORD_ID, 2), body_of("Withdraw", {"to": KEY["laptop"]})))
+    s.receive(message(tablet, "WITHDRAW", (RECORD_ID, 2), b""))
+    s.receive(message(tablet, "WITHDRAW", ("not-a-uuid", 2), body_of("Withdraw", {"to": KEY["phone"]})))
+    s.receive(message(tablet, "WITHDRAW", None, body_of("Withdraw", {"to": KEY["phone"]})))
+    s.acks()
+    # Case 5 of section 19.5, step 7: a WITHDRAW over a DATA or a DELETE of the same version.
+    for how in ("forwarded", "from the sender"):
+        tail = "APPLIED" if how == "forwarded" else "DUPLICATE"
+        s = new(
+            f"case 5 of step 7, {how}: a WITHDRAW takes the place of a DATA of the same version, which stays "
+            f"beside it; {tail}",
+            [*refs, "sync.md 20.1", "shares.md 6.3"],
+            known(record=other_data(2)),
+        )
+        if how == "forwarded":
+            s.receive(forward_message("tablet", other_withdraw(2, "tablet"), None))
+        else:
+            s.take(other_withdraw(2))
+        s.acks()
+        s.about()
+    s = new(
+        "case 5 of step 7, forwarded: a WITHDRAW takes the place of a DELETE of the same version, and the "
+        "DATA beside it stays",
+        [*refs, "sync.md 20.1"],
+        tomb(),
+    )
+    s.receive(forward_message("tablet", other_withdraw(3, "tablet"), None))
+    s.acks()
+    s.about()
+    for choice, what in [("keep", "sets a keep"), ("delete", "tidies the layer")]:
+        s = new(
+            f"case 5 at the answering device, a set that {'keeps' if choice == 'keep' else 'removes'}: a "
+            f"WITHDRAW over a DATA of its version meets an owner's value and {what}; DUPLICATE",
+            [*refs, "sync.md 22.2", "shares.md 6.3"],
+            {**received_device([weber_v3], highest=205), "on_withdraw": choice},
+        )
+        s.take(other_withdraw(3), None, (4, 0))
+        s.acks()
+        s.about()
+    s = new(
+        "a WITHDRAW that meets an owner's removal that stands, with owner's values, at a set that keeps: "
+        "WITHDRAWN, and the removal stands",
+        [*refs, "shares.md 4.2", "sync.md 22.2", "records.md 6.3"],
+        {
+            **received_device(
+                [
+                    sender_json(
+                        manifests=(kept_json(other_manifest(1), one),),
+                        records=(kept_json(other_data(2), one, text),),
+                        layers=(
+                            layer_json(
+                                State(
+                                    {"location": FieldState(VALUE_WEBER, 200, TABLET)}, gone(203, TABLET), 205
+                                ),
+                                dict.fromkeys(one),
+                            ),
+                        ),
+                    )
+                ],
+                highest=205,
+            ),
+            "on_withdraw": "keep",
+        },
+    )
+    s.take(other_withdraw(3))
+    s.acks()
+    s.about()
+    s = new(
+        "a forwarded WITHDRAW of a removed key is rejected with NOT_ACCEPTED when the sibling has not shown "
+        "that it has the removal",
+        [*refs, "sync.md 19.2"],
+        moved_away(()),
+    )
+    s.receive(forward_message("tablet", other_withdraw(2, "tablet"), None))
+    s.acks()
+    s = new(
+        "a WITHDRAW in a file of the device's own set is not applied",
+        ["shares.md 8.2", "sync.md 13.4"],
+        known(),
+    )
+    own = named(
+        "WITHDRAW of the tablet",
+        message(SEEDS["tablet"], "WITHDRAW", (OTHER_ID, 2), body_of("Withdraw", {"to": KEY["other app"]})),
+    )
+    s.step({"file_record": own, "schema": text, "now_ms": "0", "r": []})
+    s.query(OTHER_ID)
 
 
 def padded_schema(size: int) -> str:
@@ -17308,6 +17608,568 @@ SAID: dict[str, list[list[str]]] = {
                 "DELETE version 2; beside it DATA version 1"
             ),
             "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    "a forwarded WITHDRAW leaves a tombstone of a withdrawal with the DATA beside it": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "kept: WITHDRAW version 2 to the tablet; delivered to tablet",
+            (
+                "sender's layer: withdrawn, version 2, type axt.example.v1.Appointment, from WITHDRAW "
+                "version 2 to the tablet; beside it DATA version 1"
+            ),
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    "a forwarded WITHDRAW addressed to a removed key of the set is taken": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "kept: WITHDRAW version 2 to the old phone; delivered to tablet",
+            (
+                "sender's layer: withdrawn, version 2, type axt.example.v1.Appointment, from WITHDRAW "
+                "version 2 to the old phone; beside it DATA version 1"
+            ),
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    "a forwarded WITHDRAW addressed to the device's own key is taken": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+    ],
+    "a forwarded WITHDRAW addressed to the key of a sibling is taken": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+    ],
+    "a forwarded WITHDRAW addressed to a key of no device of the set is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "a forwarded WITHDRAW whose body has a byte left over is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "a forwarded WITHDRAW whose body is not an axt.Withdraw is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "a forwarded DATA below the tombstone of a withdrawal goes beside it": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to tablet",
+            "kept: WITHDRAW version 3 to the tablet; delivered to tablet",
+            (
+                "sender's layer: withdrawn, version 3, type axt.example.v1.Appointment, from WITHDRAW "
+                "version 3 to the tablet; beside it DATA version 2"
+            ),
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    "two WITHDRAW messages of one version in other bytes: the one with the higher SHA-256 stands": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "outcome: DUPLICATE",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+            "ACK of 0000000b to tablet: version 1 DUPLICATE, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "kept: WITHDRAW version 2 to the tablet; delivered to tablet",
+            (
+                "sender's layer: withdrawn, version 2, type axt.example.v1.Appointment, from WITHDRAW "
+                "version 2 to the tablet; beside it DATA version 1"
+            ),
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    (
+        "two WITHDRAW messages of one version in other bytes: the later one with the higher "
+        "SHA-256 takes the place of the kept one"
+    ): [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+            "ACK of 0000000b to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "kept: WITHDRAW version 2 to the tablet; delivered to tablet",
+            (
+                "sender's layer: withdrawn, version 2, type axt.example.v1.Appointment, from WITHDRAW "
+                "version 2 to the tablet; beside it DATA version 1"
+            ),
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    (
+        "a set that keeps: a WITHDRAW that meets an owner's value sets a keep, KEPT, and the "
+        "record is kept against the withdrawal"
+    ): [
+        [
+            "outcome: KEPT",
+            (
+                "CHANGE, origin other app, to tablet, version 211, state 211, in part: no field keep@210p "
+                "of version 4"
+            ),
+            "FORWARD 00000001 to tablet, #0: WITHDRAW version 4 to the phone",
+        ],
+        [
+            "ACK to other app: version 4 KEPT, receiver 4",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 211",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 3, start changed, notes 'Bring the vaccination card'; delivered to tablet",
+            "kept: WITHDRAW version 4 to the phone; delivered to no sibling",
+            (
+                "sender's layer: withdrawn, version 4, type axt.example.v1.Appointment, from WITHDRAW "
+                "version 4 to the phone; beside it DATA version 3, start changed, notes 'Bring the "
+                "vaccination card'"
+            ),
+            (
+                "owner's layer: state stamp 211; location@200t keep@210p of version 4; type "
+                "axt.example.v1.Appointment"
+            ),
+            "tablet: known, delivered: all",
+            "shows: kept; the owner's value in location",
+        ],
+        [
+            "outcome: MERGED, kept ['location']",
+            "FORWARD 00000002 to tablet, #0: DATA version 5, with the schema as offered",
+        ],
+        [
+            "ACK to other app: version 5 MERGED, receiver 5, kept ['location']",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 211",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 5; delivered to no sibling",
+            "sender's layer: there, version 5, type axt.example.v1.Appointment, from DATA version 5",
+            (
+                "owner's layer: state stamp 211; location@200t keep@210p of version 4; type "
+                "axt.example.v1.Appointment"
+            ),
+            "tablet: known, delivered: all",
+            "shows: there; the owner's value in location",
+        ],
+    ],
+    "the further ACK: after KEPT for a WITHDRAW, the user gives up the keep and the device sends WITHDRAWN": [
+        [
+            "outcome: KEPT",
+            (
+                "CHANGE, origin other app, to tablet, version 211, state 211, in part: no field keep@210p "
+                "of version 4"
+            ),
+            "FORWARD 00000001 to tablet, #0: WITHDRAW version 4 to the phone",
+        ],
+        [
+            "ACK to other app: version 4 KEPT, receiver 4",
+        ],
+        [
+            "made: True",
+            (
+                "CHANGE, origin other app, to tablet, version 214, state 214, in part: no field keep@213p "
+                "of version 4, given up"
+            ),
+        ],
+        [
+            "ACK to other app: version 4 WITHDRAWN, receiver 4",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 214",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 3, start changed, notes 'Bring the vaccination card'; delivered to tablet",
+            "kept: WITHDRAW version 4 to the phone; delivered to no sibling",
+            (
+                "sender's layer: withdrawn, version 4, type axt.example.v1.Appointment, from WITHDRAW "
+                "version 4 to the phone; beside it DATA version 3, start changed, notes 'Bring the "
+                "vaccination card'"
+            ),
+            (
+                "owner's layer: state stamp 214; location@200t keep@213p of version 4, given up; type "
+                "axt.example.v1.Appointment"
+            ),
+            "tablet: known, delivered: all",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    "a keep against a WITHDRAW does not cover a DELETE with a higher version": [
+        [
+            "outcome: KEPT",
+            (
+                "CHANGE, origin other app, to tablet, version 211, state 211, in part: no field keep@210p "
+                "of version 4"
+            ),
+            "FORWARD 00000001 to tablet, #0: WITHDRAW version 4 to the phone",
+        ],
+        [
+            "outcome: APPLIED",
+            (
+                "CHANGE, origin other app, to tablet, version 215, state 215, whole: location=null@214p "
+                "keep@210p of version 4"
+            ),
+            "FORWARD 00000002 to tablet, #0: DELETE version 5",
+        ],
+        [
+            "ACK to other app: version 5 APPLIED, receiver 5",
+            "ACK to other app: version 4 KEPT, receiver 4",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 215",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 3, start changed, notes 'Bring the vaccination card'; delivered to tablet",
+            "kept: DELETE version 5; delivered to no sibling",
+            (
+                "sender's layer: tombstone, version 5, type axt.example.v1.Appointment, from DELETE "
+                "version 5; beside it DATA version 3, start changed, notes 'Bring the vaccination card'"
+            ),
+            (
+                "owner's layer: state stamp 215; location=null@214p keep@210p of version 4; type "
+                "axt.example.v1.Appointment"
+            ),
+            "tablet: known, delivered: nothing",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    "a set that keeps against a DELETE may remove against a WITHDRAW: WITHDRAWN, and the layer is tidied": [
+        [
+            "outcome: WITHDRAWN",
+            "CHANGE, origin other app, to tablet, version 211, state 211, whole: location=null@210p",
+            "FORWARD 00000001 to tablet, #0: WITHDRAW version 4 to the phone",
+        ],
+        [
+            "ACK to other app: version 4 WITHDRAWN, receiver 4",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 211",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 3, start changed, notes 'Bring the vaccination card'; delivered to tablet",
+            "kept: WITHDRAW version 4 to the phone; delivered to no sibling",
+            (
+                "sender's layer: withdrawn, version 4, type axt.example.v1.Appointment, from WITHDRAW "
+                "version 4 to the phone; beside it DATA version 3, start changed, notes 'Bring the "
+                "vaccination card'"
+            ),
+            "owner's layer: state stamp 211; location=null@210p; type axt.example.v1.Appointment",
+            "tablet: known, delivered: nothing",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    "a WITHDRAW of an id the answering device does not have: WITHDRAWN, a tombstone without a type": [
+        [
+            "outcome: WITHDRAWN",
+            "FORWARD 00000001 to tablet, #0: WITHDRAW version 3 to the phone, id 7b1e6c2a",
+        ],
+        [
+            "ACK of 7b1e6c2a to other app: version 3 WITHDRAWN, receiver 3",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "kept: WITHDRAW version 3 to the phone, id 7b1e6c2a; delivered to no sibling",
+            (
+                "sender's layer: withdrawn, version 3, type None, from WITHDRAW version 3 to the phone, id "
+                "7b1e6c2a"
+            ),
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    "a WITHDRAW in a file of the device's own set is not applied": [
+        [
+            "taken: False",
+        ],
+        [
+            "no record; highest 195",
+        ],
+    ],
+    "a WITHDRAW of another app in a file of that app is taken and forwarded, and nothing is reported": [
+        [
+            "outcome: WITHDRAWN",
+            "FORWARD 00000001 to tablet, #0: WITHDRAW version 2 to the tablet",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "kept: WITHDRAW version 2 to the tablet; delivered to no sibling",
+            (
+                "sender's layer: withdrawn, version 2, type axt.example.v1.Appointment, from WITHDRAW "
+                "version 2 to the tablet; beside it DATA version 1"
+            ),
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    "a WITHDRAW of a sibling is rejected with NOT_ACCEPTED, once its body and addressee pass": [
+        [
+            "outcome: None",
+            "ERROR to tablet: NOT_ACCEPTED",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [
+            "outcome: None",
+            "ERROR to tablet: RECORD_ID_INVALID",
+        ],
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+    ],
+    (
+        "case 5 of step 7, forwarded: a WITHDRAW takes the place of a DATA of the same version, "
+        "which stays beside it; APPLIED"
+    ): [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to tablet",
+            "kept: WITHDRAW version 2 to the tablet; delivered to tablet",
+            (
+                "sender's layer: withdrawn, version 2, type axt.example.v1.Appointment, from WITHDRAW "
+                "version 2 to the tablet; beside it DATA version 2"
+            ),
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    (
+        "case 5 of step 7, from the sender: a WITHDRAW takes the place of a DATA of the same "
+        "version, which stays beside it; DUPLICATE"
+    ): [
+        [
+            "outcome: DUPLICATE",
+            "FORWARD 00000001 to tablet, #0: WITHDRAW version 2 to the phone",
+        ],
+        [
+            "ACK to other app: version 2 DUPLICATE, receiver 2",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to tablet",
+            "kept: WITHDRAW version 2 to the phone; delivered to no sibling",
+            (
+                "sender's layer: withdrawn, version 2, type axt.example.v1.Appointment, from WITHDRAW "
+                "version 2 to the phone; beside it DATA version 2"
+            ),
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    (
+        "case 5 of step 7, forwarded: a WITHDRAW takes the place of a DELETE of the same version, "
+        "and the DATA beside it stays"
+    ): [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to tablet",
+            "kept: WITHDRAW version 3 to the tablet; delivered to tablet",
+            (
+                "sender's layer: withdrawn, version 3, type axt.example.v1.Appointment, from WITHDRAW "
+                "version 3 to the tablet; beside it DATA version 2"
+            ),
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    (
+        "a WITHDRAW that meets an owner's removal that stands, with owner's values, at a set that "
+        "keeps: WITHDRAWN, and the removal stands"
+    ): [
+        [
+            "outcome: WITHDRAWN",
+            "FORWARD 00000001 to tablet, #0: WITHDRAW version 3 to the phone",
+        ],
+        [
+            "ACK to other app: version 3 WITHDRAWN, receiver 3",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 205",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to tablet",
+            "kept: WITHDRAW version 3 to the phone; delivered to no sibling",
+            (
+                "sender's layer: withdrawn, version 3, type axt.example.v1.Appointment, from WITHDRAW "
+                "version 3 to the phone; beside it DATA version 2"
+            ),
+            "owner's layer: state stamp 205; location@200t removal@203t; type axt.example.v1.Appointment",
+            "tablet: known, delivered: all and the removal",
+            "shows: deleted_by_owner",
+        ],
+    ],
+    (
+        "a forwarded WITHDRAW of a removed key is rejected with NOT_ACCEPTED when the sibling has "
+        "not shown that it has the removal"
+    ): [
+        [
+            "outcome: None",
+            "ERROR to tablet: NOT_ACCEPTED",
+            "FORWARD 00000001 to tablet, #0: DEVICE_REMOVE of the other app by the other app, new",
+        ],
+        [],
+    ],
+    (
+        "case 5 at the answering device, a set that keeps: a WITHDRAW over a DATA of its version "
+        "meets an owner's value and sets a keep; DUPLICATE"
+    ): [
+        [
+            "outcome: DUPLICATE",
+            (
+                "CHANGE, origin other app, to tablet, version 211, state 211, in part: no field keep@210p "
+                "of version 3"
+            ),
+            "FORWARD 00000001 to tablet, #0: WITHDRAW version 3 to the phone",
+        ],
+        [
+            "ACK to other app: version 3 DUPLICATE, receiver 3",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 211",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 3, start changed, notes 'Bring the vaccination card'; delivered to tablet",
+            "kept: WITHDRAW version 3 to the phone; delivered to no sibling",
+            (
+                "sender's layer: withdrawn, version 3, type axt.example.v1.Appointment, from WITHDRAW "
+                "version 3 to the phone; beside it DATA version 3, start changed, notes 'Bring the "
+                "vaccination card'"
+            ),
+            (
+                "owner's layer: state stamp 211; location@200t keep@210p of version 3; type "
+                "axt.example.v1.Appointment"
+            ),
+            "tablet: known, delivered: all",
+            "shows: kept; the owner's value in location",
+        ],
+    ],
+    (
+        "case 5 at the answering device, a set that removes: a WITHDRAW over a DATA of its version "
+        "meets an owner's value and tidies the layer; DUPLICATE"
+    ): [
+        [
+            "outcome: DUPLICATE",
+            "CHANGE, origin other app, to tablet, version 211, state 211, whole: location=null@210p",
+            "FORWARD 00000001 to tablet, #0: WITHDRAW version 3 to the phone",
+        ],
+        [
+            "ACK to other app: version 3 DUPLICATE, receiver 3",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 211",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 3, start changed, notes 'Bring the vaccination card'; delivered to tablet",
+            "kept: WITHDRAW version 3 to the phone; delivered to no sibling",
+            (
+                "sender's layer: withdrawn, version 3, type axt.example.v1.Appointment, from WITHDRAW "
+                "version 3 to the phone; beside it DATA version 3, start changed, notes 'Bring the "
+                "vaccination card'"
+            ),
+            "owner's layer: state stamp 211; location=null@210p; type axt.example.v1.Appointment",
+            "tablet: known, delivered: nothing",
             "shows: deleted_by_sender",
         ],
     ],

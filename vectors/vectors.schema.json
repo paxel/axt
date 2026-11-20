@@ -29,7 +29,8 @@
     "local",
     "relay",
     "relay-server",
-    "sync"
+    "sync",
+    "shares"
    ]
   },
   "description": {"type": "string"},
@@ -88,6 +89,20 @@
     "expected": {"$ref": "#/$defs/result"}
    },
    "allOf": [
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "acked"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["sent", "held", "outcome", "receiver_version", "shared", "withdrawal", "state_stamp", "sibling_stamp", "sibling"]
+       }
+      }
+     }
+    },
     {
      "if": {
       "properties": {
@@ -469,6 +484,20 @@
     {
      "if": {
       "properties": {
+       "op": {"const": "join_receivers"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["receivers"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
        "op": {"const": "merge"}
       }
      },
@@ -497,6 +526,20 @@
     {
      "if": {
       "properties": {
+       "op": {"const": "offer_types"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["records"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
        "op": {"const": "open"}
       }
      },
@@ -504,6 +547,20 @@
       "properties": {
        "input": {
         "required": ["sealed", "private_keys"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "owed"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["shared", "deleted", "version", "withdrawal", "last"]
        }
       }
      }
@@ -532,6 +589,20 @@
       "properties": {
        "input": {
         "required": ["text"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "pass_withdrawal"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["shared", "withdrawal", "to_pass", "state_stamp"]
        }
       }
      }
@@ -602,6 +673,20 @@
       "properties": {
        "input": {
         "required": ["file", "reader"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "receive"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["policy", "events"]
        }
       }
      }
@@ -770,6 +855,34 @@
       "properties": {
        "input": {
         "required": ["message"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "withdrawal_stamp"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["occasion", "now_ms", "highest", "r", "withdrawals", "state_stamp"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "take_version"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["occasion", "highest_given", "state_stamp"]
        }
       }
      }
@@ -1111,7 +1224,27 @@
       "items": {
        "properties": {
         "op": {
-         "enum": ["begin_stamping", "change", "deleted", "merge", "next_stamp", "pass_version", "shown", "siblings", "stale"]
+         "enum": ["begin_stamping", "change", "deleted", "merge", "next_stamp", "pass_version", "shown", "siblings", "stale", "withdrawal_stamp"]
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "if": {
+    "properties": {
+     "category": {"const": "shares"}
+    }
+   },
+   "then": {
+    "properties": {
+     "vectors": {
+      "items": {
+       "properties": {
+        "op": {
+         "enum": ["acked", "join_receivers", "offer_types", "owed", "pass_withdrawal", "receive", "take_version"]
         }
        }
       }

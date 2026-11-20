@@ -11,7 +11,8 @@ that follows the devices of its senders, the model of an app of
 protocol_examples.py, the QR code, frames and relay of
 transports_examples.py, the time types of time_examples.py, and the attributes of spec/metadata.md of
 metadata_rules.py, and the stamps, the merge and the model of a device with
-its siblings of spec/sync.md of sync_examples.py. Where those scripts have no model, for a receiver's
+its siblings of spec/sync.md of sync_examples.py, and the receiver of withdrawals and the sending
+device of spec/shares.md of shares_examples.py. Where those scripts have no model, for a receiver's
 own changes to records (spec/records.md, section 6) and for reading a file
 (spec/transports.md, section 2.2), it has its own code below. That it passes
 every vector shows that the vectors agree with the scripts' checks; it is a
@@ -53,6 +54,7 @@ tx = load("transports_examples")
 pe, me, keys, rules = tx.pe, tx.me, tx.keys, tx.rules
 tm = load("time_examples")
 sy = load("sync_examples")
+se = load("shares_examples")
 mr = rules.mr
 
 import fastavro  # noqa: E402
@@ -73,6 +75,7 @@ CATEGORIES = [
     "relay",
     "relay-server",
     "sync",
+    "shares",
 ]
 OUT_INLINE = 1 << 20  # bytes above which an answer carries raw DEFLATE rather than hex
 
@@ -546,7 +549,7 @@ def op_apply(i: Any) -> dict[str, Any]:
 
 # --- protocol (spec/protocol.md) -----------------------------------------------------------
 
-OUTCOMES = ("APPLIED", "DUPLICATE", "STALE")
+OUTCOMES = ("APPLIED", "DUPLICATE", "STALE", "WITHDRAWN")
 
 
 def op_session(i: Any) -> dict[str, Any]:
@@ -756,9 +759,9 @@ def read_file(data: bytes, reader: Any) -> dict[str, Any]:
         if keys.verify_problem(key, keys.MESSAGE_PREFIX + d[:-64], d[-64:]):
             raise FileRejected("a message whose signature does not verify")
         kind, body, record = env["kind"], bytes.fromhex(env["body"]), env["record"]
-        if kind not in (*CHAIN_SCHEMAS, "MANIFEST", "DATA", "DELETE"):
+        if kind not in (*CHAIN_SCHEMAS, "MANIFEST", "DATA", "DELETE", "WITHDRAW"):
             raise FileRejected(f"a {kind} in a file")
-        if (record is None) == (kind in ("DATA", "DELETE")):
+        if (record is None) == (kind in ("DATA", "DELETE", "WITHDRAW")):
             raise FileRejected("a record where none belongs, or none where one is required")
         if kind in CHAIN_SCHEMAS:
             name = CHAIN_SCHEMAS[kind]
@@ -789,6 +792,10 @@ def read_file(data: bytes, reader: Any) -> dict[str, Any]:
         seen_record = True
         if kind == "DELETE" and body:
             raise FileRejected("a DELETE with a body")
+        if kind == "WITHDRAW":
+            # A WITHDRAW whose body is not one axt.Withdraw is not a valid message (spec/shares.md, 8.2).
+            if body[:10] != b"\xc3\x01" + pe.fp8(pe.fingerprints["Withdraw"][1]) or len(body) != 42:
+                raise FileRejected("a WITHDRAW whose body is not an axt.Withdraw")
         if kind == "DATA" and (
             body[:2] != b"\xc3\x01" or int.from_bytes(body[2:10], "little") not in schemas
         ):
@@ -804,6 +811,10 @@ def read_file(data: bytes, reader: Any) -> dict[str, Any]:
         state = "invalid" if error or me.manifest_problems(datum, len(body)) else "used"
     own, _, _ = manifest_datum(b_in(reader["manifest"]))
     readers = {n: json.loads(t) for n, t in reader["readers"].items()}
+    # The keys of the reader's own set, by which it takes a WITHDRAW (spec/shares.md, section 8.2).
+    own_keys = {
+        bytes.fromhex(k) for part in ("current", "removed") for k in reader.get("keys", {}).get(part, [])
+    }
     kept: dict[int, dict[str, Any]] = {}
     results: list[dict[str, Any]] = []
     for kind, record, body in messages:
@@ -812,6 +823,9 @@ def read_file(data: bytes, reader: Any) -> dict[str, Any]:
         results.append(out)
         if removed:
             out["result"] = "SENDER_REMOVED"
+            continue
+        if kind == "WITHDRAW" and body[10:] not in own_keys:
+            out["result"] = "IGNORED"  # a withdrawal from another app: not applied, the file stands
             continue
         rkey = record_key(rid)
         if rkey is None:
@@ -849,7 +863,7 @@ def read_file(data: bytes, reader: Any) -> dict[str, Any]:
             kept[rkey] = {"type": name, "version": version}
         else:
             kept[rkey] = {"type": None if k is None else k["type"], "version": version}
-        out["result"] = "APPLIED"
+        out["result"] = "WITHDRAWN" if kind == "WITHDRAW" else "APPLIED"
     links = [
         {"kind": kind, "signer": signer.hex(), "device": device.hex(), "result": result}
         for (kind, signer, device, _), result in zip(chain, chain_results, strict=True)
@@ -1227,7 +1241,86 @@ def op_siblings(i: Any) -> dict[str, Any]:
     return {"steps": out}
 
 
+# --- shares (spec/shares.md) -------------------------------------------------------------------
+
+
+def stamp_or_none(v: Any) -> int | None:
+    return None if v is None else int(v)
+
+
+def op_take_version(i: Any) -> dict[str, Any]:
+    """The version of a withdrawal or of a sharing again at an installation that counts."""
+    version, state, _ = se.take_version(
+        i["occasion"], True, int(i["highest_given"]), 0, 0, 0, [], int(i["state_stamp"])
+    )
+    return ok({"version": sy.stamp_json(version), "state_stamp": str(state)})
+
+
+def op_withdrawal_stamp(i: Any) -> dict[str, Any]:
+    """The same at a device that stamps (spec/sync.md, section 2.2)."""
+    version, state, highest = se.take_version(
+        i["occasion"],
+        False,
+        0,
+        int(i["now_ms"]),
+        int(i["highest"]),
+        i["r"],
+        [int(w) for w in i["withdrawals"]],
+        int(i["state_stamp"]),
+    )
+    return ok({"version": sy.stamp_json(version), "state_stamp": str(state), "highest": str(highest)})
+
+
+def op_owed(i: Any) -> dict[str, Any]:
+    last = None if i["last"] is None else (i["last"]["kind"], int(i["last"]["version"]))
+    owes, version = se.owed(
+        i["shared"], i["deleted"], int(i["version"]), stamp_or_none(i["withdrawal"]), last
+    )
+    return ok({"owes": owes, "version": sy.stamp_json(version)})
+
+
+def op_pass_withdrawal(i: Any) -> dict[str, Any]:
+    then, to_pass = se.pass_withdrawal(
+        i["shared"], stamp_or_none(i["withdrawal"]), int(i["to_pass"]), int(i["state_stamp"])
+    )
+    return ok({"then": then, "to_pass": sy.stamp_json(to_pass)})
+
+
+def op_join_receivers(i: Any) -> dict[str, Any]:
+    a, b = ((r["shared"], stamp_or_none(r["withdrawal"])) for r in i["receivers"])
+    shared, withdrawal, new = se.joined(a, b)
+    return ok({"shared": shared, "withdrawal": sy.stamp_json(withdrawal), "new_state_stamp": new})
+
+
+def op_offer_types(i: Any) -> dict[str, Any]:
+    types = se.offer([(r["type"], r["owes"], r["delivered"]) for r in i["records"]])
+    return ok({"types": [{"type": t, "count": n} for t, n in types]})
+
+
+def op_acked(i: Any) -> dict[str, Any]:
+    held, then, to_pass = se.acked(
+        i["sent"],
+        i["held"],
+        i["outcome"],
+        int(i["receiver_version"]),
+        i["shared"],
+        stamp_or_none(i["withdrawal"]),
+        int(i["state_stamp"]),
+        stamp_or_none(i["sibling_stamp"]),
+        i["sibling"],
+    )
+    return ok({"outcome": held, "then": then, "to_pass": sy.stamp_json(to_pass)})
+
+
 OPS: dict[str, Callable[[Any], dict[str, Any]]] = {
+    "receive": lambda i: {"steps": se.apply(i["policy"], i["events"])},
+    "take_version": op_take_version,
+    "withdrawal_stamp": op_withdrawal_stamp,
+    "owed": op_owed,
+    "pass_withdrawal": op_pass_withdrawal,
+    "join_receivers": op_join_receivers,
+    "offer_types": op_offer_types,
+    "acked": op_acked,
     "decode_body": op_decode_body,
     "read_file": op_read_file,
     "apply": op_apply,

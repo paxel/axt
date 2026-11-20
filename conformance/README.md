@@ -35,6 +35,7 @@ python3 conformance/run.py -- python3 conformance/reference/adapter.py
 | [tools/protocol_examples.py](tools/protocol_examples.py)     | Produces and checks the examples of [spec/protocol.md](../spec/protocol.md), with a model of an app                                       |
 | [tools/transports_examples.py](tools/transports_examples.py) | Produces and checks the examples of [spec/transports.md](../spec/transports.md), with models of the frames and the relay                  |
 | [tools/sync_examples.py](tools/sync_examples.py)             | Produces and checks the examples of [spec/sync.md](../spec/sync.md), with the stamps, the merge and a model of a device with its siblings, the records of its set and what the set got from other apps |
+| [tools/shares_examples.py](tools/shares_examples.py)         | Produces and checks the examples of [spec/shares.md](../spec/shares.md), with a receiver of withdrawals and the rules of a sending device |
 
 The scripts and the reference adapter need Python 3.11 or later with fastavro 1.13.1, avro 1.12.2, PyNaCl 1.6.2 and cryptography 50.0.2, the versions the specification's examples were checked with, and a time zone database that Python's `zoneinfo` finds, such as the system's or the package `tzdata`. [pyproject.toml](../pyproject.toml) and `uv.lock` pin them; with [uv](https://docs.astral.sh/uv/), `uv sync` installs them and `uv run` starts a script with them:
 

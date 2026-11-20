@@ -21,6 +21,7 @@ This directory holds the test vectors of AXT: bytes with their expected meaning,
 | [relay/relay.json](relay/relay.json)                             | The relay as an app uses it ([spec/transports.md](../spec/transports.md), section 5)                  |
 | [relay-server/relay-server.json](relay-server/relay-server.json) | The interface of a relay, for relays ([spec/transports.md](../spec/transports.md), section 5)         |
 | [sync/sync.json](sync/sync.json)                                 | Stamps, the merge, the messages between the devices of one owner and what they do with the messages of other apps ([spec/sync.md](../spec/sync.md)) |
+| [shares/shares.json](shares/shares.json)                         | Withdrawals at a receiver, and what a sender of shared records does ([spec/shares.md](../spec/shares.md)) |
 
 The files are produced by [conformance/tools/generate_vectors.py](../conformance/tools/generate_vectors.py) and committed as data; they are not edited by hand. After a change of the specification, the generator writes them again, and `generate_vectors.py --check` confirms that the committed files are its output.
 

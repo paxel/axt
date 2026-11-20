@@ -290,6 +290,21 @@
    }
   },
   {
+   "id": "encoding/fingerprint/axt-withdraw-as-types-axt-withdraw-avsc-holds-it",
+   "op": "fingerprint",
+   "description": "axt.Withdraw, as types/axt/Withdraw.avsc holds it",
+   "refs": ["envelope.md 5", "shares.md 10"],
+   "input": {
+    "schema": "{\n  \"type\": \"record\",\n  \"name\": \"Withdraw\",\n  \"namespace\": \"axt\",\n  \"doc\": \"The body of a WITHDRAW message: the sender no longer shares one record with the receiver it sends this message to. Defined in spec/shares.md. The envelope's record field names the record and carries the version of the withdrawal, which no DATA or DELETE of the record carries. The receiver removes its copy, or keeps it if its user changed it. Its schema changes only with a new envelope format.\",\n  \"fields\": [\n    {\n      \"name\": \"to\",\n      \"type\": {\n        \"type\": \"fixed\",\n        \"name\": \"WithdrawTo\",\n        \"size\": 32,\n        \"doc\": \"An Ed25519 public key in the encoding of RFC 8032. Defined in spec/keys.md.\"\n      },\n      \"doc\": \"The Ed25519 public key of the receiver's device that the withdrawal is sent to. A device that gets it directly ignores a WITHDRAW that names another key; a forwarded one is rejected unless this is a current or a removed key of the device's own set, and one read from a file is applied only if it is.\"\n    }\n  ]\n}\n"
+   },
+   "expected": {
+    "accept": {
+     "canonical_form": "{\"name\":\"axt.Withdraw\",\"type\":\"record\",\"fields\":[{\"name\":\"to\",\"type\":{\"name\":\"axt.WithdrawTo\",\"type\":\"fixed\",\"size\":32}}]}",
+     "fingerprint": "d57da92315f555e3"
+    }
+   }
+  },
+  {
    "id": "encoding/decode_message/the-data-message-of-envelope-md-section-10-2",
    "op": "decode_message",
    "description": "the DATA message of envelope.md, section 10.2",
@@ -583,21 +598,21 @@
    }
   },
   {
-   "id": "encoding/decode_message/an-envelope-of-the-kind-withdraw-which-no-document-defines-yet-with-an-e",
+   "id": "encoding/decode_message/the-withdraw-of-shares-md-section-11-2",
    "op": "decode_message",
-   "description": "an envelope of the kind WITHDRAW, which no document defines yet, with an empty body",
-   "refs": ["envelope.md 2", "envelope.md 3", "envelope.md 2.2"],
+   "description": "the WITHDRAW of shares.md, section 11.2",
+   "refs": ["envelope.md 2", "envelope.md 3", "shares.md 3.1", "shares.md 11.2"],
    "input": {
-    "message": "c30116306f71b9ce9ea8021c1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a0000630a6c2a2e7ca9fa5cf55a9bb005d505d8bf1ee3b1bd2fe642dbe79a69eaa5ce6ff6e71c475af0c2f5da6399dfa61752a380f7fa780b8605b20f2b2534548407"
+    "message": "c30116306f71b9ce9ea8021c1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024833663263386135652d396231642d346337652d386136662d3264346235633665376638300854c301d57da92315f555e3da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7a99a943361bb465ebc1d2cb554a627ef4eb7787c8a4172218c059e3d5bef0491afad0c3300026421a9c537fbd39aa0544a9a23c1fcb5fd61ac7818fa03980e05"
    },
    "expected": {
     "accept": {
      "format": 1,
      "kind": "WITHDRAW",
      "sender": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
-     "record": null,
-     "body": "",
-     "signature": "630a6c2a2e7ca9fa5cf55a9bb005d505d8bf1ee3b1bd2fe642dbe79a69eaa5ce6ff6e71c475af0c2f5da6399dfa61752a380f7fa780b8605b20f2b2534548407"
+     "record": {"id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 4},
+     "body": "c301d57da92315f555e3da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7",
+     "signature": "a99a943361bb465ebc1d2cb554a627ef4eb7787c8a4172218c059e3d5bef0491afad0c3300026421a9c537fbd39aa0544a9a23c1fcb5fd61ac7818fa03980e05"
     }
    }
   },
@@ -1197,6 +1212,21 @@
    }
   },
   {
+   "id": "encoding/decode_body/the-body-of-the-withdraw-of-shares-md-section-11-2",
+   "op": "decode_body",
+   "description": "the body of the WITHDRAW of shares.md, section 11.2",
+   "refs": ["envelope.md 2.3", "shares.md 3.1", "shares.md 11.2"],
+   "input": {
+    "kind": "WITHDRAW",
+    "body": "c301d57da92315f555e3da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7"
+   },
+   "expected": {
+    "accept": {
+     "value": {"to": "da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7"}
+    }
+   }
+  },
+  {
    "id": "encoding/decode_body/the-body-of-the-change-of-sync-md-section-16-2",
    "op": "decode_body",
    "description": "the body of the CHANGE of sync.md, section 16.2",
@@ -1452,6 +1482,68 @@
    "description": "reject an empty body for an ACK",
    "refs": ["envelope.md 2.3", "envelope.md 3.1", "protocol.md 8.2"],
    "input": {"kind": "ACK", "body": ""},
+   "expected": {
+    "reject": {"error": "INVALID_MESSAGE"}
+   }
+  },
+  {
+   "id": "encoding/decode_body/reject-a-withdraw-body-with-a-byte-left-over",
+   "op": "decode_body",
+   "description": "reject a WITHDRAW body with a byte left over",
+   "refs": ["envelope.md 2.3", "envelope.md 3.1", "protocol.md 8.2"],
+   "input": {
+    "kind": "WITHDRAW",
+    "body": "c301d57da92315f555e3da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb700"
+   },
+   "expected": {
+    "reject": {"error": "INVALID_MESSAGE"}
+   }
+  },
+  {
+   "id": "encoding/decode_body/reject-a-withdraw-body-whose-key-has-31-bytes",
+   "op": "decode_body",
+   "description": "reject a WITHDRAW body whose key has 31 bytes",
+   "refs": ["envelope.md 2.3", "envelope.md 3.1", "protocol.md 8.2"],
+   "input": {
+    "kind": "WITHDRAW",
+    "body": "c301d57da92315f555e3da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7ded"
+   },
+   "expected": {
+    "reject": {"error": "INVALID_MESSAGE"}
+   }
+  },
+  {
+   "id": "encoding/decode_body/reject-a-withdraw-body-with-the-fingerprint-of-axt-resync",
+   "op": "decode_body",
+   "description": "reject a WITHDRAW body with the fingerprint of axt.Resync",
+   "refs": ["envelope.md 2.3", "envelope.md 3.1", "protocol.md 8.2"],
+   "input": {
+    "kind": "WITHDRAW",
+    "body": "c301f1fd59d5d92b76e8da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7"
+   },
+   "expected": {
+    "reject": {"error": "INVALID_MESSAGE"}
+   }
+  },
+  {
+   "id": "encoding/decode_body/reject-a-withdraw-body-of-the-resync-schema",
+   "op": "decode_body",
+   "description": "reject a WITHDRAW body of the RESYNC schema",
+   "refs": ["envelope.md 2.3", "envelope.md 3.1", "protocol.md 8.2"],
+   "input": {
+    "kind": "WITHDRAW",
+    "body": "c301f1fd59d5d92b76e8ee08eaa3d8aa507343bc02924fe98d02f9e4471627ace61554f1b49635f24ab2"
+   },
+   "expected": {
+    "reject": {"error": "INVALID_MESSAGE"}
+   }
+  },
+  {
+   "id": "encoding/decode_body/reject-an-empty-body-for-a-withdraw",
+   "op": "decode_body",
+   "description": "reject an empty body for a WITHDRAW",
+   "refs": ["envelope.md 2.3", "envelope.md 3.1", "protocol.md 8.2"],
+   "input": {"kind": "WITHDRAW", "body": ""},
    "expected": {
     "reject": {"error": "INVALID_MESSAGE"}
    }
@@ -1753,6 +1845,25 @@
    "expected": {
     "accept": {
      "message": "c30116306f71b9ce9ea8020a1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024864346333623261312d306639652d346438632d623761362d3566346533643263316230610800ea32efa326af397ee5c8f40a8c3e7ad77009210de20c60056ee1dd1e6eb27f8dad916c2bf409d553a5b49f71004497a56771ce21ea19f5a5986aaf49ec1f5e09"
+    }
+   }
+  },
+  {
+   "id": "encoding/encode_message/the-withdraw-of-shares-md-section-11-2",
+   "op": "encode_message",
+   "description": "the WITHDRAW of shares.md, section 11.2",
+   "refs": ["envelope.md 2", "envelope.md 3"],
+   "input": {
+    "format": 1,
+    "kind": "WITHDRAW",
+    "sender": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+    "record": {"id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 4},
+    "body": "c301d57da92315f555e3da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7",
+    "signature": "a99a943361bb465ebc1d2cb554a627ef4eb7787c8a4172218c059e3d5bef0491afad0c3300026421a9c537fbd39aa0544a9a23c1fcb5fd61ac7818fa03980e05"
+   },
+   "expected": {
+    "accept": {
+     "message": "c30116306f71b9ce9ea8021c1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024833663263386135652d396231642d346337652d386136662d3264346235633665376638300854c301d57da92315f555e3da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7a99a943361bb465ebc1d2cb554a627ef4eb7787c8a4172218c059e3d5bef0491afad0c3300026421a9c537fbd39aa0544a9a23c1fcb5fd61ac7818fa03980e05"
     }
    }
   }

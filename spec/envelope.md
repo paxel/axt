@@ -49,14 +49,15 @@ A sender MUST write each message in a format the receiver supports. In a live co
 | `CHANGE`         | Changed fields of one record, between the devices of one sender       | [sync.md](sync.md), section 8                                   |
 | `RESYNC`         | A device asks another device of its sender for every record again     | [sync.md](sync.md), section 11                                  |
 | `FORWARD`        | A message of another app, passed on between the devices of one sender | [sync.md](sync.md), section 18                                  |
-| `WITHDRAW`       | The sender no longer shares one record with the receiver              | [axt-1026](https://github.com/paxel/axt/issues/28)              |
+| `WITHDRAW`       | The sender no longer shares one record with the receiver              | [shares.md](shares.md), section 3                               |
 | `PROPOSAL`       | A receiver proposes a change of one record to its sender              | [axt-1027](https://github.com/paxel/axt/issues/29)              |
 | `PROPOSAL_REPLY` | The sender accepts or declines a proposal                             | [axt-1027](https://github.com/paxel/axt/issues/29)              |
 
-For a kind whose ticket has not landed, "Defined in" names that ticket; no document defines the kind yet, and an app sends no message of it. A receiver that gets one decodes its envelope and MUST reject the message with the error `INVALID_MESSAGE` ([protocol.md](protocol.md), section 8.2), until the document that defines the kind says otherwise. The document that defines a kind also defines whether its messages carry `record` and which schema their body has. Two rules hold already:
+For the two kinds whose ticket has not landed, `PROPOSAL` and `PROPOSAL_REPLY`, "Defined in" names that ticket; no document defines them yet, and an app sends no message of them. A receiver that gets one decodes its envelope and MUST reject the message with the error `INVALID_MESSAGE` ([protocol.md](protocol.md), section 8.2), until the document that defines the kind says otherwise. The document that defines a kind also defines whether its messages carry `record` and which schema their body has. Three rules hold already:
 
 - A `DATA` message MUST carry `record`, and its body MUST be the record in single-object encoding with a writer schema the receiver has from an offer (section 3) or the file header (section 4).
 - A `DELETE` message MUST carry `record` and MUST have an empty body.
+- A `WITHDRAW` message MUST carry `record`, and its body MUST be one `axt.Withdraw` ([shares.md](shares.md), section 3.1).
 
 A `CHANGE`, a `RESYNC` and a `FORWARD` travel only between the devices of one sender; an app rejects one of another app as [sync.md](sync.md), section 7.1, says.
 
@@ -66,7 +67,7 @@ New kinds come only with a new envelope format.
 
 The body is either empty or exactly one datum in single-object encoding: the two bytes `C3 01`, the 8-byte little-endian CRC-64-AVRO fingerprint of the datum's writer schema (section 5), then the datum in binary encoding. A receiver MUST reject a body that is neither empty nor a complete single-object encoding with no bytes left over.
 
-For `DATA`, the writer schema is the record type's schema as offered. The body of a `CHANGE` has a schema of the specification and carries the values of single fields, each as bytes with the fingerprint of the offered schema it was written with ([sync.md](sync.md), section 8.1). The body of a `FORWARD` has a schema of the specification as well and carries one whole message of another app as bytes, signature included, with the text of the writer schema of its body where that message is a `DATA` ([sync.md](sync.md), section 18.1). For every other kind with a body, the schema is the one the defining document publishes under [types/axt/](../types/axt/); those fingerprints are fixed by the specification and are not offered.
+For `DATA`, the writer schema is the record type's schema as offered. The body of a `CHANGE` has a schema of the specification and carries the values of single fields, each as bytes with the fingerprint of the offered schema it was written with ([sync.md](sync.md), section 8.1). The body of a `FORWARD` has a schema of the specification as well and carries one whole message of another app as bytes, signature included, with the text of the writer schema of its body where that message is a `DATA` ([sync.md](sync.md), section 18.1). The body of a `DELETE` is empty. For every other kind with a body, the body of a `WITHDRAW` among them ([shares.md](shares.md), section 10), the schema is the one the defining document publishes under [types/axt/](../types/axt/); those fingerprints are fixed by the specification and are not offered.
 
 ### 2.4 Sender and signature
 
