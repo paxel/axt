@@ -40,3 +40,12 @@ license.override = ["BSD-3-Clause"]
 effectiveUntil = 2027-05-19
 reason = """deps.dev reports no licence for colorama; its LICENSE.txt in tartley/colorama is \
 BSD-3-Clause. It comes only through pytest, a development tool, on Windows."""
+
+[[PackageOverrides]]
+name = "avro"
+ecosystem = "PyPI"
+license.override = ["Apache-2.0"]
+effectiveUntil = 2027-05-19
+reason = """deps.dev reports avro's licence as non-standard; its LICENSE.txt in apache/avro is \
+Apache-2.0. The conformance scripts use it to check the specification's examples; nothing this \
+repository publishes contains it."""
