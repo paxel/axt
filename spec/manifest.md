@@ -102,9 +102,9 @@ The app name and the sentences are plain text. An app MUST show them as text and
 
 `sends` lists the types the app may send, each with the versions it writes. `null` means that the app does not say; an empty array means that it sends no type. A manifest MUST NOT name a full name twice in `sends`. `max_version` `null` means that the app does not say up to which version it writes.
 
-`proposals` says whether the app takes proposals of changes to the records of the type that it sends. Proposals come with [axt-1027](https://github.com/paxel/axt/issues/29); until then an app writes `false`, the field's default, and ignores the field in a manifest it receives.
+`proposals` says whether the app takes proposals of changes to the records of the type that it sends, as `PROPOSAL` messages of [shares.md](shares.md), section 13, from every receiver with which it shares such a record. `false`, the field's default, means that it takes none. A receiver sends a proposal for a record only to a device whose manifest has an entry for the record's type with `proposals` `true`, and the device that gets one judges by its own current manifest ([shares.md](shares.md), section 12.2). A manifest whose `sends` is `null`, or has no entry for a type, takes no proposals for that type.
 
-`sends` is for display only. An app MAY show its user what the other app can send. It does not limit what the app offers: a receiver MUST NOT decline an offer only because its type is not in the sender's `sends`.
+Apart from `proposals`, `sends` is for display only. An app MAY show its user what the other app can send. It does not limit what the app offers: a receiver MUST NOT decline an offer only because its type is not in the sender's `sends`.
 
 ### 3.8 Revision
 
@@ -243,6 +243,7 @@ A file without a `MANIFEST` is complete as far as this document is concerned. A 
 
 - [protocol.md](protocol.md): the order of the first messages of a connection (section 3.1 there), how a manifest that cannot be read or is invalid is reported (sections 3.2 and 8.2 there), the `OFFER`, `ACCEPT` and `DECLINE` messages (sections 4 and 5 there), and the choice of the envelope format from the two apps' `formats` (section 3.2 there).
 - [keys.md](keys.md): the signature of the `MANIFEST` message, the devices of a sender, each of which has a manifest of its own, and the use of the encryption key.
+- [shares.md](shares.md): the proposals that the field `proposals` of `sends` lets other apps send (sections 12 to 18 there).
 - [transports.md](transports.md): where a file holds a `MANIFEST` and when a writer puts one in (sections 2.1 and 2.3 there), and the relay and the mailbox that `relay` names (section 5 there). It adds no case to those of section 5.1 in which an app sends a `MANIFEST` through a relay.
 
 ## 9. Schema and fingerprint

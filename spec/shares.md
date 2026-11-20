@@ -2,7 +2,7 @@
 
 Status: written, 0.1.0. Until 0.1.0 is released, [records.md](records.md), [protocol.md](protocol.md) and [sync.md](sync.md) may still change the details this document leaves to them.
 
-This document defines how an app sends the app of another user only the records its own user chose beforehand, and how it takes a record back from that user: the share, which is a rule inside the sending app; what "only predefined records leave" means for a conforming app; the `WITHDRAW` message, with which a sender withdraws one record from one receiver; how a receiver processes it and what it reports; how a withdrawal meets the receiver's own changes, a deletion and a later update; and how a withdrawal travels between the devices of the receiver and of the sender, through a relay and in a file.
+This document defines how an app sends the app of another user only the records its own user chose beforehand, how it takes a record back from that user, and how that user suggests a change of a record that it got: the share, which is a rule inside the sending app; what "only predefined records leave" means for a conforming app; the `WITHDRAW` message, with which a sender withdraws one record from one receiver; how a receiver processes it and what it reports; how a withdrawal meets the receiver's own changes, a deletion and a later update; how a withdrawal travels between the devices of the receiver and of the sender, through a relay and in a file; and the `PROPOSAL` and `PROPOSAL_REPLY` messages, with which a receiver proposes changed values of a record to its sender and the sender's user takes or refuses them, with what each side does and how a proposal travels between the devices of either side.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in BCP 14 ([RFC 2119](https://www.rfc-editor.org/rfc/rfc2119), [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174)) when, and only when, they appear in all capitals, as shown here.
 
@@ -14,6 +14,11 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 - **Receiver**: as in [records.md](records.md), section 1, here the app of another user that a share is for. A share is for one receiver, a known sender of [keys.md](keys.md), section 3, with all its current keys; where that receiver is a device set, the share is for the whole set.
 - **Withdrawal**: the sender's taking back of one record from one receiver, sent as a `WITHDRAW` message (section 3). A record is **withdrawn from** a receiver from its withdrawal until it is shared with that receiver again (section 6.2).
 - **Tombstone of a withdrawal**: what a receiver keeps of a record that its sender withdrew from it: its id and the version of the withdrawal. It is a tombstone of [records.md](records.md), section 1, of a second kind, beside the tombstone of a deletion, and is kept as long as one ([records.md](records.md), section 5.3).
+- **Proposal**: a suggestion of a receiver to the sender of a shared record to change the values of some of the record's fields, sent as a `PROPOSAL` message (section 13). A proposal changes nothing by itself: only the sender's user can take it, and then the sender changes the record (section 15).
+- **Proposer**: the receiver that sends a proposal: one installation, or the devices of one set, of which the device on which its user proposes sends the proposal (section 17.2).
+- **Owner of the record**, or **owner**, in sections 12 to 18: the sender of the record that a proposal is about, with its user and its devices. It is not the owner of [sync.md](sync.md), section 21: on the proposer's devices, the owner's layer of that section holds what the proposer's user did with the received record (section 17.2).
+- **Reply** to a proposal: a `PROPOSAL_REPLY` message (section 14), in which a device of the owner tells the proposer whether the owner's user took the proposal. It is a reply of [protocol.md](protocol.md), section 1: it is about a message of the app it goes to.
+- **Open proposal**: a proposal that a device of the owner has taken (section 13.3) and holds (section 17.1), and to which the owner's app holds no answer (section 15.1).
 
 ## 2. Shares
 
@@ -36,7 +41,7 @@ A sender MUST send a receiver only the records that are shared with it:
 - This holds for every message of a record, the first one, every update, every deletion and every resend (section 5.3), in a live connection, through a relay and in a file (section 8.2).
 - **Files.** A file is written for a receiver or for no particular one. A file for no particular receiver, such as an export, holds only the records that the user chose for it: that choice is its share, and the file is treated as going to an app of another user (section 8.2).
 
-A share names records before they go, as its user set it. A user who wants to send one record to another user puts it into a share for that user's app, which a share of a single record allows; an app MUST NOT send a record to such a receiver in any other way, also not one that its user picks at an offer. Messages that carry no record leave as before: the chain, the `MANIFEST`, offers, answers, `ACK` and `ERROR` messages.
+A share names records before they go, as its user set it. A user who wants to send one record to another user puts it into a share for that user's app, which a share of a single record allows; an app MUST NOT send a record to such a receiver in any other way, also not one that its user picks at an offer. Messages that carry no record leave as before: the chain, the `MANIFEST`, offers, answers, `ACK` and `ERROR` messages, and the replies to proposals (section 14).
 
 Nothing in the protocol can check this. A receiver sees records, not the rules that chose them, and cannot tell a record that a share names from one that its sender sent against its rules. The rule binds the sending app, and an app that conforms to this specification keeps it.
 
@@ -298,7 +303,24 @@ Its Parsing Canonical Form:
 | -------------- | --------------- | -------------------- | ------------------------- |
 | `axt.Withdraw` | 1               | `0xe355f51523a97dd5` | `d5 7d a9 23 15 f5 55 e3` |
 
-The kind is the symbol `WITHDRAW`, with the index 14, of `axt.Kind` in [types/axt/Envelope.avsc](../types/axt/Envelope.avsc), whose canonical form and fingerprint are in [envelope.md](envelope.md), section 10.1. Its outcome `WITHDRAWN` is the symbol with the index 5 of `axt.AckOutcome` in [types/axt/Ack.avsc](../types/axt/Ack.avsc), whose canonical form and fingerprint are in [protocol.md](protocol.md), section 16. Neither of these two schemas changes with this document. The test vectors of [conformance.md](conformance.md) take precedence over the values of this section and of section 11.
+The schemas of the bodies of a `PROPOSAL` and a `PROPOSAL_REPLY` are [types/axt/Proposal.avsc](../types/axt/Proposal.avsc) and [types/axt/ProposalReply.avsc](../types/axt/ProposalReply.avsc). They follow the same rules: their nested types are defined in place, with names that begin with the schema's name, and neither carries `axt.version`. The first field of each is `to`. The enum `axt.ProposalReplyAnswer` has the default symbol `DECLINED`, as [types.md](types.md), section 5.4, requires; within one envelope format every symbol is known, and the default, the answer with which the proposer changes nothing (section 14.2), only takes effect in schema resolution with a schema of another format, as [protocol.md](protocol.md), section 16, says of the enums there.
+
+Their Parsing Canonical Forms:
+
+```json
+{"name":"axt.Proposal","type":"record","fields":[{"name":"to","type":{"name":"axt.ProposalTo","type":"fixed","size":32}},{"name":"proposal_id","type":"string"},{"name":"fields","type":{"type":"array","items":{"name":"axt.ProposalField","type":"record","fields":[{"name":"name","type":"string"},{"name":"schema","type":{"name":"axt.ProposalFieldSchema","type":"fixed","size":8}},{"name":"value","type":"bytes"}]}}}]}
+```
+
+```json
+{"name":"axt.ProposalReply","type":"record","fields":[{"name":"to","type":{"name":"axt.ProposalReplyTo","type":"fixed","size":32}},{"name":"proposal_id","type":"string"},{"name":"answer","type":{"name":"axt.ProposalReplyAnswer","type":"enum","symbols":["ACCEPTED","DECLINED"]}}]}
+```
+
+| Schema              | Envelope format | CRC-64-AVRO          | As bytes                  |
+| ------------------- | --------------- | -------------------- | ------------------------- |
+| `axt.Proposal`      | 1               | `0x2512222a12d90279` | `79 02 d9 12 2a 22 12 25` |
+| `axt.ProposalReply` | 1               | `0x64610ce36e75f8c6` | `c6 f8 75 6e e3 0c 61 64` |
+
+The kind `WITHDRAW` is the symbol with the index 14 of `axt.Kind` in [types/axt/Envelope.avsc](../types/axt/Envelope.avsc), `PROPOSAL` the one with the index 15 and `PROPOSAL_REPLY` the one with the index 16; the canonical form and the fingerprint of that schema are in [envelope.md](envelope.md), section 10.1. The outcome `WITHDRAWN` is the symbol with the index 5 of `axt.AckOutcome` in [types/axt/Ack.avsc](../types/axt/Ack.avsc), and the error `PROPOSALS_NOT_TAKEN` the symbol with the index 15 of `axt.ErrorCode` in [types/axt/Error.avsc](../types/axt/Error.avsc), whose canonical forms and fingerprints are in [protocol.md](protocol.md), section 16. The field `proposals` of `axt.ManifestSend` is in [types/axt/Manifest.avsc](../types/axt/Manifest.avsc) ([manifest.md](manifest.md), section 9). None of these four schemas changes with this document. The test vectors of [conformance.md](conformance.md) take precedence over the values of this section and of section 11.
 
 ## 11. Example
 
@@ -379,6 +401,442 @@ The message: 190 bytes, SHA-256 `765153c089b88b370dac48a9baca7abf51d68eea46f496d
 00be  end
 ```
 
+### 11.3 A proposal, taken
+
+The appointment of section 11.1 as it stands after step 3 of [records.md](records.md), section 9: version 3, `title` "Vet", `start` 2025-11-18 10:30, `location` "" and `notes` "Bring the vaccination card". The owner and the proposer are the sender and the receiver of section 11.1, with the same keys: cat-a-log, one installation that counts its versions and signs with `cat-a-log, old phone, Ed25519`, and the second user's app, one installation that signs with `Old Brain Fix, Ed25519`, lets its user change received records and merges per field. The two meet in a live connection. cat-a-log's manifest is that of [manifest.md](manifest.md), section 10.1, with two differences: its `revision` is 2, and its entry of `sends` for `axt.example.v1.Appointment` has `proposals` `true`. The steps of section 11.1 do not happen here; the appointment is shared with the second user's app from step 1 on and stays shared. The times are `axt.DateTime` values in the zone `Europe/Berlin` with the offset 3600 ([time.md](time.md), section 6), shown by their wall clock. Every message's `record` carries the id of the appointment and the version in the table.
+
+| Step | What happens                                                                                                                                                             | Message, from → to                          | `record.version` | Result                                                                     |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------- | ---------------- | -------------------------------------------------------------------------- |
+| 1    | cat-a-log's user puts the appointment into a share for the second user's app. cat-a-log offers `Appointment` there, the receiver accepts, and cat-a-log sends the record | `DATA`, cat-a-log → Old Brain Fix           | 3                | `APPLIED`, receiver's version 3                                            |
+| 2    | The second user moves `start` to 11:00 in Old Brain Fix and proposes the change                                                                                          | `PROPOSAL`, Old Brain Fix → cat-a-log       | 3                | Old Brain Fix shows 11:00 as its user's change; the proposal is open there |
+| 3    | cat-a-log takes the proposal and shows it to its user, 11:00 beside 10:30                                                                                                | none                                        |                  | the proposal is open at cat-a-log; the record is unchanged, version 3      |
+| 4    | cat-a-log's user takes the proposal. `start` becomes 11:00 in the record, version 4                                                                                      | `PROPOSAL_REPLY`, cat-a-log → Old Brain Fix | 3                | `ACCEPTED`; Old Brain Fix shows its user that the proposal was taken       |
+| 5    | cat-a-log sends the update, under the offer of step 1                                                                                                                    | `DATA`, cat-a-log → Old Brain Fix           | 4                | `APPLIED`, receiver's version 4; `start` 11:00                             |
+
+- **Step 1.** As step 1 of section 11.1. Old Brain Fix holds cat-a-log's manifest of revision 2 from the `MANIFEST` of the connection, so it knows that cat-a-log takes proposals for appointments (section 12.2).
+- **Step 2.** Old Brain Fix changes `start` as a change of its user ([records.md](records.md), section 6): the record shows 11:00, and the field counts as changed by the user. It sends the `PROPOSAL` of section 11.4 to cat-a-log's key, the key from which it got the `DATA`, with its receiver's version 3 in `record` and one entry in `fields`: the name `start`, the fingerprint of the writer schema of the `DATA` of step 1, version 1 of `axt.example.v1.Appointment`, and the value 11:00 in Avro binary encoding under the type of `start` in that schema. No `ACK` answers it (section 16.1).
+- **Step 3.** cat-a-log processes the `PROPOSAL` by section 13.3. The record is there and shared with the second user's app, and cat-a-log's manifest takes proposals for its type (step 5); it holds the schema, the schema has a field `start`, the value decodes and is a valid time (steps 6 to 9). It takes the proposal and shows it to its user, applies nothing yet, and sends nothing.
+- **Step 4.** The user takes the proposal whole, so the answer is `ACCEPTED` (section 15.1). The value of `start` becomes the record's own change, as a change of its user would (section 15.2): cat-a-log counts, and the highest version it has given the record is 3, so the change takes the version 4. It sends the `PROPOSAL_REPLY` of section 11.5 to the key that signed the proposal, with the `record` of the proposal: the id and the version 3, not 4. Old Brain Fix takes the reply by section 14.2 and shows it as a status; the record does not change with it.
+- **Step 5.** The update is an ordinary `DATA` of version 4, the whole record with `start` 11:00, to every receiver with which the appointment is shared ([records.md](records.md), section 4.1). At Old Brain Fix the version 4 is above the receiver's version 3. Its user has changed `start`, and keeps the value 11:00, which is the value the message brings; no kept value differs from the message, so the outcome is `APPLIED`, with no kept field ([records.md](records.md), section 6.1). Its `ACK` carries the id, the version 4, `APPLIED`, the `receiver_version` 4 and no kept field. Old Brain Fix MAY count `start` as no longer changed by its user ([records.md](records.md), section 6.1); until then a later `DATA` with another `start` keeps 11:00, as for every change of its user.
+
+Had cat-a-log's user refused the proposal, the reply would have carried `DECLINED`, no update would have followed, and Old Brain Fix would have gone on showing 11:00 as its user's change, until its user discards it (section 17.2). Had the appointment been withdrawn from the second user's app before step 3, cat-a-log would have rejected the `PROPOSAL` with `PROPOSALS_NOT_TAKEN` (section 15.4).
+
+### 11.4 The `PROPOSAL` of step 2
+
+The `PROPOSAL` of step 2 of section 11.3 is a live message in envelope format 1 ([envelope.md](envelope.md), section 3). Its `proposal_id` is `7b3e9d21-4c8a-4f6e-9a1b-5d2c8e4f6a70`.
+
+| Field                   | Value                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `format`                | 1                                                                                                                                                                                                                                                                                                                                                    |
+| `kind`                  | `PROPOSAL`, enum index 15                                                                                                                                                                                                                                                                                                                            |
+| `sender`                | The public key of `Old Brain Fix, Ed25519` ([protocol.md](protocol.md), section 17.1), the second user's app                                                                                                                                                                                                                                         |
+| `record`                | Union index 1, `axt.RecordRef`                                                                                                                                                                                                                                                                                                                       |
+| `record.id`             | `"3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80"`                                                                                                                                                                                                                                                                                                             |
+| `record.version`        | 3                                                                                                                                                                                                                                                                                                                                                    |
+| `body`                  | One `axt.Proposal` in single-object encoding: `C3 01`, the fingerprint of `axt.Proposal`, format 1 (`79 02 d9 12 2a 22 12 25`), and the fields below; body length 129                                                                                                                                                                                |
+| `body.to`               | The public key of `cat-a-log, old phone, Ed25519` ([keys.md](keys.md), section 7.1)                                                                                                                                                                                                                                                                  |
+| `body.proposal_id`      | `"7b3e9d21-4c8a-4f6e-9a1b-5d2c8e4f6a70"`                                                                                                                                                                                                                                                                                                             |
+| `body.fields`           | One entry                                                                                                                                                                                                                                                                                                                                            |
+| `body.fields[0].name`   | `"start"`                                                                                                                                                                                                                                                                                                                                            |
+| `body.fields[0].schema` | The fingerprint of [Appointment.1.avsc](../types/axt/example/v1/Appointment.1.avsc) ([types.md](types.md)): `cd 30 64 2b f8 07 f2 1a`                                                                                                                                                                                                                |
+| `body.fields[0].value`  | The `axt.DateTime` of 2025-11-18 11:00: `year` 2025, `month` 11, `day` 18, `hour` 11, `minute` 0, `second` 0, `millisecond` 0, `zone` `"Europe/Berlin"`, `offset_seconds` 3600, `instant_ms` 1763460000000, in Avro binary encoding: `d2 1f 16 24 16 00 00 00 02 1a 45 75 72 6f 70 65 2f 42 65 72 6c 69 6e 02 a0 38 02 80 a4 c1 e6 d2 66`, length 33 |
+| `signature`             | `a9e313d8053d017ea344dc51410e0d3bc65dc0e0e41a303da26d1f0c1167a918bc86ea15d315f638eb50d4216cfbe4431b4d1820f7d234c84fcfdc7658e44e08`                                                                                                                                                                                                                   |
+
+The message: 278 bytes, SHA-256 `6f44b502cce8a2e60f9f94b1a4dbcfe12d1d2e3ddf07d3d772095db1e9e44bc4`. The signature covers the prefix `AXT-v1 message` and its zero byte, and the bytes from offset `000a` to the signature ([keys.md](keys.md), section 2.2). `instant_ms` is the instant of 2025-11-18 10:00 UTC in milliseconds since 1970-01-01 00:00 UTC: 20,410 days of 86,400,000 milliseconds and 10 hours of 3,600,000.
+
+```text
+0000  c3 01                    single-object marker
+0002  16 30 6f 71 b9 ce 9e a8  fingerprint of axt.Envelope, format 1
+000a  02                       format: int 1
+000b  1e                       kind: enum index 15, PROPOSAL
+000c  da 9e 54 c9 aa 2d b4 32  sender: fixed(32), Old Brain Fix's test key
+      44 df 99 88 9d 91 38 c1
+      ca 71 75 d4 ca 09 08 16
+      8f 63 53 0e 4a 7d ed b7
+002c  02                       record: union index 1, axt.RecordRef
+002d  48                       record.id: string length 36
+002e  33 66 32 63 38 61 35 65  "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80"
+      2d 39 62 31 64 2d 34 63
+      37 65 2d 38 61 36 66 2d
+      32 64 34 62 35 63 36 65
+      37 66 38 30
+0052  06                       record.version: long 3
+0053  82 02                    body: bytes length 129
+0055  c3 01                    body: single-object marker
+0057  79 02 d9 12 2a 22 12 25  body: fingerprint of axt.Proposal, format 1
+005f  1b 84 a6 00 f3 50 3e 22  body: to: fixed(32), cat-a-log's test key
+      bb cc 99 e6 32 02 a7 19
+      4b f6 bd 69 af f1 47 1c
+      ce 64 10 d5 3c 26 ec 4a
+007f  48                       body: proposal_id: string length 36
+0080  37 62 33 65 39 64 32 31  body: "7b3e9d21-4c8a-4f6e-9a1b-5d2c8e4f6a70"
+      2d 34 63 38 61 2d 34 66
+      36 65 2d 39 61 31 62 2d
+      35 64 32 63 38 65 34 66
+      36 61 37 30
+00a4  02                       body: fields: array block of 1 item
+00a5  0a                       body: fields[0].name: string length 5
+00a6  73 74 61 72 74           body: "start"
+00ab  cd 30 64 2b f8 07 f2 1a  body: fields[0].schema: fixed(8), the fingerprint of the writer schema
+00b3  42                       body: fields[0].value: bytes length 33
+00b4  d2 1f 16 24 16 00 00 00  body: fields[0].value: wall clock 2025-11-18 11:00:00.000, seven ints
+00bc  02                       body: fields[0].value.zone: union index 1, string
+00bd  1a                       body: fields[0].value.zone: string length 13
+00be  45 75 72 6f 70 65 2f 42  body: "Europe/Berlin"
+      65 72 6c 69 6e
+00cb  02                       body: fields[0].value.offset_seconds: union index 1, int
+00cc  a0 38                    body: fields[0].value.offset_seconds: int 3600
+00ce  02                       body: fields[0].value.instant_ms: union index 1, long
+00cf  80 a4 c1 e6 d2 66        body: fields[0].value.instant_ms: long 1763460000000
+00d5  00                       body: fields: end of the array
+00d6  a9 e3 13 d8 05 3d 01 7e  signature: fixed(64)
+      a3 44 dc 51 41 0e 0d 3b
+      c6 5d c0 e0 e4 1a 30 3d
+      a2 6d 1f 0c 11 67 a9 18
+      bc 86 ea 15 d3 15 f6 38
+      eb 50 d4 21 6c fb e4 43
+      1b 4d 18 20 f7 d2 34 c8
+      4f cf dc 76 58 e4 4e 08
+0116  end
+```
+
+### 11.5 The `PROPOSAL_REPLY` of step 4
+
+The `PROPOSAL_REPLY` of step 4 of section 11.3 is a live message in envelope format 1:
+
+| Field              | Value                                                                                                                                                                          |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `format`           | 1                                                                                                                                                                              |
+| `kind`             | `PROPOSAL_REPLY`, enum index 16                                                                                                                                                |
+| `sender`           | The public key of `cat-a-log, old phone, Ed25519` ([keys.md](keys.md), section 7.1)                                                                                            |
+| `record`           | Union index 1, `axt.RecordRef`                                                                                                                                                 |
+| `record.id`        | `"3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80"`                                                                                                                                       |
+| `record.version`   | 3, the version of the proposal                                                                                                                                                 |
+| `body`             | One `axt.ProposalReply` in single-object encoding: `C3 01`, the fingerprint of `axt.ProposalReply`, format 1 (`c6 f8 75 6e e3 0c 61 64`), and the fields below; body length 80 |
+| `body.to`          | The public key of `Old Brain Fix, Ed25519` ([protocol.md](protocol.md), section 17.1), the key that signed the proposal                                                        |
+| `body.proposal_id` | `"7b3e9d21-4c8a-4f6e-9a1b-5d2c8e4f6a70"`                                                                                                                                       |
+| `body.answer`      | `ACCEPTED`, enum index 0                                                                                                                                                       |
+| `signature`        | `1e572ef7e714ab7c90a59e7eef85338ac5f4f6984098642cc8d97428e9eb528dc1782814327cc355e99ed100e31af86073fa4275c6e59813cc4e2519d81b8c0d`                                             |
+
+The message: 229 bytes, SHA-256 `199a9c5ccf788ba6547d1e862bdfb38aa90a07a136658bee2754228b1ef2158c`. The signature covers the prefix `AXT-v1 message` and its zero byte, and the bytes from offset `000a` to the signature ([keys.md](keys.md), section 2.2).
+
+```text
+0000  c3 01                    single-object marker
+0002  16 30 6f 71 b9 ce 9e a8  fingerprint of axt.Envelope, format 1
+000a  02                       format: int 1
+000b  20                       kind: enum index 16, PROPOSAL_REPLY
+000c  1b 84 a6 00 f3 50 3e 22  sender: fixed(32), cat-a-log's test key
+      bb cc 99 e6 32 02 a7 19
+      4b f6 bd 69 af f1 47 1c
+      ce 64 10 d5 3c 26 ec 4a
+002c  02                       record: union index 1, axt.RecordRef
+002d  48                       record.id: string length 36
+002e  33 66 32 63 38 61 35 65  "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80"
+      2d 39 62 31 64 2d 34 63
+      37 65 2d 38 61 36 66 2d
+      32 64 34 62 35 63 36 65
+      37 66 38 30
+0052  06                       record.version: long 3
+0053  a0 01                    body: bytes length 80
+0055  c3 01                    body: single-object marker
+0057  c6 f8 75 6e e3 0c 61 64  body: fingerprint of axt.ProposalReply, format 1
+005f  da 9e 54 c9 aa 2d b4 32  body: to: fixed(32), Old Brain Fix's test key
+      44 df 99 88 9d 91 38 c1
+      ca 71 75 d4 ca 09 08 16
+      8f 63 53 0e 4a 7d ed b7
+007f  48                       body: proposal_id: string length 36
+0080  37 62 33 65 39 64 32 31  body: "7b3e9d21-4c8a-4f6e-9a1b-5d2c8e4f6a70"
+      2d 34 63 38 61 2d 34 66
+      36 65 2d 39 61 31 62 2d
+      35 64 32 63 38 65 34 66
+      36 61 37 30
+00a4  00                       body: answer: enum index 0, ACCEPTED
+00a5  1e 57 2e f7 e7 14 ab 7c  signature: fixed(64)
+      90 a5 9e 7e ef 85 33 8a
+      c5 f4 f6 98 40 98 64 2c
+      c8 d9 74 28 e9 eb 52 8d
+      c1 78 28 14 32 7c c3 55
+      e9 9e d1 00 e3 1a f8 60
+      73 fa 42 75 c6 e5 98 13
+      cc 4e 25 19 d8 1b 8c 0d
+00e5  end
+```
+
+## 12. Proposals
+
+### 12.1 What a proposal is
+
+A receiver's changes of a received record stay with the receiver: they are not sent back and are never versions of the record ([records.md](records.md), section 1). A receiver whose user wants the owner to change the record, such as to move an appointment to another time, sends a proposal instead:
+
+- **Changed fields only.** A proposal carries new values for some top-level fields of one record, each in the form of a field state of [sync.md](sync.md), section 3.1, without stamp and device: a name, the fingerprint of a writer schema and the value as bytes (section 13.1). It carries no removal: a proposal can neither delete a record nor create one.
+- **Nothing without the owner's user.** The owner's app shows the proposal to its user and applies nothing of it unless the user takes it. A proposal that the user takes becomes the owner's own change of the record, which reaches every receiver of the record, the proposer included, as an ordinary update ([records.md](records.md), section 4.1; section 15.2).
+- **The answer is a status.** The owner's device tells the proposer in a reply whether the user took the proposal (section 14). The reply changes no record; the proposer's own value stands as its user's change before the answer and after a refusal, until its user discards it (section 17.2).
+
+A `PROPOSAL` and a `PROPOSAL_REPLY` are no record messages. Their `record` names the owner's record, with the version of it that the proposer holds, but no version rule applies to them ([records.md](records.md), section 5.2), and the receiver's version of the record does not change by them.
+
+### 12.2 Who may propose
+
+A receiver may propose a change of a record when:
+
+- **it is a receiver of the record**: the owner shares the record with it (section 2). A device of the owner tells this from the shares that it holds (section 2.1), which every device of the owner's set holds alike once it has merged with its siblings; which messages a device sent to whom does not travel and is not looked at (section 2.1). Every app that the owner's app holds as an app of its own user (section 2.3) counts here as a receiver of every record of the type; this needs nothing that travels between the owner's devices;
+- **the owner takes proposals for the type**: the manifest of the owner's device has an entry in `sends` for the full name of the record's type whose `proposals` is `true` ([manifest.md](manifest.md), section 3.7). A manifest whose `sends` is `null`, or has no entry for the type, takes no proposals for it.
+
+Every receiver of a record of such a type may propose: an app that takes proposals for a type takes them from every receiver with which it shares a record of that type, within the limits of section 18.3. The devices of the owner's own set are no receivers (section 2.3); they change the records of the set directly.
+
+Each side judges by a manifest of its own:
+
+- **The proposer** sends a `PROPOSAL` only to a device whose kept manifest ([manifest.md](manifest.md), section 6) takes proposals for the type, the manifest of the key it puts into `to` (section 13.1). It MUST NOT send one to a key of which it holds no manifest or one that takes no proposals for the type.
+- **The owner's device** that gets a `PROPOSAL` from the proposer judges by its own current manifest, not by the one it sent: a manifest that changed in between decides (section 13.3, step 5), as for an offer ([manifest.md](manifest.md), section 5.4).
+
+## 13. The `PROPOSAL` message
+
+### 13.1 Content
+
+| Field       | Content for a `PROPOSAL`                                                                                                         |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `format`    | The envelope format, `1` ([envelope.md](envelope.md), section 2.1)                                                               |
+| `kind`      | `PROPOSAL`, the symbol with the index 15 of `axt.Kind`                                                                           |
+| `sender`    | The key of the proposer's device that sends the proposal ([keys.md](keys.md), section 2.1)                                       |
+| `record`    | REQUIRED: `id` is the id of the owner's record, `version` the receiver's version of it at the proposer                           |
+| `body`      | One `axt.Proposal` in single-object encoding, with the schema [types/axt/Proposal.avsc](../types/axt/Proposal.avsc) (section 10) |
+| `signature` | The proposer's signature, as for every message ([keys.md](keys.md), section 2.2)                                                 |
+
+| Field             | Avro type                                     | Content                                                                                                |
+| ----------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `to`              | `fixed` of 32 bytes, `axt.ProposalTo`         | The Ed25519 public key of the owner's device that the proposal is sent to                              |
+| `proposal_id`     | `string`, logical type `uuid`                 | The id of the proposal                                                                                 |
+| `fields`          | array of record `axt.ProposalField`           | The proposed values, in any order                                                                      |
+| `fields[].name`   | `string`                                      | The name of a top-level field of the record, as the schema of `fields[].schema` names it               |
+| `fields[].schema` | `fixed` of 8 bytes, `axt.ProposalFieldSchema` | The fingerprint ([envelope.md](envelope.md), section 5) of the writer schema the value is written with |
+| `fields[].value`  | `bytes`                                       | The proposed value, in Avro binary encoding under the type that the field has in that schema           |
+
+- **`record`** names the owner's record by its id and carries the receiver's version of it that the proposing device holds ([records.md](records.md), section 5.1): the version of the `DATA` that its sender's layer ends in ([sync.md](sync.md), section 17.1). A device MUST NOT send a `PROPOSAL` for a record unless the record is there on it and its last record message from the owner is a `DATA`: it sends none for a record that the owner deleted or withdrew from it, also not for one that it keeps against such a message, and none for one that its own user deleted.
+- **`to`** is a current key of the owner, chosen as [protocol.md](protocol.md), section 9.1, chooses the key of an `OFFER`, among the keys whose kept manifest takes proposals for the type (section 12.2).
+- **`proposal_id`** is a version 4 or version 7 UUID of [RFC 9562](https://www.rfc-editor.org/rfc/rfc9562) in lower-case text form, which the proposing device generates for the proposal. A device MUST NOT use an id for a second proposal, to the same or to another app, and MUST NOT use the id of a record, an offer, a request or a forward ([sync.md](sync.md), sections 11.1 and 18.1) as the id of a proposal. One proposal id always stands for the same proposal: a proposal that is sent again (section 16.2) is the same message, apart from one sent to another key of the owner after the key in `to` was removed, which differs in `to` and its signature.
+- **`fields`** holds one entry for each field whose value the proposal changes. An entry is a field whose proposed value differs, compared as decoded values, from the value of that field in the `DATA` that brought the version named in `record`; a proposal holds no other entry. A proposer merges per field (section 17.2), so its owner's layer holds field states only for the fields its user changed. Each entry is the field state that the change of the proposer's user gave the owner's layer of [sync.md](sync.md), section 21.2, on the proposing device, without its stamp and its device key: the field's name, the fingerprint of the writer schema of the record's kept `DATA` with which the device wrote the value, and the bytes of the value, unchanged. A device that keeps no owner's layer writes the same: the user's value in Avro binary encoding under the type that the field has in the writer schema of the `DATA` that brought the receiver's version, with the fingerprint of that schema. A field whose change the user discarded, a field state with the value `null`, is not proposed.
+
+### 13.2 Validity
+
+A `PROPOSAL` is valid when it is a valid message ([protocol.md](protocol.md), section 8.2), it carries `record`, its body is one `axt.Proposal` in single-object encoding, the two bytes `C3 01`, the fingerprint of `axt.Proposal` in its envelope format (section 10) and the datum, with no bytes left over, and the body is valid:
+
+- `proposal_id` is a UUID in text form, neither the nil UUID nor the max UUID;
+- `fields` has 1 to 4,096 entries;
+- each `name` is 1 to 512 bytes of UTF-8, and no name appears twice; names are compared as sequences of Unicode code points, as in [sync.md](sync.md), section 8.2.
+
+A `PROPOSAL` without `record`, and one whose body is not one `axt.Proposal`, the empty body included, is rejected with `INVALID_MESSAGE` ([protocol.md](protocol.md), section 2), as is one whose body is not valid. One whose `to` is not the receiver's own key is ignored without a report ([protocol.md](protocol.md), section 9.1).
+
+### 13.3 Processing
+
+A device of the owner processes a `PROPOSAL` that it gets from the proposer itself in these steps. A step that fails ends the processing: the device takes nothing, changes nothing, and reports the failure with the error code named ([protocol.md](protocol.md), section 8.3). "Changes nothing" includes its clock: no number in the message counts as a stamp seen ([sync.md](sync.md), section 2.2).
+
+| Step | Check                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | If it fails                                                                                                                                                                                                                    |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1    | The message and its envelope are valid, and its signature verifies, as for every message ([protocol.md](protocol.md), section 8.2); it carries `record`, its body is one `axt.Proposal` with no bytes left over, and its `to` is the device's own key                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | as [protocol.md](protocol.md), section 8.2, says; `INVALID_MESSAGE` for a missing `record` or a body that is not one `axt.Proposal`; another key in `to` is ignored without a report ([protocol.md](protocol.md), section 9.1) |
+| 2    | `record.id` is a UUID in text form, neither the nil UUID nor the max UUID ([records.md](records.md), section 2)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `RECORD_ID_INVALID`                                                                                                                                                                                                            |
+| 3    | `record.version` is at least 1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | `VERSION_INVALID`                                                                                                                                                                                                              |
+| 4    | The body is valid (section 13.2)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `INVALID_MESSAGE`                                                                                                                                                                                                              |
+| 5    | Unless the owner's app holds an answer to a proposal of that proposer with that `proposal_id`, for which the device goes on with step 10 at once (section 13.4): the proposer may propose for the record (section 12.2): the `sender` is a current key of a known sender other than the device's own set; the device holds a record of its own set with the id `record.id` that is there, not deleted ([sync.md](sync.md), section 4.3); it is shared with that sender, or the app holds that sender as an app of its own user (sections 2.3 and 12.2); the device's current manifest takes proposals for its type; the app's records do not hold the proposals of that sender as stopped for the record (section 18.4); and the proposal is within the limits of section 18.3 | `PROPOSALS_NOT_TAKEN`                                                                                                                                                                                                          |
+| 6    | For every entry of `fields`, the device holds a schema whose fingerprint is the entry's `schema`: one of its own writer schemas of the record's type, or a schema it holds by [sync.md](sync.md), section 7.3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `SCHEMA_UNKNOWN`                                                                                                                                                                                                               |
+| 7    | For every entry, that schema is the schema of a record whose full name is the full name of the record's type, and it has a top-level field whose name is the entry's `name`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `INVALID_MESSAGE`                                                                                                                                                                                                              |
+| 8    | For every entry, `value` decodes, in Avro binary encoding, as one value of the type that the field `name` has in the entry's schema, with no bytes left over, with well-formed strings, and to a data depth of at most 32 ([types.md](types.md), section 5.7)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `UNDECODABLE`                                                                                                                                                                                                                  |
+| 9    | Every time value in the decoded values is valid ([time.md](time.md), section 8); and, if the device checks them, every value keeps the checks of the entry's schema ([metadata.md](metadata.md), section 7.1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `VALUE_INVALID`                                                                                                                                                                                                                |
+| 10   | The device takes the proposal (section 13.4)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | (no failure)                                                                                                                                                                                                                   |
+
+- **Before the steps.** A `PROPOSAL` from a key that the device's user has not accepted, or signed with a removed key, is kept, dropped or rejected as every message is ([protocol.md](protocol.md), section 8.2). In a live connection, one that arrives before the other app's valid `MANIFEST` is not processed ([protocol.md](protocol.md), section 3.1). A `PROPOSAL` whose `sender` is the device's own key is ignored without a report.
+- **The order of step 1.** After the envelope and the signature, the device checks first `record`, then the body, then `to`, as for a `WITHDRAW` (section 4.1).
+- **Step 5** gives one result for every reason: an id that the device does not hold, a record of another sender with that id, a record that is deleted, a record that is not shared with the proposer, withdrawn from it or never shared, a type for which the manifest takes no proposals, a proposer whose proposals the user stopped, a proposer beyond the limits, and a `PROPOSAL` of a sibling, which is no receiver (section 12.2). So a `PROPOSAL` tells an app that is no receiver of a record nothing of the records the owner holds. The `detail` of the `ERROR` MUST be empty for `PROPOSALS_NOT_TAKEN`, and a device SHOULD answer every reason of step 5 alike, also in the time it takes to answer. A repeat of a proposal whose answer the app holds is looked up before the checks of step 5, so it gets its reply again (section 13.4) and not an error, also where the record has been deleted or withdrawn since. The record is one of the device's own set, found by its id among the records of the set ([records.md](records.md), section 2); a received record with that id is another record and does not count.
+- **Steps 6 and 7.** Every device of the owner's set holds the writer schema of every `DATA` that a device of the set sent to a receiver, for as long as the record is shared with that receiver (section 15.1), so a proposal written against that schema can be read. The error's `fingerprint` at step 6 is the `schema` of the first entry, in the order of the message, for which the device holds no schema. The full name and the field name are compared as in [sync.md](sync.md), section 8.3, step 8. A field that the device's own writer schema lacks but the entry's schema has passes; the device keeps the value as it keeps a field of [sync.md](sync.md), section 8.5.
+- **Step 8.** The data depth counts the record as depth 1, as in [sync.md](sync.md), section 8.3, step 11. The device decodes with the entry's schema alone.
+- **Step 9.** The error's `field` is the path of the first value that fails, in the order of `fields` and within one value in the order of the encoding, by the field names of the entry's schema ([metadata.md](metadata.md), section 7.2); it begins with the entry's `name`. For a time value that is not valid it names the whole value, such as `start`, as [time.md](time.md), section 8, reports it.
+- **The version** is not compared with anything at these steps: a proposal for a version that the device has left behind, or for a version above its own, is taken like any other (section 15.3). The device does not count it as a stamp seen.
+- **No acknowledgement.** The device sends no `ACK` for a `PROPOSAL`, whatever the result (section 16.1).
+
+### 13.4 Taking a proposal, and a repeat
+
+A device identifies a proposal by its proposer and its `proposal_id`. It stores with the proposal a key of the proposer, the `sender` of the `PROPOSAL`, and the app stores the same key with its answer (section 15.1); the device finds the proposer as the known sender that has that key among its current or its removed keys, as [sync.md](sync.md), section 21.3, finds the sender that `origin` names. At step 10:
+
+- **A new proposal.** If the device holds no proposal of that proposer with that id, and the owner's app holds no answer to one (section 15.1), it takes the proposal: it keeps the message (section 17.1) and holds the proposal as open. It shows the proposal to its user as section 15.1 says; it does not wait for its user before it processes the next message.
+- **A repeat of an open proposal.** If it holds an open proposal of that proposer with that id, it changes nothing, apart from keeping the copy with the higher SHA-256 (below), and sends nothing.
+- **A repeat of an answered proposal.** If the owner's app holds an answer to a proposal of that proposer with that id, the device changes nothing, and sends the proposer a reply with that answer again (section 14.1), to the key that signed the repeat.
+
+A repeat is taken as the proposal it repeats whatever its content: a `PROPOSAL` with the id of a proposal that the device holds or has answered, in other bytes or with other values, is a repeat. Of two `PROPOSAL` messages of one proposer with one `proposal_id` in different bytes that a device holds as an open proposal, the one whose SHA-256 over the bytes of the message is the higher, compared as 32 unsigned bytes from the first byte on, stands on every device, as of two kept messages in [sync.md](sync.md), section 20.1: a device that gets the higher one while it holds the lower keeps the higher one in its place, and the proposal stays open with its values. An answer that the app holds is not changed by a repeat.
+
+## 14. The `PROPOSAL_REPLY` message
+
+### 14.1 Content
+
+| Field       | Content for a `PROPOSAL_REPLY`                                                                                                                  |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `format`    | The envelope format, `1` ([envelope.md](envelope.md), section 2.1)                                                                              |
+| `kind`      | `PROPOSAL_REPLY`, the symbol with the index 16 of `axt.Kind`                                                                                    |
+| `sender`    | The key of the owner's device that sends the reply ([keys.md](keys.md), section 2.1)                                                            |
+| `record`    | REQUIRED: the `record` of the proposal, its `id` and its `version`, as the proposal carried them                                                |
+| `body`      | One `axt.ProposalReply` in single-object encoding, with the schema [types/axt/ProposalReply.avsc](../types/axt/ProposalReply.avsc) (section 10) |
+| `signature` | The owner's signature, as for every message ([keys.md](keys.md), section 2.2)                                                                   |
+
+| Field         | Avro type                                  | Content                                                                                                                             |
+| ------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `to`          | `fixed` of 32 bytes, `axt.ProposalReplyTo` | The key that signed the proposal ([protocol.md](protocol.md), section 9.1)                                                          |
+| `proposal_id` | `string`, logical type `uuid`              | The id of the proposal, as the proposal carried it                                                                                  |
+| `answer`      | enum `axt.ProposalReplyAnswer`             | `ACCEPTED`: the owner's user took every proposed value into the record. `DECLINED`: the user did not take the proposal as it stands |
+
+- **Who sends it.** The device on which the owner's user answers the proposal sends the reply (section 17.1), and a device that gets a repeat of an answered proposal sends it again (section 13.4). Each signs its reply with its own key.
+- **Where it goes.** A reply carries in `to` the key that signed the `PROPOSAL`, and goes to that device. If that key has been removed from the proposer ([keys.md](keys.md), section 5.5), the owner's device sends no reply: the proposer's set learns that the proposal was taken from the update (section 15.2).
+- **Validity.** A `PROPOSAL_REPLY` is valid when it is a valid message ([protocol.md](protocol.md), section 8.2), it carries `record`, and its body is one `axt.ProposalReply` in single-object encoding, the two bytes `C3 01`, the fingerprint of `axt.ProposalReply` in its envelope format (section 10) and the datum, with no bytes left over. One without `record`, and one with any other body, the empty body included, is rejected with `INVALID_MESSAGE`. One whose `to` is not the receiving device's key is ignored without a report ([protocol.md](protocol.md), section 9.1).
+
+### 14.2 What the proposer does with a reply
+
+A device of the proposer processes a `PROPOSAL_REPLY` in these steps; the first that applies decides:
+
+| Step | The reply                                                                                                                                    | The device                                                                                                                                                                                                                                                   |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1    | is not valid (section 14.1), or its signature does not verify                                                                                | rejects it as [protocol.md](protocol.md), section 8.2, says, with `INVALID_MESSAGE` for a missing `record` or another body, and with `SIGNATURE_INVALID`, whose `record` is `null`, for a signature that does not verify, as the owner does for a `PROPOSAL` |
+| 2    | names another key in `to`                                                                                                                    | ignores it without a report                                                                                                                                                                                                                                  |
+| 3    | names in `proposal_id` no proposal that this device sent to the sender of the reply, the known sender of which its `sender` is a current key | ignores it without a report, as an answer to an offer the app did not make ([protocol.md](protocol.md), section 8.2)                                                                                                                                         |
+| 4    | carries another `record` than that proposal: another id, or another version                                                                  | rejects it with `INVALID_MESSAGE`                                                                                                                                                                                                                            |
+| 5    | is about a proposal for which the device holds a reply already                                                                               | takes `ACCEPTED` in the place of a `DECLINED` that it holds; ignores it otherwise                                                                                                                                                                            |
+| 6    | is the first reply for that proposal                                                                                                         | keeps its answer as the status of the proposal, stops sending the proposal again (section 16.2), and MAY show its user the answer                                                                                                                            |
+
+- **A status only.** The device changes no record because of a reply, and the reply ends no change of its user (section 17.2). `ACCEPTED` says that an update is coming (section 15.2); it is applied by the version rule when it arrives, as every `DATA` ([records.md](records.md), section 5.2). `DECLINED` says that none is coming for this proposal.
+- **A change that was discarded.** A reply to a proposal whose values the device's user has discarded since is taken all the same, as a status.
+- **Two answers.** Two devices of the owner can answer one proposal differently before they have merged (section 17.1). The proposer keeps the first reply it gets, and takes a later `ACCEPTED` in the place of a `DECLINED`; the update of an `ACCEPTED` reaches it in any case, as an ordinary `DATA`.
+- **No reply to a reply.** A device sends no `ACK` and no reply for a `PROPOSAL_REPLY`. It reports an invalid one with an `ERROR`, as every message ([protocol.md](protocol.md), section 8.3). The owner's device takes an `ERROR` as one about a reply when its `message_hash` is the SHA-256 of a `PROPOSAL_REPLY` that it sent to the key that sent the `ERROR`, not by the error's `record`, which names a record of its own; it logs it and does not send that reply again.
+
+## 15. The owner's app
+
+### 15.1 Showing and answering
+
+The owner's app shows each open proposal to its user: the proposer, as the app knows it ([keys.md](keys.md), section 3.2), the record, and each proposed value beside the record's current value of that field, read with the schema of its entry, resolved against the app's reader schema, as for a value of a field state ([sync.md](sync.md), section 3.1). It SHOULD gather the open proposals in one place rather than interrupt its user for each.
+
+- **Nothing without the user.** The app MUST NOT take a proposed value into a record unless its user takes the proposal. A device MUST NOT answer `ACCEPTED` unless it has shown its user every proposed value, decoded with the schema of its entry and resolved against its reader schema of the type. A value that it cannot show so, such as one of a field that its reader schema lacks, one that does not decode, or one whose schema does not resolve against its own, bars `ACCEPTED` on that device; its user can still decline there, or take the proposal on a device that can show every value. It MUST NOT answer `ACCEPTED` on its own, and answers `DECLINED` only by its user's decision. A proposal that no one answers stays open; no timer ends it.
+- **The answer.** `ACCEPTED` when the user takes the proposal whole, every value as proposed. `DECLINED` when the user refuses it. An app that lets its user take only some of the proposed values, or other values, answers `DECLINED` and makes what its user takes a change of its user like any other, which reaches the proposer as an update.
+- **Recording the answer.** The app keeps, for each proposal it answered, the key of the proposer stored with the proposal (section 13.4), the `proposal_id`, the proposal's `record`, its id and version, which the reply to a repeat carries, and the answer, as records of a type in its own namespace, as it keeps its shares (section 2.1). So every device of the owner's set comes to hold the answer once it has merged with its siblings (section 17.1). It MUST keep an answer for as long as the record is shared with the proposer, and at least for the 15 days for which a relay may deliver the proposal again ([transports.md](transports.md), section 5.5). Of two answers to one proposal that the records hold, `ACCEPTED` stands. A device that no longer holds the answer takes a repeat of the proposal as a new proposal (section 13.4).
+- **What the device holds.** To show and answer a proposal, a device holds the `PROPOSAL` message as the proposer sent it (section 17.1), and keeps the text of the schema of each entry with it. The app also keeps the text of the writer schema of every `DATA` that any device of its set sent to a receiver, for as long as the record is shared with that receiver, as records of a type in its own namespace, as it keeps its shares (section 2.1), so that every device of the set holds it and can read a proposal written against that schema ([sync.md](sync.md), section 7.3). A device that does not hold the schema of an entry, such as a sibling that got the proposal in a forward (section 17.1), shows that value once it holds the schema, and MUST NOT answer `ACCEPTED` before it holds the schema of every entry.
+
+### 15.2 An accepted proposal
+
+When the owner's user takes a proposal, the device on which the user takes it, which has shown every proposed value (section 15.1):
+
+1. makes the proposed values a change of its user of the record of its set, one change of [sync.md](sync.md), section 3.5, "changes one or several fields of a record": it takes one stamp and gives it, with its own key, to each proposed field, with the entry's value bytes and the entry's `schema` as the field state's value and schema, unchanged; then it takes the state stamp. It stamps every proposed field, also one whose value the record holds already, in place of the rule of [sync.md](sync.md), section 3.5, that leaves such a field unstamped. An installation that counts takes the values into the record and the next count as the record's version ([records.md](records.md), section 3);
+2. records the answer `ACCEPTED` (section 15.1) and sends the proposer the reply (section 14);
+3. sends the change to its siblings by sibling sync, as every change of the record ([sync.md](sync.md), section 10), and the record to every receiver with which it is shared, the proposer included, as an ordinary `DATA` under the new state stamp or count ([sync.md](sync.md), section 5.1; section 5.3).
+
+The order of the reply and the update is free. Wherever this document compares two values, it compares them as the values they decode to, each with the schema it was written with, not by their bytes. A value accepted from an entry whose schema is a later version of the type than the one the device writes with, of a field that its own writer schema lacks, holds the record back from other apps by [sync.md](sync.md), section 5.1: the device does not send the update itself, and leaves it to a sibling whose schema has the field. A device that can take no stamp ([sync.md](sync.md), section 2.3) cannot make the change: it records no answer and sends none until it can. A device on which the record is not there, because it is deleted, cannot take the proposal (section 15.4).
+
+### 15.3 A version that the owner left behind
+
+The `record.version` of a proposal is the version of the record that the proposer held when it proposed. A device of the owner compares it with its own state stamp of the record, or its count, only to tell its user:
+
+- **The same version.** The proposal is about the record as the device holds it.
+- **A lower version.** The record has changed since the proposer saw it. The device takes and shows the proposal all the same, and SHOULD tell its user that the record has changed since; it MAY show the current value beside each proposed one, as section 15.1 says. Taking the proposal sets the proposed values over whatever the record holds then, as any change of the user does.
+- **A higher version.** The proposer holds a version that a sibling gave and this device has not merged yet, or one that this device gave and lost ([protocol.md](protocol.md), section 10). The device takes and shows the proposal as for the same version.
+
+In no case is the version a reason to reject or decline a proposal on its own, and in no case does it count as a stamp seen.
+
+### 15.4 A record withdrawn from the proposer, or deleted
+
+A proposal is about a record that is shared with the proposer and there. For one that is not:
+
+- **When it arrives.** A `PROPOSAL` for a record that is withdrawn from the proposer, no longer shared with it, or deleted, fails step 5 of section 13.3 and is rejected with `PROPOSALS_NOT_TAKEN`. It gets an error and not a reply `DECLINED`: a reply is the answer of the owner's user, and the proposer shows it as such, while this result needs no user. The proposer gets the `WITHDRAW` or the `DELETE` of the record as well, which says why; and an app from which a record was withdrawn learns from the error no more than an app that never got the record (section 13.3).
+- **While it is open.** A device on which the record of an open proposal is deleted, or comes to be no longer shared with the proposer, by its user or by sibling sync, drops the proposal (section 17.1), stops showing it, and sends no reply. The proposer learns of it from the `DELETE` or the `WITHDRAW` that it gets (section 17.2). A record that is taken back, or shared again, later does not bring the dropped proposal back; the proposer may propose again.
+
+## 16. No acknowledgement; repeats and errors
+
+### 16.1 No acknowledgement
+
+A `PROPOSAL` is not acknowledged in an `ACK`. An entry of an `ACK` names the acknowledged message by the `id` and the `version` of its `record` ([protocol.md](protocol.md), section 7.1). For a `PROPOSAL` these are the owner's record and the proposer's version, not the proposal: two proposals for the same version of one record would have the same entry, and the entry would be about a record of the acknowledging app, not of the app it goes to, as every entry of an `ACK` of record messages is. `RESYNC` and `FORWARD` can be acknowledged because their `record` names the request or the forward itself ([sync.md](sync.md), sections 11.1 and 18.1); a `PROPOSAL` names its proposal in its body.
+
+So a device of the owner MUST NOT put an entry for a `PROPOSAL` into an `ACK`. The proposer learns the result of a proposal from the reply, or from an `ERROR` for a proposal that failed a step of section 13.3. A proposal that is taken and open has neither, until the owner's user answers it; the proposer sends it again meanwhile (section 16.2). A `PROPOSAL_REPLY` is not acknowledged either (section 14.2).
+
+### 16.2 Sending a proposal again
+
+A proposal that has neither a reply nor an error may not have arrived, or may be open at the owner. For as long as it has neither, the proposing device sends it again:
+
+- **In a live connection**, at the start of each later live connection with the device of `to`.
+- **Through a relay**, each time the holding time of 14 days ([transports.md](transports.md), section 5.5) has passed since it last sent it through the relay without a reply or an error, and not before.
+
+This is intended: an open proposal is repeated until the owner's user answers it. The repeats are bounded by the limits of section 18.3, which bound the open proposals of one proposer, and a repeat counts once there.
+
+It sends the same message again, with the same bytes. It stops when it has a reply or an error for the proposal; when the record's last record message from the owner is no longer a `DATA`, because the owner deleted or withdrew it (section 15.4); and when it forgets the owner. When the key in `to` is removed from the owner ([keys.md](keys.md), section 5.5), the device sends the same proposal, with the same `proposal_id`, `record` and `fields`, to another current key of the owner chosen as in section 13.1: a `PROPOSAL` with that key in `to`, signed anew, which it sends again from then on. A device of the owner that holds the proposal or its answer takes it as a repeat (section 13.4), so this is safe. A user who discards the proposed values does not take back a proposal that was sent: no message takes a proposal back. The device MAY stop sending it again then.
+
+A repeat is safe: the owner's device changes nothing for it, apart from keeping the copy with the higher SHA-256, and sends the reply again for a proposal that is answered (section 13.4).
+
+### 16.3 Errors
+
+An `ERROR` is about a `PROPOSAL` when its `message_hash` is the SHA-256 of a `PROPOSAL` that the device sent to the key that sent the `ERROR` ([protocol.md](protocol.md), section 8.1). A device that holds a reply for a proposal already ignores an `ERROR` about it. Otherwise the error settles the proposal, and the device does not send it again, apart from `FORMAT_UNSUPPORTED`, after which it sends it again in a format the owner reads:
+
+| Code                                                                                           | The proposing device then                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PROPOSALS_NOT_TAKEN`                                                                          | MAY show its user that the owner did not take the proposal. It sends no new `PROPOSAL` for that record to any key of the owner, the block holding for the owner as a whole, until it holds a manifest of a key of the owner with a higher revision than it held of that key, a record message of the record with a higher version, or a reply to any proposal of its own to that owner, whichever comes first. The block holds back new proposals only: the repeats of its open proposals (section 16.2), and their sending to another key after the key in `to` was removed, go on |
+| `SCHEMA_UNKNOWN`                                                                               | MAY show its user that the proposal did not reach the owner. The owner keeps the schemas of the `DATA` it sent (section 15.1), so this is rare. It sends no further `PROPOSAL` for that record until a record message of the record with a higher version reaches it, or until one of the ends of the block after `PROPOSALS_NOT_TAKEN` above                                                                                                                                                                                                                                       |
+| `VALUE_INVALID`                                                                                | SHOULD show its user the field that `field` names. It sends no new proposal for that record while the value of the top-level field that `field` begins with equals, as a decoded value, the one it proposed last                                                                                                                                                                                                                                                                                                                                                                    |
+| `FORMAT_UNSUPPORTED`                                                                           | writes in the chosen format ([protocol.md](protocol.md), section 3.2) and sends the proposal again in it, as the same message while there is one format; the proposal is not settled                                                                                                                                                                                                                                                                                                                                                                                                |
+| `INVALID_MESSAGE`, `RECORD_ID_INVALID`, `VERSION_INVALID`, `UNDECODABLE`, and every other code | logs it; it is a fault of the proposer's implementation, or of a message that was damaged ([protocol.md](protocol.md), section 8.2)                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+
+## 17. Between devices
+
+### 17.1 The owner's devices
+
+The owner can be a device set. The proposer sends a proposal to one of its devices (section 13.1), which is the answering device for it ([sync.md](sync.md), section 17.1): it processes the `PROPOSAL` by section 13.3 and alone reports an error to the proposer. A proposal is a message of another app that is forwarded ([sync.md](sync.md), section 19.6), so that every device of the set can show it and the user can answer it on any of them:
+
+- **Kept.** A device keeps each `PROPOSAL` that it took, from the proposer itself at step 10 of section 13.3 or in a `FORWARD`, as the bytes it got, among the kept messages of the proposer ([sync.md](sync.md), section 20.1). It keeps it until the first of these: the owner's app holds an answer to the proposal (section 15.1); a change on the device, of its user or taken in a merge with a sibling, deletes the record or takes it out of the shares for the proposer (section 15.4); the device holds the record as deleted, or as not shared with the proposer, and either has merged the record and the app's share records with every other current device of its set since it took the proposal, as [sync.md](sync.md), section 10.4, says, or took the proposal 14 days ago or longer, the bound of that wait in section 5.3; the app's records hold the proposals of that receiver as stopped for the record (section 18.4); the key that signed the `PROPOSAL` is removed from the proposer, which drops the open proposal on every device; or the device forgets the proposer ([sync.md](sync.md), section 20.5). A device shows a kept proposal only while the record is there on it and shared with the proposer by the shares it holds; a sibling whose sibling sync lags behind the answering device so keeps a forwarded proposal without showing it until the record or the share reaches it. A kept `PROPOSAL` is delivered and due for each sibling as every kept message ([sync.md](sync.md), section 20.2).
+- **Forwarded.** A device forwards a kept `PROPOSAL` to each sibling for which it is due, in a `FORWARD` whose `schema` is `null` ([sync.md](sync.md), section 18.1), after the additions, the removals, the manifests and the record messages of the proposer that it forwards to that sibling ([sync.md](sync.md), section 20.3). Before it forwards the proposal, it offers that sibling the schema of each entry that it keeps with the proposal, as it offers a schema before a `CHANGE` ([sync.md](sync.md), section 7.2), so that the sibling can show the values.
+- **A forwarded `PROPOSAL`.** A sibling processes it after the steps 1 to 14 of [sync.md](sync.md), section 18.3, with these checks, in this order: the body decodes as one `axt.Proposal`, with no bytes left over, and `to` is a current or a removed key of its own set, its own key, a sibling's or the key of a device removed from the set since, as for a forwarded `WITHDRAW` (section 7.1), else `INVALID_MESSAGE`; the steps 2 to 4 of section 13.3, with their codes. The steps 5 to 9 do not apply: the answering device made them, and the sibling's shares, manifest and schemas can differ from that device's until they have merged. The sibling then takes the proposal by section 13.4, without a reply: a new proposal it keeps and holds as open, and the outcome of the forward is `APPLIED`, as it is for one in other bytes that takes the place of the one it holds by the higher SHA-256 (section 13.4); one that it holds already, or whose answer the owner's app holds, it does not take, and the outcome is `DUPLICATE`. Nor does it take one of a receiver whose proposals the app's records hold as stopped for the record (section 18.4): it drops it, and the outcome is `DUPLICATE`. The limits of section 18.3 do not hold back a forwarded `PROPOSAL`: the answering device took it, and the sibling keeps it. A forwarded `PROPOSAL` whose inner sender is a removed key of the proposer is not taken, with the outcome `DUPLICATE`, as a forwarded `MANIFEST` of such a key ([sync.md](sync.md), section 19.4). The sibling sends the proposer nothing ([sync.md](sync.md), section 19.1), and asks its user nothing while it processes the forward; it shows the proposal among the open proposals as section 15.1 says.
+- **One answer, one reply.** The device on which the owner's user answers the proposal records the answer (section 15.1) and sends the reply (section 14.1), and for `ACCEPTED` makes the change (section 15.2). The answer reaches the siblings in the records of the app's own type; a sibling that comes to hold it stops showing the proposal, drops its kept `PROPOSAL` and sends no reply. Only a device that got a repeat of an answered proposal from the proposer itself sends the reply again (section 13.4).
+- **Two answers.** A user can answer the same proposal on two devices before they have merged. Each device then records its answer and sends its reply; the proposer keeps the first that it gets, and takes a later `ACCEPTED` in the place of a `DECLINED` (section 14.2). Of the two answers that the app's records then hold, `ACCEPTED` stands on every device (section 15.1). A change that an `ACCEPTED` made stands as every change of the record and merges by [sync.md](sync.md), section 4.
+- **The reply needs a channel.** A device that sends a reply to a proposer that it knows only by forwards introduces itself first, with its chain and its `MANIFEST`, as [sync.md](sync.md), section 17.2, says of a message of its own for such an app. It sends the reply in a live connection with the proposer's device of `to`, or through the relay when it holds that key's encryption key and relay ([keys.md](keys.md), section 4.2). A device that has neither channel to that device when its user answers sends the reply as soon as it has one.
+
+### 17.2 The proposer's devices
+
+The proposer can be a device set too. Its devices share the received record, with its sender's layer and its owner's layer ([sync.md](sync.md), sections 17 to 22); on these devices the owner's layer holds what the proposer's user did with the record.
+
+- **The proposer's value is its user's change.** The user's new value is a change of the owner's layer of [sync.md](sync.md), section 21.2, on the device on which the user makes it, and reaches its siblings in a `CHANGE` with a key in `origin`, as every such change ([sync.md](sync.md), section 21.3). It stands there before the answer, after `DECLINED` and after an error, until the user discards it, by a change of that section ([records.md](records.md), section 6.1). A reply changes nothing of it.
+- **Per field.** An app that lets its user propose changes to records of a type MUST merge per field for the records of that type ([records.md](records.md), section 6.1; the per-field rows of [sync.md](sync.md), section 22.2). The proposed value is then an ordinary owner's value of the owner's layer, on every device of the proposer's set, and stands against every later `DATA` until the user discards it, whichever device applies the `DATA`. It does not end by itself when an update brings the value.
+- **After `ACCEPTED`.** The owner's update brings the proposed value. The answering device applies it by [sync.md](sync.md), section 22.2: the user's value is the value that the message has for the field, so it does not count for `MERGED`. The owner's value stays in the layer: where the set counts a field that a `DATA` brings back to the user's value as no longer changed ([records.md](records.md), section 6.1), it discards the change by a change of [sync.md](sync.md), section 21.2, as that section allows, and the devices of the set choose alike ([sync.md](sync.md), section 22.3); otherwise the value stands until the user discards it.
+- **One device proposes.** The device on which the user proposes sends the `PROPOSAL`, and only it sends it again (section 16.2). A `PROPOSAL` is a message of the set itself: a device does not forward it to its siblings ([sync.md](sync.md), section 18.3, step 13), and a sibling that has the same values in its owner's layer does not propose them again on its own.
+- **The status is the app's affair.** Which proposals were sent, and the replies and errors they got, stay on the device that sent them ([sync.md](sync.md), section 17.3). An app that shows its user the status on every device keeps it as records of a type in its own namespace, as the owner keeps its answers (section 15.1). A reply goes to the key that signed the proposal (section 14.1), so a sibling that gets one for a proposal that it did not send ignores it at step 3 of section 14.2.
+- **A proposing device that is removed.** The owner's devices send no reply to a key removed from the proposer (section 14.1). The remaining devices learn of an accepted proposal from the update.
+
+A `PROPOSAL_REPLY` is no message that is forwarded: a device keeps none, and a `FORWARD` that carries one is not valid ([sync.md](sync.md), section 18.2).
+
+## 18. Transports and limits
+
+### 18.1 Live connection and relay
+
+A `PROPOSAL` and a `PROPOSAL_REPLY` need no offer: their bodies have schemas of the specification, and the values in a proposal name schemas with which the owner wrote the record. A proposing device sends a `PROPOSAL` once it holds a manifest of the device in `to` that takes proposals for the type (section 12.2): in a live connection after both `MANIFEST` messages ([protocol.md](protocol.md), section 3.1), and through the relay to that device's mailbox, sealed for its encryption key ([keys.md](keys.md), section 4). An app that sends a `PROPOSAL` through a relay MUST take messages through it, as for an offer ([protocol.md](protocol.md), section 15.1), since the reply comes back the same way. Both kinds are sealed, padded and repeated as every message ([protocol.md](protocol.md), sections 9.2 and 15.1); a repeat of a `PROPOSAL` is handled by section 13.4, and one of a `PROPOSAL_REPLY` by step 5 of section 14.2.
+
+### 18.2 File
+
+No file holds a `PROPOSAL` or a `PROPOSAL_REPLY`. A proposal needs a way back for its reply and its errors, and goes to one device of the owner; a reply is a reply of [protocol.md](protocol.md), section 1, like the `ACK`, and is for the one device that sent the proposal. A file has no way back and is for any device of its reader ([protocol.md](protocol.md), section 15.2). A reader that finds either kind in a file rejects the whole file ([transports.md](transports.md), section 2.2).
+
+### 18.3 Limits
+
+| What                                                                  | Limit                                                                                        |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Entries of `fields` in one `PROPOSAL`                                 | 1 to 4,096 (section 13.2)                                                                    |
+| A field name in a `PROPOSAL`                                          | 1 to 512 bytes of UTF-8 (section 13.2)                                                       |
+| One `PROPOSAL` or `PROPOSAL_REPLY`                                    | 16 MiB, as every message ([envelope.md](envelope.md), section 8)                             |
+| Data depth of a proposed value                                        | 32, the record counted as depth 1 (section 13.3, step 8)                                     |
+| Value bytes of one `PROPOSAL`, the `value` of every entry together    | 64 KiB (65,536 bytes)                                                                        |
+| Value bytes of the open proposals of one proposer in all, at a device | 1 MiB (1,048,576 bytes)                                                                      |
+| Open proposals of one proposer for one record, at a device            | 16                                                                                           |
+| Open proposals of one proposer in all, at a device                    | 256                                                                                          |
+| Sending a proposal again through a relay                              | After the holding time of 14 days, not before (section 16.2)                                 |
+| How long the owner's app keeps an answer                              | MUST: as long as the record is shared with the proposer, and at least 15 days (section 15.1) |
+
+- **Open proposals.** A device of the owner MUST NOT take more open proposals of one proposer than the two count limits of the table, nor a `PROPOSAL` whose value bytes are above 64 KiB, nor one that would bring the value bytes of the open proposals of that proposer that it holds above 1 MiB. A `PROPOSAL` that the device gets from the proposer itself and would take as a new proposal beyond one of these limits fails step 5 of section 13.3 with `PROPOSALS_NOT_TAKEN`. A device MAY set lower limits. The limits hold for the proposals that a device takes from the proposer itself, counted over every open proposal of that proposer that it holds, those it took itself and those forwarded to it. A device keeps every forwarded `PROPOSAL` whatever the limits (section 17.1), so a device can hold more than a limit, and devices that have not yet merged can together hold more than a limit for a while.
+
+### 18.4 Unwanted proposals
+
+Every receiver of a record of a type for which the owner takes proposals can propose (section 12.2), and a proposal costs the owner's user attention. Beyond the limits of section 18.3:
+
+- **Stopping one receiver.** An app MAY let its user stop proposals from one receiver, for one record, for one type or for all records. It keeps the stop, with a key of the receiver as in section 13.4, as records of a type in its own namespace, as it keeps its shares and its answers (sections 2.1 and 15.1), so the stop reaches every device of the set. A `PROPOSAL` that its user has stopped fails step 5 of section 13.3 with `PROPOSALS_NOT_TAKEN`, as for a type that takes no proposals. A device drops the kept proposals of a receiver that its records hold as stopped for their record, without a reply, and does not take a forwarded one (section 17.1). The other receivers go on proposing.
+- **Stopping every receiver.** An app that takes no more proposals for a type sends a `MANIFEST` with a higher revision in which `proposals` is `false` for it ([manifest.md](manifest.md), sections 3.8 and 6). Its devices reject every later `PROPOSAL` for the type at step 5. The proposals that are open stay open until they are answered or dropped.
+- **No user is asked before.** The device takes or rejects a `PROPOSAL` without asking its user; only the answer to a proposal that it took needs the user (section 15.1).
+- **What a proposal tells.** A proposer learns from `PROPOSALS_NOT_TAKEN` nothing of whether the owner holds a record with that id (section 13.3). A receiver learns from the `sends` of the owner's manifest for which types it takes proposals, as every app that holds the manifest does.
+- **A proposal is a request.** A proposal binds no one. The owner's user may refuse it, leave it open, or take only part of it as a change of their own (section 15.1), and an app that does not conform to this specification can apply what it likes. The proposed values reach no other receiver unless the owner's user takes them, and then as the owner's change.
+
 ## References
 
 - [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) and [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174): key words for requirement levels
+- [RFC 9562](https://www.rfc-editor.org/rfc/rfc9562): UUIDs

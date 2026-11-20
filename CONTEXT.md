@@ -28,17 +28,19 @@ The vocabulary of this repository. The specification in [spec/](spec/README.md) 
 
 **Tombstone**: what a receiver keeps of a record its sender deleted, or withdrew from it: its id and the version of the deletion or the withdrawal.
 
-**Local change**: a change the receiver's user makes to a received record in the receiver. It stays there and is not sent back to the sender; between the devices of one owner it travels as the owner's layer.
+**Local change**: a change the receiver's user makes to a received record in the receiver. It stays there and is not sent back to the sender, though the receiver may propose it; between the devices of one owner it travels as the owner's layer.
 
 **Sender's layer** and **owner's layer**: what a device of a set holds of a record it received from another app: what the sender's record messages brought, and what the owner changed in the record on the devices of the set. A device shows the record that the two give together.
 
 **Forward**: a `FORWARD` message, in which a device passes a message of another app on to a sibling, as the signed message it got. The sibling checks the signature inside, takes the message as if it had received it, and sends nothing to the other app.
 
-**Answering device**: the device of a set that got a message from another app itself. It alone answers the other app, and it forwards the message to its siblings.
+**Answering device**: the device of a set that got a message from another app itself. It alone answers the other app's message, and it forwards the message to its siblings. The reply to a proposal comes from the device on which the owner's user decides.
 
 **Share**: a rule inside the sending app that names, for one app of another user, the records that go to it: single records, or those a rule of the app picks. Only shared records go to another user. The app keeps its shares as records of its own type, so the owner's devices hold the same shares; the other app sees only ordinary records.
 
 **Withdrawal**: a `WITHDRAW` message, with which a sender takes one record back from one receiver when it leaves a share. The receiver removes its copy, or keeps it if its user changed it; sharing it again brings it back.
+
+**Proposal**: a `PROPOSAL` message, in which a receiver of a shared record suggests new values for some of its fields to the record's sender, the **owner** of the record, if the owner's manifest takes proposals for the type. The owner's user takes or refuses it, the owner answers with a `PROPOSAL_REPLY` that is only a status, and a proposal that is taken becomes the owner's own change and goes out as an ordinary update.
 
 **Type**: an Apache Avro schema with a full name. An **example type** is one of the types this repository brings under `axt.example.v1`, so that apps can exchange without agreeing first.
 

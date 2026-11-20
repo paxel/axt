@@ -355,7 +355,7 @@ A `DEVICE_REMOVE` message removes a key from the sender's set:
 A removal needs no proof and no consent of the removed device: it serves when a device is lost (section 5.9).
 
 - A device MUST NOT sign the removal of its own key; a receiver rejects it (section 5.5, step 2). An owner who gives up a device removes it with another one, and the only device of a set cannot be removed.
-- A removed key is never a key of the set again. An installation that was removed and is to come back generates a new signing key and joins by section 5.2.
+- A removed key is never a key of the set again. An installation that was removed and comes back generates a new signing key and joins by section 5.2.
 - The device that signs a removal, and every device of the set that gets it, keeps it in its chain (section 5.4) and sends its chain again to every app it exchanges with and to the other devices of its set, within the bounds of [protocol.md](protocol.md), section 3.3.
 - A device that gets a valid removal of its own key MUST NOT sign any further message with that key, and SHOULD tell its user. What it does with its data is up to the app.
 

@@ -335,8 +335,8 @@ SYNC_OF = {"CHANGE": "Change", "RESYNC": "Resync", "FORWARD": "Forward"}
 
 def written(hexed: Any, own: bytes, bodies: dict[str, str], fps: dict[str, str]) -> tuple[Any, Any]:
     """The envelope and the body of a message the adapter wrote; raises ValueError if it is not a valid
-    message of its own key, signed, of one of the kinds given. Only a CHANGE, a RESYNC and a FORWARD name a
-    record."""
+    message of its own key, signed, of one of the kinds given. Only a CHANGE, a RESYNC, a FORWARD and a
+    PROPOSAL_REPLY name a record."""
     import fastavro
 
     m = to_bytes(hexed)
@@ -353,7 +353,7 @@ def written(hexed: Any, own: bytes, bodies: dict[str, str], fps: dict[str, str])
     name = bodies.get(env["kind"])
     if (
         name is None
-        or (env["record"] is None) == (env["kind"] in SYNC_OF)
+        or (env["record"] is None) == (env["kind"] in SYNC_OF or env["kind"] == "PROPOSAL_REPLY")
         or env["body"][:10] != b"\xc3\x01" + bytes.fromhex(fps[name])
     ):
         raise ValueError(f"a reply of kind {env['kind']} that is not a valid reply")
@@ -376,7 +376,12 @@ def reply(hexed: Any, own: bytes, peer: bytes) -> tuple[str, Any]:
 def said(hexed: Any, own: bytes) -> list[dict[str, Any]]:
     """What a message says that a device wrote in a `siblings` session (section 5.14): one entry for the
     message, or for an ACK one for each of its entries. Every long is written as a Stamp."""
-    env, d = written(hexed, own, {**BODY_OF, **SYNC_OF}, {**BODY_FPS, **SYNC_FPS})
+    env, d = written(
+        hexed,
+        own,
+        {**BODY_OF, **SYNC_OF, "PROPOSAL_REPLY": "ProposalReply"},
+        {**BODY_FPS, **SYNC_FPS, "ProposalReply": "c6f8756ee30c6164"},
+    )
     kind, rec = env["kind"], env["record"]
     base = {"kind": kind, "to": d["to"].hex()}
     if kind == "FORWARD":
@@ -452,7 +457,82 @@ def said(hexed: Any, own: bytes) -> list[dict[str, Any]]:
         return [{**base, "offer_id": d["offer_id"], "types": sorted(d["types"])}]
     if kind == "RESYNC":
         return [{**base, "record": {"id": rec["id"], "version": str(rec["version"])}}]
+    if kind == "PROPOSAL_REPLY":
+        record = {"id": rec["id"], "version": str(rec["version"])}
+        return [{**base, "record": record, "proposal_id": d["proposal_id"], "answer": d["answer"]}]
     raise ValueError(f"a {kind} in a session of a device with its siblings")
+
+
+# The messages of the sessions of spec/shares.md, sections 13 to 16 (section 5.15).
+SHARES_FPS = {"Proposal": "7902d9122a221225", "ProposalReply": "c6f8756ee30c6164", "Error": BODY_FPS["Error"]}
+SHARES_OF = {"PROPOSAL": "Proposal", "PROPOSAL_REPLY": "ProposalReply", "ERROR": "Error"}
+
+
+def shares_said(hexed: Any, own: bytes) -> dict[str, Any]:
+    """What a PROPOSAL, a PROPOSAL_REPLY or an ERROR that the adapter wrote says (section 5.15); raises
+    ValueError if it is not a valid message of its own key, signed."""
+    import fastavro
+
+    m = to_bytes(hexed)
+    if m[:2] != b"\xc3\x01" or m[2:10] != ENVELOPE_FP:
+        raise ValueError("a message that is not a live message of envelope format 1")
+    buf = io.BytesIO(m[10:])
+    env: Any = fastavro.schemaless_reader(buf, schema("Envelope"), schema("Envelope"))
+    if buf.tell() != len(m) - 10 or env["format"] != 1 or env["sender"] != own:
+        raise ValueError("a message with bytes left over, another format or another sender")
+    if keys.verify_problem(own, keys.MESSAGE_PREFIX + m[10:-64], m[-64:]):
+        raise ValueError("a message whose signature does not verify")
+    kind, rec = env["kind"], env["record"]
+    name = SHARES_OF.get(kind)
+    if name is None or (rec is None) != (kind == "ERROR"):
+        raise ValueError(f"a {kind} that is not valid here")
+    if env["body"][:10] != b"\xc3\x01" + bytes.fromhex(SHARES_FPS[name]):
+        raise ValueError(f"a {kind} whose body is not its kind's schema")
+    buf = io.BytesIO(env["body"][10:])
+    d: Any = fastavro.schemaless_reader(buf, schema(name), schema(name))
+    if buf.tell() != len(env["body"]) - 10:
+        raise ValueError("a body with bytes left over")
+    out: dict[str, Any] = {"kind": kind, "to": d["to"].hex()}
+    if kind == "ERROR":
+        r = d["record"]
+        return {
+            **out,
+            "code": d["code"],
+            "message_hash": d["message_hash"].hex(),
+            "record": r and {"id": r["id"], "version": r["version"]},
+            "fingerprint": None if d["fingerprint"] is None else d["fingerprint"].hex(),
+            "field": d["field"],
+        }
+    out = {**out, "record": {"id": rec["id"], "version": rec["version"]}, "proposal_id": d["proposal_id"]}
+    if kind == "PROPOSAL_REPLY":
+        return {**out, "answer": d["answer"]}
+    fields = {f["name"]: {"schema": f["schema"].hex(), "value": f["value"].hex()} for f in d["fields"]}
+    if len(fields) != len(d["fields"]):
+        raise ValueError("a PROPOSAL with a field name twice")
+    return {**out, "fields": fields}
+
+
+def check_shares(vector: Any, output: Any) -> str | None:
+    """A session of `owner` or `proposer`: the messages the adapter wrote are compared by what they say."""
+    own = keys.public_key(bytes.fromhex(vector["input"]["device"]["seed"]))
+    want, got = vector["expected"]["steps"], output.get("steps")
+    if not isinstance(got, list) or len(got) != len(want):
+        return f"expected {len(want)} step results, got {short(got)}"
+    problems: list[str] = []
+    for n, (w, g) in enumerate(zip(want, got, strict=True)):
+        try:
+            if isinstance(g, dict) and "replies" in g:
+                g = {**g, "replies": [shares_said(m, own) for m in g["replies"]]}
+            if isinstance(g, dict) and g.get("message") is not None:
+                g = {**g, "message": shares_said(g["message"], own)}
+            if isinstance(g, dict) and "messages" in g:
+                g = {**g, "messages": [shares_said(m, own) for m in g["messages"]]}
+            problem = diff(w, g, f"step {n}")
+        except (ValueError, KeyError, TypeError) as e:
+            problem = f"step {n}: {e}"
+        if problem:
+            problems.append(problem)
+    return "; ".join(problems) if problems else None
 
 
 def check_siblings(vector: Any, output: Any) -> str | None:
@@ -566,7 +646,13 @@ def check_step(step: Any, w: Any, g: Any, own: bytes, peer: bytes, where: str) -
     return diff(w, g, where)
 
 
-SPECIAL = {"seal": check_seal, "session": check_session, "siblings": check_siblings}
+SPECIAL = {
+    "seal": check_seal,
+    "session": check_session,
+    "siblings": check_siblings,
+    "owner": check_shares,
+    "proposer": check_shares,
+}
 
 
 def check(vector: Any, output: Any) -> str | None:

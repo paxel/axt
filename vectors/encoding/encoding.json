@@ -305,6 +305,36 @@
    }
   },
   {
+   "id": "encoding/fingerprint/axt-proposal-as-types-axt-proposal-avsc-holds-it",
+   "op": "fingerprint",
+   "description": "axt.Proposal, as types/axt/Proposal.avsc holds it",
+   "refs": ["envelope.md 5", "shares.md 10"],
+   "input": {
+    "schema": "{\n  \"type\": \"record\",\n  \"name\": \"Proposal\",\n  \"namespace\": \"axt\",\n  \"doc\": \"The body of a PROPOSAL message: a receiver of a record proposes changed values of some of its fields to the record's sender, whose user takes or refuses them. Defined in spec/shares.md. The envelope's record field names the sender's record and the version of it that the proposer holds; no version rule applies to the message. The proposal changes nothing by itself: a value the sender's user takes reaches every receiver as an ordinary update. Its schema changes only with a new envelope format.\",\n  \"fields\": [\n    {\n      \"name\": \"to\",\n      \"type\": {\n        \"type\": \"fixed\",\n        \"name\": \"ProposalTo\",\n        \"size\": 32,\n        \"doc\": \"An Ed25519 public key in the encoding of RFC 8032. Defined in spec/keys.md.\"\n      },\n      \"doc\": \"The Ed25519 public key of the device of the record's sender that the proposal is sent to, a current key of that sender. A device that gets it directly ignores a PROPOSAL that names another key; a forwarded one is rejected unless this is a current or a removed key of the device's own set.\"\n    },\n    {\n      \"name\": \"proposal_id\",\n      \"type\": {\n        \"type\": \"string\",\n        \"logicalType\": \"uuid\"\n      },\n      \"doc\": \"The id of the proposal, a version 4 or 7 UUID in its 36-character lower-case text form, which the proposer never uses for another proposal and which is not the id of a record, an offer, a request or a forward. The reply to the proposal names it.\"\n    },\n    {\n      \"name\": \"fields\",\n      \"type\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"type\": \"record\",\n          \"name\": \"ProposalField\",\n          \"doc\": \"The proposed value of one top-level field of the record. Defined in spec/shares.md, section 13.1.\",\n          \"fields\": [\n            {\n              \"name\": \"name\",\n              \"type\": \"string\",\n              \"doc\": \"The name of the field, as the writer schema named in schema has it.\"\n            },\n            {\n              \"name\": \"schema\",\n              \"type\": {\n                \"type\": \"fixed\",\n                \"name\": \"ProposalFieldSchema\",\n                \"size\": 8,\n                \"doc\": \"The CRC-64-AVRO fingerprint of a schema, as 8 bytes in little-endian order. Defined in spec/envelope.md, section 5.\"\n              },\n              \"doc\": \"The fingerprint of the writer schema of the record's type with which the proposer wrote the value: the writer schema of the record's kept DATA, with which the proposer's change of the field was written. The owner keeps the writer schemas of the DATA it sent to the receiver.\"\n            },\n            {\n              \"name\": \"value\",\n              \"type\": \"bytes\",\n              \"doc\": \"The proposed value of the field, in Avro binary encoding under the type the field has in the schema named in schema.\"\n            }\n          ]\n        }\n      },\n      \"doc\": \"The proposed values, 1 to 4096, each field name at most once, in any order. Only fields that the proposal changes; a proposal neither creates nor deletes a record.\"\n    }\n  ]\n}\n"
+   },
+   "expected": {
+    "accept": {
+     "canonical_form": "{\"name\":\"axt.Proposal\",\"type\":\"record\",\"fields\":[{\"name\":\"to\",\"type\":{\"name\":\"axt.ProposalTo\",\"type\":\"fixed\",\"size\":32}},{\"name\":\"proposal_id\",\"type\":\"string\"},{\"name\":\"fields\",\"type\":{\"type\":\"array\",\"items\":{\"name\":\"axt.ProposalField\",\"type\":\"record\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"},{\"name\":\"schema\",\"type\":{\"name\":\"axt.ProposalFieldSchema\",\"type\":\"fixed\",\"size\":8}},{\"name\":\"value\",\"type\":\"bytes\"}]}}}]}",
+     "fingerprint": "7902d9122a221225"
+    }
+   }
+  },
+  {
+   "id": "encoding/fingerprint/axt-proposalreply-as-types-axt-proposalreply-avsc-holds-it",
+   "op": "fingerprint",
+   "description": "axt.ProposalReply, as types/axt/ProposalReply.avsc holds it",
+   "refs": ["envelope.md 5", "shares.md 10"],
+   "input": {
+    "schema": "{\n  \"type\": \"record\",\n  \"name\": \"ProposalReply\",\n  \"namespace\": \"axt\",\n  \"doc\": \"The body of a PROPOSAL_REPLY message: the answer of a record's sender to one proposal, taken or refused by its user. Defined in spec/shares.md. The envelope's record field is that of the proposal. The reply is a status only: a proposal that is taken reaches the proposer as an ordinary update of the record. Its schema changes only with a new envelope format.\",\n  \"fields\": [\n    {\n      \"name\": \"to\",\n      \"type\": {\n        \"type\": \"fixed\",\n        \"name\": \"ProposalReplyTo\",\n        \"size\": 32,\n        \"doc\": \"An Ed25519 public key in the encoding of RFC 8032. Defined in spec/keys.md.\"\n      },\n      \"doc\": \"The Ed25519 public key that signed the proposal, the key of the proposer's device that sent it. A device ignores a reply that names another key.\"\n    },\n    {\n      \"name\": \"proposal_id\",\n      \"type\": {\n        \"type\": \"string\",\n        \"logicalType\": \"uuid\"\n      },\n      \"doc\": \"The id of the proposal this message answers, as the proposal carried it.\"\n    },\n    {\n      \"name\": \"answer\",\n      \"type\": {\n        \"type\": \"enum\",\n        \"name\": \"ProposalReplyAnswer\",\n        \"doc\": \"What the sender's user did with the proposal. ACCEPTED: took every proposed value into the record, which reaches the proposer as an update. DECLINED: did not take the proposal as it stands. The default is for schema resolution only; within one envelope format every symbol is known.\",\n        \"symbols\": [\n          \"ACCEPTED\",\n          \"DECLINED\"\n        ],\n        \"default\": \"DECLINED\"\n      },\n      \"doc\": \"The answer to the proposal.\"\n    }\n  ]\n}\n"
+   },
+   "expected": {
+    "accept": {
+     "canonical_form": "{\"name\":\"axt.ProposalReply\",\"type\":\"record\",\"fields\":[{\"name\":\"to\",\"type\":{\"name\":\"axt.ProposalReplyTo\",\"type\":\"fixed\",\"size\":32}},{\"name\":\"proposal_id\",\"type\":\"string\"},{\"name\":\"answer\",\"type\":{\"name\":\"axt.ProposalReplyAnswer\",\"type\":\"enum\",\"symbols\":[\"ACCEPTED\",\"DECLINED\"]}}]}",
+     "fingerprint": "c6f8756ee30c6164"
+    }
+   }
+  },
+  {
    "id": "encoding/decode_message/the-data-message-of-envelope-md-section-10-2",
    "op": "decode_message",
    "description": "the DATA message of envelope.md, section 10.2",
@@ -617,40 +647,40 @@
    }
   },
   {
-   "id": "encoding/decode_message/an-envelope-of-the-kind-proposal-which-no-document-defines-yet-with-an-e",
+   "id": "encoding/decode_message/the-proposal-of-shares-md-section-11-4",
    "op": "decode_message",
-   "description": "an envelope of the kind PROPOSAL, which no document defines yet, with an empty body",
-   "refs": ["envelope.md 2", "envelope.md 3", "envelope.md 2.2"],
+   "description": "the PROPOSAL of shares.md, section 11.4",
+   "refs": ["envelope.md 2", "envelope.md 3", "shares.md 13.1", "shares.md 11.4"],
    "input": {
-    "message": "c30116306f71b9ce9ea8021e1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a00002e439ecee65a0aea85d9c06a2c5673bbf0a8520612230b13d60a2dbb69aa4094842a1c9eaf621c429dfb1f0feabc7fc39051560efd57e281a04648afed722d04"
+    "message": "c30116306f71b9ce9ea8021eda9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7024833663263386135652d396231642d346337652d386136662d326434623563366537663830068202c3017902d9122a2212251b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a4837623365396432312d346338612d346636652d396131622d356432633865346636613730020a7374617274cd30642bf807f21a42d21f162416000000021a4575726f70652f4265726c696e02a0380280a4c1e6d26600a9e313d8053d017ea344dc51410e0d3bc65dc0e0e41a303da26d1f0c1167a918bc86ea15d315f638eb50d4216cfbe4431b4d1820f7d234c84fcfdc7658e44e08"
    },
    "expected": {
     "accept": {
      "format": 1,
      "kind": "PROPOSAL",
-     "sender": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
-     "record": null,
-     "body": "",
-     "signature": "2e439ecee65a0aea85d9c06a2c5673bbf0a8520612230b13d60a2dbb69aa4094842a1c9eaf621c429dfb1f0feabc7fc39051560efd57e281a04648afed722d04"
+     "sender": "da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7",
+     "record": {"id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 3},
+     "body": "c3017902d9122a2212251b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a4837623365396432312d346338612d346636652d396131622d356432633865346636613730020a7374617274cd30642bf807f21a42d21f162416000000021a4575726f70652f4265726c696e02a0380280a4c1e6d26600",
+     "signature": "a9e313d8053d017ea344dc51410e0d3bc65dc0e0e41a303da26d1f0c1167a918bc86ea15d315f638eb50d4216cfbe4431b4d1820f7d234c84fcfdc7658e44e08"
     }
    }
   },
   {
-   "id": "encoding/decode_message/an-envelope-of-the-kind-proposal-reply-which-no-document-defines-yet-wit",
+   "id": "encoding/decode_message/the-proposal-reply-of-shares-md-section-11-5",
    "op": "decode_message",
-   "description": "an envelope of the kind PROPOSAL_REPLY, which no document defines yet, with an empty body",
-   "refs": ["envelope.md 2", "envelope.md 3", "envelope.md 2.2"],
+   "description": "the PROPOSAL_REPLY of shares.md, section 11.5",
+   "refs": ["envelope.md 2", "envelope.md 3", "shares.md 14.1", "shares.md 11.5"],
    "input": {
-    "message": "c30116306f71b9ce9ea802201b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a00002e208924ad2e73dd8c1fdff477092b6eebf7aaefeb4ff9e530c79eaf3c2a577140fb559e6cd59afa791a04458207aeea8e16e86b54bc94236f7479302dddf307"
+    "message": "c30116306f71b9ce9ea802201b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024833663263386135652d396231642d346337652d386136662d32643462356336653766383006a001c301c6f8756ee30c6164da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb74837623365396432312d346338612d346636652d396131622d356432633865346636613730001e572ef7e714ab7c90a59e7eef85338ac5f4f6984098642cc8d97428e9eb528dc1782814327cc355e99ed100e31af86073fa4275c6e59813cc4e2519d81b8c0d"
    },
    "expected": {
     "accept": {
      "format": 1,
      "kind": "PROPOSAL_REPLY",
      "sender": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
-     "record": null,
-     "body": "",
-     "signature": "2e208924ad2e73dd8c1fdff477092b6eebf7aaefeb4ff9e530c79eaf3c2a577140fb559e6cd59afa791a04458207aeea8e16e86b54bc94236f7479302dddf307"
+     "record": {"id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 3},
+     "body": "c301c6f8756ee30c6164da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb74837623365396432312d346338612d346636652d396131622d35643263386534663661373000",
+     "signature": "1e572ef7e714ab7c90a59e7eef85338ac5f4f6984098642cc8d97428e9eb528dc1782814327cc355e99ed100e31af86073fa4275c6e59813cc4e2519d81b8c0d"
     }
    }
   },
@@ -1227,6 +1257,50 @@
    }
   },
   {
+   "id": "encoding/decode_body/the-body-of-the-proposal-of-shares-md-section-11-4",
+   "op": "decode_body",
+   "description": "the body of the PROPOSAL of shares.md, section 11.4",
+   "refs": ["envelope.md 2.3", "shares.md 13.1", "shares.md 11.4"],
+   "input": {
+    "kind": "PROPOSAL",
+    "body": "c3017902d9122a2212251b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a4837623365396432312d346338612d346636652d396131622d356432633865346636613730020a7374617274cd30642bf807f21a42d21f162416000000021a4575726f70652f4265726c696e02a0380280a4c1e6d26600"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "to": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+      "proposal_id": "7b3e9d21-4c8a-4f6e-9a1b-5d2c8e4f6a70",
+      "fields": [
+       {
+        "name": "start",
+        "schema": "cd30642bf807f21a",
+        "value": "d21f162416000000021a4575726f70652f4265726c696e02a0380280a4c1e6d266"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "encoding/decode_body/the-body-of-the-proposal-reply-of-shares-md-section-11-5",
+   "op": "decode_body",
+   "description": "the body of the PROPOSAL_REPLY of shares.md, section 11.5",
+   "refs": ["envelope.md 2.3", "shares.md 14.1", "shares.md 11.5"],
+   "input": {
+    "kind": "PROPOSAL_REPLY",
+    "body": "c301c6f8756ee30c6164da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb74837623365396432312d346338612d346636652d396131622d35643263386534663661373000"
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "to": "da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7",
+      "proposal_id": "7b3e9d21-4c8a-4f6e-9a1b-5d2c8e4f6a70",
+      "answer": "ACCEPTED"
+     }
+    }
+   }
+  },
+  {
    "id": "encoding/decode_body/the-body-of-the-change-of-sync-md-section-16-2",
    "op": "decode_body",
    "description": "the body of the CHANGE of sync.md, section 16.2",
@@ -1549,6 +1623,143 @@
    }
   },
   {
+   "id": "encoding/decode_body/reject-a-proposal-body-with-a-byte-left-over",
+   "op": "decode_body",
+   "description": "reject a PROPOSAL body with a byte left over",
+   "refs": ["envelope.md 2.3", "envelope.md 3.1", "protocol.md 8.2"],
+   "input": {
+    "kind": "PROPOSAL",
+    "body": "c3017902d9122a2212251b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a4837623365396432312d346338612d346636652d396131622d356432633865346636613730020a7374617274cd30642bf807f21a42d21f162416000000021a4575726f70652f4265726c696e02a0380280a4c1e6d2660000"
+   },
+   "expected": {
+    "reject": {"error": "INVALID_MESSAGE"}
+   }
+  },
+  {
+   "id": "encoding/decode_body/reject-a-proposal-body-cut-short",
+   "op": "decode_body",
+   "description": "reject a PROPOSAL body cut short",
+   "refs": ["envelope.md 2.3", "envelope.md 3.1", "protocol.md 8.2"],
+   "input": {
+    "kind": "PROPOSAL",
+    "body": "c3017902d9122a2212251b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a4837623365396432312d346338612d346636652d396131622d356432633865346636613730020a7374617274cd30642bf807f21a42d21f162416000000021a4575726f70652f4265726c696e02a0380280a4c1e6d266"
+   },
+   "expected": {
+    "reject": {"error": "INVALID_MESSAGE"}
+   }
+  },
+  {
+   "id": "encoding/decode_body/reject-a-proposal-body-with-the-fingerprint-of-axt-proposalreply",
+   "op": "decode_body",
+   "description": "reject a PROPOSAL body with the fingerprint of axt.ProposalReply",
+   "refs": ["envelope.md 2.3", "envelope.md 3.1", "protocol.md 8.2"],
+   "input": {
+    "kind": "PROPOSAL",
+    "body": "c301c6f8756ee30c61641b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a4837623365396432312d346338612d346636652d396131622d356432633865346636613730020a7374617274cd30642bf807f21a42d21f162416000000021a4575726f70652f4265726c696e02a0380280a4c1e6d26600"
+   },
+   "expected": {
+    "reject": {"error": "INVALID_MESSAGE"}
+   }
+  },
+  {
+   "id": "encoding/decode_body/reject-a-proposal-body-whose-schema-has-7-bytes",
+   "op": "decode_body",
+   "description": "reject a PROPOSAL body whose schema has 7 bytes",
+   "refs": ["envelope.md 2.3", "envelope.md 3.1", "protocol.md 8.2"],
+   "input": {
+    "kind": "PROPOSAL",
+    "body": "c3017902d9122a2212251b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a4837623365396432312d346338612d346636652d396131622d356432633865346636613730020a737461727430642bf807f21a42d21f162416000000021a4575726f70652f4265726c696e02a0380280a4c1e6d26600"
+   },
+   "expected": {
+    "reject": {"error": "INVALID_MESSAGE"}
+   }
+  },
+  {
+   "id": "encoding/decode_body/reject-a-proposal-body-of-the-withdraw-schema",
+   "op": "decode_body",
+   "description": "reject a PROPOSAL body of the WITHDRAW schema",
+   "refs": ["envelope.md 2.3", "envelope.md 3.1", "protocol.md 8.2"],
+   "input": {
+    "kind": "PROPOSAL",
+    "body": "c301d57da92315f555e3da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7"
+   },
+   "expected": {
+    "reject": {"error": "INVALID_MESSAGE"}
+   }
+  },
+  {
+   "id": "encoding/decode_body/reject-an-empty-body-for-a-proposal",
+   "op": "decode_body",
+   "description": "reject an empty body for a PROPOSAL",
+   "refs": ["envelope.md 2.3", "envelope.md 3.1", "protocol.md 8.2"],
+   "input": {"kind": "PROPOSAL", "body": ""},
+   "expected": {
+    "reject": {"error": "INVALID_MESSAGE"}
+   }
+  },
+  {
+   "id": "encoding/decode_body/reject-a-proposal-reply-body-with-a-byte-left-over",
+   "op": "decode_body",
+   "description": "reject a PROPOSAL_REPLY body with a byte left over",
+   "refs": ["envelope.md 2.3", "envelope.md 3.1", "protocol.md 8.2"],
+   "input": {
+    "kind": "PROPOSAL_REPLY",
+    "body": "c301c6f8756ee30c6164da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb74837623365396432312d346338612d346636652d396131622d3564326338653466366137300000"
+   },
+   "expected": {
+    "reject": {"error": "INVALID_MESSAGE"}
+   }
+  },
+  {
+   "id": "encoding/decode_body/reject-a-proposal-reply-body-cut-short",
+   "op": "decode_body",
+   "description": "reject a PROPOSAL_REPLY body cut short",
+   "refs": ["envelope.md 2.3", "envelope.md 3.1", "protocol.md 8.2"],
+   "input": {
+    "kind": "PROPOSAL_REPLY",
+    "body": "c301c6f8756ee30c6164da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb74837623365396432312d346338612d346636652d396131622d356432633865346636613730"
+   },
+   "expected": {
+    "reject": {"error": "INVALID_MESSAGE"}
+   }
+  },
+  {
+   "id": "encoding/decode_body/reject-a-proposal-reply-body-with-an-answer-index-of-2",
+   "op": "decode_body",
+   "description": "reject a PROPOSAL_REPLY body with an answer index of 2",
+   "refs": ["envelope.md 2.3", "envelope.md 3.1", "protocol.md 8.2"],
+   "input": {
+    "kind": "PROPOSAL_REPLY",
+    "body": "c301c6f8756ee30c6164da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb74837623365396432312d346338612d346636652d396131622d35643263386534663661373004"
+   },
+   "expected": {
+    "reject": {"error": "INVALID_MESSAGE"}
+   }
+  },
+  {
+   "id": "encoding/decode_body/reject-a-proposal-reply-body-with-the-fingerprint-of-axt-proposal",
+   "op": "decode_body",
+   "description": "reject a PROPOSAL_REPLY body with the fingerprint of axt.Proposal",
+   "refs": ["envelope.md 2.3", "envelope.md 3.1", "protocol.md 8.2"],
+   "input": {
+    "kind": "PROPOSAL_REPLY",
+    "body": "c3017902d9122a221225da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb74837623365396432312d346338612d346636652d396131622d35643263386534663661373000"
+   },
+   "expected": {
+    "reject": {"error": "INVALID_MESSAGE"}
+   }
+  },
+  {
+   "id": "encoding/decode_body/reject-an-empty-body-for-a-proposal-reply",
+   "op": "decode_body",
+   "description": "reject an empty body for a PROPOSAL_REPLY",
+   "refs": ["envelope.md 2.3", "envelope.md 3.1", "protocol.md 8.2"],
+   "input": {"kind": "PROPOSAL_REPLY", "body": ""},
+   "expected": {
+    "reject": {"error": "INVALID_MESSAGE"}
+   }
+  },
+  {
    "id": "encoding/decode_body/reject-a-change-body-with-a-byte-left-over",
    "op": "decode_body",
    "description": "reject a CHANGE body with a byte left over",
@@ -1864,6 +2075,44 @@
    "expected": {
     "accept": {
      "message": "c30116306f71b9ce9ea8021c1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024833663263386135652d396231642d346337652d386136662d3264346235633665376638300854c301d57da92315f555e3da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7a99a943361bb465ebc1d2cb554a627ef4eb7787c8a4172218c059e3d5bef0491afad0c3300026421a9c537fbd39aa0544a9a23c1fcb5fd61ac7818fa03980e05"
+    }
+   }
+  },
+  {
+   "id": "encoding/encode_message/the-proposal-of-shares-md-section-11-4",
+   "op": "encode_message",
+   "description": "the PROPOSAL of shares.md, section 11.4",
+   "refs": ["envelope.md 2", "envelope.md 3"],
+   "input": {
+    "format": 1,
+    "kind": "PROPOSAL",
+    "sender": "da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7",
+    "record": {"id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 3},
+    "body": "c3017902d9122a2212251b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a4837623365396432312d346338612d346636652d396131622d356432633865346636613730020a7374617274cd30642bf807f21a42d21f162416000000021a4575726f70652f4265726c696e02a0380280a4c1e6d26600",
+    "signature": "a9e313d8053d017ea344dc51410e0d3bc65dc0e0e41a303da26d1f0c1167a918bc86ea15d315f638eb50d4216cfbe4431b4d1820f7d234c84fcfdc7658e44e08"
+   },
+   "expected": {
+    "accept": {
+     "message": "c30116306f71b9ce9ea8021eda9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7024833663263386135652d396231642d346337652d386136662d326434623563366537663830068202c3017902d9122a2212251b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a4837623365396432312d346338612d346636652d396131622d356432633865346636613730020a7374617274cd30642bf807f21a42d21f162416000000021a4575726f70652f4265726c696e02a0380280a4c1e6d26600a9e313d8053d017ea344dc51410e0d3bc65dc0e0e41a303da26d1f0c1167a918bc86ea15d315f638eb50d4216cfbe4431b4d1820f7d234c84fcfdc7658e44e08"
+    }
+   }
+  },
+  {
+   "id": "encoding/encode_message/the-proposal-reply-of-shares-md-section-11-5",
+   "op": "encode_message",
+   "description": "the PROPOSAL_REPLY of shares.md, section 11.5",
+   "refs": ["envelope.md 2", "envelope.md 3"],
+   "input": {
+    "format": 1,
+    "kind": "PROPOSAL_REPLY",
+    "sender": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+    "record": {"id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 3},
+    "body": "c301c6f8756ee30c6164da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb74837623365396432312d346338612d346636652d396131622d35643263386534663661373000",
+    "signature": "1e572ef7e714ab7c90a59e7eef85338ac5f4f6984098642cc8d97428e9eb528dc1782814327cc355e99ed100e31af86073fa4275c6e59813cc4e2519d81b8c0d"
+   },
+   "expected": {
+    "accept": {
+     "message": "c30116306f71b9ce9ea802201b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a024833663263386135652d396231642d346337652d386136662d32643462356336653766383006a001c301c6f8756ee30c6164da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb74837623365396432312d346338612d346636652d396131622d356432633865346636613730001e572ef7e714ab7c90a59e7eef85338ac5f4f6984098642cc8d97428e9eb528dc1782814327cc355e99ed100e31af86073fa4275c6e59813cc4e2519d81b8c0d"
     }
    }
   }

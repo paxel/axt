@@ -11,10 +11,10 @@ that follows the devices of its senders, the model of an app of
 protocol_examples.py, the QR code, frames and relay of
 transports_examples.py, the time types of time_examples.py, and the attributes of spec/metadata.md of
 metadata_rules.py, and the stamps, the merge and the model of a device with
-its siblings of spec/sync.md of sync_examples.py, and the receiver of withdrawals and the sending
-device of spec/shares.md of shares_examples.py. Where those scripts have no model, for a receiver's
-own changes to records (spec/records.md, section 6) and for reading a file
-(spec/transports.md, section 2.2), it has its own code below. That it passes
+its siblings of spec/sync.md of sync_examples.py, and the receiver of withdrawals, the sending
+device, the owner that takes proposals and the proposer of spec/shares.md of shares_examples.py.
+Where those scripts have no model, for a receiver's own changes to records (spec/records.md,
+section 6) and for reading a file (spec/transports.md, section 2.2), it has its own code below. That it passes
 every vector shows that the vectors agree with the scripts' checks; it is a
 test of the vectors, not a library.
 
@@ -1312,7 +1312,23 @@ def op_acked(i: Any) -> dict[str, Any]:
     return ok({"outcome": held, "then": then, "to_pass": sy.stamp_json(to_pass)})
 
 
+def shares_session(steps: list[dict[str, Any]]) -> dict[str, Any]:
+    """The steps of an `owner` or a `proposer` session, with each message written as Bytes."""
+    out = []
+    for answer in steps:
+        if "replies" in answer:
+            answer = {**answer, "replies": [b_out(m) for m in answer["replies"]]}
+        if "message" in answer:
+            answer = {**answer, "message": b_out(answer["message"])}
+        if "messages" in answer:
+            answer = {**answer, "messages": [b_out(m) for m in answer["messages"]]}
+        out.append(answer)
+    return {"steps": out}
+
+
 OPS: dict[str, Callable[[Any], dict[str, Any]]] = {
+    "owner": lambda i: shares_session(se.owner_session(i, b_in)),
+    "proposer": lambda i: shares_session(se.proposer_session(i, b_in)),
     "receive": lambda i: {"steps": se.apply(i["policy"], i["events"])},
     "take_version": op_take_version,
     "withdrawal_stamp": op_withdrawal_stamp,

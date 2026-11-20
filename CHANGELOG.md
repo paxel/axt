@@ -25,6 +25,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - Sibling sync: an owner's devices send each other only the changed fields of a record, track acknowledgements, and can ask for everything again. ([axt-1024](https://github.com/paxel/axt/issues/26))
 - Received records between an owner's devices: another app reaches one device, which passes its messages on, and the owner's changes sync too. ([axt-1025](https://github.com/paxel/axt/issues/27))
 - Shares: another user gets only the records the owner shared with them, and the owner can withdraw a record again. ([axt-1026](https://github.com/paxel/axt/issues/28))
+- Proposals: another user suggests changes to a shared record, which the owner's user takes or refuses; a taken change goes out as an ordinary update. ([axt-1027](https://github.com/paxel/axt/issues/29))
 
 ---
 

@@ -5,7 +5,8 @@ Checks the schemas of the protocol messages, types/axt/Offer.avsc,
 Accept.avsc, Decline.avsc, Ack.avsc and Error.avsc, and with the same
 schema rules those of the messages between the devices of one set,
 Change.avsc, Resync.avsc and Forward.avsc, whose examples sync_examples.py produces, and
-Withdraw.avsc, whose example shares_examples.py produces, then
+Withdraw.avsc, Proposal.avsc and ProposalReply.avsc, whose examples
+shares_examples.py produces, then
 plays a live exchange from cat-a-log to Old Brain Fix with signed messages
 and prints each as annotated hex:
 
@@ -34,7 +35,9 @@ and prints each as annotated hex:
   spec/protocol.md: the order of the first messages, the format choice,
   offers, answers, the version rule, acknowledgements and errors, and a
   WITHDRAW of spec/shares.md as a record message of an app whose user
-  changes no record; it
+  changes no record, and a PROPOSAL and a PROPOSAL_REPLY of spec/shares.md,
+  which an app that shares no record of its own rejects at step 5 of
+  section 13.3 there and ignores; it
   checks the exchange above and a set of messages that must be ignored,
   answered as before, or reported with a given error code.
 
@@ -96,7 +99,8 @@ _spec.loader.exec_module(tm)
 PROTOCOL = ["Offer", "Accept", "Decline", "Ack", "Error"]
 DEVICES = ["DeviceJoin", "DeviceAdd", "DeviceRemove"]
 SYNC = ["Change", "Resync", "Forward"]  # the bodies of spec/sync.md, whose examples sync_examples.py produces
-SHARES = ["Withdraw"]  # the body of spec/shares.md, whose example shares_examples.py produces
+SHARES = ["Withdraw", "Proposal", "ProposalReply"]  # the bodies of spec/shares.md, whose examples
+# shares_examples.py produces
 ALL_SPEC = ["Envelope", "Manifest"] + DEVICES + PROTOCOL + SYNC + SHARES
 
 # --- the limits of spec/protocol.md -------------------------------------------
@@ -162,7 +166,9 @@ for n in PROTOCOL + SYNC + SHARES:
     )
     depths[n] = rules.check_type(s, where, s, set(), [])
     assert depths[n] <= rules.MAX_DATA_DEPTH
-    assert s["fields"][0]["name"] == "to" and s["fields"][0]["type"]["size"] == 32, f"{where}: to comes first"
+    assert s["fields"][0]["name"] == "to" and s["fields"][0]["type"]["size"] == 32, (
+        f"{where}: the first field is to"
+    )
 if rules.failures:
     raise SystemExit("\n".join(["checks failed:"] + rules.failures))
 
@@ -219,6 +225,8 @@ BODY_SCHEMA = {
     "RESYNC": "Resync",
     "FORWARD": "Forward",
     "WITHDRAW": "Withdraw",
+    "PROPOSAL": "Proposal",
+    "PROPOSAL_REPLY": "ProposalReply",
 }
 RECORD_KINDS = {"DATA", "DELETE", "WITHDRAW"}  # the record messages (spec/records.md, section 1)
 SYNC_KINDS = {
@@ -228,6 +236,9 @@ SYNC_KINDS = {
 }  # between the devices of one set only (spec/sync.md, section 7.1)
 DEVICE_KINDS = {"DEVICE_JOIN", "DEVICE_ADD", "DEVICE_REMOVE"}
 CHAIN_KINDS = {"DEVICE_ADD", "DEVICE_REMOVE"}  # signed with a key of a device set, not the connection's
+# No record messages, but they carry `record`, which names the record they are about (spec/shares.md,
+# section 12.1).
+PROPOSAL_KINDS = {"PROPOSAL", "PROPOSAL_REPLY"}
 
 
 def fp8(fp: int) -> bytes:
@@ -492,6 +503,24 @@ def uuid_problem(text: str) -> bool:
     return False
 
 
+MAX_PROPOSAL_FIELDS = 4096  # entries of `fields` in one PROPOSAL (spec/shares.md, section 13.2)
+MAX_PROPOSAL_NAME = 512  # bytes of one field name in a PROPOSAL
+
+
+def proposal_problem(d: dict[str, Any]) -> str | None:
+    """Why the body of a PROPOSAL, decoded, is not valid (spec/shares.md, section 13.2), or None."""
+    if uuid_problem(d["proposal_id"]):
+        return "proposal_id is no UUID in text form, or the nil or the max UUID"
+    if not 1 <= len(d["fields"]) <= MAX_PROPOSAL_FIELDS:
+        return "not 1 to 4,096 entries in fields"
+    names = [f["name"] for f in d["fields"]]
+    if any(not 1 <= len(n.encode("utf-8")) <= MAX_PROPOSAL_NAME for n in names):
+        return "a field name that is not 1 to 512 bytes of UTF-8"
+    if len(set(names)) != len(names):
+        return "a field name twice"
+    return None
+
+
 def full_name(schema: dict[str, Any]) -> str:
     return (
         schema["name"]
@@ -717,9 +746,7 @@ class App:
             raise Rejected("INVALID_MESSAGE", "an ERROR before the MANIFEST", report=False)
         if kind not in ("MANIFEST", "ERROR", *DEVICE_KINDS) and self.peer_manifest is None:
             raise Rejected("INVALID_MESSAGE", "a message before the MANIFEST", report=False)
-        if kind not in BODY_SCHEMA and kind not in RECORD_KINDS:
-            raise Rejected("INVALID_MESSAGE", f"no document defines the kind {kind} yet", record)
-        if (rec is None) == (kind in RECORD_KINDS or kind in SYNC_KINDS):
+        if (rec is None) == (kind in RECORD_KINDS or kind in SYNC_KINDS or kind in PROPOSAL_KINDS):
             raise Rejected("INVALID_MESSAGE", "record field present or missing", record)
         if kind in SYNC_KINDS:
             # The app of this model has no sibling: the other app is another known sender, and only the
@@ -757,6 +784,12 @@ class App:
             # Step 1 has checked the body and the addressee; the other steps are those of a DELETE
             # (spec/shares.md, section 4.1).
             return self._record(kind, record, rec, None)
+        if kind == "PROPOSAL":
+            return self._proposal(record, rec, d)
+        if kind == "PROPOSAL_REPLY":
+            # The app of this model sends no proposal, so a reply names none of its own and is ignored
+            # (spec/shares.md, section 14.2, step 3). The model of a proposer is in shares_examples.py.
+            return ("ignored: a reply to no proposal of this app", [])
         return {"OFFER": self._offer, "ACCEPT": self._answer, "DECLINE": self._answer, "ACK": self._ack}[
             kind
         ](kind, d)
@@ -959,6 +992,21 @@ class App:
             }
         )
         return (outcome, [])
+
+    def _proposal(
+        self, record: dict[str, Any] | None, rec: Any, d: dict[str, Any]
+    ) -> tuple[str, list[bytes]]:
+        """A PROPOSAL by the steps 2 to 5 of spec/shares.md, section 13.3; step 1 is done. The app of this
+        model holds no record of its own that it shares, so step 5 fails for every proposal that passes
+        the steps before it. The model of an owner that takes proposals is in shares_examples.py."""
+        if uuid_problem(str(rec["id"])):
+            raise Rejected("RECORD_ID_INVALID", record=record)  # step 2
+        if rec["version"] < 1:
+            raise Rejected("VERSION_INVALID", record=record)  # step 3
+        problem = proposal_problem(d)
+        if problem is not None:
+            raise Rejected("INVALID_MESSAGE", problem, record)  # step 4
+        raise Rejected("PROPOSALS_NOT_TAKEN", record=record)  # step 5
 
     def _ack(self, kind: str, d: dict[str, Any]) -> tuple[str, list[bytes]]:
         if not 1 <= len(d["records"]) <= MAX_ACK_RECORDS:

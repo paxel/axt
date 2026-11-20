@@ -42,7 +42,10 @@ of the CHANGE, RESYNC and FORWARD messages between the devices of a set. This sc
   device, the kept messages with what is delivered and due for each sibling, the owner's
   layer of a received record with its CHANGE messages that name the sender in `origin`, what
   a device shows from the two layers, and the answering device, which takes a message from
-  the other app itself. It builds the messages of sections 16.5 to 16.7 in the same way. Not
+  the other app itself. It builds the messages of sections 16.5 to 16.7 in the same way. It also
+  keeps the PROPOSAL messages of other apps (spec/shares.md, section 17.1): taken by the answering
+  device and in a FORWARD, forwarded, shown by the app's shares, dropped, and answered with a
+  PROPOSAL_REPLY and, for ACCEPTED, a change of the record. Not
   modelled, because the text of these parts is about to change: ending and completing an
   owner's layer and the later ACK (sections 22.2 and 22.3), a forwarded record message of a
   key removed since (section 19.2), and two senders that join (section 23.4).
@@ -2772,6 +2775,8 @@ SPEC_NAMES = (
     "DeviceAdd",
     "DeviceRemove",
     "Withdraw",
+    "Proposal",
+    "ProposalReply",
 )
 SPEC_TEXT = {n: (AXT / f"{n}.avsc").read_text(encoding="utf-8") for n in SPEC_NAMES}
 
@@ -2802,6 +2807,7 @@ BODY_OF = {
     "CHANGE": "Change",
     "RESYNC": "Resync",
     "FORWARD": "Forward",
+    "PROPOSAL_REPLY": "ProposalReply",
 }
 MARKER = b"\xc3\x01"  # the marker of a single-object encoding (spec/envelope.md, section 3)
 MAX_MESSAGE = 16777216  # spec/envelope.md, section 8
@@ -2849,6 +2855,26 @@ def read_all(name: str, data: bytes) -> Any:
     if buf.tell() != len(data):
         raise ValueError(f"bytes left over after the axt.{name}")
     return datum
+
+
+def _uuid_text(key: int) -> str:
+    """A 128-bit value as a UUID in lower-case text form."""
+    h = f"{key:032x}"
+    return f"{h[:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:]}"
+
+
+def proposal_problem(d: dict[str, Any]) -> str | None:
+    """Why the body of a PROPOSAL, decoded, is not valid (spec/shares.md, section 13.2), or None."""
+    if uuid_key(d["proposal_id"]) is None:
+        return "proposal_id is no UUID in text form, or the nil or the max UUID"
+    if not 1 <= len(d["fields"]) <= MAX_FIELDS:
+        return "not 1 to 4,096 entries in fields"
+    names = [f["name"] for f in d["fields"]]
+    if any(not 1 <= len(n.encode("utf-8")) <= MAX_NAME for n in names):
+        return "a field name that is not 1 to 512 bytes of UTF-8"
+    if len(set(names)) != len(names):
+        return "a field name twice"
+    return None
 
 
 def uuid_key(text: str) -> int | None:
@@ -3132,13 +3158,25 @@ class Reject(Exception):
 
 # --- what a set got from other apps (sections 17 to 22) ---------------------------------------------
 
-FORWARDED = ("MANIFEST", "DATA", "DELETE", "WITHDRAW", "DEVICE_ADD", "DEVICE_REMOVE")  # of section 18.1
+FORWARDED = (
+    "MANIFEST",
+    "DATA",
+    "DELETE",
+    "WITHDRAW",
+    "PROPOSAL",
+    "DEVICE_ADD",
+    "DEVICE_REMOVE",
+)  # of section 18.1
 INNER_BODY = {
     "MANIFEST": "Manifest",
     "DEVICE_ADD": "DeviceAdd",
     "DEVICE_REMOVE": "DeviceRemove",
     "WITHDRAW": "Withdraw",
+    "PROPOSAL": "Proposal",
 }
+# A PROPOSAL and a PROPOSAL_REPLY carry `record` and are no record messages (spec/shares.md, section 12.1).
+WITH_RECORD = ("DATA", "DELETE", "WITHDRAW", "PROPOSAL", "PROPOSAL_REPLY")
+PROPOSAL_DAYS = 14  # how long a device keeps a proposal it does not show (spec/shares.md, section 17.1)
 RECORD_MESSAGES = ("DATA", "DELETE", "WITHDRAW")  # spec/records.md, section 1
 # A record of the set by its id as a 128-bit value; an owner's layer by its sender and that id.
 Ref = int | tuple[int, int]
@@ -3166,7 +3204,7 @@ def inner_message(d: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | N
         raise Reject("INVALID_MESSAGE", "message: not the format of its fingerprint")
     if kind not in FORWARDED:
         raise Reject("INVALID_MESSAGE", f"a {kind} is never forwarded")
-    if (inner["record"] is None) == (kind in RECORD_MESSAGES):
+    if (inner["record"] is None) == (kind in WITH_RECORD):
         raise Reject("INVALID_MESSAGE", "message: record present or missing")
     if kind == "DELETE":
         if body:
@@ -3379,6 +3417,10 @@ class Sender:
     # How the device came to know it (section 19.2): None by its own user; otherwise by forwards of these
     # siblings.
     known_by: set[bytes] | None = None
+    # The PROPOSAL messages of the sender that the device took and keeps (spec/shares.md, section 17.1), by
+    # the proposal id as a 128-bit value: the message, the id of the record of the set, the day it took it,
+    # and whether it showed the proposal then or since.
+    proposals: dict[int, tuple[bytes, int, int, bool]] = dataclasses.field(default_factory=dict)
 
     def kept(self) -> list[tuple[bytes, str | None]]:
         """Its kept messages in the order in which they are forwarded (section 20.3): the additions and
@@ -3390,6 +3432,9 @@ class Sender:
             beside = self.records[k].beside  # the DATA beside a tombstone goes before the DELETE
             out += [] if beside is None else [(beside.message, beside.schema)]
             out.append((self.records[k].message, self.records[k].schema))
+        # The proposals after the record messages: a choice of the device of a session (section 20.3;
+        # spec/shares.md, section 17.1).
+        out += [(self.proposals[k][0], None) for k in sorted(self.proposals)]
         return out
 
 
@@ -3475,6 +3520,15 @@ class SetDevice:
         self.fretried: dict[bytes, set[bytes]] = {s: set() for s in siblings}
         self.after_acks: list[tuple[bytes, bytes]] = []  # due again once the ACK of a removal has gone
         self.app_acks: dict[bytes, list[dict[str, Any]]] = {}  # the entries it owes other apps
+        # What the app's own records hold (spec/shares.md, sections 2.1 and 15.1): for each record of the
+        # set, by its id as a 128-bit value, the senders it is shared with, by serial; and the answers to
+        # proposals, by the serial of the proposer and the proposal id as a 128-bit value.
+        self.shares: dict[int, set[int]] = {}
+        self.answers: dict[tuple[int, int], str] = {}
+        self.stopped: set[tuple[int, int | None]] = set()
+        self.answered_records: dict[
+            tuple[int, int], tuple[str, int]
+        ] = {}  # the stops of receivers, by serial and record
         self.schemas = {
             schema_fingerprint(t): t for t in schemas
         }  # its own, and those kept with field states
@@ -3763,6 +3817,8 @@ class SetDevice:
                 h = sha(raw)
                 if h in self.fdelivered[sibling] | self.fsettled[sibling] | self.fgone[sibling]:
                     continue
+                if kind_of(raw) == "PROPOSAL" and self._offer_first(sibling, raw, out):
+                    continue  # the schemas of its entries are offered first (spec/shares.md, section 17.1)
                 again = [f for f in self.forwards[sibling].values() if f[0] == h]
                 assert again or self.forward_ids, "an id for the forward"
                 fid = again[0][2] if again else self.forward_ids[0]
@@ -3776,6 +3832,27 @@ class SetDevice:
                 self.fgone[sibling].add(h)
                 out.append(m)
         return out
+
+    def _offer_first(self, sibling: bytes, raw: bytes, out: list[bytes]) -> bool:
+        """Whether a kept PROPOSAL waits for the sibling's acceptance of the schema of an entry: the device
+        offers each such schema whose text it keeps, in an offer of its own, unless one is open."""
+        d = read_all("Proposal", read_all("Envelope", raw[10:])["body"][10:])
+        waits = False
+        for fp in dict.fromkeys(f["schema"] for f in d["fields"]):
+            text = self.schemas.get(fp)
+            if text is None or fp in self.accepted[sibling] or fp in self.declined[sibling]:
+                continue
+            waits = True
+            if fp in {p[0] for p in self.pending[sibling].values()}:
+                continue
+            assert self.offer_ids, "an id for the offer"
+            offer_id = self.offer_ids.pop(0)
+            self.pending[sibling][uuid_key(offer_id) or 0] = (fp, str(full_name(json.loads(text))))
+            body = body_of(
+                "Offer", {"to": sibling, "offer_id": offer_id, "types": [{"schema": text, "count": 0}]}
+            )
+            out.append(message(self.seed, "OFFER", None, body))
+        return waits
 
     def _undeliver(self, sibling: bytes, raw: bytes) -> None:
         """A kept message is no longer delivered to a sibling, and so due for it again (section 20.2)."""
@@ -4206,7 +4283,7 @@ class SetDevice:
             self._manifest(sender, m, envelope["body"], connection or sender)
             return None, []
         of_other = self.book.key_state(sender)[0]  # what the key is among the other senders it knows
-        if (rec is None) == (kind in ("CHANGE", "RESYNC", "FORWARD", *RECORD_MESSAGES)):
+        if (rec is None) == (kind in ("CHANGE", "RESYNC", "FORWARD", *WITH_RECORD)):
             # A record where none belongs, or none where one is required: no valid message of its kind.
             # Only a key the device exchanges with gets the report.
             raise Reject(
@@ -4242,6 +4319,8 @@ class SetDevice:
                 return None, []
         if kind in RECORD_MESSAGES:
             return self._record_message(sender, kind, rec, envelope["body"])
+        if kind in ("PROPOSAL", "PROPOSAL_REPLY"):
+            return self._proposal_of_sibling(kind, rec, envelope["body"])
         # Step 3: the body, and the addressee (spec/protocol.md, section 9.1).
         name, body = BODY_OF[kind], envelope["body"]
         if body[:10] != MARKER + SPEC_FP[name]:
@@ -4281,6 +4360,32 @@ class SetDevice:
         if kind == "DATA" and (body[:2] != MARKER or body[2:10] not in self.offered[sender]):
             raise Reject("SCHEMA_UNKNOWN", fingerprint=body[2:10] if len(body) >= 10 else None)  # step 4
         raise Reject("NOT_ACCEPTED", "siblings send each other no record messages")
+
+    def _proposal_of_sibling(self, kind: str, rec: Any, body: bytes) -> tuple[str | None, list[bytes]]:
+        """A PROPOSAL of a sibling, which is no receiver: it fails step 5 of spec/shares.md, section 13.3,
+        if the steps before it pass. A PROPOSAL_REPLY of a sibling names no proposal that the device sent
+        it, and is ignored at step 3 of section 14.2 there."""
+        name = "Proposal" if kind == "PROPOSAL" else "ProposalReply"
+        if body[:10] != MARKER + SPEC_FP[name]:
+            raise Reject("INVALID_MESSAGE", f"the body is not an axt.{name}")
+        try:
+            d = read_all(name, body[10:])
+        except ValueError as e:
+            raise Reject("INVALID_MESSAGE", str(e)) from None
+        if d["to"] != self.key:
+            self.what = "ignored: for another key"
+            return None, []
+        if kind == "PROPOSAL_REPLY":
+            self.what = "ignored: a reply to no proposal of the device"
+            return None, []
+        if uuid_key(rec["id"]) is None:
+            raise Reject("RECORD_ID_INVALID")
+        if rec["version"] < 1:
+            raise Reject("VERSION_INVALID")
+        problem = proposal_problem(d)
+        if problem is not None:
+            raise Reject("INVALID_MESSAGE", problem)
+        raise Reject("PROPOSALS_NOT_TAKEN", "a sibling is no receiver")
 
     def _change(
         self, sender: bytes, rec: dict[str, Any], d: dict[str, Any]
@@ -4659,6 +4764,15 @@ class SetDevice:
                     values = {} if schema is None else record_values(schema, envelope["body"])
                     name = item["type"] if schema is None else full_name(schema)
                     self._keep_record(sender, key, rec, envelope["kind"], name, raw, text, values)
+        for item in v.get("proposals", []):
+            raw = bytes_in(item["message"])
+            envelope = read_all("Envelope", raw[10:])
+            d = read_all("Proposal", envelope["body"][10:])
+            for sibling in item["delivered"]:
+                self.fdelivered[bytes.fromhex(sibling)].add(sha(raw))
+            record_key = uuid_key(envelope["record"]["id"])
+            assert record_key is not None
+            sender.proposals[uuid_key(d["proposal_id"]) or 0] = (raw, record_key, 0, True)
         for item in v["layers"]:
             state, key = state_of_json(item["state"]), uuid_key(item["id"])
             assert state is not None and key is not None
@@ -4801,6 +4915,8 @@ class SetDevice:
             took = self._chain_message(kind, signer, inner["body"], raw, True, sender)
         elif kind == "MANIFEST":
             took = self._manifest_of(signer, inner["body"], raw, sender, False)
+        elif kind == "PROPOSAL":
+            took = self._forwarded_proposal(signer, inner, raw)
         else:
             took = self._forwarded_record(signer, inner, schema, d["schema"], raw, sender)
         outcome = "APPLIED" if took else "DUPLICATE"  # step 16 and section 18.4
@@ -5073,6 +5189,220 @@ class SetDevice:
         self._keep_record(sender, key, rec, kind, name, raw, text, values)  # step 10
         return True
 
+    def _forwarded_proposal(self, signer: bytes, inner: dict[str, Any], raw: bytes) -> bool:
+        """A forwarded PROPOSAL (spec/shares.md, section 17.1): the checks of the body, of `to` and of the
+        steps 2 to 4 of section 13.3 there, and then whether the device takes it as a new proposal."""
+        try:
+            d = read_all("Proposal", inner["body"][10:])
+        except ValueError as e:
+            raise Reject("INVALID_MESSAGE", f"message: {e}") from None
+        to = d["to"]
+        if to != self.key and to not in self.siblings and to not in self.removed:
+            raise Reject("INVALID_MESSAGE", "a PROPOSAL for a key of no device of the set")
+        rec = inner["record"]
+        key = uuid_key(rec["id"])
+        if key is None:
+            raise Reject("RECORD_ID_INVALID", "the id of the message inside")
+        if rec["version"] < 1:
+            raise Reject("VERSION_INVALID", "the version of the message inside")
+        problem = proposal_problem(d)
+        if problem is not None:
+            raise Reject("INVALID_MESSAGE", problem)
+        sender = self._sender_of(signer)
+        if sender is not None and signer in self._keys(sender).removed:
+            return False  # not taken, as a forwarded MANIFEST of such a key
+        if sender is None:
+            sender = self._new_sender(signer)  # a known sender, without a question (section 19.2)
+        return self._keep_proposal(sender, uuid_key(d["proposal_id"]) or 0, raw, key)
+
+    def _keep_proposal(self, sender: Sender, pid: int, raw: bytes, key: int) -> bool:
+        """Section 13.4 of spec/shares.md, without a reply: whether the device takes the proposal as new."""
+        if (sender.serial, pid) in self.answers or self._stopped(sender, key):
+            return False
+        held = sender.proposals.get(pid)
+        if held is not None:
+            # A repeat in other bytes: the one with the higher SHA-256 stands (section 13.4 there).
+            if raw == held[0] or sha(raw) < sha(held[0]):
+                return False
+            sender.proposals[pid] = (raw, key, held[2], held[3])
+            return True
+        sender.proposals[pid] = (raw, key, self.day, self._shows(sender, key))
+        return True
+
+    def _stopped(self, sender: Sender, key: int) -> bool:
+        """Whether the app's records hold the proposals of the sender as stopped for the record
+        (spec/shares.md, section 18.4)."""
+        return (sender.serial, key) in self.stopped or (sender.serial, None) in self.stopped
+
+    def _shows(self, sender: Sender, key: int) -> bool:
+        """Whether the device shows a proposal of the sender about the record of the set with that id: the
+        record is there on it and shared with the proposer (spec/shares.md, section 17.1)."""
+        held = self.records.get(key)
+        there = held is not None and not deleted(held.state.fields, held.state.removal)
+        return there and sender.serial in self.shares.get(key, set())
+
+    def _tidy_proposals(self) -> None:
+        """The kept proposals that end (spec/shares.md, section 17.1): one that the device showed and no
+        longer shows, because a change deleted the record or took it out of the shares for the proposer;
+        one that it never showed, 14 days after it took it. One that it did not show and shows now is
+        shown from now on."""
+        for sender in self.senders.values():
+            for pid, (raw, key, day, shown_then) in list(sender.proposals.items()):
+                now = self._shows(sender, key)
+                signer = read_all("Envelope", raw[10:])["sender"]
+                if signer not in self._keys(sender).current or self._stopped(sender, key):
+                    del sender.proposals[pid]  # the signer is removed, or the receiver is stopped
+                elif shown_then and not now:
+                    del sender.proposals[pid]
+                elif not shown_then and now:
+                    sender.proposals[pid] = (raw, key, day, True)
+                elif not now and self.day - day >= PROPOSAL_DAYS:
+                    del sender.proposals[pid]
+
+    def take_proposal(self, m: bytes, sender: Sender) -> tuple[dict[str, Any], list[bytes]]:
+        """A PROPOSAL that the proposer sent the device itself and that passed the steps 1 to 9 of
+        spec/shares.md, section 13.3: step 10 (section 13.4 there)."""
+        envelope = read_all("Envelope", m[10:])
+        d, rec = read_all("Proposal", envelope["body"][10:]), envelope["record"]
+        pid, key = uuid_key(d["proposal_id"]) or 0, uuid_key(rec["id"])
+        assert key is not None
+        answer = self.answers.get((sender.serial, pid))
+        if answer is not None:
+            # A repeat of an answered proposal: the reply again, to the key that signed the repeat.
+            body = body_of(
+                "ProposalReply", {"to": envelope["sender"], "proposal_id": d["proposal_id"], "answer": answer}
+            )
+            # The reply carries the proposal's record, which the app stores with the answer (section 15.1).
+            stored = self.answered_records.get((sender.serial, pid), (str(rec["id"]), rec["version"]))
+            reply = message(self.seed, "PROPOSAL_REPLY", stored, body)
+            return {"taken": False}, [reply, *self._send_due()]
+        return {"taken": self._keep_proposal(sender, pid, m, key)}, self._send_due()
+
+    def _proposal_of(self, key: bytes, proposal_id: str) -> tuple[Sender, int, bytes]:
+        sender = self._sender_of(key)
+        assert sender is not None, "a known sender"
+        pid = uuid_key(proposal_id) or 0
+        return sender, pid, sender.proposals[pid][0]
+
+    def answer_proposal(self, key: bytes, proposal_id: str, answer: str) -> tuple[bool, list[bytes]]:
+        """The user answers on this device a proposal that it shows (spec/shares.md, sections 15 and 17.1):
+        the device records the answer, drops the kept PROPOSAL, sends the reply to the key that signed it,
+        if that key is not removed, and for ACCEPTED makes the proposed values one change of section 3.5.
+        It draws two random parts."""
+        sender, pid, raw = self._proposal_of(key, proposal_id)
+        envelope = read_all("Envelope", raw[10:])
+        d, rec = read_all("Proposal", envelope["body"][10:]), envelope["record"]
+        record_key = sender.proposals[pid][1]
+        assert self._shows(sender, record_key), "the user answers a proposal that the device shows"
+        sent: list[bytes] = []
+        r = (self._draw(), self._draw())
+        if answer == "ACCEPTED":
+            held = self.records[record_key]
+            if not all(self._can_show(held.type, f) for f in d["fields"]):
+                return False, []  # every proposed value shown, or no ACCEPTED (section 15.1 there)
+            # Every proposed field is stamped, also one whose value the record holds already (section 15.2).
+            values = {f["name"]: (f["value"], f["schema"]) for f in d["fields"]}
+            if values:
+                first_schema = next(iter(values.values()))[1]
+                done = change(
+                    held.state,
+                    self.key,
+                    "set",
+                    {n: v for n, (v, _) in values.items()},
+                    self.now_ms,
+                    self.highest,
+                    r,
+                    first_schema,
+                    None,
+                    held.to_pass,
+                )
+                if not done.made or done.state is None:
+                    return False, []  # no stamp, no ACCEPTED (section 15.2 there)
+                fields = dict(done.state.fields)
+                for n, (_, fp) in values.items():
+                    fields[n] = dataclasses.replace(fields[n], schema=fp)
+                state = dataclasses.replace(done.state, fields=fields)
+                before = self._parts(held.state)
+                held.state, held.to_pass, self.highest = state, done.to_pass, done.highest
+                self._due_for(record_key, self._parts(state) - before)
+        self.answers[(sender.serial, pid)] = answer
+        self.answered_records[(sender.serial, pid)] = (str(rec["id"]), rec["version"])
+        del sender.proposals[pid]
+        signer = envelope["sender"]
+        if signer in self._keys(sender).current:
+            body = body_of("ProposalReply", {"to": signer, "proposal_id": d["proposal_id"], "answer": answer})
+            sent.append(message(self.seed, "PROPOSAL_REPLY", (rec["id"], rec["version"]), body))
+        return True, sent + self._send_due()
+
+    def _can_show(self, type_name: str, f: dict[str, Any]) -> bool:
+        """Whether the device can show a proposed value: it holds the schema of the entry, the value decodes
+        with it, and a schema of the type that the device holds has the field (spec/shares.md, 15.1)."""
+        text = self.schemas.get(f["schema"])
+        if text is None:
+            return False
+        try:
+            read_field(json.loads(text), f["name"], io.BytesIO(f["value"]))
+        except (ValueError, AssertionError):
+            return False
+        return any(
+            full_name(json.loads(t)) == type_name and field_schema(json.loads(t), f["name"]) is not None
+            for t in self.schemas.values()
+        )
+
+    def stop(self, key: bytes, rid: str | None) -> list[bytes]:
+        """The app's records come to hold the proposals of the sender as stopped, for the record with the id
+        or for all records (spec/shares.md, section 18.4): the device drops what they stop."""
+        sender = self._sender_of(key)
+        assert sender is not None, "a known sender"
+        self.stopped.add((sender.serial, None if rid is None else uuid_key(rid)))
+        return self._send_due()
+
+    def answered_proposal(self, key: bytes, proposal_id: str, answer: str) -> list[bytes]:
+        """The answer to a proposal reaches the device in the app's own records, from a sibling: it drops
+        the kept PROPOSAL and sends no reply (spec/shares.md, section 17.1)."""
+        sender = self._sender_of(key)
+        assert sender is not None, "a known sender"
+        pid = uuid_key(proposal_id) or 0
+        if self.answers.get((sender.serial, pid)) != "ACCEPTED":
+            self.answers[(sender.serial, pid)] = answer  # of two answers, ACCEPTED stands (section 15.1)
+        sender.proposals.pop(pid, None)
+        return self._send_due()
+
+    def share(self, rid: str, key: bytes, shared: bool) -> list[bytes]:
+        """The app's share records change on the device: the record is shared with the sender that has the
+        key, or no longer."""
+        sender, record_key = self._sender_of(key), uuid_key(rid)
+        assert sender is not None and record_key is not None
+        serials = self.shares.setdefault(record_key, set())
+        if shared:
+            serials.add(sender.serial)
+        else:
+            serials.discard(sender.serial)
+        return self._send_due()
+
+    def query_proposals(self, key: bytes) -> dict[str, Any]:
+        """The proposals of the sender that has the key that the device keeps, and the answers the app's
+        records hold to its proposals."""
+        sender = self._sender_of(key)
+        assert sender is not None, "a known sender"
+        kept = []
+        for pid in sorted(sender.proposals):
+            raw, record_key, _, _ = sender.proposals[pid]
+            d = read_all("Proposal", read_all("Envelope", raw[10:])["body"][10:])
+            kept.append(
+                {
+                    "proposal_id": d["proposal_id"],
+                    "id": self.ids.get(record_key) or str(read_all("Envelope", raw[10:])["record"]["id"]),
+                    "message_hash": sha(raw).hex(),
+                    "shown": self._shows(sender, record_key),
+                }
+            )
+        answers = sorted((pid, a) for (serial, pid), a in self.answers.items() if serial == sender.serial)
+        return {
+            "proposals": kept,
+            "answers": [{"proposal_id": _uuid_text(pid), "answer": a} for pid, a in answers],
+        }
+
     def _at_or_below(
         self,
         sender: Sender,
@@ -5163,6 +5493,9 @@ class SetDevice:
         assert sender is not None and signer in self._keys(sender).current, "a current key of a known sender"
         if kind == "MANIFEST":
             return {"taken": self._manifest_of(signer, body, m, None, not file)}, self._send_due()
+        if kind == "PROPOSAL":
+            assert not file, "no file holds a PROPOSAL (spec/shares.md, section 18.2)"
+            return self.take_proposal(m, sender)
         assert kind in RECORD_MESSAGES, kind
         key, version = uuid_key(rec["id"]), rec["version"]
         assert key is not None and version >= 1
@@ -5530,6 +5863,26 @@ def device_of_json(v: dict[str, Any], bytes_in: Callable[[Any], bytes] = bytes.f
         device.passed[bytes.fromhex(to)] = {bytes.fromhex(of): revision for of, revision in revisions.items()}
     for record in v["records"]:
         device.hold(*_held_of_json(record))
+    # What the app's own records hold of its shares and of the answers to proposals (spec/shares.md,
+    # sections 2.1 and 15.1).
+    for rid, senders in v.get("shares", {}).items():
+        key = uuid_key(rid)
+        assert key is not None
+        for k in senders:
+            sender = device._sender_of(bytes.fromhex(k))
+            assert sender is not None, "a record is shared with a known sender"
+            device.shares.setdefault(key, set()).add(sender.serial)
+    for st in v.get("stopped", []):
+        sender = device._sender_of(bytes.fromhex(st["sender"]))
+        assert sender is not None
+        device.stopped.add((sender.serial, None if st["id"] is None else uuid_key(st["id"])))
+    for a in v.get("answers", []):
+        sender = device._sender_of(bytes.fromhex(a["sender"]))
+        assert sender is not None
+        device.answers[(sender.serial, uuid_key(a["proposal_id"]) or 0)] = a["answer"]
+    for sender in device.senders.values():
+        for pid, (raw, key, day, _) in list(sender.proposals.items()):
+            sender.proposals[pid] = (raw, key, day, device._shows(sender, key))
     return device
 
 
@@ -5558,6 +5911,21 @@ def play(
         answer = {**did, "sent": sent}
     elif "forget" in step:
         answer = {"sent": device.forget(bytes.fromhex(step["forget"]))}
+    elif "answer" in step:
+        a = step["answer"]  # the user answers a proposal on this device (spec/shares.md, section 17.1)
+        made, sent = device.answer_proposal(bytes.fromhex(a["sender"]), a["proposal_id"], a["answer"])
+        answer = {"made": made, "sent": sent}
+    elif "answered" in step:
+        a = step["answered"]  # the answer reaches the device in the app's own records
+        answer = {"sent": device.answered_proposal(bytes.fromhex(a["sender"]), a["proposal_id"], a["answer"])}
+    elif "stop" in step:
+        a = step["stop"]
+        answer = {"sent": device.stop(bytes.fromhex(a["sender"]), a["id"])}
+    elif "share" in step:
+        a = step["share"]
+        answer = {"sent": device.share(a["id"], bytes.fromhex(a["sender"]), a["shared"])}
+    elif "proposals" in step:
+        return device.query_proposals(bytes.fromhex(step["proposals"]))
     elif "file_record" in step:
         taken, sent = device.file_record(bytes_in(step["file_record"]), step["schema"])
         answer = {"taken": taken, "sent": sent}
@@ -5588,6 +5956,7 @@ def play(
     else:
         return device.query(step["query"])
     assert not device.r, "the step gives a random part that the device does not draw"
+    device._tidy_proposals()
     answer["passed"] = [{"to": to, "manifest": m} for to, m in device.take_passed()]
     return answer
 
@@ -5672,6 +6041,9 @@ def meaning(m: bytes) -> list[dict[str, Any]]:
         return [{**base, "offer_id": d["offer_id"], "schemas": [t["schema"] for t in d["types"]]}]
     if kind == "ACCEPT":
         return [{**base, "offer_id": d["offer_id"], "types": sorted(d["types"])}]
+    if kind == "PROPOSAL_REPLY":
+        record = {"id": rec["id"], "version": str(rec["version"])}
+        return [{**base, "record": record, "proposal_id": d["proposal_id"], "answer": d["answer"]}]
     assert kind == "RESYNC", kind
     return [{**base, "record": {"id": rec["id"], "version": str(rec["version"])}}]
 
@@ -6702,6 +7074,13 @@ def _keep_brief(k: dict[str, Any] | None) -> str:
 
 def brief(answer: dict[str, Any]) -> list[str]:
     """The answer of a step in a few words, as the cases below write out what they expect."""
+    if "proposals" in answer:  # the proposals of a sender
+        kept_now = [
+            f"proposal {p['proposal_id'][:8]} of {p['id'][:8]}: {'shown' if p['shown'] else 'not shown'}"
+            for p in answer["proposals"]
+        ]
+        answers = [f"answer {a['proposal_id'][:8]}: {a['answer']}" for a in answer["answers"]]
+        return [*kept_now, *answers] or ["no proposal"]
     if "refused" in answer:  # a query about a sender, and about a record received from it
         return _received_brief(answer)
     if "highest" in answer:  # a query
@@ -6760,6 +7139,9 @@ def brief(answer: dict[str, Any]) -> list[str]:
             out.append(f"OFFER {m['offer_id'][:8]} to {to}: {names}")
         elif m["kind"] == "ACCEPT":
             out.append(f"ACCEPT {m['offer_id'][:8]} to {to}: {', '.join(m['types'])}")
+        elif m["kind"] == "PROPOSAL_REPLY":
+            version = m["record"]["version"]
+            out.append(f"PROPOSAL_REPLY {m['proposal_id'][:8]} to {to}, version {version}: {m['answer']}")
         else:
             version = "" if m["record"]["version"] == "1" else f", version {m['record']['version']}"
             out.append(f"{m['kind']} {m['record']['id'][:8]} to {to}{version}")
@@ -8822,8 +9204,7 @@ def received_sessions() -> list[Session]:
     x_add: bytes = read_all("Envelope", chain_message(keys.ADD, "second app", "stranger")[10:])["body"]
     x_delete = other_delete(1, "second app")
     never = ("OFFER", "ACCEPT", "DECLINE", "ACK", "ERROR", "DEVICE_JOIN", "CHANGE", "RESYNC", "FORWARD")
-    later = ("PROPOSAL", "PROPOSAL_REPLY")
-    assert sorted((*never, *later, *FORWARDED)) == sorted(KINDS)
+    assert sorted((*never, "PROPOSAL_REPLY", *FORWARDED)) == sorted(KINDS)
     bodies: list[tuple[str, bytes, str | None, str]] = [
         ("step 7: an empty message", b"", text, "INVALID_MESSAGE"),
         ("step 7: a message of 9 bytes", x1[:9], text, "INVALID_MESSAGE"),
@@ -8844,8 +9225,9 @@ def received_sessions() -> list[Session]:
                 None,
                 "INVALID_MESSAGE",
             )
-            # A WITHDRAW without a record, which its kind requires (spec/shares.md, section 3.3).
-            for kind in (*never, "WITHDRAW", *later)
+            # A WITHDRAW and a PROPOSAL without a record, which their kinds require (spec/shares.md, sections
+            # 3.3 and 13.2), and a PROPOSAL_REPLY, which is never forwarded (section 18.2).
+            for kind in (*never, "WITHDRAW", "PROPOSAL", "PROPOSAL_REPLY")
         ],
         ("step 9: a forwarded DATA without a record", of("DATA", None, x_body), text, "INVALID_MESSAGE"),
         ("step 9: a forwarded DELETE without a record", of("DELETE", None, b""), None, "INVALID_MESSAGE"),
@@ -10395,7 +10777,324 @@ def received_sessions() -> list[Session]:
     s.acks()
     s.about()
     withdraw_sessions(new, known, tomb, weber_v3, text, d1, one, moved_away)
+    proposal_sessions(new, known)
     return out
+
+
+PROPOSAL_IDS = [f"0000000{n}-9e0a-4000-8000-00000000000{n}" for n in range(1, 6)]  # of other apps
+
+
+def other_proposal(
+    n: int,
+    to: str = "phone",
+    sender: str = "other app",
+    rid: str = OTHER_ID,
+    version: int = 1,
+    values: dict[str, bytes] | None = None,
+    more: bytes = b"",
+    schema: bytes = SCHEMA_1,
+) -> bytes:
+    """A PROPOSAL of another app with the proposal id PROPOSAL_IDS[n], for the record of the set with the id
+    `rid`, addressed to the key `to` (spec/shares.md, section 13.1)."""
+    what = f"PROPOSAL {n + 1} to the {to}" + ("" if sender == "other app" else f" of the {sender}")
+    vs = {"location": VALUE_WEBER} if values is None else values
+    fields = [{"name": k, "schema": schema, "value": v} for k, v in vs.items()]
+    body = body_of("Proposal", {"to": KEY[to], "proposal_id": PROPOSAL_IDS[n], "fields": fields}) + more
+    return named(what, message(SEEDS[sender], "PROPOSAL", (rid, version), body))
+
+
+def proposal_sessions(
+    new: Callable[[str, list[str], dict[str, Any]], Session], known: Callable[..., dict[str, Any]]
+) -> None:
+    """The sessions about a PROPOSAL of another app for a record of the set (spec/shares.md, section 17),
+    and about the proposer's value as a change of the owner's layer (section 17.2 there)."""
+    obf = KEY["other app"].hex()
+    refs = ["shares.md 17.1", "sync.md 19.6", "sync.md 20.1"]
+    mine = record_json(BASE, {"tablet": None}, OTHER_ID)
+
+    def owner(shared: bool = True, **more: Any) -> dict[str, Any]:
+        """The phone holds the appointment of section 16.1 as a record of the set under OTHER_ID, shared
+        with Old Brain Fix, which it knows as in the sessions above."""
+        d = known(records=(mine,), **more)
+        d["shares"] = {OTHER_ID: [obf] if shared else []}
+        return d
+
+    def about(s: Session, sender: str = "other app") -> None:
+        s.step({"proposals": KEY[sender].hex()})
+
+    p1 = other_proposal(0)
+    s = new("the answering device takes a PROPOSAL, keeps it and forwards it with no schema", refs, owner())
+    s.take(p1)
+    about(s)
+    s.take(p1)
+    s.acks()
+    s.about(None)
+    s = new(
+        "the answering device answers ACCEPTED: the reply to the key "
+        "that signed, and the values as one change",
+        [*refs, "shares.md 15.2", "sync.md 3.5"],
+        owner(),
+    )
+    s.take(p1)
+    s.step(
+        {
+            "answer": {"sender": obf, "proposal_id": PROPOSAL_IDS[0], "answer": "ACCEPTED"},
+            "now_ms": "0",
+            "r": [5, 0],
+        }
+    )
+    about(s)
+    s.query(OTHER_ID)
+    s.take(p1)
+    s = new(
+        "ACCEPTED stamps every proposed field, also one whose value the record holds already",
+        [*refs, "shares.md 15.2", "sync.md 3.5"],
+        owner(),
+    )
+    s.take(other_proposal(0, values={"location": VALUE["location"]}))
+    s.step(
+        {
+            "answer": {"sender": obf, "proposal_id": PROPOSAL_IDS[0], "answer": "ACCEPTED"},
+            "now_ms": "0",
+            "r": [5, 0],
+        }
+    )
+    s.query(OTHER_ID)
+    s = new("an answer DECLINED: the reply, and nothing changes", [*refs, "shares.md 15.1"], owner())
+    s.take(p1)
+    s.step(
+        {
+            "answer": {"sender": obf, "proposal_id": PROPOSAL_IDS[0], "answer": "DECLINED"},
+            "now_ms": "0",
+            "r": [5, 0],
+        }
+    )
+    s.query(OTHER_ID)
+    s = new("a forwarded PROPOSAL is taken and kept without a reply", refs, owner())
+    s.receive(forward_message("tablet", other_proposal(0, "tablet"), None))
+    s.receive(forward_message("tablet", other_proposal(0, "tablet"), None, fid=TABLET_FORWARD_2))
+    s.acks()
+    about(s)
+    s.about(None)
+    for to, what in [("phone", "the device's own key"), ("old phone", "a removed key of the set")]:
+        s = new(f"a forwarded PROPOSAL addressed to {what} is taken", refs, owner(removed=("old phone",)))
+        s.receive(forward_message("tablet", other_proposal(0, to), None))
+        s.acks()
+    for label, m in [
+        ("addressed to a key of no device of the set", other_proposal(0, "stranger")),
+        ("whose body has a byte left over", other_proposal(0, "tablet", more=b"\x00")),
+        ("with the id vet", other_proposal(0, "tablet", rid="vet")),
+        ("with the version 0", other_proposal(0, "tablet", version=0)),
+        ("with no entry", other_proposal(0, "tablet", values={})),
+    ]:
+        s = new(f"a forwarded PROPOSAL {label} is rejected", refs, owner())
+        s.receive(forward_message("tablet", m, None))
+        s.acks()
+        about(s)
+    s = new(
+        "a forwarded PROPOSAL of a removed key of its sender is not taken",
+        refs,
+        owner(),
+    )
+    s.receive(forward_message("tablet", chain_message(keys.ADD, "other app", "second app"), None))
+    s.receive(
+        forward_message(
+            "tablet", chain_message(keys.REMOVE, "second app", "other app"), None, fid=TABLET_FORWARD_2
+        )
+    )
+    s.receive(forward_message("tablet", other_proposal(0), None, fid=TABLET_FORWARD_3))
+    s.acks()
+    s = new(
+        "a forwarded PROPOSAL of a key of the device's own set is rejected",
+        [*refs, "sync.md 18.3", "shares.md 17.2"],
+        owner(),
+    )
+    s.receive(forward_message("tablet", other_proposal(0, sender="tablet"), None))
+    s.acks()
+    s = new(
+        "a forwarded PROPOSAL for a record the device does not show is kept, shown once the share arrives",
+        refs,
+        owner(shared=False),
+    )
+    s.receive(forward_message("tablet", other_proposal(0, "tablet"), None))
+    about(s)
+    s.step({"share": {"id": OTHER_ID, "sender": obf, "shared": True}})
+    about(s)
+    s = new(
+        "a forwarded PROPOSAL that the device never shows ends after 14 days",
+        refs,
+        owner(shared=False),
+    )
+    s.receive(forward_message("tablet", other_proposal(0, "tablet"), None))
+    s.acks()
+    s.step({"days": 13})
+    about(s)
+    s.step({"days": 1})
+    about(s)
+    s = new(
+        "a kept PROPOSAL ends when the record leaves the shares for the proposer, and when it is deleted",
+        [*refs, "shares.md 15.4"],
+        owner(),
+    )
+    s.take(p1)
+    s.take(other_proposal(1))
+    s.step({"share": {"id": OTHER_ID, "sender": obf, "shared": False}})
+    about(s)
+    s.step({"share": {"id": OTHER_ID, "sender": obf, "shared": True}})
+    about(s)
+    s.take(other_proposal(2))
+    s.change("delete", {}, (5, 0), OTHER_ID)
+    about(s)
+    s = new(
+        "the answer reaches the device from a sibling: the kept PROPOSAL ends, and no reply goes",
+        refs,
+        owner(),
+    )
+    s.take(p1)
+    s.step({"answered": {"sender": obf, "proposal_id": PROPOSAL_IDS[0], "answer": "DECLINED"}})
+    about(s)
+    s.receive(forward_message("tablet", p1, None))
+    s.take(p1)
+    s.acks()
+    s = new(
+        "two answers before a merge: a sibling's answer after the device's own sends nothing",
+        [*refs, "shares.md 14.2"],
+        owner(),
+    )
+    s.take(p1)
+    s.step(
+        {
+            "answer": {"sender": obf, "proposal_id": PROPOSAL_IDS[0], "answer": "DECLINED"},
+            "now_ms": "0",
+            "r": [5, 0],
+        }
+    )
+    s.step({"answered": {"sender": obf, "proposal_id": PROPOSAL_IDS[0], "answer": "ACCEPTED"}})
+    about(s)
+    s = new("a PROPOSAL of a sibling is rejected with PROPOSALS_NOT_TAKEN", ["shares.md 13.3"], owner())
+    fields = [{"name": "location", "schema": SCHEMA_1, "value": VALUE_WEBER}]
+    body = body_of("Proposal", {"to": PHONE, "proposal_id": PROPOSAL_IDS[0], "fields": fields})
+    s.receive(message(TABLET_SEED, "PROPOSAL", (OTHER_ID, 1), body))
+    s.receive(
+        message(
+            TABLET_SEED,
+            "PROPOSAL_REPLY",
+            (OTHER_ID, 1),
+            body_of("ProposalReply", {"to": PHONE, "proposal_id": PROPOSAL_IDS[0], "answer": "ACCEPTED"}),
+        )
+    )
+    s = new(
+        "the proposer's value is an owner's change, and the update that brings it is APPLIED",
+        ["shares.md 17.2", "sync.md 21.2", "sync.md 22.2"],
+        known(),
+    )
+    s.owner("set", {"location": VALUE_WEBER}, (5, 0))
+    s.take(other_data(2, location=WEBER), APPOINTMENT_OFFERED)
+    s.acks()
+    s.about()
+
+    s = new(
+        "a forwarded PROPOSAL in other bytes with a higher SHA-256 takes the place of the one kept",
+        [*refs, "shares.md 13.4"],
+        owner(),
+    )
+    low, high = sorted((other_proposal(0, "tablet"), other_proposal(0, "phone")), key=sha)
+    s.receive(forward_message("tablet", low, None))
+    s.receive(forward_message("tablet", high, None, fid=TABLET_FORWARD_2))
+    s.receive(forward_message("tablet", low, None, fid=TABLET_FORWARD_3))
+    s.acks()
+    s.about(None)
+    s = new(
+        "two answers before a merge: ACCEPTED on the device stands over a later DECLINED of a sibling",
+        [*refs, "shares.md 15.1"],
+        owner(),
+    )
+    s.take(p1)
+    s.step(
+        {
+            "answer": {"sender": obf, "proposal_id": PROPOSAL_IDS[0], "answer": "ACCEPTED"},
+            "now_ms": "0",
+            "r": [5, 0],
+        }
+    )
+    s.step({"answered": {"sender": obf, "proposal_id": PROPOSAL_IDS[0], "answer": "DECLINED"}})
+    about(s)
+    s = new(
+        "ACCEPTED is barred for a forwarded value whose schema the device lacks, and DECLINED is not",
+        [*refs, "shares.md 15.1"],
+        owner(),
+    )
+    s.receive(
+        forward_message("tablet", other_proposal(0, "tablet", values={"room": ROOM}, schema=SCHEMA_2), None)
+    )
+    s.step(
+        {
+            "answer": {"sender": obf, "proposal_id": PROPOSAL_IDS[0], "answer": "ACCEPTED"},
+            "now_ms": "0",
+            "r": [5, 0],
+        }
+    )
+    about(s)
+    s.step(
+        {
+            "answer": {"sender": obf, "proposal_id": PROPOSAL_IDS[0], "answer": "DECLINED"},
+            "now_ms": "0",
+            "r": [5, 0],
+        }
+    )
+    s = new(
+        "a stop of the receiver drops its kept proposals, and a forwarded one is not taken",
+        [*refs, "shares.md 18.4"],
+        owner(),
+    )
+    s.take(p1)
+    s.step({"stop": {"sender": obf, "id": None}})
+    about(s)
+    s.receive(forward_message("tablet", other_proposal(1, "tablet"), None))
+    s.acks()
+    s = new(
+        "a kept PROPOSAL ends when the key that signed it is removed from the proposer",
+        refs,
+        owner(),
+    )
+    s.take(p1)
+    s.receive(forward_message("tablet", chain_message(keys.ADD, "other app", "second app"), None))
+    s.receive(
+        forward_message(
+            "tablet", chain_message(keys.REMOVE, "second app", "other app"), None, fid=TABLET_FORWARD_2
+        )
+    )
+    about(s, "second app")
+    s = new(
+        "the schema of each entry is offered to a sibling before the PROPOSAL is forwarded to it",
+        [*refs, "sync.md 7.2", "sync.md 20.3"],
+        owner(accepted={"tablet": []}),
+    )
+    s.take(p1)
+    s.receive(answer_message("tablet", OFFER_IDS[0], APPOINTMENT_TYPE))
+
+    held = []
+    for n in range(16):
+        fields = [{"name": "location", "schema": SCHEMA_1, "value": VALUE_WEBER}]
+        body = body_of(
+            "Proposal",
+            {"to": PHONE, "proposal_id": f"{n + 1:08x}-9e0a-4000-8000-0000000000aa", "fields": fields},
+        )
+        held.append(
+            {
+                "message": message(SEEDS["other app"], "PROPOSAL", (OTHER_ID, 1), body).hex(),
+                "delivered": [KEY["tablet"].hex()],
+            }
+        )
+    full = owner()
+    full["senders"][0]["proposals"] = held
+    s = new(
+        "a forwarded PROPOSAL beyond the limit of 16 open proposals for one record is kept all the same",
+        [*refs, "shares.md 18.3"],
+        full,
+    )
+    s.receive(forward_message("tablet", other_proposal(0, "tablet"), None))
+    s.acks()
 
 
 def withdraw_sessions(
@@ -18172,6 +18871,234 @@ SAID: dict[str, list[list[str]]] = {
             "tablet: known, delivered: nothing",
             "shows: deleted_by_sender",
         ],
+    ],
+    "the answering device takes a PROPOSAL, keeps it and forwards it with no schema": [
+        ["taken: True", "FORWARD 00000001 to tablet, #0: PROPOSAL 1 to the phone"],
+        ["proposal 00000001 of 7b1e6c2a: shown"],
+        ["taken: False"],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "kept: PROPOSAL 1 to the phone; delivered to no sibling",
+        ],
+    ],
+    "the answering device answers ACCEPTED: the reply to the key that signed, and the values as one change": [
+        ["taken: True", "FORWARD 00000001 to tablet, #0: PROPOSAL 1 to the phone"],
+        [
+            "made: True",
+            "PROPOSAL_REPLY 00000001 to other app, version 1: ACCEPTED",
+            "CHANGE of 7b1e6c2a to tablet, version 202, state 202, in part: location@201p",
+        ],
+        ["answer 00000001: ACCEPTED"],
+        [
+            "state stamp 202; title,start,end,all_day,notes,reminders@100p "
+            "location@201p; sibling stamp None; to pass None; highest 202",
+            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+        ],
+        ["taken: False", "PROPOSAL_REPLY 00000001 to other app, version 1: ACCEPTED"],
+    ],
+    "an answer DECLINED: the reply, and nothing changes": [
+        ["taken: True", "FORWARD 00000001 to tablet, #0: PROPOSAL 1 to the phone"],
+        ["made: True", "PROPOSAL_REPLY 00000001 to other app, version 1: DECLINED"],
+        [
+            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 195",
+            "tablet: known, delivered: all",
+        ],
+    ],
+    "a forwarded PROPOSAL is taken and kept without a reply": [
+        ["outcome: APPLIED"],
+        ["outcome: DUPLICATE"],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+            "ACK of 0000000b to tablet: version 1 DUPLICATE, receiver 1",
+        ],
+        ["proposal 00000001 of 7b1e6c2a: shown"],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "kept: PROPOSAL 1 to the tablet; delivered to tablet",
+        ],
+    ],
+    "a forwarded PROPOSAL addressed to the device's own key is taken": [
+        ["outcome: APPLIED"],
+        ["ACK of 0000000a to tablet: version 1 APPLIED, receiver 1"],
+    ],
+    "a forwarded PROPOSAL addressed to a removed key of the set is taken": [
+        ["outcome: APPLIED"],
+        ["ACK of 0000000a to tablet: version 1 APPLIED, receiver 1"],
+    ],
+    "a forwarded PROPOSAL addressed to a key of no device of the set is rejected": [
+        ["outcome: None", "ERROR to tablet: INVALID_MESSAGE"],
+        [],
+        ["no proposal"],
+    ],
+    "a forwarded PROPOSAL whose body has a byte left over is rejected": [
+        ["outcome: None", "ERROR to tablet: INVALID_MESSAGE"],
+        [],
+        ["no proposal"],
+    ],
+    "a forwarded PROPOSAL with the id vet is rejected": [
+        ["outcome: None", "ERROR to tablet: RECORD_ID_INVALID"],
+        [],
+        ["no proposal"],
+    ],
+    "a forwarded PROPOSAL with the version 0 is rejected": [
+        ["outcome: None", "ERROR to tablet: VERSION_INVALID"],
+        [],
+        ["no proposal"],
+    ],
+    "a forwarded PROPOSAL with no entry is rejected": [
+        ["outcome: None", "ERROR to tablet: INVALID_MESSAGE"],
+        [],
+        ["no proposal"],
+    ],
+    "a forwarded PROPOSAL of a removed key of its sender is not taken": [
+        ["outcome: APPLIED"],
+        ["outcome: APPLIED"],
+        ["outcome: DUPLICATE"],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+            "ACK of 0000000b to tablet: version 1 APPLIED, receiver 1",
+            "ACK of 0000000c to tablet: version 1 DUPLICATE, receiver 1",
+        ],
+    ],
+    "a forwarded PROPOSAL of a key of the device's own set is rejected": [
+        ["outcome: None", "ERROR to tablet: INVALID_MESSAGE"],
+        [],
+    ],
+    "a forwarded PROPOSAL for a record the device does not show is kept, shown once the share arrives": [
+        ["outcome: APPLIED"],
+        ["proposal 00000001 of 7b1e6c2a: not shown"],
+        [],
+        ["proposal 00000001 of 7b1e6c2a: shown"],
+    ],
+    "a forwarded PROPOSAL that the device never shows ends after 14 days": [
+        ["outcome: APPLIED"],
+        ["ACK of 0000000a to tablet: version 1 APPLIED, receiver 1"],
+        [],
+        ["proposal 00000001 of 7b1e6c2a: not shown"],
+        [],
+        ["no proposal"],
+    ],
+    "a kept PROPOSAL ends when the record leaves the shares for the proposer, and when it is deleted": [
+        ["taken: True", "FORWARD 00000001 to tablet, #0: PROPOSAL 1 to the phone"],
+        ["taken: True", "FORWARD 00000002 to tablet, #0: PROPOSAL 2 to the phone"],
+        [],
+        ["no proposal"],
+        [],
+        ["no proposal"],
+        ["taken: True", "FORWARD 00000003 to tablet, #0: PROPOSAL 3 to the phone"],
+        [
+            "made: True",
+            "CHANGE of 7b1e6c2a to tablet, version 202, state 202, in part: no field removal@201p",
+        ],
+        ["no proposal"],
+    ],
+    "the answer reaches the device from a sibling: the kept PROPOSAL ends, and no reply goes": [
+        ["taken: True", "FORWARD 00000001 to tablet, #0: PROPOSAL 1 to the phone"],
+        [],
+        ["answer 00000001: DECLINED"],
+        ["outcome: DUPLICATE"],
+        ["taken: False", "PROPOSAL_REPLY 00000001 to other app, version 1: DECLINED"],
+        ["ACK of 0000000a to tablet: version 1 DUPLICATE, receiver 1"],
+    ],
+    "two answers before a merge: a sibling's answer after the device's own sends nothing": [
+        ["taken: True", "FORWARD 00000001 to tablet, #0: PROPOSAL 1 to the phone"],
+        ["made: True", "PROPOSAL_REPLY 00000001 to other app, version 1: DECLINED"],
+        [],
+        ["answer 00000001: ACCEPTED"],
+    ],
+    "a PROPOSAL of a sibling is rejected with PROPOSALS_NOT_TAKEN": [
+        ["outcome: None", "ERROR to tablet: PROPOSALS_NOT_TAKEN"],
+        ["outcome: None"],
+    ],
+    "the proposer's value is an owner's change, and the update that brings it is APPLIED": [
+        ["made: True", "CHANGE, origin other app, to tablet, version 202, state 202, whole: location@201p"],
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, location 'Dr. "
+            "Weber, Hauptstr. 5', with the schema as offered",
+        ],
+        ["ACK to other app: version 2 APPLIED, receiver 2"],
+        [
+            "sender first known by other app; current: other app; highest 202",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2, location 'Dr. Weber, Hauptstr. 5'; delivered to no sibling",
+            "sender's layer: there, version 2, type axt.example.v1.Appointment, "
+            "from DATA version 2, location 'Dr. Weber, Hauptstr. 5'",
+            "owner's layer: state stamp 202; location@201p; type axt.example.v1.Appointment",
+            "tablet: not known",
+            "shows: there; the owner's value in location",
+        ],
+    ],
+    "ACCEPTED stamps every proposed field, also one whose value the record holds already": [
+        ["taken: True", "FORWARD 00000001 to tablet, #0: PROPOSAL 1 to the phone"],
+        [
+            "made: True",
+            "PROPOSAL_REPLY 00000001 to other app, version 1: ACCEPTED",
+            "CHANGE of 7b1e6c2a to tablet, version 202, state 202, in part: location@201p",
+        ],
+        [
+            "state stamp 202; title,start,end,all_day,notes,reminders@100p location@201p; "
+            "sibling stamp None; to pass None; highest 202",
+            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+        ],
+    ],
+    "a forwarded PROPOSAL in other bytes with a higher SHA-256 takes the place of the one kept": [
+        ["outcome: APPLIED"],
+        ["outcome: APPLIED"],
+        ["outcome: DUPLICATE"],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+            "ACK of 0000000b to tablet: version 1 APPLIED, receiver 1",
+            "ACK of 0000000c to tablet: version 1 DUPLICATE, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "kept: PROPOSAL 1 to the phone; delivered to tablet",
+        ],
+    ],
+    "two answers before a merge: ACCEPTED on the device stands over a later DECLINED of a sibling": [
+        ["taken: True", "FORWARD 00000001 to tablet, #0: PROPOSAL 1 to the phone"],
+        [
+            "made: True",
+            "PROPOSAL_REPLY 00000001 to other app, version 1: ACCEPTED",
+            "CHANGE of 7b1e6c2a to tablet, version 202, state 202, in part: location@201p",
+        ],
+        [],
+        ["answer 00000001: ACCEPTED"],
+    ],
+    "ACCEPTED is barred for a forwarded value whose schema the device lacks, and DECLINED is not": [
+        ["outcome: APPLIED"],
+        ["made: False"],
+        ["proposal 00000001 of 7b1e6c2a: shown"],
+        ["made: True", "PROPOSAL_REPLY 00000001 to other app, version 1: DECLINED"],
+    ],
+    "a stop of the receiver drops its kept proposals, and a forwarded one is not taken": [
+        ["taken: True", "FORWARD 00000001 to tablet, #0: PROPOSAL 1 to the phone"],
+        [],
+        ["no proposal"],
+        ["outcome: DUPLICATE"],
+        ["ACK of 0000000a to tablet: version 1 DUPLICATE, receiver 1"],
+    ],
+    "a kept PROPOSAL ends when the key that signed it is removed from the proposer": [
+        ["taken: True", "FORWARD 00000001 to tablet, #0: PROPOSAL 1 to the phone"],
+        ["outcome: APPLIED"],
+        ["outcome: APPLIED"],
+        ["no proposal"],
+    ],
+    "the schema of each entry is offered to a sibling before the PROPOSAL is forwarded to it": [
+        ["taken: True", "OFFER 00000001 to tablet: axt.example.v1.Appointment version 1"],
+        ["outcome: None", "FORWARD 00000001 to tablet, #0: PROPOSAL 1 to the phone"],
+    ],
+    "a forwarded PROPOSAL beyond the limit of 16 open proposals for one record is kept all the same": [
+        ["outcome: APPLIED"],
+        ["ACK of 0000000a to tablet: version 1 APPLIED, receiver 1"],
     ],
 }
 

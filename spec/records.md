@@ -16,7 +16,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 - **Local change**: a change the receiver's user makes to a received record in the receiver, including its deletion there.
 - **Tombstone**: what a receiver keeps of a record its sender deleted, or withdrew from it: its id and the version of the deletion or of the withdrawal. A tombstone is of a deletion or of a withdrawal ([shares.md](shares.md), section 1).
 
-A record has one sender. Only its sender sends versions of it; where the sender is a device set, each of its devices does, and [sync.md](sync.md) defines how they change the same record. A receiver's local changes stay in the receiver: they are not sent back to the sender and are never versions of the record. Where the receiver is a device set, the record messages that one of its devices got and the local changes travel between its own devices, and only there ([sync.md](sync.md), sections 17 to 22). A receiver that sends a record of its own, even one copied from a received record, sends it as a new record with an id of its own.
+A record has one sender. Only its sender sends versions of it; where the sender is a device set, each of its devices does, and [sync.md](sync.md) defines how they change the same record. A receiver's local changes stay in the receiver: they are never versions of the record, and the receiver sends no record message of them back to the sender. Where the sender takes proposals for the record's type, the receiver may propose them to the sender, whose user takes or refuses them; a proposal that is taken becomes the sender's own change and comes back as an ordinary update ([shares.md](shares.md), section 12). Where the receiver is a device set, the record messages that one of its devices got and the local changes travel between its own devices, and only there ([sync.md](sync.md), sections 17 to 22). A receiver that sends a record of its own, even one copied from a received record, sends it as a new record with an id of its own.
 
 ## 2. Record ids
 
@@ -125,7 +125,7 @@ The outcome is `MERGED` if the receiver kept at least one value that differs fro
 
 ### 6.2 Whole record
 
-A receiver that does not track changes per field treats any local change as a change of the whole record. It then either takes the whole record from the message, outcome `APPLIED`, or keeps the whole record as its user left it, outcome `KEPT`.
+A receiver that does not track changes per field treats any local change as a change of the whole record. It then either takes the whole record from the message, outcome `APPLIED`, or keeps the whole record as its user left it, outcome `KEPT`. An app that lets its user propose changes to records of a type merges per field for that type ([shares.md](shares.md), section 17.2).
 
 ### 6.3 A record the user deleted
 

@@ -65,6 +65,7 @@ sy.check()  # the examples of spec/sync.md hold; fills its examples, messages an
 se = load("shares_examples")  # runs none of its checks on import; the receiver and sender of spec/shares.md
 se.check()  # the examples of spec/shares.md hold
 WITHDRAW_MSG = se.withdraw_message(pe.CAT_SEED, pe.OBF, se.REC_ID, 4)[1]  # spec/shares.md, section 11.2
+PROPOSAL_MSG, REPLY_MSG = se.example_proposal()[:2]  # spec/shares.md, sections 11.4 and 11.5
 mr = mx.mr
 assert mr.LANGTAG.pattern == me.LANGTAG.pattern and mr.LANGTAG.flags == me.LANGTAG.flags, (
     "two language tag rules"
@@ -1031,6 +1032,8 @@ def encoding_category() -> Category:
         "Resync": 0xE8762BD9D559FDF1,
         "Forward": 0x57476ABF6B053BAD,
         "Withdraw": se.WITHDRAW_FP,
+        "Proposal": 0x2512222A12D90279,
+        "ProposalReply": 0x64610CE36E75F8C6,
     }
     sections = {
         "Envelope": "envelope.md 10.1",
@@ -1043,6 +1046,8 @@ def encoding_category() -> Category:
         "Resync": "sync.md 15",
         "Forward": "sync.md 15",
         "Withdraw": "shares.md 10",
+        "Proposal": "shares.md 10",
+        "ProposalReply": "shares.md 10",
     }
     for name, want in published.items():
         text = (REPO / "types" / "axt" / f"{name}.avsc").read_text(encoding="utf-8")
@@ -1084,19 +1089,12 @@ def encoding_category() -> Category:
     above = signed(CAT_SEED, "DATA", (env.RECORD_ID, 1), bytes(pad_len + 1))
     assert len(above) == MAX_MESSAGE + 1
     goods.append(("a message of exactly 16 MiB", at_limit, ["envelope.md 8"]))
-    # The kinds that come with later tickets: format 1 has their symbols, and no document their bodies.
-    goods.append(
-        ("the WITHDRAW of shares.md, section 11.2", WITHDRAW_MSG, ["shares.md 3.1", "shares.md 11.2"])
-    )
-    later = [k for k in pe.KINDS if k not in pe.BODY_SCHEMA and k not in pe.RECORD_KINDS]
-    assert later == ["PROPOSAL", "PROPOSAL_REPLY"]
+    # The kinds of spec/shares.md; every kind of format 1 has a document that defines it.
+    assert [k for k in pe.KINDS if k not in pe.BODY_SCHEMA and k not in pe.RECORD_KINDS] == []
     goods += [
-        (
-            f"an envelope of the kind {kind}, which no document defines yet, with an empty body",
-            signed(CAT_SEED, kind, None, b""),
-            ["envelope.md 2.2"],
-        )
-        for kind in later
+        ("the WITHDRAW of shares.md, section 11.2", WITHDRAW_MSG, ["shares.md 3.1", "shares.md 11.2"]),
+        ("the PROPOSAL of shares.md, section 11.4", PROPOSAL_MSG, ["shares.md 13.1", "shares.md 11.4"]),
+        ("the PROPOSAL_REPLY of shares.md, section 11.5", REPLY_MSG, ["shares.md 14.1", "shares.md 11.5"]),
     ]
     # The messages between the devices of one set (spec/sync.md, section 16).
     sync_messages = [
@@ -1228,6 +1226,11 @@ def encoding_category() -> Category:
     )
     assert change_body[10 + 32] == 0  # origin: union index 0, null
     withdraw_body = cast(bytes, sy.read_all("Envelope", WITHDRAW_MSG[10:])["body"])
+    proposal_body = cast(bytes, sy.read_all("Envelope", PROPOSAL_MSG[10:])["body"])
+    reply_body = cast(bytes, sy.read_all("Envelope", REPLY_MSG[10:])["body"])
+    assert reply_body[-1] == 0  # answer: enum index 0, ACCEPTED
+    at = proposal_body.index(b"start") + 5  # the fingerprint of the entry, then the value
+    proposal_short = proposal_body[:at] + proposal_body[at + 1 :]
     forward: bytes = sy.EXAMPLE_MESSAGES["the FORWARD of sync.md, section 16.5"]
     forward_body = cast(bytes, sy.read_all("Envelope", forward[10:])["body"])
     schema_at = len(forward_body) - len(sy.APPOINTMENT_OFFERED.encode()) - 3  # the union index of schema
@@ -1263,6 +1266,29 @@ def encoding_category() -> Category:
         ),
         ("a WITHDRAW body of the RESYNC schema", "WITHDRAW", resync_body),
         ("an empty body for a WITHDRAW", "WITHDRAW", b""),
+        ("a PROPOSAL body with a byte left over", "PROPOSAL", proposal_body + b"\x00"),
+        ("a PROPOSAL body cut short", "PROPOSAL", proposal_body[:-1]),
+        (
+            "a PROPOSAL body with the fingerprint of axt.ProposalReply",
+            "PROPOSAL",
+            proposal_body[:2] + sy.SPEC_FP["ProposalReply"] + proposal_body[10:],
+        ),
+        ("a PROPOSAL body whose schema has 7 bytes", "PROPOSAL", proposal_short),
+        ("a PROPOSAL body of the WITHDRAW schema", "PROPOSAL", withdraw_body),
+        ("an empty body for a PROPOSAL", "PROPOSAL", b""),
+        ("a PROPOSAL_REPLY body with a byte left over", "PROPOSAL_REPLY", reply_body + b"\x00"),
+        ("a PROPOSAL_REPLY body cut short", "PROPOSAL_REPLY", reply_body[:-1]),
+        (
+            "a PROPOSAL_REPLY body with an answer index of 2",
+            "PROPOSAL_REPLY",
+            reply_body[:-1] + keys.zigzag(2),
+        ),
+        (
+            "a PROPOSAL_REPLY body with the fingerprint of axt.Proposal",
+            "PROPOSAL_REPLY",
+            reply_body[:2] + sy.SPEC_FP["Proposal"] + reply_body[10:],
+        ),
+        ("an empty body for a PROPOSAL_REPLY", "PROPOSAL_REPLY", b""),
         ("a CHANGE body with a byte left over", "CHANGE", change_body + b"\x00"),
         ("a CHANGE body cut short", "CHANGE", change_body[:-1]),
         (
@@ -1322,6 +1348,8 @@ def encoding_category() -> Category:
         ("the MANIFEST of cat-a-log of manifest.md, section 10.3", pe.m1),
         ("a DELETE, with an empty body", pe.del_unknown),
         ("the WITHDRAW of shares.md, section 11.2", WITHDRAW_MSG),
+        ("the PROPOSAL of shares.md, section 11.4", PROPOSAL_MSG),
+        ("the PROPOSAL_REPLY of shares.md, section 11.5", REPLY_MSG),
     ]:
         d = message_meaning(msg)
         c.add("encode_message", label, ["envelope.md 2", "envelope.md 3"], d, accept({"message": B(msg)}))
@@ -4088,7 +4116,6 @@ def shares_category() -> Category:
             (data(1, v1), done("DUPLICATE", 1, "there", v1)),
         ],
     )
-
     # The version of a withdrawal and of a sharing again by an installation that counts (sections 3.2 and
     # 6.2); those of a device that stamps are in the category sync.
     for label, refs, i, want in withdrawal_versions():
@@ -4457,7 +4484,1302 @@ def shares_category() -> Category:
         )
         assert (held, then, sy.stamp_json(to_pass)) == want, (label, held, then, to_pass)
         c.add("acked", label, refs, full, accept({"outcome": want[0], "then": want[1], "to_pass": want[2]}))
+    proposal_vectors(c)
     return c
+
+
+def proposal_vectors(c: Category) -> None:
+    """The sessions of an owner that takes proposals and of a proposer (spec/shares.md, sections 12 to 18),
+    played with the models of shares_examples.py; each step's expected result is written out below and
+    checked against the model."""
+    obf, cat = H(OBF), H(CAT)
+    second_seed = sy.SEEDS["second app"]
+    second = H(sy.KEY["second app"])
+    sibling_seed = sy.TABLET_SEED
+    rid, other_id, pet_id = (
+        se.REC_ID,
+        "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "1d2e3f40-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+    )
+    gone_id, alone_id = "2e3f4051-6b7c-4d8e-9fa0-1b2c3d4e5f60", "3f405162-7c8d-4e9f-a0b1-2c3d4e5f6071"
+    unknown_id = "40516273-8d9e-4fa0-b1c2-3d4e5f607182"
+    ap1, ap2 = se.APPOINTMENT_TEXT, sy.APPOINTMENT_2
+    fp1, fp2 = se.APPOINTMENT_FP, sy.schema_fingerprint(ap2)
+    pet_text = pe.PET_TEXT
+    pet_fp = sy.schema_fingerprint(pet_text)
+    v3 = se.json_form(se.V3_OWNER)
+    pet_value = se.json_form(rules.DATA["Pet"])
+    start11 = se.START_VALUE
+    start1030 = sy.field_value(se.APPOINTMENT_SCHEMA, "start", se.V3_OWNER["start"])
+    start1130 = sy.field_value(se.APPOINTMENT_SCHEMA, "start", se.berlin(11, 30))
+    pids = [f"0000000{n}-9e0a-4000-8000-00000000000{n}" for n in range(1, 10)]
+
+    def owner_device(**more: Any) -> dict[str, Any]:
+        d = {
+            "seed": H(CAT_SEED),
+            "siblings": [H(sy.TABLET)],
+            "proposals": ["axt.example.v1.Appointment"],
+            "schemas": [ap1, pet_text],
+            "receivers": [
+                {"name": "Old Brain Fix", "current": [obf], "removed": []},
+                {"name": "second app", "current": [second], "removed": []},
+            ],
+            "records": [
+                {
+                    "id": rid,
+                    "type": se.AP_TYPE,
+                    "version": "3",
+                    "state": "there",
+                    "value": v3,
+                    "shared": ["Old Brain Fix"],
+                },
+                {
+                    "id": other_id,
+                    "type": se.AP_TYPE,
+                    "version": "1",
+                    "state": "there",
+                    "value": v3,
+                    "shared": ["Old Brain Fix", "second app"],
+                },
+                {
+                    "id": pet_id,
+                    "type": "axt.example.v1.Pet",
+                    "version": "1",
+                    "state": "there",
+                    "value": pet_value,
+                    "shared": ["Old Brain Fix"],
+                },
+                {
+                    "id": gone_id,
+                    "type": se.AP_TYPE,
+                    "version": "2",
+                    "state": "deleted",
+                    "value": v3,
+                    "shared": ["Old Brain Fix"],
+                },
+                {
+                    "id": alone_id,
+                    "type": se.AP_TYPE,
+                    "version": "1",
+                    "state": "there",
+                    "value": v3,
+                    "shared": [],
+                },
+            ],
+            "open": [],
+            "answers": [],
+        }
+        d.update(more)
+        return d
+
+    def P(
+        entries: list[tuple[str, bytes, bytes]] | None = None,
+        pid: str = se.PROPOSAL_ID,
+        record: tuple[str, int] | None = (rid, 3),
+        seed: bytes = OBF_SEED,
+        to: bytes = CAT,
+        body: bytes | None = None,
+    ) -> bytes:
+        es = [("start", fp1, start11)] if entries is None else entries
+        b = se.proposal_body(to, pid, es) if body is None else body
+        return cast(bytes, sy.message(seed, "PROPOSAL", record, b))
+
+    def reply(pid: str, answer: str, to: str = obf, record: tuple[str, int] = (rid, 3)) -> dict[str, Any]:
+        return {
+            "kind": "PROPOSAL_REPLY",
+            "to": to,
+            "record": {"id": record[0], "version": record[1]},
+            "proposal_id": pid,
+            "answer": answer,
+        }
+
+    def err(
+        m: bytes,
+        code: str,
+        record: tuple[str, int] | None = (rid, 3),
+        to: str = obf,
+        fingerprint: bytes | None = None,
+        field: str | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "kind": "ERROR",
+            "to": to,
+            "code": code,
+            "message_hash": hashlib.sha256(m).hexdigest(),
+            "record": record and {"id": record[0], "version": record[1]},
+            "fingerprint": None if fingerprint is None else fingerprint.hex(),
+            "field": field,
+        }
+
+    def got(result: str, *replies: dict[str, Any]) -> dict[str, Any]:
+        return {"result": result, "replies": list(replies)}
+
+    def owner(
+        label: str, refs: list[str], device: dict[str, Any], steps: list[tuple[dict[str, Any], Any]]
+    ) -> None:
+        inputs = [
+            json.loads(json.dumps({k: (H(v) if isinstance(v, bytes) else v) for k, v in st.items()}))
+            for st, _ in steps
+        ]
+        played = se.owner_session({"device": device, "steps": inputs})
+        for n, ((_, want), answer) in enumerate(zip(steps, played, strict=True)):
+            if "replies" in answer:
+                answer = {**answer, "replies": [se.said(m) for m in answer["replies"]]}
+            assert answer == want, (label, n, answer, want)
+        c.add(
+            "owner",
+            label,
+            ["shares.md 13.3", *refs],
+            {"device": device, "steps": inputs},
+            {"steps": [w for _, w in steps]},
+        )
+
+    def q(
+        open_: list[tuple[str, str, str, bytes | None]],
+        answers: list[tuple[str, str, str]],
+        records: dict[str, tuple[str, str, Any]] | None = None,
+        answered: tuple[str, int] = (rid, 3),
+    ) -> dict[str, Any]:
+        base = {r["id"]: (r["version"], r["state"], r["value"]) for r in owner_device()["records"]}
+        base.update(records or {})
+        return {
+            "open": [
+                {
+                    "receiver": a,
+                    "proposal_id": b,
+                    "id": i,
+                    "message_hash": msg and hashlib.sha256(msg).hexdigest(),
+                }
+                for a, b, i, msg in open_
+            ],
+            "answers": [
+                {"receiver": a, "proposal_id": b, "answer": x, "id": answered[0], "version": answered[1]}
+                for a, b, x in answers
+            ],
+            "records": [
+                {"id": i, "version": v, "state": st, "value": val} for i, (v, st, val) in sorted(base.items())
+            ],
+        }
+
+    v4 = dict(v3, start=se.json_form(se.START_11))
+    m = P()
+    owner(
+        "the example of shares.md, section 11.3: a proposal taken, a "
+        "repeat, the answer ACCEPTED and the update",
+        ["shares.md 11.3", "shares.md 13.4", "shares.md 15.2"],
+        owner_device(),
+        [
+            ({"receive": m}, got("taken")),
+            ({"receive": m}, got("repeat")),
+            ({"query": True}, q([("Old Brain Fix", se.PROPOSAL_ID, rid, m)], [])),
+            (
+                {
+                    "answer": {
+                        "receiver": "Old Brain Fix",
+                        "proposal_id": se.PROPOSAL_ID,
+                        "answer": "ACCEPTED",
+                    }
+                },
+                {
+                    "made": True,
+                    "replies": [reply(se.PROPOSAL_ID, "ACCEPTED")],
+                    "update": {"version": "4", "value": v4},
+                },
+            ),
+            ({"receive": m}, got("repeat", reply(se.PROPOSAL_ID, "ACCEPTED"))),
+            (
+                {"receive": P(pid=se.PROPOSAL_ID, entries=[("title", fp1, sy.encoded("Dentist"))])},
+                got("repeat", reply(se.PROPOSAL_ID, "ACCEPTED")),
+            ),
+            (
+                {"query": True},
+                q([], [("Old Brain Fix", se.PROPOSAL_ID, "ACCEPTED")], {rid: ("4", "there", v4)}),
+            ),
+        ],
+    )
+    owner(
+        "a proposal declined: the reply DECLINED, no update, and a repeat gets the reply again",
+        ["shares.md 13.4", "shares.md 14.1", "shares.md 15.1"],
+        owner_device(),
+        [
+            ({"receive": m}, got("taken")),
+            (
+                {
+                    "answer": {
+                        "receiver": "Old Brain Fix",
+                        "proposal_id": se.PROPOSAL_ID,
+                        "answer": "DECLINED",
+                    }
+                },
+                {"made": True, "replies": [reply(se.PROPOSAL_ID, "DECLINED")], "update": None},
+            ),
+            ({"receive": m}, got("repeat", reply(se.PROPOSAL_ID, "DECLINED"))),
+            (
+                {
+                    "answer": {
+                        "receiver": "Old Brain Fix",
+                        "proposal_id": se.PROPOSAL_ID,
+                        "answer": "ACCEPTED",
+                    }
+                },
+                {"made": False, "replies": [], "update": None},
+            ),
+        ],
+    )
+    owner(
+        "ACCEPTED stamps every proposed value, also those the record holds "
+        "already: a new version and an update",
+        ["shares.md 15.2"],
+        owner_device(),
+        [
+            ({"receive": P([("start", fp1, start1030), ("title", fp1, sy.encoded("Vet"))])}, got("taken")),
+            (
+                {
+                    "answer": {
+                        "receiver": "Old Brain Fix",
+                        "proposal_id": se.PROPOSAL_ID,
+                        "answer": "ACCEPTED",
+                    }
+                },
+                {
+                    "made": True,
+                    "replies": [reply(se.PROPOSAL_ID, "ACCEPTED")],
+                    "update": {"version": "4", "value": v3},
+                },
+            ),
+        ],
+    )
+    owner(
+        "a proposal for a version that the owner left behind, and one for a version above its own, are taken",
+        ["shares.md 13.3", "shares.md 15.3"],
+        owner_device(),
+        [
+            ({"receive": P(pid=pids[0], record=(rid, 2))}, got("taken")),
+            ({"receive": P(pid=pids[1], record=(rid, 9))}, got("taken")),
+            (
+                {"answer": {"receiver": "Old Brain Fix", "proposal_id": pids[0], "answer": "ACCEPTED"}},
+                {
+                    "made": True,
+                    "replies": [reply(pids[0], "ACCEPTED", record=(rid, 2))],
+                    "update": {"version": "4", "value": v4},
+                },
+            ),
+        ],
+    )
+    owner(
+        "an open proposal is dropped when its record is deleted, and a later one is not taken",
+        ["shares.md 15.4", "shares.md 17.1"],
+        owner_device(),
+        [
+            ({"receive": m}, got("taken")),
+            ({"change": {"id": rid, "action": "delete"}}, {}),
+            ({"query": True}, q([], [], {rid: ("3", "deleted", v3)})),
+            (
+                {
+                    "answer": {
+                        "receiver": "Old Brain Fix",
+                        "proposal_id": se.PROPOSAL_ID,
+                        "answer": "ACCEPTED",
+                    }
+                },
+                {"made": False, "replies": [], "update": None},
+            ),
+            ({"receive": P(pid=pids[0])}, got("rejected", err(P(pid=pids[0]), "PROPOSALS_NOT_TAKEN"))),
+        ],
+    )
+    owner(
+        "an open proposal is dropped when its record is withdrawn "
+        "from the proposer, and a dropped one does not "
+        "come back when the record is shared again",
+        ["shares.md 15.4", "shares.md 17.1"],
+        owner_device(),
+        [
+            ({"receive": m}, got("taken")),
+            ({"change": {"id": rid, "action": "unshare", "receiver": "Old Brain Fix"}}, {}),
+            ({"receive": P(pid=pids[0])}, got("rejected", err(P(pid=pids[0]), "PROPOSALS_NOT_TAKEN"))),
+            ({"change": {"id": rid, "action": "share", "receiver": "Old Brain Fix"}}, {}),
+            ({"query": True}, q([], [])),
+            ({"receive": m}, got("taken")),
+        ],
+    )
+    # Step 1, in its order: the envelope and the signature, record, the body, to.
+    signed_bad = m[:-1] + bytes([m[-1] ^ 1])
+    for label, msg, want in [
+        (
+            "whose signature does not verify is rejected with SIGNATURE_INVALID",
+            signed_bad,
+            got("rejected", err(signed_bad, "SIGNATURE_INVALID", None)),
+        ),
+        (
+            "without a record is rejected with INVALID_MESSAGE",
+            P(record=None),
+            got("rejected", err(P(record=None), "INVALID_MESSAGE", None)),
+        ),
+        (
+            "with an empty body is rejected with INVALID_MESSAGE",
+            P(body=b""),
+            got("rejected", err(P(body=b""), "INVALID_MESSAGE")),
+        ),
+        (
+            "with the body of a WITHDRAW is rejected with INVALID_MESSAGE",
+            P(body=sy.body_of("Withdraw", {"to": CAT})),
+            got("rejected", err(P(body=sy.body_of("Withdraw", {"to": CAT})), "INVALID_MESSAGE")),
+        ),
+        (
+            "with a byte left over in its body is rejected with INVALID_MESSAGE",
+            P(body=se.proposal_body(CAT, se.PROPOSAL_ID, [("start", fp1, start11)]) + b"\x00"),
+            got(
+                "rejected",
+                err(
+                    P(body=se.proposal_body(CAT, se.PROPOSAL_ID, [("start", fp1, start11)]) + b"\x00"),
+                    "INVALID_MESSAGE",
+                ),
+            ),
+        ),
+        ("addressed to another key is ignored without a report", P(to=OBF), got("ignored")),
+        (
+            "without a record and addressed to another key is rejected: record comes before to",
+            P(record=None, to=OBF),
+            got("rejected", err(P(record=None, to=OBF), "INVALID_MESSAGE", None)),
+        ),
+        ("signed with the owner's own key is ignored", P(seed=CAT_SEED), got("ignored")),
+        (
+            "with the id vet is rejected with RECORD_ID_INVALID",
+            P(record=("vet", 3)),
+            got("rejected", err(P(record=("vet", 3)), "RECORD_ID_INVALID", ("vet", 3))),
+        ),
+        (
+            "with the nil UUID as its record id is rejected with RECORD_ID_INVALID",
+            P(record=("00000000-0000-0000-0000-000000000000", 3)),
+            got(
+                "rejected",
+                err(
+                    P(record=("00000000-0000-0000-0000-000000000000", 3)),
+                    "RECORD_ID_INVALID",
+                    ("00000000-0000-0000-0000-000000000000", 3),
+                ),
+            ),
+        ),
+        (
+            "with the version 0 is rejected with VERSION_INVALID",
+            P(record=(rid, 0)),
+            got("rejected", err(P(record=(rid, 0)), "VERSION_INVALID", (rid, 0))),
+        ),
+        (
+            "with the id vet and the version 0 is rejected with RECORD_ID_INVALID: step 2 comes first",
+            P(record=("vet", 0)),
+            got("rejected", err(P(record=("vet", 0)), "RECORD_ID_INVALID", ("vet", 0))),
+        ),
+        (
+            "with the version 0 and no entry is rejected with VERSION_INVALID: step 3 comes before step 4",
+            P([], record=(rid, 0)),
+            got("rejected", err(P([], record=(rid, 0)), "VERSION_INVALID", (rid, 0))),
+        ),
+    ]:
+        owner(
+            f"step 1 to 3: a PROPOSAL {label}",
+            ["shares.md 13.2", "protocol.md 8.2", "protocol.md 9.1"],
+            owner_device(),
+            [({"receive": msg}, want)],
+        )
+    # Step 4: the body is valid. A body that passes it fails step 5 here, for a record that is not shared.
+    many = [(f"f{n}", fp1, b"\x00") for n in range(4096)]
+    for label, msg, code in [
+        ("whose proposal_id is no UUID", P(pid="proposal"), "INVALID_MESSAGE"),
+        (
+            "whose proposal_id is the nil UUID",
+            P(pid="00000000-0000-0000-0000-000000000000"),
+            "INVALID_MESSAGE",
+        ),
+        (
+            "whose proposal_id is the max UUID",
+            P(pid="ffffffff-ffff-ffff-ffff-ffffffffffff"),
+            "INVALID_MESSAGE",
+        ),
+        ("with no entry", P([]), "INVALID_MESSAGE"),
+        ("with 4,097 entries", P([*many, ("g", fp1, b"\x00")], record=(alone_id, 1)), "INVALID_MESSAGE"),
+        ("with 4,096 entries passes step 4", P(many, record=(alone_id, 1)), "PROPOSALS_NOT_TAKEN"),
+        ("with an empty field name", P([("", fp1, start11)]), "INVALID_MESSAGE"),
+        (
+            "with a field name of 513 bytes",
+            P([("n" * 513, fp1, start11)], record=(alone_id, 1)),
+            "INVALID_MESSAGE",
+        ),
+        (
+            "with a field name of 512 bytes passes step 4",
+            P([("n" * 512, fp1, start11)], record=(alone_id, 1)),
+            "PROPOSALS_NOT_TAKEN",
+        ),
+        (
+            "with a field name twice",
+            P([("start", fp1, start11), ("start", fp1, start1030)]),
+            "INVALID_MESSAGE",
+        ),
+        (
+            "with two names that differ only in their Unicode normalization passes step 4",
+            P([("\u00e9", fp1, b"\x00"), ("e\u0301", fp1, b"\x00")], record=(alone_id, 1)),
+            "PROPOSALS_NOT_TAKEN",
+        ),
+    ]:
+        env_rec = sy.read_all("Envelope", msg[10:])["record"]
+        owner(
+            f"step 4: a PROPOSAL {label}",
+            ["shares.md 13.2", "shares.md 18.3"],
+            owner_device(),
+            [({"receive": msg}, got("rejected", err(msg, code, (env_rec["id"], env_rec["version"]))))],
+        )
+    # Step 5: one result for every reason.
+    full = [
+        {"receiver": "Old Brain Fix", "proposal_id": f"{n:08x}-9e0a-4000-8000-000000000000", "id": rid}
+        for n in range(1, 17)
+    ]
+    more_full = [
+        {
+            "receiver": "Old Brain Fix",
+            "proposal_id": f"{n:08x}-9e0a-4000-8000-0000000000ff",
+            "id": f"{n:08x}-1111-4000-8000-000000000000",
+        }
+        for n in range(1, 257)
+    ]
+    for label, msg, device, rec in [
+        ("for an id the owner does not hold", P(record=(unknown_id, 1)), owner_device(), (unknown_id, 1)),
+        ("for a record that is deleted", P(record=(gone_id, 2)), owner_device(), (gone_id, 2)),
+        (
+            "for a record that is not shared with the proposer",
+            P(record=(alone_id, 1)),
+            owner_device(),
+            (alone_id, 1),
+        ),
+        (
+            "for a record shared with another receiver only",
+            P(seed=second_seed, record=(rid, 3)),
+            owner_device(),
+            (rid, 3),
+        ),
+        (
+            "for a type for which the manifest takes no proposals",
+            P([("name", pet_fp, sy.encoded("Mia"))], record=(pet_id, 1)),
+            owner_device(),
+            (pet_id, 1),
+        ),
+        (
+            "after the owner's manifest has stopped taking proposals for the type",
+            P(),
+            owner_device(proposals=[]),
+            (rid, 3),
+        ),
+        ("of a sibling, which is no receiver", P(seed=sibling_seed), owner_device(), (rid, 3)),
+        (
+            "beyond the 16 open proposals of one proposer for one record",
+            P(pid=pids[0]),
+            owner_device(open=full),
+            (rid, 3),
+        ),
+        (
+            "beyond the 256 open proposals of one proposer in all",
+            P(pid=pids[0], record=(other_id, 1)),
+            owner_device(open=more_full),
+            (other_id, 1),
+        ),
+    ]:
+        to = H(sy.TABLET) if "sibling" in label else (second if "another receiver" in label else obf)
+        owner(
+            f"step 5: a PROPOSAL {label} is rejected with PROPOSALS_NOT_TAKEN",
+            ["shares.md 12.2", "shares.md 15.4", "shares.md 18.3"],
+            device,
+            [({"receive": msg}, got("rejected", err(msg, "PROPOSALS_NOT_TAKEN", rec, to)))],
+        )
+    owner(
+        "step 5: a repeat of an open proposal at the limit of 16 is a repeat, not a new proposal",
+        ["shares.md 13.4", "shares.md 18.3"],
+        owner_device(open=full),
+        [({"receive": P(pid=full[0]["proposal_id"])}, got("repeat"))],
+    )
+    owner(
+        "step 5: a second receiver proposes for a record shared with it as well, beside the first",
+        ["shares.md 12.2", "shares.md 13.4"],
+        owner_device(),
+        [
+            ({"receive": P(record=(other_id, 1))}, got("taken")),
+            ({"receive": P(record=(other_id, 1), seed=second_seed)}, got("taken")),
+            (
+                {"query": True},
+                q(
+                    [
+                        ("Old Brain Fix", se.PROPOSAL_ID, other_id, P(record=(other_id, 1))),
+                        ("second app", se.PROPOSAL_ID, other_id, P(record=(other_id, 1), seed=second_seed)),
+                    ],
+                    [],
+                ),
+            ),
+        ],
+    )
+    # Steps 6 to 9.
+    nofp = bytes.fromhex("0102030405060708")
+    m6 = P([("title", fp1, sy.encoded("Dentist")), ("start", nofp, start11)])
+    m67 = P([("nofield", fp1, b"\x00"), ("start", nofp, start11)])
+    bad_time = dict(se.START_11, instant_ms=se.START_11["instant_ms"] + 1)
+    m9 = P(
+        [
+            ("title", fp1, sy.encoded("Dentist")),
+            ("start", fp1, sy.field_value(se.APPOINTMENT_SCHEMA, "start", bad_time)),
+        ]
+    )
+    for label, msg, want_err in [
+        (
+            "step 6: an entry whose schema the owner does not hold is rejected with SCHEMA_UNKNOWN and that "
+            "fingerprint",
+            m6,
+            ("SCHEMA_UNKNOWN", nofp, None),
+        ),
+        (
+            "step 6 comes before step 7: a name that is no field, then an unknown schema",
+            m67,
+            ("SCHEMA_UNKNOWN", nofp, None),
+        ),
+        (
+            "step 7: an entry with the schema of another type is rejected with INVALID_MESSAGE",
+            P([("name", pet_fp, sy.encoded("Mia"))]),
+            ("INVALID_MESSAGE", None, None),
+        ),
+        (
+            "step 7: an entry whose name is no field of its schema is rejected with INVALID_MESSAGE",
+            P([("room", fp1, sy.encoded("2"))]),
+            ("INVALID_MESSAGE", None, None),
+        ),
+        (
+            "step 8: a value with a byte left over is rejected with UNDECODABLE",
+            P([("start", fp1, start11 + b"\x00")]),
+            ("UNDECODABLE", None, None),
+        ),
+        (
+            "step 8: a value cut short is rejected with UNDECODABLE",
+            P([("start", fp1, start11[:-1])]),
+            ("UNDECODABLE", None, None),
+        ),
+        (
+            "step 8: a string that is not well-formed UTF-8 is rejected with UNDECODABLE",
+            P([("title", fp1, b"\x02\xff")]),
+            ("UNDECODABLE", None, None),
+        ),
+        (
+            "step 9: a time value that is not valid is rejected with VALUE_INVALID and the path of the first",
+            m9,
+            ("VALUE_INVALID", None, "start"),
+        ),
+    ]:
+        owner(
+            label,
+            ["shares.md 13.3"],
+            owner_device(),
+            [
+                (
+                    {"receive": msg},
+                    got("rejected", err(msg, want_err[0], (rid, 3), obf, want_err[1], want_err[2])),
+                )
+            ],
+        )
+    for label, msg in [
+        ("an empty message", b""),
+        ("a message with the fingerprint of no envelope format", m[:2] + bytes(8) + m[10:]),
+        ("a message with a byte after its envelope", m + b"\x00"),
+    ]:
+        owner(
+            f"step 1: {label} is rejected without a report",
+            ["shares.md 13.3", "protocol.md 8.2"],
+            owner_device(),
+            [({"receive": msg}, got("rejected"))],
+        )
+    owner(
+        "a repeat of a proposal whose answer the app's records hold gets the reply again",
+        ["shares.md 13.4", "shares.md 15.1"],
+        owner_device(
+            answers=[
+                {
+                    "receiver": "Old Brain Fix",
+                    "proposal_id": se.PROPOSAL_ID,
+                    "answer": "DECLINED",
+                    "id": rid,
+                    "version": 3,
+                }
+            ]
+        ),
+        [({"receive": m}, got("repeat", reply(se.PROPOSAL_ID, "DECLINED")))],
+    )
+    owner(
+        "a manifest that takes no more proposals for the type: a later PROPOSAL fails, an open one stays",
+        ["shares.md 18.4", "shares.md 12.2"],
+        owner_device(),
+        [
+            ({"receive": m}, got("taken")),
+            ({"manifest": []}, {}),
+            ({"receive": P(pid=pids[0])}, got("rejected", err(P(pid=pids[0]), "PROPOSALS_NOT_TAKEN"))),
+            ({"query": True}, q([("Old Brain Fix", se.PROPOSAL_ID, rid, m)], [])),
+        ],
+    )
+    owner(
+        "step 7: a field that the owner's own schema lacks and the entry's later schema has passes",
+        ["shares.md 13.3"],
+        owner_device(schemas=[ap1, ap2, pet_text]),
+        [({"receive": P([("room", fp2, sy.field_value(json.loads(ap2), "room", "2"))])}, got("taken"))],
+    )
+
+    # --- the proposer ---
+    v3_bytes = {n: H(sy.field_value(se.APPOINTMENT_SCHEMA, n, v)) for n, v in se.V3_OWNER.items()}
+
+    def proposer_device(**more: Any) -> dict[str, Any]:
+        d = {
+            "seed": H(OBF_SEED),
+            "owner": [cat, H(NEW), H(sy.LAPTOP)],
+            "manifests": {
+                cat: {"revision": 2, "proposals": [se.AP_TYPE]},
+                H(NEW): {"revision": 1, "proposals": []},
+            },
+            "records": [
+                {
+                    "id": rid,
+                    "type": se.AP_TYPE,
+                    "version": "3",
+                    "last": "DATA",
+                    "schema": ap1,
+                    "values": v3_bytes,
+                },
+                {"id": other_id, "type": se.AP_TYPE, "version": "4", "last": "WITHDRAW", "schema": ap1},
+                {
+                    "id": gone_id,
+                    "type": se.AP_TYPE,
+                    "version": "2",
+                    "last": "DATA",
+                    "schema": ap1,
+                    "deleted": True,
+                },
+            ],
+            "proposal_ids": pids,
+        }
+        d.update(more)
+        return d
+
+    def proposal_said(
+        pid: str, record: tuple[str, int] = (rid, 3), to: str = cat, values: dict[str, bytes] | None = None
+    ) -> dict[str, Any]:
+        vs = {"start": start11} if values is None else values
+        return {
+            "kind": "PROPOSAL",
+            "to": to,
+            "record": {"id": record[0], "version": record[1]},
+            "proposal_id": pid,
+            "fields": {n: {"schema": fp1.hex(), "value": v.hex()} for n, v in vs.items()},
+        }
+
+    def R(
+        pid: str,
+        answer: str,
+        seed: bytes = CAT_SEED,
+        to: bytes = OBF,
+        record: tuple[str, int] | None = (rid, 3),
+        body: bytes | None = None,
+    ) -> bytes:
+        b = se.reply_body(to, pid, answer) if body is None else body
+        return cast(bytes, sy.message(seed, "PROPOSAL_REPLY", record, b))
+
+    def E(
+        pid_message: bytes,
+        code: str,
+        seed: bytes = CAT_SEED,
+        field: str | None = None,
+        fingerprint: bytes | None = None,
+    ) -> bytes:
+        return cast(
+            bytes,
+            se.error_message(
+                seed, OBF, pid_message, se.Failed(code, fingerprint, field), {"id": rid, "version": 3}
+            ),
+        )
+
+    first = P(pid=pids[0], seed=OBF_SEED)  # the PROPOSAL the proposer's first step sends
+
+    def proposer(
+        label: str, refs: list[str], device: dict[str, Any], steps: list[tuple[dict[str, Any], Any]]
+    ) -> None:
+        inputs = [json.loads(json.dumps(st, default=lambda b: H(b))) for st, _ in steps]
+        played = se.proposer_session({"device": device, "steps": inputs})
+        for n, ((_, want), answer) in enumerate(zip(steps, played, strict=True)):
+            if "replies" in answer:
+                answer = {**answer, "replies": [se.said(x) for x in answer["replies"]]}
+            if answer.get("message") is not None:
+                answer = {"message": se.said(answer["message"])}
+            if "messages" in answer:
+                answer = {"messages": [se.said(x) for x in answer["messages"]]}
+            assert answer == want, (label, n, answer, want)
+        c.add("proposer", label, refs, {"device": device, "steps": inputs}, {"steps": [w for _, w in steps]})
+
+    propose = {"propose": {"id": rid, "to": cat, "values": {"start": start11}}}
+    sent = {"message": proposal_said(pids[0])}
+
+    def status(st: str, resend: bool) -> dict[str, Any]:
+        return {"status": st, "resend": resend}
+
+    assert first == se.Proposer(
+        OBF_SEED, [CAT], {CAT: (2, {se.AP_TYPE})}, {rid: se.Got(se.AP_TYPE, 3, "DATA", ap1)}, [pids[0]]
+    ).propose(rid, CAT, {"start": start11})
+    proposer(
+        "a proposal, its reply ACCEPTED, a repeat of the reply and a second reply DECLINED, which is ignored",
+        ["shares.md 13.1", "shares.md 14.2", "shares.md 16.2"],
+        proposer_device(),
+        [
+            (propose, sent),
+            ({"query": pids[0]}, status("open", True)),
+            ({"receive": R(pids[0], "ACCEPTED")}, got("taken")),
+            ({"receive": R(pids[0], "ACCEPTED")}, got("ignored")),
+            ({"receive": R(pids[0], "DECLINED")}, got("ignored")),
+            ({"query": pids[0]}, status("ACCEPTED", False)),
+            ({"receive": E(first, "PROPOSALS_NOT_TAKEN")}, got("ignored")),
+        ],
+    )
+    for label, step in [
+        ("a record withdrawn from the proposer", {"id": other_id, "to": cat, "values": {"start": start11}}),
+        ("a record its own user deleted", {"id": gone_id, "to": cat, "values": {"start": start11}}),
+        (
+            "a key whose manifest takes no proposals for the type",
+            {"id": rid, "to": H(NEW), "values": {"start": start11}},
+        ),
+        (
+            "a key of which it holds no manifest",
+            {"id": rid, "to": H(sy.LAPTOP), "values": {"start": start11}},
+        ),
+        (
+            "a value whose change its user discarded, and no other",
+            {"id": rid, "to": cat, "values": {"start": None}},
+        ),
+    ]:
+        proposer(
+            f"no PROPOSAL for {label}",
+            ["shares.md 12.2", "shares.md 13.1"],
+            proposer_device(),
+            [({"propose": step}, {"message": None})],
+        )
+    proposer(
+        "a PROPOSAL to a key with a manifest that takes proposals, after that manifest arrives",
+        ["shares.md 12.2"],
+        proposer_device(),
+        [
+            ({"propose": {"id": rid, "to": H(NEW), "values": {"start": start11}}}, {"message": None}),
+            ({"manifest": {"key": H(NEW), "revision": 2, "proposals": [se.AP_TYPE]}}, {}),
+            (
+                {"propose": {"id": rid, "to": H(NEW), "values": {"start": start11}}},
+                {"message": proposal_said(pids[0], to=H(NEW))},
+            ),
+        ],
+    )
+    for label, msg, want in [
+        ("addressed to another key is ignored", R(pids[0], "ACCEPTED", to=CAT), got("ignored")),
+        ("for a proposal the device did not send is ignored", R(pids[5], "ACCEPTED"), got("ignored")),
+        (
+            "of a key that is no current key of the owner is ignored",
+            R(pids[0], "ACCEPTED", seed=sy.SEEDS["second app"]),
+            got("ignored"),
+        ),
+        (
+            "with another version in its record is rejected with INVALID_MESSAGE",
+            R(pids[0], "ACCEPTED", record=(rid, 4)),
+            got("rejected", err(R(pids[0], "ACCEPTED", record=(rid, 4)), "INVALID_MESSAGE", (rid, 4), cat)),
+        ),
+        (
+            "with another id in its record is rejected with INVALID_MESSAGE",
+            R(pids[0], "ACCEPTED", record=(other_id, 3)),
+            got(
+                "rejected",
+                err(R(pids[0], "ACCEPTED", record=(other_id, 3)), "INVALID_MESSAGE", (other_id, 3), cat),
+            ),
+        ),
+        (
+            "without a record is rejected with INVALID_MESSAGE",
+            R(pids[0], "ACCEPTED", record=None),
+            got("rejected", err(R(pids[0], "ACCEPTED", record=None), "INVALID_MESSAGE", None, cat)),
+        ),
+        (
+            "with an empty body is rejected with INVALID_MESSAGE",
+            R(pids[0], "ACCEPTED", body=b""),
+            got("rejected", err(R(pids[0], "ACCEPTED", body=b""), "INVALID_MESSAGE", (rid, 3), cat)),
+        ),
+    ]:
+        proposer(
+            f"a PROPOSAL_REPLY {label}",
+            ["shares.md 14.1", "shares.md 14.2"],
+            proposer_device(),
+            [(propose, sent), ({"receive": msg}, want), ({"query": pids[0]}, status("open", True))],
+        )
+    proposer(
+        "an ERROR PROPOSALS_NOT_TAKEN settles the proposal, and no PROPOSAL goes for the record "
+        "until a manifest of the owner has a higher revision",
+        ["shares.md 16.3"],
+        proposer_device(),
+        [
+            (propose, sent),
+            ({"receive": E(first, "PROPOSALS_NOT_TAKEN")}, got("taken")),
+            ({"query": pids[0]}, status("PROPOSALS_NOT_TAKEN", False)),
+            (propose, {"message": None}),
+            ({"manifest": {"key": cat, "revision": 2, "proposals": [se.AP_TYPE]}}, {}),
+            (propose, {"message": None}),
+            ({"manifest": {"key": cat, "revision": 3, "proposals": [se.AP_TYPE]}}, {}),
+            (propose, {"message": proposal_said(pids[1])}),
+        ],
+    )
+    proposer(
+        "after PROPOSALS_NOT_TAKEN a record message with a higher version lets a new PROPOSAL go",
+        ["shares.md 16.3"],
+        proposer_device(),
+        [
+            (propose, sent),
+            ({"receive": E(first, "PROPOSALS_NOT_TAKEN")}, got("taken")),
+            ({"record": {"id": rid, "kind": "DATA", "version": "4"}}, {}),
+            (propose, {"message": proposal_said(pids[1], record=(rid, 4))}),
+        ],
+    )
+    proposer(
+        "after SCHEMA_UNKNOWN a new PROPOSAL waits for a record message with a higher version",
+        ["shares.md 16.3"],
+        proposer_device(),
+        [
+            (propose, sent),
+            ({"receive": E(first, "SCHEMA_UNKNOWN", fingerprint=fp1)}, got("taken")),
+            (propose, {"message": None}),
+            ({"record": {"id": rid, "kind": "DATA", "version": "5"}}, {}),
+            (propose, {"message": proposal_said(pids[1], record=(rid, 5))}),
+        ],
+    )
+    proposer(
+        "after VALUE_INVALID a new PROPOSAL goes only once its user has changed that value",
+        ["shares.md 16.3"],
+        proposer_device(),
+        [
+            (propose, sent),
+            ({"receive": E(first, "VALUE_INVALID", field="start")}, got("taken")),
+            (propose, {"message": None}),
+            (
+                {"propose": {"id": rid, "to": cat, "values": {"start": start1130}}},
+                {"message": proposal_said(pids[1], values={"start": start1130})},
+            ),
+        ],
+    )
+    proposer(
+        "after FORMAT_UNSUPPORTED the proposal is not settled and goes again",
+        ["shares.md 16.3"],
+        proposer_device(),
+        [
+            (propose, sent),
+            ({"receive": E(first, "FORMAT_UNSUPPORTED", fingerprint=bytes(8))}, got("taken")),
+            ({"query": pids[0]}, status("open", True)),
+        ],
+    )
+    for code in ("INVALID_MESSAGE", "UNDECODABLE"):
+        proposer(
+            f"an ERROR {code} settles the proposal, which does not go again",
+            ["shares.md 16.3"],
+            proposer_device(),
+            [
+                (propose, sent),
+                ({"receive": E(first, code)}, got("taken")),
+                ({"query": pids[0]}, status(code, False)),
+            ],
+        )
+    proposer(
+        "an ERROR about no PROPOSAL of the device, and one of another key, are ignored",
+        ["shares.md 16.3"],
+        proposer_device(),
+        [
+            (propose, sent),
+            ({"receive": E(R(pids[0], "ACCEPTED"), "PROPOSALS_NOT_TAKEN")}, got("ignored")),
+            ({"receive": E(first, "PROPOSALS_NOT_TAKEN", seed=NEW_SEED)}, got("ignored")),
+            ({"query": pids[0]}, status("open", True)),
+        ],
+    )
+    other_error = se.error_message(CAT_SEED, CAT, first, se.Failed("PROPOSALS_NOT_TAKEN"), None)
+    bad_reply = R(pids[0], "ACCEPTED")
+    bad_reply = bad_reply[:-1] + bytes([bad_reply[-1] ^ 1])
+    proposer(
+        "an ERROR addressed to another key, and a reply whose signature does not verify, change nothing",
+        ["shares.md 14.2", "shares.md 16.3", "protocol.md 9.1"],
+        proposer_device(),
+        [
+            (propose, sent),
+            ({"receive": other_error}, got("ignored")),
+            ({"receive": bad_reply}, got("rejected", err(bad_reply, "SIGNATURE_INVALID", None, cat))),
+            ({"query": pids[0]}, status("open", True)),
+        ],
+    )
+    proposer(
+        "a proposal stops going again once the owner withdraws the record, or once the key in to is removed",
+        ["shares.md 16.2"],
+        proposer_device(),
+        [
+            (propose, sent),
+            (
+                {"propose": {"id": rid, "to": cat, "values": {"title": sy.encoded("Dentist")}}},
+                {"message": proposal_said(pids[1], values={"title": sy.encoded("Dentist")})},
+            ),
+            ({"remove": cat}, {"messages": []}),
+            ({"query": pids[0]}, status("open", False)),
+            ({"record": {"id": rid, "kind": "WITHDRAW", "version": "4"}}, {}),
+            ({"query": pids[1]}, status("open", False)),
+        ],
+    )
+
+    # --- the second round of rules (spec/shares.md, sections 12 to 18) ---
+    takes_new = {
+        cat: {"revision": 2, "proposals": [se.AP_TYPE]},
+        H(NEW): {"revision": 1, "proposals": [se.AP_TYPE]},
+    }
+    proposer(
+        "only the fields whose value differs from the DATA of the version go into a PROPOSAL",
+        ["shares.md 13.1"],
+        proposer_device(),
+        [
+            ({"propose": {"id": rid, "to": cat, "values": {"start": start1030}}}, {"message": None}),
+            (
+                {"propose": {"id": rid, "to": cat, "values": {"start": start11, "title": sy.encoded("Vet")}}},
+                sent,
+            ),
+        ],
+    )
+    proposer(
+        "a later ACCEPTED takes the place of a DECLINED, and a later "
+        "DECLINED does not take that of an ACCEPTED",
+        ["shares.md 14.2"],
+        proposer_device(),
+        [
+            (propose, sent),
+            ({"receive": R(pids[0], "DECLINED")}, got("taken")),
+            ({"receive": R(pids[0], "ACCEPTED", seed=NEW_SEED)}, got("taken")),
+            ({"query": pids[0]}, status("ACCEPTED", False)),
+            ({"receive": R(pids[0], "DECLINED")}, got("ignored")),
+            ({"query": pids[0]}, status("ACCEPTED", False)),
+        ],
+    )
+    proposer(
+        "the block after PROPOSALS_NOT_TAKEN holds for every key of the "
+        "owner and ends with a reply for the record",
+        ["shares.md 16.3"],
+        proposer_device(manifests=takes_new),
+        [
+            (propose, sent),
+            (
+                {"propose": {"id": rid, "to": H(NEW), "values": {"title": sy.encoded("Dentist")}}},
+                {"message": proposal_said(pids[1], to=H(NEW), values={"title": sy.encoded("Dentist")})},
+            ),
+            ({"receive": E(first, "PROPOSALS_NOT_TAKEN")}, got("taken")),
+            ({"propose": {"id": rid, "to": H(NEW), "values": {"notes": sy.encoded("x")}}}, {"message": None}),
+            ({"receive": R(pids[1], "DECLINED", seed=NEW_SEED, to=OBF)}, got("taken")),
+            (
+                {"propose": {"id": rid, "to": H(NEW), "values": {"notes": sy.encoded("x")}}},
+                {"message": proposal_said(pids[2], to=H(NEW), values={"notes": sy.encoded("x")})},
+            ),
+        ],
+    )
+    two_records = proposer_device()
+    two_records["records"].append(
+        {
+            "id": alone_id,
+            "type": se.AP_TYPE,
+            "version": "1",
+            "last": "DATA",
+            "schema": ap1,
+            "values": v3_bytes,
+        }
+    )
+    proposer(
+        "the block after PROPOSALS_NOT_TAKEN ends with a reply of the owner about another record, and holds "
+        "back no repeat",
+        ["shares.md 16.3", "shares.md 16.2"],
+        two_records,
+        [
+            (
+                {"propose": {"id": alone_id, "to": cat, "values": {"start": start11}}},
+                {"message": proposal_said(pids[0], record=(alone_id, 1))},
+            ),
+            (
+                {"propose": {"id": rid, "to": cat, "values": {"start": start11}}},
+                {"message": proposal_said(pids[1])},
+            ),
+            ({"receive": E(P(pid=pids[1], seed=OBF_SEED), "PROPOSALS_NOT_TAKEN")}, got("taken")),
+            ({"connect": cat}, {"messages": [proposal_said(pids[0], record=(alone_id, 1))]}),
+            (
+                {"propose": {"id": rid, "to": cat, "values": {"title": sy.encoded("Dentist")}}},
+                {"message": None},
+            ),
+            ({"receive": R(pids[0], "DECLINED", record=(alone_id, 1))}, got("taken")),
+            (
+                {"propose": {"id": rid, "to": cat, "values": {"title": sy.encoded("Dentist")}}},
+                {"message": proposal_said(pids[2], values={"title": sy.encoded("Dentist")})},
+            ),
+        ],
+    )
+    proposer(
+        "the block after PROPOSALS_NOT_TAKEN ends with a manifest of another "
+        "key of the owner with a higher revision",
+        ["shares.md 16.3"],
+        proposer_device(manifests=takes_new),
+        [
+            (propose, sent),
+            ({"receive": E(first, "PROPOSALS_NOT_TAKEN")}, got("taken")),
+            ({"manifest": {"key": H(NEW), "revision": 2, "proposals": [se.AP_TYPE]}}, {}),
+            (propose, {"message": proposal_said(pids[1])}),
+        ],
+    )
+    proposer(
+        "after SCHEMA_UNKNOWN the block also ends with a manifest of the owner with a higher revision",
+        ["shares.md 16.3"],
+        proposer_device(),
+        [
+            (propose, sent),
+            ({"receive": E(first, "SCHEMA_UNKNOWN", fingerprint=fp1)}, got("taken")),
+            (propose, {"message": None}),
+            ({"manifest": {"key": cat, "revision": 3, "proposals": [se.AP_TYPE]}}, {}),
+            (propose, {"message": proposal_said(pids[1])}),
+        ],
+    )
+    proposer(
+        "an open proposal goes again at the start of each live connection with the device of to",
+        ["shares.md 16.2"],
+        proposer_device(),
+        [
+            (propose, sent),
+            ({"connect": cat}, {"messages": [proposal_said(pids[0])]}),
+            ({"connect": H(NEW)}, {"messages": []}),
+            ({"connect": cat}, {"messages": [proposal_said(pids[0])]}),
+            ({"receive": R(pids[0], "DECLINED")}, got("taken")),
+            ({"connect": cat}, {"messages": []}),
+        ],
+    )
+    proposer(
+        "an open proposal sent through the relay goes again after the holding time of 14 days, not before",
+        ["shares.md 16.2"],
+        proposer_device(),
+        [
+            ({"propose": {"id": rid, "to": cat, "values": {"start": start11}, "relay": True}}, sent),
+            ({"days": 13}, {"messages": []}),
+            ({"days": 1}, {"messages": [proposal_said(pids[0])]}),
+            ({"days": 13}, {"messages": []}),
+            ({"days": 1}, {"messages": [proposal_said(pids[0])]}),
+        ],
+    )
+    proposer(
+        "after the removal of the key in to the proposal goes to another key of the owner, with the same id",
+        ["shares.md 16.2", "shares.md 13.1"],
+        proposer_device(manifests=takes_new),
+        [
+            (propose, sent),
+            ({"remove": cat}, {"messages": [proposal_said(pids[0], to=H(NEW))]}),
+            ({"query": pids[0]}, status("open", True)),
+            ({"connect": H(NEW)}, {"messages": [proposal_said(pids[0], to=H(NEW))]}),
+        ],
+    )
+    # The owner.
+    m_other = P(entries=[("start", fp1, start11), ("title", fp1, sy.encoded("Vet"))])
+    low, high = sorted((m, m_other), key=lambda x: hashlib.sha256(x).digest())
+    owner(
+        "a repeat in other bytes with a higher SHA-256 takes the place of "
+        "the open proposal, a lower one does not",
+        ["shares.md 13.4"],
+        owner_device(),
+        [
+            ({"receive": low}, got("taken")),
+            ({"receive": high}, got("replaced")),
+            ({"receive": low}, got("repeat")),
+            ({"query": True}, q([("Old Brain Fix", se.PROPOSAL_ID, rid, high)], [])),
+        ],
+    )
+    owner(
+        "a repeat of an answered proposal gets its reply again, also after the record has been deleted",
+        ["shares.md 13.3", "shares.md 13.4"],
+        owner_device(),
+        [
+            ({"receive": m}, got("taken")),
+            (
+                {
+                    "answer": {
+                        "receiver": "Old Brain Fix",
+                        "proposal_id": se.PROPOSAL_ID,
+                        "answer": "DECLINED",
+                    }
+                },
+                {"made": True, "replies": [reply(se.PROPOSAL_ID, "DECLINED")], "update": None},
+            ),
+            ({"change": {"id": rid, "action": "delete"}}, {}),
+            ({"receive": P(record=(rid, 5))}, got("repeat", reply(se.PROPOSAL_ID, "DECLINED"))),
+        ],
+    )
+    own_app = H(NEW)
+    own_device = owner_device()
+    own_device["receivers"].append({"name": "own app", "current": [own_app], "removed": [], "own_user": True})
+    owner(
+        "an app of the owner's own user is a receiver of every record of the type, shared with it or not",
+        ["shares.md 12.2", "shares.md 2.3"],
+        own_device,
+        [
+            ({"receive": P(record=(alone_id, 1), seed=NEW_SEED)}, got("taken")),
+            ({"receive": P(record=(rid, 3), seed=NEW_SEED, pid=pids[0])}, got("taken")),
+            (
+                {
+                    "receive": P(
+                        [("name", pet_fp, sy.encoded("Mia"))], record=(pet_id, 1), seed=NEW_SEED, pid=pids[1]
+                    )
+                },
+                got(
+                    "rejected",
+                    err(
+                        P(
+                            [("name", pet_fp, sy.encoded("Mia"))],
+                            record=(pet_id, 1),
+                            seed=NEW_SEED,
+                            pid=pids[1],
+                        ),
+                        "PROPOSALS_NOT_TAKEN",
+                        (pet_id, 1),
+                        own_app,
+                    ),
+                ),
+            ),
+        ],
+    )
+    owner(
+        "a stop of a receiver for all records drops its open proposals and fails its later ones",
+        ["shares.md 18.4", "shares.md 13.3"],
+        owner_device(),
+        [
+            ({"receive": m}, got("taken")),
+            ({"receive": P(record=(other_id, 1), seed=second_seed)}, got("taken")),
+            ({"stop": {"receiver": "Old Brain Fix"}}, {}),
+            ({"receive": P(pid=pids[0])}, got("rejected", err(P(pid=pids[0]), "PROPOSALS_NOT_TAKEN"))),
+            (
+                {"query": True},
+                q([("second app", se.PROPOSAL_ID, other_id, P(record=(other_id, 1), seed=second_seed))], []),
+            ),
+        ],
+    )
+    for label, stop in [
+        ("for one record", {"receiver": "Old Brain Fix", "id": rid}),
+        ("for one type", {"receiver": "Old Brain Fix", "type": se.AP_TYPE}),
+    ]:
+        owner(
+            f"a stop of a receiver {label} that the app's records hold fails step 5",
+            ["shares.md 18.4", "shares.md 13.3"],
+            owner_device(stopped=[stop]),
+            [
+                ({"receive": m}, got("rejected", err(m, "PROPOSALS_NOT_TAKEN"))),
+                (
+                    {"receive": P(record=(other_id, 1), pid=pids[0])},
+                    got("taken")
+                    if "id" in stop
+                    else got(
+                        "rejected",
+                        err(P(record=(other_id, 1), pid=pids[0]), "PROPOSALS_NOT_TAKEN", (other_id, 1)),
+                    ),
+                ),
+            ],
+        )
+    big = sy.encoded("v" * 65533)
+    assert len(big) == 65536
+    for size, value, result in [(65536, big, "taken"), (65537, sy.encoded("v" * 65534), "rejected")]:
+        msg = P([("title", fp1, value)])
+        owner(
+            f"step 5: a PROPOSAL with {size:,} value bytes",
+            ["shares.md 18.3"],
+            owner_device(),
+            [
+                (
+                    {"receive": msg},
+                    got("taken") if result == "taken" else got("rejected", err(msg, "PROPOSALS_NOT_TAKEN")),
+                )
+            ],
+        )
+    for held, result in [(1048576 - 33, "taken"), (1048576 - 32, "rejected")]:
+        opens = [{"receiver": "Old Brain Fix", "proposal_id": pids[8], "id": unknown_id, "value_bytes": held}]
+        owner(
+            f"step 5: a PROPOSAL of 33 value bytes beside open proposals of "
+            f"{held:,} value bytes of that proposer",
+            ["shares.md 18.3"],
+            owner_device(open=opens),
+            [
+                (
+                    {"receive": m},
+                    got("taken") if result == "taken" else got("rejected", err(m, "PROPOSALS_NOT_TAKEN")),
+                )
+            ],
+        )
+    for first_answer, later, stands in [
+        ("DECLINED", "ACCEPTED", "ACCEPTED"),
+        ("ACCEPTED", "DECLINED", "ACCEPTED"),
+    ]:
+        update = None if first_answer == "DECLINED" else {"version": "4", "value": v4}
+        owner(
+            f"of two answers that the app's records hold, ACCEPTED stands: "
+            f"{first_answer} here, {later} of a sibling",
+            ["shares.md 15.1", "shares.md 17.1"],
+            owner_device(),
+            [
+                ({"receive": m}, got("taken")),
+                (
+                    {
+                        "answer": {
+                            "receiver": "Old Brain Fix",
+                            "proposal_id": se.PROPOSAL_ID,
+                            "answer": first_answer,
+                        }
+                    },
+                    {"made": True, "replies": [reply(se.PROPOSAL_ID, first_answer)], "update": update},
+                ),
+                (
+                    {
+                        "answered": {
+                            "receiver": "Old Brain Fix",
+                            "proposal_id": se.PROPOSAL_ID,
+                            "answer": later,
+                            "id": rid,
+                            "version": 3,
+                        }
+                    },
+                    {},
+                ),
+                (
+                    {"query": True},
+                    q(
+                        [],
+                        [("Old Brain Fix", se.PROPOSAL_ID, stands)],
+                        {rid: ("4", "there", v4)} if first_answer == "ACCEPTED" else None,
+                    ),
+                ),
+            ],
+        )
+    room = sy.field_value(json.loads(ap2), "room", "2")
+    owner(
+        "ACCEPTED is barred for a value of a field that the reader schema lacks, and DECLINED is not",
+        ["shares.md 15.1"],
+        owner_device(schemas=[ap1, ap2, pet_text], readers={se.AP_TYPE: ap1}),
+        [
+            ({"receive": P([("room", fp2, room)])}, got("taken")),
+            (
+                {
+                    "answer": {
+                        "receiver": "Old Brain Fix",
+                        "proposal_id": se.PROPOSAL_ID,
+                        "answer": "ACCEPTED",
+                    }
+                },
+                {"made": False, "replies": [], "update": None},
+            ),
+            (
+                {
+                    "answer": {
+                        "receiver": "Old Brain Fix",
+                        "proposal_id": se.PROPOSAL_ID,
+                        "answer": "DECLINED",
+                    }
+                },
+                {"made": True, "replies": [reply(se.PROPOSAL_ID, "DECLINED")], "update": None},
+            ),
+        ],
+    )
 
 
 # --- file (spec/transports.md, section 2) ---------------------------------------------------
@@ -5104,6 +6426,20 @@ def file_category() -> Category:
             shares_refs,
             keyed([OBF]),
         )
+    # No file holds a PROPOSAL or a PROPOSAL_REPLY (spec/shares.md, section 18.2).
+    entry = [("start", se.APPOINTMENT_FP, se.START_VALUE)]
+    for kind, b in [
+        ("PROPOSAL", se.proposal_body(OBF, se.PROPOSAL_ID, entry)),
+        ("PROPOSAL_REPLY", se.reply_body(OBF, se.PROPOSAL_ID, "ACCEPTED")),
+    ]:
+        m = sy.message(CAT_SEED, kind, (rid(39), 1), b)
+        add(
+            f"reject a file with a {kind}",
+            container([D(40), m], [schema(A_)]),
+            reject("FILE_REJECTED"),
+            ["shares.md 18.2", "transports.md 2.1", "transports.md 2.2"],
+            keyed([OBF]),
+        )
     # The files the readers of the Python libraries take are taken here as well.
     for data in (env.axt_file, full):
         assert len(list(fastavro.reader(io.BytesIO(data)))) >= 1
@@ -5518,8 +6854,8 @@ def same_values(v: Any) -> Any:
 # spec/conformance.md, section 7.4, counts them.
 COUNTS = {
     "encoding": (
-        {"fingerprint": 22, "decode_message": 40, "decode_body": 43, "encode_message": 6},
-        {"decode_message": 17, "decode_body": 26},
+        {"fingerprint": 24, "decode_message": 40, "decode_body": 56, "encode_message": 8},
+        {"decode_message": 17, "decode_body": 37},
     ),
     "types": ({"fingerprint": 8, "decode_record": 63}, {"decode_record": 21}),
     "time": (
@@ -5558,7 +6894,7 @@ COUNTS = {
         },
     ),
     "protocol": ({"choose_format": 3, "contact_key": 5, "resend_after_removal": 2, "session": 48}, {}),
-    "file": ({"read_file": 64}, {"read_file": 42}),
+    "file": ({"read_file": 66}, {"read_file": 44}),
     "qr": ({"parse_qr": 28, "qr_text": 4}, {"parse_qr": 21}),
     "local": ({"hello_frame": 2, "connection": 20}, {}),
     "relay": ({"mailbox_id": 2, "request": 7, "reaction": 28, "listing": 3}, {}),
@@ -5573,7 +6909,7 @@ COUNTS = {
             "stale": 10,
             "pass_version": 5,
             "shown": 23,
-            "siblings": 447,
+            "siblings": 475,
             "withdrawal_stamp": 4,
         },
         {},
@@ -5587,6 +6923,8 @@ COUNTS = {
             "pass_withdrawal": 5,
             "join_receivers": 5,
             "offer_types": 2,
+            "owner": 68,
+            "proposer": 33,
         },
         {},
     ),
