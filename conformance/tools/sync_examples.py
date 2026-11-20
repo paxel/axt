@@ -3,7 +3,7 @@
 
 The examples of sections 2 to 6 of spec/sync.md are numbers: stamps, states of a record
 and what a merge makes of them. Those of sections 15 and 16 are the schemas and the bytes
-of the CHANGE and RESYNC messages between the devices of a set. This script:
+of the CHANGE, RESYNC and FORWARD messages between the devices of a set. This script:
 
 - implements the rules of spec/sync.md from its normative sections: the next stamp and
   where there is none (sections 2.2 and 2.3), what an installation does when it begins
@@ -24,8 +24,8 @@ of the CHANGE and RESYNC messages between the devices of a set. This script:
   second time, in another way, and checks over many generated cases, which a counter
   and SHA-256 make the same in every run, that both ways agree and that the merge of
   field states and removals is commutative, associative and idempotent (section 4.5);
-- checks the Parsing Canonical Forms and the fingerprints of types/axt/Change.avsc and
-  Resync.avsc with fastavro and the Apache avro package (section 15), and builds the
+- checks the Parsing Canonical Forms and the fingerprints of types/axt/Change.avsc,
+  Resync.avsc and Forward.avsc with fastavro and the Apache avro package (section 15), and builds the
   messages of section 16 field by field: each is compared with fastavro's encoding, read
   back with the avro package, and signed and verified with the pure-Python Ed25519 of
   keys_examples.py, PyNaCl and cryptography, which give the same signature;
@@ -35,11 +35,22 @@ of the CHANGE and RESYNC messages between the devices of a set. This script:
   acknowledgements, errors, RESYNC, a restored, a removed and a new device, and a file of
   its own set; it plays the examples of section 16 and the sessions of `sessions` through
   the model and checks every step against what `SAID` writes out for it. The generator
-  turns the sessions into the vectors of the operation `siblings`.
+  turns the sessions into the vectors of the operation `siblings`;
+- extends that model to what a set got from other apps (sections 17 to 24): the 16 steps
+  in which a device checks a FORWARD, a forwarded MANIFEST, DATA, DELETE, DEVICE_ADD and
+  DEVICE_REMOVE by what its sender is to the device, the kept messages with what is
+  delivered and due for each sibling, the owner's layer of a received record with its
+  CHANGE messages that name the sender in `origin`, what a device shows from the two
+  layers, and the answering device, which takes a message from the other app itself. It
+  builds the messages of sections 16.5 to 16.7 in the same way. Not modelled, because the
+  text of these parts is about to change: ending and completing an owner's layer and the
+  later ACK (sections 22.2 and 22.3), a forwarded record message of a key removed since
+  (section 19.2), and two senders that join (section 23.4).
 
 The device keys are TEST KEYS, derived as spec/keys.md, section 7.1, says, from the
 labels "cat-a-log, phone, Ed25519" and "cat-a-log, tablet, Ed25519", and for the sessions
-from further labels in the same way. The keys of the cases about the order of keys are
+from further labels in the same way; the other app of sections 16.5 to 16.7 has the test
+key "Old Brain Fix, Ed25519" of spec/protocol.md. The keys of the cases about the order of keys are
 byte strings chosen for the comparison, not keys.
 
 Run from anywhere, with fastavro, avro (1.12), pynacl and cryptography installed, and a
@@ -199,7 +210,9 @@ SCHEMA_VERSIONS = {SCHEMA_1: 1, SCHEMA_2: 2}  # the axt.version of the schema a 
 
 @dataclass(frozen=True)
 class FieldState:
-    value: bytes  # the value in Avro binary encoding, with the type of the field
+    # The value in Avro binary encoding, with the type of the field. None only in an owner's layer of a
+    # received record: the owner discarded a change of the field (section 21.1).
+    value: bytes | None
     stamp: int  # 0 for a field never stamped (section 3.4)
     device: bytes
     schema: bytes = SCHEMA_1  # the fingerprint of the writer schema the bytes were written with
@@ -213,10 +226,22 @@ class Removal:
 
 
 @dataclass(frozen=True)
+class Keep:
+    """The keep of an owner's layer (section 21.1): the owner keeps the record against a deletion by its
+    sender whose version is not above `version`, or, with `given_up`, has given that keeping up."""
+
+    stamp: int
+    device: bytes
+    version: int
+    given_up: bool = False
+
+
+@dataclass(frozen=True)
 class State:
     fields: dict[str, FieldState]
     removal: Removal | None = None
     state_stamp: int | None = None  # None where the device could take none (section 2.3)
+    keep: Keep | None = None  # only an owner's layer of a received record holds one (section 21.1)
 
 
 def key_order(a: bytes, b: bytes) -> int:
@@ -238,6 +263,8 @@ def later_field(a: FieldState, b: FieldState) -> bool:
     if (a.stamp, a.device) != (b.stamp, b.device):
         return later(a, b)
     if a.value != b.value:
+        if a.value is None or b.value is None:
+            return b.value is None  # a null value is lower than every value that is not null (section 21.1)
         return bytes_order(a.value, b.value) > 0  # rule 3: the higher bytes of the value
     return bytes_order(a.schema, b.schema) > 0  # then the higher schema; with all equal, the same field state
 
@@ -249,6 +276,18 @@ def later_removal(a: Removal, b: Removal) -> bool:
     return a.stands and not b.stands  # the one that stands, over the one that was taken back
 
 
+def later_keep(a: Keep, b: Keep) -> bool:
+    """Whether the keep a is later than b (section 21.1): the higher version, then the higher stamp, then
+    the higher device key, then the one that is given up."""
+    if a.version != b.version:
+        return a.version > b.version
+    if a.stamp != b.stamp:
+        return a.stamp > b.stamp
+    if a.device != b.device:
+        return key_order(a.device, b.device) > 0
+    return a.given_up and not b.given_up
+
+
 # --- merging two states (sections 4.1 to 4.3) --------------------------------------------------
 
 
@@ -258,10 +297,12 @@ class Merged:
     removal: Removal | None
     stands: dict[str, str]  # for each field name, "own" or "other" (section 4.1)
     removal_taken: bool  # whether the removal comes from the other state (section 4.2)
+    keep: Keep | None = None  # of an owner's layer (section 21.1)
+    keep_taken: bool = False  # whether the keep comes from the other state
 
     @property
     def took(self) -> bool:
-        return self.removal_taken or "other" in self.stands.values()
+        return self.removal_taken or self.keep_taken or "other" in self.stands.values()
 
 
 def merge(own: State | None, other: State) -> Merged:
@@ -283,7 +324,11 @@ def merge(own: State | None, other: State) -> Merged:
     removal_taken = other.removal is not None and (removal is None or later_removal(other.removal, removal))
     if removal_taken:
         removal = other.removal
-    return Merged(fields, removal, stands, removal_taken)
+    keep = own.keep if own else None
+    keep_taken = other.keep is not None and (keep is None or later_keep(other.keep, keep))
+    if keep_taken:
+        keep = other.keep
+    return Merged(fields, removal, stands, removal_taken, keep, keep_taken)
 
 
 def deleted(fields: dict[str, FieldState], removal: Removal | None) -> bool:
@@ -299,7 +344,7 @@ def merge_latest(states: list[State]) -> tuple[dict[str, FieldState], Removal | 
     for name in {n for s in states for n in s.fields}:
         fields[name] = max(
             (s.fields[name] for s in states if name in s.fields),
-            key=lambda f: (f.stamp, f.device, f.value, f.schema),
+            key=lambda f: (f.stamp, f.device, f.value is not None, f.value or b"", f.schema),
         )
     removals = [s.removal for s in states if s.removal is not None]
     return fields, max(removals, key=lambda x: (x.stamp, x.device, x.stands)) if removals else None
@@ -313,6 +358,8 @@ def seen(state: State) -> int:
     stamps = [f.stamp for f in state.fields.values()]
     if state.removal:
         stamps.append(state.removal.stamp)
+    if state.keep:
+        stamps.append(state.keep.stamp)
     if state.state_stamp is not None:
         stamps.append(state.state_stamp)
     return max(stamps, default=0)
@@ -358,13 +405,13 @@ def device_merge(
     if other.state_stamp is not None:
         sibling_stamp = max(sibling_stamp or 0, other.state_stamp)
     if own is not None and not m.took:
-        state = State(m.fields, m.removal, own.state_stamp)
+        state = State(m.fields, m.removal, own.state_stamp, m.keep)
         return DeviceMerge(state, m, highest, sibling_stamp, kept_to_pass(to_pass, own.state_stamp))
     stamp = next_stamp(now_ms, highest, r)  # step 3
     if stamp is not None:
         highest = stamp
     return DeviceMerge(
-        State(m.fields, m.removal, stamp), m, highest, sibling_stamp, kept_to_pass(to_pass, stamp)
+        State(m.fields, m.removal, stamp, m.keep), m, highest, sibling_stamp, kept_to_pass(to_pass, stamp)
     )
 
 
@@ -535,14 +582,24 @@ def stamp_json(stamp: int | None) -> str | None:
     return None if stamp is None else str(stamp)
 
 
-def state_json(state: State | None) -> dict[str, Any] | None:
+def state_json(state: State | None, layer: bool = False) -> dict[str, Any] | None:
+    """A State of spec/conformance.md, section 5.14; that of an owner's layer, with `layer`, has `keep`."""
     if state is None:
         return None
-    r = state.removal
+    r, k = state.removal, state.keep
+    keep = {
+        "keep": k
+        and {
+            "stamp": str(k.stamp),
+            "device": k.device.hex(),
+            "version": str(k.version),
+            "given_up": k.given_up,
+        }
+    }
     return {
         "fields": {
             name: {
-                "value": f.value.hex(),
+                "value": None if f.value is None else f.value.hex(),
                 "schema": f.schema.hex(),
                 "stamp": str(f.stamp),
                 "device": f.device.hex(),
@@ -550,6 +607,7 @@ def state_json(state: State | None) -> dict[str, Any] | None:
             for name, f in state.fields.items()
         },
         "removal": r and {"stamp": str(r.stamp), "device": r.device.hex(), "stands": r.stands},
+        **(keep if layer else {}),
         "state_stamp": stamp_json(state.state_stamp),
     }
 
@@ -557,11 +615,11 @@ def state_json(state: State | None) -> dict[str, Any] | None:
 def state_of_json(v: dict[str, Any] | None) -> State | None:
     if v is None:
         return None
-    r = v["removal"]
+    r, k = v["removal"], v.get("keep")
     return State(
         {
             name: FieldState(
-                bytes.fromhex(f["value"]),
+                None if f["value"] is None else bytes.fromhex(f["value"]),
                 int(f["stamp"]),
                 bytes.fromhex(f["device"]),
                 bytes.fromhex(f["schema"]),
@@ -570,6 +628,7 @@ def state_of_json(v: dict[str, Any] | None) -> State | None:
         },
         r and Removal(int(r["stamp"]), bytes.fromhex(r["device"]), r["stands"]),
         None if v["state_stamp"] is None else int(v["state_stamp"]),
+        k and Keep(int(k["stamp"]), bytes.fromhex(k["device"]), int(k["version"]), k["given_up"]),
     )
 
 
@@ -770,6 +829,7 @@ def start_of_6_2(label: bool = False) -> tuple[Device, Device]:
 
 def row(state: State, name: str) -> tuple[str, int, str]:
     f = state.fields[name]
+    assert f.value is not None
     return (text_of(f.value), f.stamp, {PHONE: "phone", TABLET: "tablet"}[f.device])
 
 
@@ -2698,7 +2758,20 @@ def check_properties(out: list[str]) -> None:
 # --- the schemas of the messages (sections 8.1, 11.1 and 15) -------------------------------------------
 
 AXT = REPO / "types" / "axt"
-SPEC_NAMES = ("Envelope", "Manifest", "Offer", "Accept", "Decline", "Ack", "Error", "Change", "Resync")
+SPEC_NAMES = (
+    "Envelope",
+    "Manifest",
+    "Offer",
+    "Accept",
+    "Decline",
+    "Ack",
+    "Error",
+    "Change",
+    "Resync",
+    "Forward",
+    "DeviceAdd",
+    "DeviceRemove",
+)
 SPEC_TEXT = {n: (AXT / f"{n}.avsc").read_text(encoding="utf-8") for n in SPEC_NAMES}
 
 
@@ -2727,6 +2800,7 @@ BODY_OF = {
     "ERROR": "Error",
     "CHANGE": "Change",
     "RESYNC": "Resync",
+    "FORWARD": "Forward",
 }
 MARKER = b"\xc3\x01"  # the marker of a single-object encoding (spec/envelope.md, section 3)
 MAX_MESSAGE = 16777216  # spec/envelope.md, section 8
@@ -2918,21 +2992,25 @@ def field_value(schema: dict[str, Any], name: str, value: Any) -> bytes:
 def change_version(d: dict[str, Any]) -> int:
     """`record.version` of a CHANGE: the highest stamp in the message (section 8.1)."""
     stamps = [d["state"], *(f["stamp"] for f in d["fields"])]
-    if d["removal"] is not None:
-        stamps.append(d["removal"]["stamp"])
+    for part in ("removal", "keep"):
+        if d[part] is not None:
+            stamps.append(d[part]["stamp"])
     return int(max(stamps))
 
 
 def change_problem(d: dict[str, Any], version: int) -> str | None:
-    """The rule of section 8.2 that the body of a CHANGE breaks, or None for a valid body."""
-    if d["origin"] is not None:
-        return "origin is a key"
+    """The rule of section 8.2 that the body of a CHANGE breaks, or None for a valid body. A key in
+    `origin` is valid, and only with one a value may be null (section 21.4)."""
     if not FULL_NAME.match(d["type"]) or len(d["type"].encode()) > MAX_NAME:
         return "type is not a full name of at most 512 bytes"
     if d["state"] < 1:
         return "state is below 1"
     if d["removal"] is not None and d["removal"]["stamp"] < 1:
         return "the stamp of the removal is below 1"
+    if d["keep"] is not None and d["origin"] is None:
+        return "a keep in a message whose origin is null"
+    if d["keep"] is not None and (d["keep"]["stamp"] < 1 or d["keep"]["version"] < 1):
+        return "the stamp or the version of the keep is below 1"
     if len(d["fields"]) > MAX_FIELDS:
         return "more than 4,096 entries in fields"
     names = [f["name"] for f in d["fields"]]
@@ -2940,11 +3018,11 @@ def change_problem(d: dict[str, Any], version: int) -> str | None:
         return "a name of 0 or of more than 512 bytes"
     if len(set(names)) != len(names):
         return "a name twice"
-    if any(f["value"] is None for f in d["fields"]):
-        return "a null value"
+    if d["origin"] is None and any(f["value"] is None for f in d["fields"]):
+        return "a null value in a message whose origin is null"
     if any(f["stamp"] < -1 for f in d["fields"]):
         return "a stamp of a field state below -1"
-    if not d["whole"] and not d["fields"] and d["removal"] is None:
+    if not d["whole"] and not d["fields"] and d["removal"] is None and d["keep"] is None:
         return "not whole, and the message carries nothing"
     if version != change_version(d):
         return "record.version is not the highest stamp in the message"
@@ -2985,12 +3063,13 @@ class Content:
     whole: bool
     removal: Removal | None
     fields: frozenset[tuple[str, FieldState]]
+    keep: Keep | None = None
 
     @property
     def marks(self) -> frozenset[Any]:
         """The parts as a device keeps them for a CHANGE it sent (section 10.1): each field state by all
-        it holds, where a device may keep a hash in the place of the value, and the removal."""
-        return self.fields if self.removal is None else self.fields | {self.removal}
+        it holds, where a device may keep a hash in the place of the value, the removal and the keep."""
+        return self.fields | {p for p in (self.removal, self.keep) if p is not None}
 
 
 @dataclass
@@ -3021,6 +3100,12 @@ class Kept:
     settled: int | None = None  # the state stamp at which an error settled the last CHANGE (section 9.3)
     barred: bool = False  # RECORD_UNKNOWN for a record the device holds incompletely (section 10.2)
     fresh: bool = False  # no CHANGE of it has gone since a RESYNC of the sibling (section 3.3, occasion 6)
+    # RECORD_UNKNOWN for an owner's layer: nothing of it goes to the sibling until the sibling has taken
+    # something of the sender, or the layer has a new state stamp (section 21.5).
+    waiting: bool = False
+    # RECORD_UNKNOWN for an owner's layer in a row, with no outcome of the sibling for a CHANGE of it in
+    # between: from the second on, only a new state stamp or a RESYNC ends the wait (section 21.5).
+    unknowns: int = 0
 
 
 class Reject(Exception):
@@ -3044,10 +3129,262 @@ class Reject(Exception):
         )
 
 
+# --- what a set got from other apps (sections 17 to 22) ---------------------------------------------
+
+FORWARDED = ("MANIFEST", "DATA", "DELETE", "DEVICE_ADD", "DEVICE_REMOVE")  # the kinds of section 18.1
+INNER_BODY = {"MANIFEST": "Manifest", "DEVICE_ADD": "DeviceAdd", "DEVICE_REMOVE": "DeviceRemove"}
+# A record of the set by its id as a 128-bit value; an owner's layer by its sender and that id.
+Ref = int | tuple[int, int]
+
+
+def sha(data: bytes) -> bytes:
+    """The SHA-256 by which a device identifies a kept message (section 20.1)."""
+    return hashlib.sha256(data).digest()
+
+
+def inner_message(d: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Steps 7 to 11 of section 18.3 on the body of a FORWARD: the envelope of the message inside, and
+    for a DATA the schema that `schema` holds. Reject with the code of the step that fails."""
+    m: bytes = d["message"]
+    if len(m) < 10 or m[:2] != MARKER:
+        raise Reject("INVALID_MESSAGE", "message is no single-object encoding")  # step 7
+    if m[2:10] != SPEC_FP["Envelope"]:
+        raise Reject("FORMAT_UNSUPPORTED", fingerprint=m[2:10])  # step 8
+    try:  # step 9: the rest of section 18.2
+        inner = read_all("Envelope", m[10:])
+    except ValueError as e:
+        raise Reject("INVALID_MESSAGE", f"message: {e}") from None
+    kind, body, text = inner["kind"], inner["body"], d["schema"]
+    if inner["format"] != 1:
+        raise Reject("INVALID_MESSAGE", "message: not the format of its fingerprint")
+    if kind not in FORWARDED:
+        raise Reject("INVALID_MESSAGE", f"a {kind} is never forwarded")
+    if (inner["record"] is None) == (kind in ("DATA", "DELETE")):
+        raise Reject("INVALID_MESSAGE", "message: record present or missing")
+    if kind == "DELETE":
+        if body:
+            raise Reject("INVALID_MESSAGE", "message: a DELETE with a body")
+    elif kind == "DATA":
+        if len(body) < 10 or body[:2] != MARKER:
+            raise Reject("INVALID_MESSAGE", "message: the body is no single-object encoding")
+    elif body[:10] != MARKER + SPEC_FP[INNER_BODY[kind]]:
+        raise Reject("INVALID_MESSAGE", f"message: the body is not an axt.{INNER_BODY[kind]}")
+    if (text is None) == (kind == "DATA"):
+        raise Reject("INVALID_MESSAGE", "schema is a string for a DATA, and null for every other kind")
+    if text is None:
+        return inner, None
+    if len(text.encode()) > tm.rules.MAX_SCHEMA_BYTES:  # step 10
+        raise Reject("TOO_LARGE", "a schema above 256 KiB")
+    try:
+        schema = json.loads(text)
+    except RecursionError:
+        raise Reject("TOO_LARGE", "a schema nested deeper than 64") from None
+    except ValueError:
+        raise Reject("INVALID_MESSAGE", "schema is no JSON text") from None
+    if tm.rules.json_depth(schema) > tm.rules.MAX_JSON_DEPTH:
+        raise Reject("TOO_LARGE", "a schema nested deeper than 64")
+    try:  # step 11
+        name = full_name(schema)
+        fastavro.parse_schema(schema, _write_hint=False)
+        fp = schema_fingerprint(text)
+    except Exception:
+        name = None
+    if name is None or fp != body[2:10]:
+        raise Reject("INVALID_MESSAGE", "schema is no schema of a record with the fingerprint of the body")
+    return inner, schema
+
+
+def record_values(schema: dict[str, Any], body: bytes) -> dict[str, bytes]:
+    """The bytes of each top-level field in the body of a DATA, which holds the fields of the record one
+    after the other, by the names of its writer schema; Reject with UNDECODABLE or VALUE_INVALID for a
+    body that fails step 8 or 9 of spec/protocol.md, section 6.2 (section 19.5)."""
+    buf, out, found = io.BytesIO(body[10:]), dict[str, bytes](), []
+    for f in schema["fields"]:
+        start = buf.tell()
+        try:
+            found.append(read_field(schema, f["name"], buf))
+        except ValueError as e:
+            raise Reject("UNDECODABLE", str(e)) from None
+        out[f["name"]] = body[10 + start : 10 + buf.tell()]
+    if buf.tell() != len(body) - 10:
+        raise Reject("UNDECODABLE", "bytes left over after the record")
+    for one, value in found:
+        broken = tm.value_breaches(one, value)
+        if broken:
+            path, rule, why = broken[0]
+            raise Reject("VALUE_INVALID", f"{rule}: {why}", field=mr.error_field(path))
+    return out
+
+
+def same_value(name: str, a: bytes, a_schema: dict[str, Any], b: bytes, b_schema: dict[str, Any]) -> bool:
+    """Whether two values of a field are the same value: compared as the values they decode to, each
+    with the schema it was written with, not by their bytes (section 22.2)."""
+    if field_schema(a_schema, name) is None or field_schema(b_schema, name) is None:
+        return False
+    one: Any = read_field(a_schema, name, io.BytesIO(a))[1]
+    other: Any = read_field(b_schema, name, io.BytesIO(b))[1]
+    return bool(one == other)
+
+
+def owner_values(layer: State | None) -> dict[str, FieldState]:
+    """The field states of an owner's layer that hold an owner's value (section 17.1)."""
+    return {} if layer is None else {n: f for n, f in layer.fields.items() if f.value is not None}
+
+
+def owner_deleted(layer: State | None) -> bool:
+    """Whether the owner's removal stands (section 21.1): a removal with `stands` true, whatever the
+    stamps of the field states."""
+    return layer is not None and layer.removal is not None and layer.removal.stands
+
+
+# What a device shows of a received record (section 22.1).
+NOT_THERE, THERE, BY_OWNER, BY_SENDER, AGAINST = (
+    "none",
+    "there",
+    "deleted_by_owner",
+    "deleted_by_sender",
+    "kept",
+)
+
+
+def shown(
+    there: bool | None,
+    values: dict[str, bytes],
+    schema: bytes | None,
+    layer: State | None,
+    version: int = 0,
+    beside: tuple[dict[str, bytes], bytes] | None = None,
+) -> tuple[str, dict[str, tuple[bytes, bytes, str]]]:
+    """The record a device shows, from the two layers alone, by the rules 0 to 3b of section 22.1. `there`
+    is None for a device that holds no record message of the record, True for a sender's layer that ends
+    in a DATA, with the bytes of its fields in `values` and the fingerprint of their schema, and False for
+    one that ends in a DELETE of the version `version`, with the values and the fingerprint of the
+    schema of the DATA beside the tombstone in `beside`, if the device holds one. For each field that
+    has a value: its bytes, the fingerprint of their schema, and the layer it comes from."""
+    if there is None:
+        return NOT_THERE, {}  # rule 0
+    if owner_deleted(layer):
+        return BY_OWNER, {}  # rule 1
+    if not there:
+        keep = None if layer is None else layer.keep
+        kept = keep is not None and not keep.given_up and keep.version >= version
+        if not kept or beside is None or not owner_values(layer):
+            return BY_SENDER, {}  # rule 3b
+        values, schema = beside  # rule 3a: the DATA beside the tombstone, with the owner's values
+    assert schema is not None
+    own = owner_values(layer)
+    out: dict[str, tuple[bytes, bytes, str]] = {}
+    for name, value in values.items():
+        mine = own.get(name)
+        if mine is None or mine.value is None:
+            out[name] = (value, schema, "sender")
+        else:
+            out[name] = (mine.value, mine.schema, "owner")
+    return (THERE if there else AGAINST), out
+
+
+def answered(
+    kind: str,
+    values: dict[str, bytes],
+    schema: bytes | None,
+    layer: State | None,
+    texts: dict[bytes, str],
+) -> tuple[str, list[str]]:
+    """The outcome that the answering device reports for a record message with a higher version than its
+    receiver's version, or for an id it does not have, and the names of the fields it kept (section 22.2;
+    spec/records.md, section 6), for a set that merges per field. The message changes nothing in the
+    owner's layer. `kind` is DATA, with the bytes of each field of its body in `values` and the
+    fingerprint of its writer schema, or DELETE; `texts` holds the schemas by which values are compared.
+    A DELETE that meets an owner's layer which is deleted by the owner or holds an owner's value is not
+    modelled."""
+    own = owner_values(layer)
+    assert kind == "DATA" and schema is not None
+    if owner_deleted(layer):
+        return "KEPT", []  # the record stays deleted (spec/records.md, section 6.3)
+    written = json.loads(texts[schema])
+    kept_fields = [
+        n
+        for n in values
+        if n in own
+        and not same_value(n, own[n].value or b"", json.loads(texts[own[n].schema]), values[n], written)
+    ]
+    return ("MERGED" if kept_fields else "APPLIED"), kept_fields
+
+
+def schema_version(text: str | None) -> int:
+    """The `axt.version` of a writer schema (spec/types.md, section 3.2), or 0 without one."""
+    if text is None:
+        return 0
+    version = json.loads(text).get("axt.version", 0)
+    return version if isinstance(version, int) else 0
+
+
+def stands_over(raw: bytes, text: str | None, kept: "Received") -> bool:
+    """Whether a record message with the id and version of the kept one, in other bytes, stands over it
+    (section 20.1): of two DATA messages the one whose writer schema has the higher `axt.version`; with
+    equal versions of the schema, and of two DELETE messages, the one with the higher SHA-256."""
+    mine, theirs = schema_version(text), schema_version(kept.schema)
+    if mine != theirs:
+        return mine > theirs
+    return sha(raw) > sha(kept.message)
+
+
+def cast_stamp(stamp: int | None) -> int:
+    assert stamp is not None, "the second stamp of a change that could begin can be taken"
+    return stamp
+
+
+@dataclass
+class Received:
+    """The sender's layer of a received record (section 17.1) and its kept message (section 20.1)."""
+
+    type: str | None  # the full name of its type; a tombstone for an id the device did not have holds none
+    version: int  # the receiver's version
+    there: bool  # False for a tombstone
+    message: bytes  # the record message that brought the receiver's version, as the bytes received
+    schema: str | None  # for a DATA, the text of the writer schema of its body
+    values: dict[str, bytes] = dataclasses.field(default_factory=dict)  # of a DATA, the bytes of each field
+    # For a tombstone: the DATA with the highest version below the DELETE that the device took, the DATA
+    # beside the tombstone (sections 17.1 and 20.1), or None.
+    beside: Any = None  # a Received, or None; not annotated so, as the loaders of this script need
+
+
+@dataclass
+class Sender:
+    """A known sender other than the device's own set, with what the device keeps of it in order to pass
+    it on (section 20.1)."""
+
+    serial: int  # its current and its removed keys are with the device, under this number
+    first: bytes  # the key by which the device first knew it: the `origin` of its layers (section 21.3)
+    chain: list[bytes] = dataclasses.field(default_factory=list)  # the additions and removals applied
+    manifests: dict[bytes, tuple[int, bytes]] = dataclasses.field(default_factory=dict)
+    records: dict[int, Received] = dataclasses.field(default_factory=dict)
+    ids: dict[int, str] = dataclasses.field(default_factory=dict)
+    schemas: dict[bytes, str] = dataclasses.field(default_factory=dict)  # kept apart (section 21.4)
+    # The keys whose kept manifest the device took from the key itself in a live connection (section 19.4).
+    live: set[bytes] = dataclasses.field(default_factory=set)
+    # How the device came to know it (section 19.2): None by its own user; otherwise by forwards of these
+    # siblings.
+    known_by: set[bytes] | None = None
+
+    def kept(self) -> list[tuple[bytes, str | None]]:
+        """Its kept messages in the order in which they are forwarded (section 20.3): the additions and
+        removals in the order in which they were applied, the manifests, the record messages. Each with
+        the schema text that goes with a DATA."""
+        out: list[tuple[bytes, str | None]] = [(m, None) for m in self.chain]
+        out += [(self.manifests[k][1], None) for k in sorted(self.manifests)]
+        for k in sorted(self.records):
+            beside = self.records[k].beside  # the DATA beside a tombstone goes before the DELETE
+            out += [] if beside is None else [(beside.message, beside.schema)]
+            out.append((self.records[k].message, self.records[k].schema))
+        return out
+
+
 class SetDevice:
     """One device of a device set, with the records of the set, its siblings and what it keeps for each
-    of them. It processes the messages of its siblings by sections 7 to 13 and gives back the messages
-    it sends. Every sibling has a channel to it, a live connection in which both manifests have been
+    of them, and the senders it knows with what it keeps of them. It processes the messages of its
+    siblings by sections 7 to 13 and 17 to 24 and gives back the messages it sends. Every sibling has a
+    channel to it, a live connection in which both manifests have been
     exchanged or, for the siblings named so, the relay; the envelope, the size and the signature of a
     message are those of spec/protocol.md, whose model is in protocol_examples.py, so a message that
     fails there is dropped here without a report.
@@ -3070,13 +3407,58 @@ class SetDevice:
         offer_ids: list[str] | None = None,
         request_ids: list[str] | None = None,
         relay: list[bytes] | None = None,
+        refused: list[bytes] | None = None,
+        forward_ids: list[str] | None = None,
+        on_delete: str = "delete",
     ) -> None:
         self.seed, self.key = seed, bytes(keys.public_key(seed))
         self.siblings = list(siblings)
         self.relay = set(relay or [])  # the siblings it reaches through the relay
         self.removed = set(removed or [])  # the removed keys of the device's own set
-        self.others = set(others or [])  # the current keys of the other senders it knows
-        self.gone = set(gone or [])  # the removed keys of other senders, and the refused keys
+        # The removed keys of other senders and the refused keys that the device is given as such: a
+        # message of one is rejected without a report (section 7.1).
+        self.gone = set(gone or [])
+        # The senders it knows other than its own set, with their current and their removed keys, and
+        # its refused keys (spec/keys.md, sections 3.3, 3.4 and 5.5).
+        self.book = keys.DeviceReceiver([], [*(refused or []), *(gone or [])])
+        self.senders: dict[int, Sender] = {}
+        self.serial = 0
+        self.others = list(others or [])
+        for other in self.others:
+            self._new_sender(other)  # a known sender of which it keeps nothing but that key
+        self.forward_ids = list(forward_ids or [])
+        # The senders its user forgot (section 20.5): for each, the key it first knew it by, its forgotten
+        # keys, which were its current keys, and its refused keys, which were its removed keys.
+        self.forgotten: list[tuple[bytes, list[bytes], list[bytes]]] = []
+        self.intro_waits: set[int] = set()  # the senders to which its chain and MANIFEST wait (section 17.2)
+        # What the set does with a DELETE of another app that meets owner's values: "delete" or "keep"
+        # (spec/records.md, section 6.4; section 22.3).
+        self.on_delete = on_delete
+        # For each owner's layer, the message of its sender for which the device reported KEPT and owes
+        # the further ACK of section 22.3: the signer, the id, the version and the kind.
+        self.later: dict[tuple[int, int], tuple[bytes, str, int, str]] = {}
+        self.layers: dict[tuple[int, int], Held] = {}  # the owner's layers, by sender and id (section 21.1)
+        # The removals of other senders that it keeps to try them again (section 19.3).
+        # Each with the signer, the device, the kind and the sibling that forwarded it.
+        self.early: list[tuple[bytes, bytes, bytes, str, bytes | None]] = []
+        # For each sibling (section 20.2): the kept messages delivered to it; the forwards it sent that
+        # have neither an outcome nor a settling error, by their id, each with the kept message, the day
+        # it last went, its id as text and its sender; the kept messages for which an error settled a
+        # forward; and those that went in the channel and wait for an outcome there.
+        self.fdelivered: dict[bytes, set[bytes]] = {s: set() for s in siblings}
+        self.forwards: dict[bytes, dict[int, tuple[bytes, int, str, int]]] = {s: {} for s in siblings}
+        self.fsettled: dict[bytes, set[bytes]] = {s: set() for s in siblings}
+        self.fgone: dict[bytes, set[bytes]] = {s: set() for s in siblings}
+        self.fanswer: dict[bytes, bool] = dict.fromkeys(siblings, False)  # forwards of an answer are to go
+        # For each sibling (section 20.2): the keys of which it has forwarded a removal whose signature
+        # verified; those of which the device acknowledged such a forward; the kept messages for which
+        # NOT_ACCEPTED of the sibling settled a forward, and those it forwarded once more after one.
+        self.fremovals: dict[bytes, set[bytes]] = {s: set() for s in siblings}
+        self.facked: dict[bytes, set[bytes]] = {s: set() for s in siblings}
+        self.frefused: dict[bytes, set[bytes]] = {s: set() for s in siblings}
+        self.fretried: dict[bytes, set[bytes]] = {s: set() for s in siblings}
+        self.after_acks: list[tuple[bytes, bytes]] = []  # due again once the ACK of a removal has gone
+        self.app_acks: dict[bytes, list[dict[str, Any]]] = {}  # the entries it owes other apps
         self.schemas = {
             schema_fingerprint(t): t for t in schemas
         }  # its own, and those kept with field states
@@ -3088,10 +3470,12 @@ class SetDevice:
         self.highest = highest
         self.records: dict[int, Held] = {}
         self.ids: dict[int, str] = {}  # the id of each record as text
-        self.kept: dict[tuple[bytes, int], Kept] = {}
+        self.kept: dict[tuple[bytes, Ref], Kept] = {}
         # The CHANGE messages it sent that have neither an outcome nor a settling error, by id and
-        # version: the parts each held, and the day it last went (section 10.1).
-        self.sent: dict[bytes, dict[tuple[int, int], tuple[frozenset[Any], int]]] = {s: {} for s in siblings}
+        # version: the parts each held, the day it last went (section 10.1), and the record or layer.
+        self.sent: dict[bytes, dict[tuple[int, int], tuple[frozenset[Any], int, Ref]]] = {
+            s: {} for s in siblings
+        }
         self.acks: dict[bytes, list[dict[str, Any]]] = {s: [] for s in siblings}
         self.requests: dict[bytes, tuple[str, int]] = {}  # its open requests: the id, the day it last went
         self.asked: int | None = None  # the day it opened the first of its open requests (section 5.1)
@@ -3099,7 +3483,7 @@ class SetDevice:
         self.restored = False  # whether it restored a backup (section 12.1)
         self.acted: dict[bytes, dict[int, str]] = {s: {} for s in siblings}  # the requests it acted on
         self.answering: dict[bytes, dict[int, str]] = {s: {} for s in siblings}  # those not yet answered
-        self.left: dict[bytes, set[int]] = {s: set() for s in siblings}  # the records an answer still lacks
+        self.left: dict[bytes, set[Ref]] = {s: set() for s in siblings}  # the records an answer still lacks
         self.manifests: dict[
             bytes, tuple[int, bytes]
         ] = {}  # the kept MANIFEST of a sibling, with its revision
@@ -3139,6 +3523,48 @@ class SetDevice:
             if text is not None:
                 self.schemas.setdefault(f.schema, text)
 
+    # --- the senders it knows, and the records and layers by their place (sections 17.1 and 21.3) ---
+
+    def _new_sender(self, key: bytes) -> Sender:
+        """A key becomes the first key of a new known sender (spec/keys.md, section 3.2; section 19.2)."""
+        self.serial += 1
+        self.book.senders.append(keys.KnownSender(str(self.serial), [key]))
+        self.senders[self.serial] = Sender(self.serial, key)
+        return self.senders[self.serial]
+
+    def _sender_of(self, key: bytes) -> Sender | None:
+        """The known sender that has the key among its current or its removed keys."""
+        known = self.book.sender_of(key)
+        return None if known is None else self.senders[int(known.name)]
+
+    def _keys(self, sender: Sender) -> Any:
+        """The current and the removed keys of a known sender."""
+        return next(k for k in self.book.senders if k.name == str(sender.serial))
+
+    def _ordered(self) -> list[Sender]:
+        """The known senders in the order of the keys by which the device first knew them."""
+        return sorted(self.senders.values(), key=lambda s: s.first)
+
+    def _refs(self) -> list[Ref]:
+        """The records of the set in the order of their ids, then the owner's layers, sender by sender."""
+        layers = sorted(self.layers, key=lambda ref: (self.senders[ref[0]].first, ref[1]))
+        return [*sorted(self.records), *layers]
+
+    def _held(self, ref: Ref) -> Held | None:
+        return self.records.get(ref) if isinstance(ref, int) else self.layers.get(ref)
+
+    def _id(self, ref: Ref) -> str:
+        return self.ids[ref] if isinstance(ref, int) else self.senders[ref[0]].ids[ref[1]]
+
+    def _text(self, ref: Ref, fp: bytes) -> str | None:
+        """The text of the schema that a field state of the record or layer names."""
+        if isinstance(ref, int):
+            return self.schema(fp)
+        return self.senders[ref[0]].schemas.get(fp)
+
+    def _kept_hashes(self) -> set[bytes]:
+        return {sha(m) for sender in self.senders.values() for m, _ in sender.kept()}
+
     # --- records ---
 
     def hold(
@@ -3163,6 +3589,8 @@ class SetDevice:
         parts: set[Any] = set(state.fields.items())
         if state.removal is not None:
             parts.add(state.removal)
+        if state.keep is not None:
+            parts.add(state.keep)
         return parts
 
     def _content(self, held: Held, kept: Kept) -> Content | None:
@@ -3170,24 +3598,30 @@ class SetDevice:
         fields = frozenset(held.state.fields.items())
         whole = not held.incomplete
         if not kept.known:
-            return Content(whole, held.state.removal, fields)
+            return Content(whole, held.state.removal, fields, held.state.keep)
         due = frozenset(p for p in fields if p not in kept.delivered)
-        removal = held.state.removal
+        removal, keep = held.state.removal, held.state.keep
         if removal is not None and removal in kept.delivered:
             removal = None
-        if not due and removal is None:
+        if keep is not None and keep in kept.delivered:
+            keep = None
+        if not due and removal is None and keep is None:
             return None
-        return Content(due == fields and whole, removal, due)
+        return Content(due == fields and whole, removal, due, keep)
 
-    def change_datum(self, sibling: bytes, held: Held, content: Content, stamp: int) -> dict[str, Any]:
-        r = content.removal
+    def change_datum(
+        self, sibling: bytes, held: Held, content: Content, stamp: int, origin: bytes | None = None
+    ) -> dict[str, Any]:
+        r, k = content.removal, content.keep
         return {
             "to": sibling,
-            "origin": None,
+            "origin": origin,
             "type": held.type,
             "state": stamp,
             "whole": content.whole,
             "removal": r and {"stamp": r.stamp, "device": r.device, "stands": r.stands},
+            "keep": k
+            and {"stamp": k.stamp, "device": k.device, "version": k.version, "given_up": k.given_up},
             "fields": [
                 {"name": name, "schema": f.schema, "value": f.value, "stamp": f.stamp, "device": f.device}
                 for name, f in held.state.fields.items()
@@ -3209,17 +3643,21 @@ class SetDevice:
     def _send_once(self) -> list[bytes]:
         out: list[bytes] = []
         for sibling in sorted(self.siblings):
-            lacking: dict[bytes, int] = {}
+            lacking: dict[bytes, tuple[int, str]] = {}
             left = self.left[sibling]
-            for key in sorted(self.records):
-                held = self.records[key]
+            # The messages of other apps go first, so that the sibling knows a sender and holds a record
+            # when the owner's layer arrives (sections 20.3, 20.4 and 21.5).
+            out += self._forward_due(sibling)
+            for key in self._refs():
+                held = self._held(key)
+                assert held is not None
                 kept = self.kept.setdefault((sibling, key), Kept())
                 if sibling in self.requests and key not in left:
                     continue  # no CHANGE while its own request is open, apart from an answer (section 11.3)
                 stamp = held.state.state_stamp
                 if kept.settled is not None and kept.settled != stamp:
                     kept.want, kept.settled = True, None  # the state stamp has changed (section 9.3)
-                if not kept.want:
+                if not kept.want or kept.waiting:
                     continue
                 content = (
                     None if stamp is None or (kept.barred and held.incomplete) else self._content(held, kept)
@@ -3235,7 +3673,9 @@ class SetDevice:
                     continue  # no CHANGE that names a declined schema under that offer (section 7.2)
                 if named - self.accepted[sibling]:
                     for fp in named - self.accepted[sibling]:
-                        lacking[fp] = lacking.get(fp, 0) + 1
+                        text = self._text(key, fp)
+                        assert text is not None, "a schema to offer"
+                        lacking[fp] = (lacking.get(fp, (0, ""))[0] + 1, text)
                     continue
                 differs = kept.last is not None and kept.last[0] == stamp and kept.last[1] != content
                 if differs or kept.fresh or held.restored:
@@ -3245,29 +3685,31 @@ class SetDevice:
                         left.discard(key)
                         continue
                     self.highest = stamp = new
-                    held.state = State(held.state.fields, held.state.removal, new)
+                    held.state = dataclasses.replace(held.state, state_stamp=new)
                     held.to_pass = kept_to_pass(held.to_pass, new)
-                datum = self.change_datum(sibling, held, content, stamp)
+                origin = None if isinstance(key, int) else self.senders[key[0]].first
+                datum = self.change_datum(sibling, held, content, stamp, origin)
                 version = change_version(datum)
-                m = message(self.seed, "CHANGE", (self.ids[key], version), body_of("Change", datum))
+                m = message(self.seed, "CHANGE", (self._id(key), version), body_of("Change", datum))
                 if len(m) > MAX_MESSAGE:
                     left.discard(key)
                     continue  # a record that does not fit is not sent (section 10.2)
-                kept.last, kept.flight, kept.want = (stamp, content), (key, version), False
+                name = (key if isinstance(key, int) else key[1], version)
+                kept.last, kept.flight, kept.want = (stamp, content), name, False
                 kept.fresh = held.restored = False
-                self.sent[sibling][(key, version)] = (content.marks, self.day)
+                self.sent[sibling][name] = (content.marks, self.day, key)
                 left.discard(key)
                 out.append(m)
             for fp in sorted(lacking):
                 if fp in {p[0] for p in self.pending[sibling].values()}:
                     continue  # offered, and not answered yet
-                text = self.schema(fp)
-                assert text is not None and self.offer_ids, "a schema to offer, and an id for the offer"
+                count, text = lacking[fp]
+                assert self.offer_ids, "an id for the offer"
                 offer_id = self.offer_ids.pop(0)
                 offer_key = uuid_key(offer_id)
                 assert offer_key is not None
                 self.pending[sibling][offer_key] = (fp, str(full_name(json.loads(text))))
-                types = [{"schema": text, "count": lacking[fp]}]
+                types = [{"schema": text, "count": count}]
                 body = body_of("Offer", {"to": sibling, "offer_id": offer_id, "types": types})
                 out.append(message(self.seed, "OFFER", None, body))
             if self.answering[sibling] and not left:
@@ -3282,13 +3724,47 @@ class SetDevice:
     def _request_entry(rid: str, outcome: str) -> dict[str, Any]:
         return {"id": rid, "version": 1, "outcome": outcome, "receiver_version": 1, "kept_fields": []}
 
-    def _due_for(self, key: int, parts: set[Any], but: bytes | None = None) -> None:
+    def _due_for(self, key: Ref, parts: set[Any], but: bytes | None = None) -> None:
         """Parts that the state of a record has got are due for every sibling to which they are not
         delivered: a reason to send (section 10.3)."""
         for sibling in self.siblings:
             kept = self.kept.setdefault((sibling, key), Kept())
             if sibling != but and not parts <= kept.delivered:
                 kept.want = True
+
+    # --- forwarding (section 20) ---
+
+    def _forward_due(self, sibling: bytes) -> list[bytes]:
+        """The FORWARD messages the device sends a sibling now: one for every kept message that is due
+        for it, sender by sender and in the order of section 20.3. A forward that it still keeps goes
+        again as the same message; every other is a new forward, with the next id."""
+        if sibling in self.requests and not self.fanswer[sibling]:
+            return []  # no FORWARD while its own request is open, apart from an answer (section 20.3)
+        self.fanswer[sibling] = False
+        out: list[bytes] = []
+        for sender in self._ordered():
+            for raw, text in sender.kept():
+                h = sha(raw)
+                if h in self.fdelivered[sibling] | self.fsettled[sibling] | self.fgone[sibling]:
+                    continue
+                again = [f for f in self.forwards[sibling].values() if f[0] == h]
+                assert again or self.forward_ids, "an id for the forward"
+                fid = again[0][2] if again else self.forward_ids[0]
+                body = body_of("Forward", {"to": sibling, "message": raw, "schema": text})
+                m = message(self.seed, "FORWARD", (fid, 1), body)
+                if len(m) > MAX_MESSAGE:
+                    continue  # a message that does not fit is not forwarded (section 20.3)
+                if not again:
+                    self.forward_ids.pop(0)
+                self.forwards[sibling][uuid_key(fid) or 0] = (h, self.day, fid, sender.serial)
+                self.fgone[sibling].add(h)
+                out.append(m)
+        return out
+
+    def _undeliver(self, sibling: bytes, raw: bytes) -> None:
+        """A kept message is no longer delivered to a sibling, and so due for it again (section 20.2)."""
+        for table in (self.fdelivered, self.fsettled, self.fgone):
+            table[sibling].discard(sha(raw))
 
     # --- what its user does (section 3.5) ---
 
@@ -3391,6 +3867,11 @@ class SetDevice:
             table[sibling] = {}
         self.accepted[sibling], self.declined[sibling], self.left[sibling] = set(), set(), set()
         self.acks[sibling] = []
+        # No kept message is delivered to a device that joins (section 23.3).
+        self.fdelivered[sibling], self.fsettled[sibling], self.fgone[sibling] = set(), set(), set()
+        self.forwards[sibling], self.fanswer[sibling] = {}, False
+        self.fremovals[sibling], self.facked[sibling] = set(), set()
+        self.frefused[sibling], self.fretried[sibling] = set(), set()
         asked: list[bytes] = []
         if self.restored:
             # A restored device that learns of a device its backup did not hold acts toward it as after
@@ -3400,14 +3881,47 @@ class SetDevice:
         self._pass_on()
         return asked + self._send_due()
 
-    def remove(self, sibling: bytes) -> list[bytes]:
-        """The device applies the removal of a sibling (section 12.2): it discards what it kept for that
-        key and sends it nothing more."""
+    def remove(self, sibling: bytes, move: bool = False) -> tuple[list[bytes], list[bytes]]:
+        """The device applies the removal of a sibling (sections 12.2 and 23.2): it discards what it kept
+        for that key and sends it nothing more; the messages it sends, and the origins of the known
+        senders to which it sends its chain and its MANIFEST now (section 17.2). It holds them back from
+        the senders known only by forwards of the removed sibling, unless the removal ends a move."""
+        out = self._remove(sibling)
+        now = []
+        for serial in sorted(self.senders):
+            s = self.senders[serial]
+            if s.known_by == {sibling} and not move:
+                self.intro_waits.add(serial)
+            else:
+                now.append(s.first)
+        return out, sorted(now)
+
+    def senders_kept(self) -> list[bytes]:
+        """Its user has seen the list of the senders known only by forwards of the removed sibling and
+        kept those it did not forget: the origins of those to which it now sends its chain and its
+        MANIFEST (section 17.2)."""
+        held, self.intro_waits = self.intro_waits, set()
+        return sorted(self.senders[n].first for n in held if n in self.senders)
+
+    def _remove(self, sibling: bytes) -> list[bytes]:
         self.siblings.remove(sibling)
         self.removed.add(sibling)
         self.relay.discard(sibling)
         tables: tuple[dict[bytes, Any], ...] = (self.offered, self.pending, self.accepted, self.declined)
         for table in (*tables, self.sent, self.acks, self.acted, self.answering, self.left, self.passed):
+            del table[sibling]
+        # What it kept for that key about the messages of other apps goes as well (section 23.2).
+        more: tuple[dict[bytes, Any], ...] = (
+            self.fdelivered,
+            self.fsettled,
+            self.fgone,
+            self.forwards,
+            self.fremovals,
+            self.facked,
+            self.frefused,
+            self.fretried,
+        )
+        for table in (*more, self.fanswer):
             del table[sibling]
         self.requests.pop(sibling, None)
         self.manifests.pop(sibling, None)
@@ -3425,17 +3939,40 @@ class SetDevice:
         for (s, _), kept in self.kept.items():
             if s == sibling and kept.flight is not None and kept.flight in self.sent[sibling]:
                 kept.want = True
+        # A FORWARD without an outcome when its connection ends has not been delivered (section 20.3).
+        self.fgone[sibling] = set()
         first = [self._resync(sibling)] if sibling in self.requests else []
         return first + self._send_due()
 
     def restore(
-        self, highest: int, records: list[tuple[str, Held]], acted: dict[bytes, list[str]] | None = None
+        self,
+        highest: int,
+        records: list[tuple[str, Held]],
+        acted: dict[bytes, list[str]] | None = None,
+        senders: list[dict[str, Any]] | None = None,
+        refused: list[bytes] | None = None,
+        bytes_in: Callable[[Any], bytes] = bytes.fromhex,
     ) -> list[bytes]:
-        """The device restored its data from a backup (section 12.1): it holds the records and the highest
-        stamp of the backup and none of its bookkeeping, has no offer, gives its field states never stamped
-        the stamp -1 if it has a sibling, and opens a new request toward every sibling."""
+        """The device restored its data from a backup (sections 12.1 and 23.1): it holds the records, the
+        known senders with their kept messages and owner's layers, and the highest stamp of the backup,
+        and none of its bookkeeping, has no offer, gives its field states never stamped the stamp -1 if
+        it has a sibling, and opens a new request toward every sibling."""
         self.highest, self.records, self.ids, self.kept = highest, {}, {}, {}
         self.requests, self.asked, self.restored = {}, None, True
+        self.book = keys.DeviceReceiver([], [*(refused or []), *sorted(self.gone)])
+        self.senders, self.layers, self.early, self.app_acks, self.later = {}, {}, [], {}, {}
+        for other in self.others:
+            self._new_sender(other)
+        for sibling in self.siblings:
+            self.fdelivered[sibling], self.fsettled[sibling], self.fgone[sibling] = set(), set(), set()
+            self.forwards[sibling], self.fanswer[sibling] = {}, False
+            self.fremovals[sibling], self.facked[sibling] = set(), set()
+            self.frefused[sibling], self.fretried[sibling] = set(), set()
+        for sender in senders or []:
+            self.know(sender, bytes_in)
+        for layer in self.layers.values():
+            layer.restored = True
+            layer.unstamped = {name: f for name, f in layer.state.fields.items() if f.stamp == 0}
         for sibling in self.siblings:
             # Of the requests it acted on, it keeps those of the backup, and none it learned since.
             self.acted[sibling] = dict.fromkeys(
@@ -3457,14 +3994,16 @@ class SetDevice:
         """The field states never stamped that the device held when it restored, and still holds
         unchanged, get the stamp -1: at the restore if it has a sibling then, or when it learns of one
         that its backup did not hold (sections 4.6 and 12.1)."""
-        for key, held in self.records.items():
+        for key in self._refs():
+            held = self._held(key)
+            assert held is not None
             fields = dict(held.state.fields)
             for name, f in held.unstamped.items():
                 if fields.get(name) == f:
                     fields[name] = dataclasses.replace(f, stamp=-1)
             held.unstamped = {}
             if fields != held.state.fields:
-                held.state = State(fields, held.state.removal, held.state.state_stamp)
+                held.state = dataclasses.replace(held.state, fields=fields)
                 self._due_for(key, self._parts(held.state))
 
     def days(self, n: int) -> list[bytes]:
@@ -3473,16 +4012,23 @@ class SetDevice:
         for sibling in self.siblings:
             # A CHANGE is kept for 15 days after it last went; an outcome after that is ignored.
             self.sent[sibling] = {
-                name: (marks, day)
-                for name, (marks, day) in self.sent[sibling].items()
+                name: (marks, day, ref)
+                for name, (marks, day, ref) in self.sent[sibling].items()
                 if self.day - day <= KEEP_DAYS
+            }
+            # A FORWARD is kept for 15 days after it last went as well (section 20.2).
+            self.forwards[sibling] = {
+                fid: f for fid, f in self.forwards[sibling].items() if self.day - f[1] <= KEEP_DAYS
             }
         out: list[bytes] = []
         for sibling in sorted(self.relay & set(self.siblings)):
-            # Through the relay, once the holding time has passed: the request, and each CHANGE that has
-            # neither an outcome nor an error that settles it.
+            # Through the relay, once the holding time has passed: the request, and each CHANGE and each
+            # FORWARD that has neither an outcome nor an error that settles it.
             if sibling in self.requests and self.day - self.requests[sibling][1] >= HOLDING_DAYS:
                 out.append(self._resync(sibling))
+            for h, day, _, _ in self.forwards[sibling].values():
+                if self.day - day >= HOLDING_DAYS:
+                    self.fgone[sibling].discard(h)
             for (s, _), kept in self.kept.items():
                 if s == sibling and kept.flight is not None and kept.flight in self.sent[sibling]:
                     if self.day - self.sent[sibling][kept.flight][1] >= HOLDING_DAYS:
@@ -3514,6 +4060,35 @@ class SetDevice:
                         batch.append(e)
                 out.append(message(self.seed, "ACK", None, body_of("Ack", {"to": sibling, "records": batch})))
                 entries = rest
+        # What it owes the other apps whose record messages it answered itself (section 17.2).
+        for app in sorted(self.app_acks):
+            for batch in self._batches(self.app_acks[app]):
+                out.append(message(self.seed, "ACK", None, body_of("Ack", {"to": app, "records": batch})))
+        self.app_acks = {}
+        # Once its acknowledgement of a forwarded removal has gone, what NOT_ACCEPTED of that sibling had
+        # settled for the removed key goes again (section 20.2).
+        later, self.after_acks = self.after_acks, []
+        for sibling, key in later:
+            if sibling in self.siblings:
+                self._refused_again(sibling, key)
+        return out + (self._send_due() if later else [])
+
+    @staticmethod
+    def _batches(entries: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+        """The entries of the acknowledgements a device owes one key, in ACK messages of up to 4,096
+        entries of which none holds an id and version twice (spec/protocol.md, section 7.1)."""
+        out: list[list[dict[str, Any]]] = []
+        while entries:
+            batch, rest, met = list[dict[str, Any]](), list[dict[str, Any]](), set[tuple[int | None, int]]()
+            for e in entries:
+                name = (uuid_key(e["id"]), e["version"])
+                if name in met or len(batch) == MAX_ACK_RECORDS:
+                    rest.append(e)
+                else:
+                    met.add(name)
+                    batch.append(e)
+            out.append(batch)
+            entries = rest
         return out
 
     # --- a file of the device's own set (section 13.4) ---
@@ -3570,7 +4145,10 @@ class SetDevice:
             outcome, sent = self._receive(m, connection)
         except Reject as e:
             self.what = f"rejected {e.code}" + ("" if e.report else ", not reported")
-            return None, [self._report(e, m)] if e.report else []
+            # After NOT_ACCEPTED for a message of a removed key, the device's own removal is due for that
+            # sibling and goes to it (section 19.2).
+            more = self._send_due() if e.detail.startswith("a removed key") else []
+            return None, ([self._report(e, m)] if e.report else []) + more
         return outcome, sent
 
     def _report(self, e: Reject, m: bytes) -> bytes:
@@ -3611,24 +4189,27 @@ class SetDevice:
             # Of a sibling, from itself or passed on by another; of any other key it is ignored here.
             self._manifest(sender, m, envelope["body"], connection or sender)
             return None, []
-        if (rec is None) == (kind in ("CHANGE", "RESYNC", "DATA", "DELETE")):
+        of_other = self.book.key_state(sender)[0]  # what the key is among the other senders it knows
+        if (rec is None) == (kind in ("CHANGE", "RESYNC", "FORWARD", "DATA", "DELETE")):
             # A record where none belongs, or none where one is required: no valid message of its kind.
             # Only a key the device exchanges with gets the report.
             raise Reject(
                 "INVALID_MESSAGE",
                 "record present or missing",
-                report=sender in {*self.siblings, *self.others},
+                report=sender in self.siblings or of_other == "current",
             )
         # Step 2: the sender, by the table of section 7.1. It holds for every kind a sibling sends.
         if sender == self.key:
             self.what = "ignored: the device's own key"
             return None, []
-        if sender in self.removed or sender in self.gone:
+        if sender in self.removed or of_other in ("removed", "refused"):
             self.what = "rejected without a report: a removed or a refused key"
             return None, []
         if sender not in self.siblings:
-            assert kind in ("CHANGE", "RESYNC"), "the model takes the other kinds from siblings only"
-            if sender in self.others:
+            assert kind in ("CHANGE", "RESYNC", "FORWARD"), (
+                "the model takes the other kinds from siblings only"
+            )
+            if of_other == "current":
                 raise Reject("INVALID_MESSAGE", f"a {kind} of another sender")
             self.what = "a message of an unknown key"
             return None, []
@@ -3647,6 +4228,8 @@ class SetDevice:
             return None, []
         if kind == "CHANGE":
             return self._change(sender, rec, d)
+        if kind == "FORWARD":
+            return self._forward(sender, rec, d)
         if kind == "RESYNC":
             return None, self._request(sender, rec)
         handler = {
@@ -3675,7 +4258,8 @@ class SetDevice:
     def _change(
         self, sender: bytes, rec: dict[str, Any], d: dict[str, Any]
     ) -> tuple[str | None, list[bytes]]:
-        """Steps 4 to 13 of section 8.3."""
+        """Steps 4 to 13 of section 8.3, and for a message with a key in `origin`, which carries the
+        owner's layer of a received record, with the differences of section 21.4."""
         key = uuid_key(rec["id"])
         if key is None:
             raise Reject("RECORD_ID_INVALID")  # step 4
@@ -3684,23 +4268,49 @@ class SetDevice:
         problem = change_problem(d, rec["version"])
         if problem is not None:
             raise Reject("INVALID_MESSAGE", problem)  # step 6
+        origin: bytes | None = d["origin"]
+        of = None if origin is None else self._sender_of(origin)  # the record's sender (section 21.3)
+        if origin is not None:
+            # Step 10 comes before the steps 7 and 8 for a message with a key in origin: the sender is
+            # resolved first (section 21.4).
+            if origin == self.key or origin in self.siblings or origin in self.removed:
+                raise Reject("INVALID_MESSAGE", "origin is a key of the device's own set")
+            if of is None:
+                raise Reject("RECORD_UNKNOWN")  # the device does not know the sender of the record
+        ref: Ref = key if origin is None else (of.serial if of else 0, key)
         schemas: dict[bytes, dict[str, Any]] = {}
+        texts: dict[bytes, str] = {}
         for entry in d["fields"]:  # step 7
-            text = self.schema(entry["schema"])
+            if origin is None:
+                text = self.schema(entry["schema"])
+            else:
+                # Among the schemas kept of the record's sender, then among those of the current offers
+                # of the sibling in the channel, and nowhere else (section 21.4).
+                text = (of.schemas if of else {}).get(entry["schema"]) or self.offered[sender].get(
+                    entry["schema"]
+                )
             if text is None:
                 raise Reject("SCHEMA_UNKNOWN", fingerprint=entry["schema"])
-            schemas[entry["schema"]] = json.loads(text)
+            schemas[entry["schema"]], texts[entry["schema"]] = json.loads(text), text
         for entry in d["fields"]:  # step 8
             schema = schemas[entry["schema"]]
             if full_name(schema) != d["type"] or field_schema(schema, entry["name"]) is None:
                 raise Reject("INVALID_MESSAGE", f"{entry['name']}: not a field of a schema of {d['type']}")
-        held = self.records.get(key)
-        if held is not None and held.type != d["type"]:
-            raise Reject("TYPE_CHANGED", f"{held.type} before, {d['type']} now")  # step 9
-        if not (d["whole"] or (held is not None and (held.state.fields or held.state.removal is None))):
-            raise Reject("RECORD_UNKNOWN")  # step 10
+        held = self._held(ref)
+        names: set[str | None] = {held.type} if held is not None else set()
+        if of is not None and key in of.records:
+            names.add(of.records[key].type)  # the sender's layer keeps a full name as well
+        if names - {d["type"], None}:
+            raise Reject(
+                "TYPE_CHANGED", f"{sorted(n for n in names if n)[0]} before, {d['type']} now"
+            )  # step 9
+        if origin is None:
+            if not (d["whole"] or (held is not None and (held.state.fields or held.state.removal is None))):
+                raise Reject("RECORD_UNKNOWN")  # step 10
         decoded = []
         for entry in d["fields"]:  # step 11
+            if entry["value"] is None:
+                continue  # the owner discarded a change of the field (section 21.1)
             buf = io.BytesIO(entry["value"])
             try:
                 one, value = read_field(schemas[entry["schema"]], entry["name"], buf)
@@ -3715,11 +4325,12 @@ class SetDevice:
                 path, rule, why = broken[0]
                 raise Reject("VALUE_INVALID", f"{rule}: {why}", field=mr.error_field(path))
         # Step 13: the merge and its outcome (section 8.4).
-        removal = d["removal"]
+        removal, keep = d["removal"], d["keep"]
         other = State(
             {e["name"]: FieldState(e["value"], e["stamp"], e["device"], e["schema"]) for e in d["fields"]},
             removal and Removal(removal["stamp"], removal["device"], removal["stands"]),
             d["state"],
+            keep and Keep(keep["stamp"], keep["device"], keep["version"], keep["given_up"]),
         )
         own = held.state if held else None
         before = self._parts(own) if own else set()
@@ -3734,11 +4345,22 @@ class SetDevice:
             held.to_pass if held else None,
         )
         if held is None:
-            held = self.records[key] = Held(d["type"], done.state)
-            self.ids[key] = rec["id"]
-        held.state, held.sibling_stamp, held.to_pass = done.state, done.sibling_stamp, done.to_pass
-        self.highest = done.highest
-        self._keep_schemas(done.state)
+            held = Held(d["type"], done.state)
+            if isinstance(ref, int):
+                self.records[key], self.ids[key] = held, rec["id"]
+            else:
+                self.layers[ref] = held
+                self.senders[ref[0]].ids.setdefault(key, rec["id"])
+        held.state, self.highest = done.state, done.highest
+        if isinstance(ref, int):
+            held.sibling_stamp, held.to_pass = done.sibling_stamp, done.to_pass
+            self._keep_schemas(done.state)
+        else:
+            # A layer keeps neither a state stamp seen from a sibling nor a version to pass (section
+            # 21.1); the texts of its schemas stay among those of the sender.
+            for f in done.state.fields.values():
+                if f.schema in texts:
+                    self.senders[ref[0]].schemas.setdefault(f.schema, texts[f.schema])
         mine, theirs = self._parts(done.state), self._parts(other)
         if took:
             outcome = "APPLIED"
@@ -3746,23 +4368,27 @@ class SetDevice:
             outcome = "DUPLICATE" if theirs <= mine else "STALE"
         # The record is known to the sibling, and every part of the message that the device holds is
         # delivered to it (section 10.1, event 2).
-        kept = self.kept.setdefault((sender, key), Kept())
+        kept = self.kept.setdefault((sender, ref), Kept())
         kept.known = True
         kept.delivered = (kept.delivered | theirs) & mine
         # Every part of its state for which the message carried another, earlier one is due for that
         # sibling again, whatever the outcome: a reason to send (sections 8.4 and 10.3).
-        names = {p[0] for p in theirs - mine if not isinstance(p, Removal)}
-        again = {p for p in mine if (isinstance(p, Removal) and other.removal not in (None, p))}
-        again |= {p for p in mine if not isinstance(p, Removal) and p[0] in names}
+        names = {p[0] for p in theirs - mine if isinstance(p, tuple)}
+        again: set[Any] = {p for p in mine if (isinstance(p, Removal) and other.removal not in (None, p))}
+        again |= {p for p in mine if (isinstance(p, Keep) and other.keep not in (None, p))}
+        again |= {p for p in mine if isinstance(p, tuple) and p[0] in names}
         if again:
             kept.delivered -= again
             kept.want = True
         if d["whole"] and held.incomplete:
             held.incomplete = False  # a whole CHANGE completes the record (section 8.4)
             for sibling in self.siblings:
-                waiting = self.kept.setdefault((sibling, key), Kept())
+                waiting = self.kept.setdefault((sibling, ref), Kept())
                 if waiting.barred:
                     waiting.barred, waiting.want = False, True
+        if took and not isinstance(ref, int):
+            self._layer_moved(ref)
+            self._later_ack(ref)
         stamp = done.state.state_stamp
         self.acks[sender].append(
             {
@@ -3773,7 +4399,7 @@ class SetDevice:
                 "kept_fields": [],
             }
         )
-        self._due_for(key, mine - before, but=sender)
+        self._due_for(ref, mine - before, but=sender)
         self.what = outcome
         return outcome, self._send_due()
 
@@ -3799,14 +4425,33 @@ class SetDevice:
                         kept.want = True
                 taken += 1
                 continue
+            if key in self.forwards[sender] and entry["version"] == 1:
+                # The outcome of a forward: it settles the forward and delivers its kept message, if the
+                # device still keeps it (sections 18.4 and 20.2).
+                h, _, _, serial = self.forwards[sender].pop(key)
+                if h in self._kept_hashes():
+                    self.fdelivered[sender].add(h)
+                removal = self._removal_of(h)
+                if removal is not None:
+                    self._refused_again(sender, removal)  # the sibling now has the removal (section 20.2)
+                # An outcome of the sibling for a forward of the sender, APPLIED or DUPLICATE: a layer that
+                # waited goes, unless it got RECORD_UNKNOWN twice in a row (section 21.5).
+                for (s, ref), kept in self.kept.items():
+                    if s == sender and kept.waiting and not isinstance(ref, int) and ref[0] == serial:
+                        if kept.unknowns < 2:
+                            kept.waiting, kept.want = False, True
+                taken += 1
+                continue
             if name not in self.sent[sender]:
                 continue  # no CHANGE to that sibling that it still keeps
-            marks, _ = self.sent[sender].pop(name)  # the first outcome stands
-            held, kept = self.records[key], self.kept[(sender, key)]
-            kept.known = True
+            marks, _, ref = self.sent[sender].pop(name)  # the first outcome stands
+            held, kept = self._held(ref), self.kept[(sender, ref)]
+            assert held is not None
+            kept.known, kept.unknowns = True, 0
             kept.delivered |= self._parts(held.state) & marks  # only what the state still holds exactly
             self.highest = max(self.highest, entry["receiver_version"])
-            held.sibling_stamp = max(held.sibling_stamp or 0, entry["receiver_version"])
+            if isinstance(ref, int):
+                held.sibling_stamp = max(held.sibling_stamp or 0, entry["receiver_version"])
             taken += 1
         self.what = f"{taken} entries taken"
         return self._send_due()
@@ -3822,9 +4467,28 @@ class SetDevice:
         if request is not None and rec is not None and (key, rec["version"]) == (uuid_key(request[0]), 1):
             # About its request, which stays open; after FORMAT_UNSUPPORTED it goes again at once.
             return [self._resync(sender)] if code == "FORMAT_UNSUPPORTED" else []
+        if rec is not None and key in self.forwards[sender] and rec["version"] == 1:
+            # About a forward that it still keeps (section 18.4).
+            h = self.forwards[sender][key][0]
+            signer = self._signer_of(h)
+            if code == "FORMAT_UNSUPPORTED" and d["fingerprint"] == SPEC_FP["Envelope"]:
+                self.fgone[sender].discard(h)  # again in the chosen format: the same message
+            elif code == "NOT_ACCEPTED" and signer in self.facked[sender] and h not in self.fretried[sender]:
+                # After the device acknowledged the sibling's removal of that key: due again, once.
+                del self.forwards[sender][key]
+                self.fretried[sender].add(h)
+                self.fgone[sender].discard(h)
+            else:
+                if code == "NOT_ACCEPTED":
+                    self.frefused[sender].add(h)
+                del self.forwards[sender][key]  # settled: that forward is not sent again
+                self.fsettled[sender].add(h)
+            return self._send_due()
         if rec is None or key is None or (key, rec["version"]) not in self.sent[sender]:
             return []  # logged, and changes nothing
-        held, kept = self.records[key], self.kept[(sender, key)]
+        ref = self.sent[sender][(key, rec["version"])][2]
+        held, kept = self._held(ref), self.kept[(sender, ref)]
+        assert held is not None
         if code == "SCHEMA_UNKNOWN":
             # The schema is offered again, also when an accepted offer of it stood; the message goes
             # again once it is accepted, or at once if the error names no fingerprint.
@@ -3834,6 +4498,13 @@ class SetDevice:
                     k: v for k, v in self.pending[sender].items() if v[0] != d["fingerprint"]
                 }
             kept.want = True
+        elif code == "RECORD_UNKNOWN" and not isinstance(ref, int):
+            # For an owner's layer (section 21.5): the layer is not known to the sibling, every kept
+            # message of the record's sender is forwarded again, and the layer waits.
+            kept.known, kept.delivered, kept.want, kept.waiting = False, set(), True, True
+            kept.unknowns += 1
+            for raw, _ in self.senders[ref[0]].kept():
+                self._undeliver(sender, raw)
         elif code == "RECORD_UNKNOWN":
             kept.known, kept.delivered, kept.want = False, set(), True
             kept.barred = held.incomplete
@@ -3867,11 +4538,17 @@ class SetDevice:
         self.acted[sender][request] = "answering"
         self.answering[sender][request] = rec["id"]
         self.sent[sender] = {}
-        self.left[sender] = set(self.records)
-        for key in self.records:
+        self.left[sender] = set(self._refs())
+        for key in self._refs():
             kept = self.kept.setdefault((sender, key), Kept())
             kept.known, kept.delivered, kept.want, kept.fresh = False, set(), True, True
-            kept.flight, kept.settled = None, None
+            kept.flight, kept.settled, kept.waiting, kept.unknowns = None, None, False, 0
+        # What it kept for that sibling about the messages of other apps is forgotten as well, and its
+        # answer begins with a new forward of every kept message (section 20.4).
+        self.fdelivered[sender], self.fsettled[sender], self.fgone[sender] = set(), set(), set()
+        self.forwards[sender], self.fanswer[sender] = {}, True
+        self.fremovals[sender], self.facked[sender] = set(), set()
+        self.frefused[sender], self.fretried[sender] = set(), set()
         self.what = "acted on"
         return self._send_due()
 
@@ -3924,6 +4601,773 @@ class SetDevice:
             self.declined[sender].add(fp)
             self.what = "declined"
         return self._send_due()
+
+    # --- the senders a device knows when a session begins, or in a backup ---
+
+    def know(self, v: dict[str, Any], bytes_in: Callable[[Any], bytes] = bytes.fromhex) -> None:
+        """A known sender in the form of spec/conformance.md, section 5.14: its keys, its kept messages
+        with the siblings each is delivered to, and the owner's layers of its records."""
+        sender = self._new_sender(bytes.fromhex(v["origin"]))
+        if v.get("known_by", "user") != "user":
+            sender.known_by = {bytes.fromhex(k) for k in v["known_by"]}
+        known = self._keys(sender)
+        known.current[:] = [bytes.fromhex(k) for k in v["current"]]
+        known.removed[:] = [bytes.fromhex(k) for k in v["removed"]]
+        for group in ("chain", "manifests", "records"):
+            for item in v[group]:
+                raw = bytes_in(item["message"])
+                envelope = read_all("Envelope", raw[10:])
+                for sibling in item["delivered"]:
+                    self.fdelivered[bytes.fromhex(sibling)].add(sha(raw))
+                if group == "chain":
+                    sender.chain.append(raw)
+                elif group == "manifests":
+                    revision = read_all("Manifest", envelope["body"][10:])["revision"]
+                    sender.manifests[envelope["sender"]] = (revision, raw)
+                else:
+                    rec, text = envelope["record"], item["schema"]
+                    key = uuid_key(rec["id"])
+                    assert key is not None
+                    schema = None if text is None else json.loads(text)
+                    values = {} if schema is None else record_values(schema, envelope["body"])
+                    name = item["type"] if schema is None else full_name(schema)
+                    self._keep_record(sender, key, rec, envelope["kind"], name, raw, text, values)
+        for item in v["layers"]:
+            state, key = state_of_json(item["state"]), uuid_key(item["id"])
+            assert state is not None and key is not None
+            ref = (sender.serial, key)
+            self.layers[ref] = Held(item["type"], state)
+            sender.ids.setdefault(key, item["id"])
+            for sibling, s in item["siblings"].items():
+                parts: set[Any] = {(name, state.fields[name]) for name in s["delivered"]}
+                if s["removal"]:
+                    assert state.removal is not None
+                    parts.add(state.removal)
+                if s["keep"]:
+                    assert state.keep is not None
+                    parts.add(state.keep)
+                want = not s["known"] or parts != self._parts(state)
+                self.kept[(bytes.fromhex(sibling), ref)] = Kept(s["known"], parts, want=want)
+
+    def _keep_record(
+        self,
+        sender: Sender,
+        key: int,
+        rec: dict[str, Any],
+        kind: str,
+        name: str | None,
+        raw: bytes,
+        text: str | None,
+        values: dict[str, bytes],
+    ) -> None:
+        """The message becomes the sender's layer of the record and its kept message (sections 19.5
+        and 20.1): a DATA makes the record there, with the full name of its schema as its type, and a
+        DELETE leaves a tombstone, which keeps the type the record had."""
+        old = sender.records.get(key)
+        if kind == "DELETE" and name is None:
+            name = old.type if old else None
+        # A DELETE keeps beside the tombstone the DATA with the highest version below it that the device
+        # took; a DATA has nothing beside it.
+        beside = None if kind == "DATA" or old is None else (old if old.there else old.beside)
+        sender.records[key] = Received(name, rec["version"], kind == "DATA", raw, text, values, beside)
+        sender.ids.setdefault(key, rec["id"])
+        if text is not None:
+            sender.schemas.setdefault(schema_fingerprint(text), text)
+
+    # --- a FORWARD of a sibling (sections 18 and 19) ---
+
+    def _forward(
+        self, sender: bytes, rec: dict[str, Any], d: dict[str, Any]
+    ) -> tuple[str | None, list[bytes]]:
+        """Steps 4 to 16 of section 18.3."""
+        if uuid_key(rec["id"]) is None:
+            raise Reject("RECORD_ID_INVALID")  # step 4
+        if rec["version"] < 1:
+            raise Reject("VERSION_INVALID")  # step 5
+        if rec["version"] != 1:
+            raise Reject("INVALID_MESSAGE", "the version of a forward is 1")  # step 6
+        inner, schema = inner_message(d)  # steps 7 to 11
+        raw: bytes = d["message"]
+        signer: bytes = inner["sender"]
+        if keys.verify_problem(signer, keys.MESSAGE_PREFIX + raw[10:-64], raw[-64:]) is not None:
+            raise Reject("SIGNATURE_INVALID", "the signature of the message inside")  # step 12
+        kind = inner["kind"]
+        if kind == keys.REMOVE:
+            # The sibling has forwarded a removal of that key, whatever the device then does with it.
+            try:
+                self.fremovals[sender].add(read_all("DeviceRemove", inner["body"][10:])["device"])
+            except ValueError:
+                pass
+        if signer == self.key or signer in self.siblings or signer in self.removed:
+            raise Reject("INVALID_MESSAGE", "a message of the device's own set")  # step 13
+        named = [signer]
+        if kind in (keys.ADD, keys.REMOVE):
+            try:
+                named.append(read_all(INNER_BODY[kind], inner["body"][10:])["device"])
+            except ValueError:
+                pass
+        before = set(self.senders)
+        outcome, sent = self._forward_known(sender, rec, d, inner, schema, raw, signer, kind, named)
+        # A sender that a forward made known is known by forwards of that sibling; each sibling that
+        # forwards a message of a sender known by forwards is one more (section 19.2).
+        for serial in set(self.senders) - before:
+            self.senders[serial].known_by = {sender}
+        of = self._sender_of(signer)
+        if of is not None and of.known_by is not None:
+            of.known_by.add(sender)
+        return outcome, sent
+
+    def _forward_known(
+        self,
+        sender: bytes,
+        rec: dict[str, Any],
+        d: dict[str, Any],
+        inner: dict[str, Any],
+        schema: dict[str, Any] | None,
+        raw: bytes,
+        signer: bytes,
+        kind: str,
+        named: list[bytes],
+    ) -> tuple[str | None, list[bytes]]:
+        """A forgotten key that the inner message names makes its sender known again (section 20.5)."""
+        back = next((f for f in self.forgotten if set(named) & set(f[1])), None)
+        if back is not None:
+            # A forgotten key: the sender is known again, on the word of the sibling (section 20.5); if a
+            # later step fails, it stays forgotten.
+            state = (copy.deepcopy(self.book), dict(self.senders), self.serial, list(self.forgotten))
+            self.forgotten.remove(back)
+            for k in back[2]:
+                if k in self.book.refused:
+                    self.book.refused.remove(k)
+            self.serial += 1
+            self.book.senders.append(keys.KnownSender(str(self.serial), list(back[1]), list(back[2])))
+            self.senders[self.serial] = Sender(self.serial, back[0])
+            try:
+                outcome, sent = self._forward_inner(sender, rec, d, inner, schema, raw, signer, kind)
+            except Reject:
+                self.book, self.senders, self.serial, self.forgotten = state
+                raise
+            return outcome, sent + self._ask(sender)  # it MUST ask that sibling for everything again
+        return self._forward_inner(sender, rec, d, inner, schema, raw, signer, kind)
+
+    def _forward_inner(
+        self,
+        sender: bytes,
+        rec: dict[str, Any],
+        d: dict[str, Any],
+        inner: dict[str, Any],
+        schema: dict[str, Any] | None,
+        raw: bytes,
+        signer: bytes,
+        kind: str,
+    ) -> tuple[str | None, list[bytes]]:
+        """Steps 14 to 16 of section 18.3."""
+        if signer in self.book.refused and kind not in (keys.ADD, keys.REMOVE):
+            raise Reject("NOT_ACCEPTED", "a refused key")  # step 14
+        of = self._sender_of(signer)
+        if kind in ("DATA", "DELETE") and of is not None and signer in self._keys(of).removed:
+            if not self._has_removal(sender, of, signer):
+                # Step 14: the sibling has not shown that it has the removal (section 19.2).
+                raise Reject("NOT_ACCEPTED", "a removed key whose removal the sibling has not shown to have")
+        # step 15: the rules of its kind
+        if kind in (keys.ADD, keys.REMOVE):
+            took = self._chain_message(kind, signer, inner["body"], raw, True, sender)
+        elif kind == "MANIFEST":
+            took = self._manifest_of(signer, inner["body"], raw, sender, False)
+        else:
+            took = self._forwarded_record(signer, inner, schema, d["schema"], raw, sender)
+        outcome = "APPLIED" if took else "DUPLICATE"  # step 16 and section 18.4
+        if kind == keys.REMOVE:
+            removed = read_all("DeviceRemove", inner["body"][10:])["device"]
+            self.facked[sender].add(removed)
+            # The removal that the sibling now has: what NOT_ACCEPTED had settled is due again, after the
+            # acknowledgement of this forward (section 20.2).
+            self.after_acks += [(sender, removed)]
+        if sha(raw) in self._kept_hashes():
+            # The device keeps exactly these bytes, so they are delivered to that sibling and do not go
+            # back to it (section 20.2, event 2).
+            self.fdelivered[sender].add(sha(raw))
+        self.acks[sender].append(self._request_entry(rec["id"], outcome))
+        self.what = outcome
+        return outcome, self._send_due()
+
+    def _has_removal(self, sibling: bytes, sender: Sender, key: bytes) -> bool:
+        """Whether the sibling has the removal of that key (section 19.2): the device's kept removal of it
+        is delivered to the sibling, or the sibling has forwarded it one whose signature verified."""
+        if key in self.fremovals[sibling]:
+            return True
+        return any(
+            self._removal_of(sha(m)) == key and sha(m) in self.fdelivered[sibling] for m in sender.chain
+        )
+
+    def _kept_by_hash(self, h: bytes) -> bytes | None:
+        for sender in self.senders.values():
+            for m, _ in sender.kept():
+                if sha(m) == h:
+                    return m
+        return None
+
+    def _removal_of(self, h: bytes) -> bytes | None:
+        """The key that a kept DEVICE_REMOVE with that hash removes, or None."""
+        m = self._kept_by_hash(h)
+        if m is None:
+            return None
+        envelope = read_all("Envelope", m[10:])
+        if envelope["kind"] != keys.REMOVE:
+            return None
+        device: bytes = read_all("DeviceRemove", envelope["body"][10:])["device"]
+        return device
+
+    def _signer_of(self, h: bytes) -> bytes | None:
+        m = self._kept_by_hash(h)
+        return None if m is None else bytes(read_all("Envelope", m[10:])["sender"])
+
+    def _refused_again(self, sibling: bytes, key: bytes) -> None:
+        """The kept record messages signed with that key for which NOT_ACCEPTED of the sibling had settled
+        a forward are due for it again (section 20.2)."""
+        for h in list(self.frefused[sibling]):
+            if self._signer_of(h) == key:
+                self.frefused[sibling].discard(h)
+                self.fsettled[sibling].discard(h)
+                self.fgone[sibling].discard(h)
+
+    def _chain_message(
+        self, kind: str, signer: bytes, body: bytes, raw: bytes, forwarded: bool, sibling: bytes | None = None
+    ) -> bool:
+        """A DEVICE_ADD or a DEVICE_REMOVE of another app by the steps of spec/keys.md, section 5.5, and
+        for a forwarded one with the differences of section 19.3. Whether the device applied it, or
+        keeps a forwarded removal to try it again."""
+        try:
+            d = read_all(INNER_BODY[kind], body[10:])
+        except ValueError as e:
+            raise Reject("INVALID_MESSAGE", str(e)) from None
+        device: bytes = d["device"]
+        signed = keys.MESSAGE_PREFIX + raw[10:-64]
+        if keys.device_message_problem(kind, signer, signed, raw[-64:], device, d.get("proof")) is not None:
+            raise Reject("DEVICE_REJECTED", "step 2 of spec/keys.md, section 5.5")
+        # In a forwarded addition or removal a refused key counts as a key of no known sender, and stops
+        # being refused when the message is applied or kept (section 19.3).
+        was_refused = [k for k in (signer, device) if forwarded and k in self.book.refused]
+        for k in was_refused:
+            self.book.refused.remove(k)
+        before = {s.name for s in self.book.senders}
+        result = self.book.place(kind, signer, device)
+        fresh = None
+        if result == keys.NOT_PLACED and forwarded:
+            # No forwarded addition or removal "cannot be placed": the signer becomes the first key of a
+            # new known sender, and the table decides.
+            fresh = keys.KnownSender(str(self.serial + 1), [signer])
+            self.book.senders.append(fresh)
+            result = self.book.place(kind, signer, device)
+        if result == keys.REJECTED and forwarded and self._signer_removed(kind, signer, device):
+            # A chain out of order: kept and tried again like a kept removal (section 19.3).
+            self.early.append((raw, signer, device, kind, sibling))
+            return True
+        if result in (keys.REJECTED, keys.NOT_PLACED, keys.REFUSED):
+            if fresh is not None:
+                self.book.senders.remove(fresh)  # a step that fails changes nothing (section 18.3)
+            self.book.refused += was_refused
+            raise Reject("DEVICE_REJECTED", "the table of spec/keys.md, section 5.5")
+        self._follow(before)
+        sender = self._sender_of(signer)
+        assert sender is not None
+        if result == keys.APPLIED:
+            self._applied(sender, kind, device, raw)
+            return True
+        early = kind == keys.REMOVE and signer in self._keys(sender).current
+        if forwarded and early and self._sender_of(device) is not sender:
+            self.early.append((raw, signer, device, kind, sibling))  # kept to be tried again
+            return True
+        self.book.refused += was_refused
+        return False
+
+    def _signer_removed(self, kind: str, signer: bytes, device: bytes) -> bool:
+        """Whether the table rejects a DEVICE_ADD only because its signer is a removed key of its sender:
+        the column "signer removed", with a device that is a key of no known sender or the only key of
+        another known sender (section 19.3)."""
+        s, t = self.book.sender_of(signer), self.book.sender_of(device)
+        if kind != keys.ADD or s is None or signer not in s.removed or device in self.book.refused:
+            return False
+        return t is None or (t is not s and t.single())
+
+    def _applied(self, sender: Sender, kind: str, device: bytes, raw: bytes) -> None:
+        """An addition or a removal that the device applied is a kept message of its sender (section
+        20.1). The kept manifest of a removed key is deleted; after an addition, the removals that the
+        device keeps are tried again (section 19.3)."""
+        sender.chain.append(raw)
+        if kind == keys.REMOVE:
+            sender.manifests.pop(device, None)
+            sender.live.discard(device)
+            return
+        again = True
+        while again:
+            again = False
+            for item in list(self.early):
+                raw_, signer, device_, kind_, sibling = item
+                before = {s.name for s in self.book.senders}
+                if self.book.place(kind_, signer, device_) == keys.APPLIED:
+                    self.early.remove(item)
+                    self._follow(before)
+                    of = self._sender_of(signer)
+                    assert of is not None
+                    of.chain.append(raw_)
+                    if kind_ == keys.REMOVE:
+                        of.manifests.pop(device_, None)
+                    if sibling is not None and sibling in self.fdelivered:
+                        # It counts as delivered to the sibling that forwarded it (section 19.3).
+                        self.fdelivered[sibling].add(sha(raw_))
+                    again = True
+
+    def _follow(self, before: set[str] | None = None) -> None:
+        """Bring what the device keeps of each sender in step with their keys: a new known sender, or
+        two senders that joined (section 23.4). `before` names the senders before the message."""
+        names = {int(k.name): k for k in self.book.senders}
+        for serial in sorted(set(names) - set(self.senders)):
+            self.serial = max(self.serial, serial)
+            self.senders[serial] = Sender(serial, names[serial].current[0])
+        for serial in sorted(set(self.senders) - set(names)):
+            gone = self.senders.pop(serial)
+            (stay,) = [self.senders[n] for n in names if gone.first in names[n].current]
+            self._join(stay, gone)
+
+    def _join(self, stay: Sender, gone: Sender) -> None:
+        """Two senders join (section 23.4): the kept additions, removals and manifests of the second are
+        kept as those of the sender that stays; of a record both hold, the copy with the higher version
+        stays, and with equal versions that of the sender that stays; their owner's layers merge, the
+        layer of the copy that stays being the device's own state."""
+        stay.chain += gone.chain
+        stay.manifests.update(gone.manifests)
+        stay.live |= gone.live
+        for fp, text in gone.schemas.items():
+            stay.schemas.setdefault(fp, text)
+        for key in sorted(
+            set(gone.records) | set(gone.ids) | {r[1] for r in self.layers if r[0] == gone.serial}
+        ):
+            stay.ids.setdefault(key, gone.ids.get(key, ""))
+            mine, theirs = stay.records.get(key), gone.records.get(key)
+            if theirs is not None and (mine is None or theirs.version > mine.version):
+                stay.records[key] = theirs
+            ref, old = (stay.serial, key), (gone.serial, key)
+            other = self.layers.pop(old, None)
+            for sibling in self.siblings:
+                self.kept.pop((sibling, old), None)
+            self.later.pop(old, None)
+            if other is None:
+                continue
+            held = self.layers.get(ref)
+            own = held.state if held else None
+            took = own is None or merge(own, other.state).took
+            done = device_merge(own, other.state, self.now_ms, self.highest, self._draw() if took else 0)
+            self.highest = done.highest
+            if held is None:
+                held = self.layers[ref] = Held(other.type, done.state)
+            before = self._parts(own) if own else set()
+            held.state = done.state
+            if took:
+                self._due_for(ref, self._parts(done.state) - before)
+                self._layer_moved(ref)
+        for sibling in self.siblings:
+            self.forwards[sibling] = {
+                f: (v[0], v[1], v[2], stay.serial if v[3] == gone.serial else v[3])
+                for f, v in self.forwards[sibling].items()
+            }
+
+    def _manifest_of(self, signer: bytes, body: bytes, raw: bytes, sibling: bytes | None, live: bool) -> bool:
+        """A MANIFEST of another app (section 19.4; spec/manifest.md, section 6): whether it becomes the
+        kept manifest of its key. One that the app itself sends in a live connection applies whatever
+        its revision; every other only with a higher revision than the kept one."""
+        try:
+            manifest = read_all("Manifest", body[10:])
+        except ValueError as e:
+            raise Reject("MANIFEST_INVALID", str(e)) from None
+        if me.manifest_problems(manifest, len(body)):
+            raise Reject("MANIFEST_INVALID", "not valid by spec/manifest.md, section 4")
+        sender = self._sender_of(signer)
+        if sender is not None and signer in self._keys(sender).removed:
+            return False  # a removed key has no kept manifest
+        revision: int = manifest["revision"]
+        kept = sender.manifests.get(signer) if sender else None
+        if kept is not None and (revision == kept[0] if live else revision <= kept[0]):
+            if sibling is not None and revision < kept[0]:
+                self._undeliver(sibling, kept[1])  # the sibling evidently does not hold the kept one
+            return False
+        if sibling is not None and sender is not None and signer in sender.live:
+            return False  # a forwarded MANIFEST never takes the place of one taken live (section 19.4)
+        if sender is None:
+            sender = self._new_sender(signer)  # a known sender, without a question (section 19.2)
+        sender.manifests[signer] = (revision, raw)
+        if live:
+            sender.live.add(signer)
+        elif sibling is None:
+            sender.live.discard(signer)  # a later MANIFEST from the key itself ends the mark
+        return True
+
+    def _forwarded_record(
+        self,
+        signer: bytes,
+        inner: dict[str, Any],
+        schema: dict[str, Any] | None,
+        text: str | None,
+        raw: bytes,
+        sibling: bytes,
+    ) -> bool:
+        """A forwarded DATA or DELETE by the steps of section 19.5: whether the device took it into the
+        sender's layer. It never changes the owner's layer (section 19.1)."""
+        rec, kind = inner["record"], inner["kind"]
+        key = uuid_key(rec["id"])
+        if key is None:
+            raise Reject("RECORD_ID_INVALID", "the id of the message inside")  # step 2
+        if rec["version"] < 1:
+            raise Reject("VERSION_INVALID", "the version of the message inside")  # step 3
+        sender = self._sender_of(signer)
+        held = sender.records.get(key) if sender else None
+        layer = self.layers.get((sender.serial, key)) if sender else None
+        name = None if schema is None else full_name(schema)
+        before = {held.type if held else None, layer.type if layer else None} - {None}
+        if kind == "DATA" and before - {name}:
+            raise Reject("TYPE_CHANGED", f"{sorted(n for n in before if n)[0]} before, {name} now")  # step 6
+        if held is not None and rec["version"] <= held.version:  # step 7
+            assert sender is not None
+            return self._at_or_below(
+                sender, key, held, kind, rec["version"], raw, text, inner["body"], sibling
+            )
+        values = {} if schema is None else record_values(schema, inner["body"])  # steps 8 and 9
+        if sender is None:
+            sender = self._new_sender(signer)  # a known sender, without a question (section 19.2)
+        self._keep_record(sender, key, rec, kind, name, raw, text, values)  # step 10
+        return True
+
+    def _at_or_below(
+        self,
+        sender: Sender,
+        key: int,
+        held: Received,
+        kind: str,
+        version: int,
+        raw: bytes,
+        text: str | None,
+        body: bytes,
+        sibling: bytes | None,
+    ) -> bool:
+        """Step 7 of section 19.5 for a record message whose version is equal to or below the receiver's
+        version, in a FORWARD of `sibling` or, without one, from the sender itself: whether the device
+        takes it all the same, by one of the four cases, after the steps 8 and 9. A message of the sender
+        itself that fails those steps is not taken; a forwarded one is rejected."""
+        schema = None if text is None else json.loads(text)
+        name = None if schema is None else full_name(schema)
+        beside = held.beside
+        case = None
+        if version < held.version:
+            if kind == "DATA" and not held.there:
+                if beside is None or beside.version < version:
+                    case = 1  # a DATA below the tombstone goes beside it
+                elif beside.version == version and raw != beside.message and stands_over(raw, text, beside):
+                    case = 4  # the DATA beside the tombstone in other bytes
+                elif sibling is not None and version < beside.version:
+                    self._undeliver(
+                        sibling, beside.message
+                    )  # an older message: only that DATA (section 20.2)
+            elif sibling is not None:
+                self._undeliver(sibling, held.message)  # an older message from the sibling (section 20.2)
+        elif kind == "DELETE" and held.there:
+            case = 3  # a DELETE stands over a DATA of the same version
+        elif (kind == "DATA") == held.there and raw != held.message and stands_over(raw, text, held):
+            case = 2  # the kept message in other bytes
+        if case is None:
+            return False
+        try:
+            values = {} if schema is None else record_values(schema, body)  # steps 8 and 9
+        except Reject:
+            if sibling is not None:
+                raise
+            return False
+        if text is not None:
+            sender.schemas.setdefault(schema_fingerprint(text), text)
+        if case in (1, 4):
+            held.beside = Received(name, version, True, raw, text, values)
+        elif case == 3:
+            sender.records[key] = Received(held.type, version, False, raw, None, {}, None)
+        else:
+            self._replace_record(sender, key, raw, text, values)
+        return True
+
+    def _replace_record(
+        self, sender: Sender, key: int, raw: bytes, text: str | None, values: dict[str, bytes]
+    ) -> None:
+        """A record message with the receiver's version in other bytes that stand over the kept ones takes
+        their place, with its schema and its values (section 20.1)."""
+        old = sender.records[key]
+        sender.records[key] = dataclasses.replace(old, message=raw, schema=text, values=values)
+        if text is not None:
+            sender.schemas.setdefault(schema_fingerprint(text), text)
+
+    # --- the answering device (sections 17.2, 22.2 and 24.2) ---
+
+    def take(self, m: bytes, text: str | None, file: bool = False) -> tuple[dict[str, Any], list[bytes]]:
+        """A message of another app that reaches the device from that app itself, in a live connection
+        or, with `file`, in a file of that app, after the checks of spec/protocol.md and
+        spec/transports.md; `text` is the writer schema of a DATA. What the device did with it, and
+        what it sends its siblings; the outcome it owes the other app goes with `flush_acks`."""
+        envelope = read_all("Envelope", m[10:])
+        signer, kind, rec, body = envelope["sender"], envelope["kind"], envelope["record"], envelope["body"]
+        if kind in (keys.ADD, keys.REMOVE):
+            try:
+                applied = self._chain_message(kind, signer, body, m, False)
+            except Reject:
+                applied = False
+            return {"taken": applied}, self._send_due()
+        sender = self._sender_of(signer)
+        assert sender is not None and signer in self._keys(sender).current, "a current key of a known sender"
+        if kind == "MANIFEST":
+            return {"taken": self._manifest_of(signer, body, m, None, not file)}, self._send_due()
+        assert kind in ("DATA", "DELETE"), kind
+        key, version = uuid_key(rec["id"]), rec["version"]
+        assert key is not None and version >= 1
+        held, ref = sender.records.get(key), (sender.serial, key)
+        kept_fields: list[str] = []
+        if held is not None and version <= held.version:
+            outcome = "DUPLICATE" if version == held.version else "STALE"  # spec/records.md, section 5.2
+            # The four cases of section 19.5, step 7, hold from the sender itself as well; the outcome is
+            # that of the version rule.
+            self._at_or_below(sender, key, held, kind, version, m, text, body, None)
+        else:
+            schema = None if text is None else json.loads(text)
+            values = {} if schema is None else record_values(schema, body)
+            fp = None if text is None else schema_fingerprint(text)
+            layer = self.layers.get(ref)
+            texts = dict(sender.schemas)
+            if fp is not None and text is not None:
+                texts[fp] = text
+            name = None if schema is None else full_name(schema)
+            own = layer.state if layer else None
+            self.later.pop(ref, None)  # a later message of the sender: no further ACK for an earlier one
+            if kind == "DATA":
+                # The message goes into the sender's layer and changes nothing in the owner's layer.
+                outcome, kept_fields = answered(kind, values, fp, own, texts)
+                self._keep_record(sender, key, rec, kind, name, m, text, values)
+            else:
+                # A DELETE (section 22.2): the record is kept against it, or the layer is tidied.
+                self._keep_record(sender, key, rec, kind, name, m, text, values)
+                outcome, mine = "APPLIED", owner_values(own)
+                if mine and not owner_deleted(own):
+                    if self.on_delete in ("keep", "ask") and sender.records[key].beside is not None:
+                        if self._layer_step(ref, "keep", {}):
+                            outcome = "KEPT"
+                    else:
+                        self._layer_step(ref, "discard", dict.fromkeys(mine, b""))  # tidying the layer
+            if outcome == "KEPT":
+                self.later[ref] = (signer, rec["id"], version, kind)
+        if not file:
+            entry = {
+                "id": rec["id"],
+                "version": version,
+                "outcome": outcome,
+                "receiver_version": sender.records[key].version,
+                "kept_fields": kept_fields,
+            }
+            self.app_acks.setdefault(signer, []).append(entry)
+        return {"outcome": outcome, "kept_fields": kept_fields}, self._send_due()
+
+    def _layer_moved(self, ref: tuple[int, int]) -> None:
+        """A change or a merge has given an owner's layer a new state stamp: a layer that waited for a
+        sibling goes again (section 21.5)."""
+        for sibling in self.siblings:
+            kept = self.kept.setdefault((sibling, ref), Kept())
+            if kept.waiting:
+                kept.waiting, kept.want, kept.unknowns = False, True, 0
+
+    # --- what its user does to a received record (section 21.2) ---
+
+    def layer_change(
+        self, signer: bytes, rid: str, action: str, values: dict[str, bytes]
+    ) -> tuple[bool, list[bytes]]:
+        """A change of the user to a record of the sender that has the key `signer`: "set", with the
+        values it gives; "discard", for the fields named in `values`; "delete"; "take_back"; "keep", a
+        keep against the sender's deletion with the version of the DELETE of the sender's layer; or
+        "give_up", a keep with the version 0. Whether the device makes it, and what it sends."""
+        sender, key = self._sender_of(signer), uuid_key(rid)
+        assert sender is not None and key is not None, "a record of a sender the device knows"
+        made = self._layer_step((sender.serial, key), action, values)
+        return made, (self._send_due() if made else [])
+
+    def _layer_step(self, ref: tuple[int, int], action: str, values: dict[str, bytes]) -> bool:
+        """One change of section 21.2 to the owner's layer of a received record, with its two stamps;
+        whether the device could make it (section 2.3)."""
+        sender = self.senders[ref[0]]
+        rec, layer = sender.records.get(ref[1]), self.layers.get(ref)
+        state = layer.state if layer else State({}, None, None)
+        if action == "keep" and (rec is None or rec.there or rec.beside is None or not owner_values(state)):
+            return False  # a keep only beside a DATA, and only with an owner's value (section 21.2)
+        if action == "give_up" and (state.keep is None or state.keep.given_up):
+            return False  # only a keep that keeps the record is given up
+        r = (self._draw(), self._draw())
+        if not can_begin_change(self.now_ms, self.highest):
+            return False
+        first = cast_stamp(next_stamp(self.now_ms, self.highest, r[0]))
+        fields, removal, keep = dict(state.fields), state.removal, state.keep
+        if action == "set":
+            fp = None
+            if rec is not None and rec.there and rec.schema is not None:
+                fp = schema_fingerprint(rec.schema)  # the writer schema of the kept DATA
+            elif rec is not None and rec.beside is not None and rec.beside.schema is not None:
+                fp = schema_fingerprint(rec.beside.schema)
+            for name, value in values.items():
+                fields[name] = FieldState(value, first, self.key, fp or fields[name].schema)
+        elif action == "discard":
+            for name in values:
+                fields[name] = FieldState(None, first, self.key, fields[name].schema)
+        elif action == "delete":
+            removal = Removal(first, self.key, True)
+        elif action == "take_back":
+            removal = Removal(first, self.key, False)
+        elif action == "keep":
+            assert rec is not None
+            keep = Keep(first, self.key, max(rec.version, keep.version if keep else 0))
+        else:
+            assert action == "give_up" and keep is not None, action
+            keep = Keep(first, self.key, keep.version, True)
+        self.highest = second = cast_stamp(next_stamp(self.now_ms, first, r[1]))
+        new = State(fields, removal, second, keep)
+        if layer is None:
+            assert rec is not None and rec.type is not None, "the user changes a record the device holds"
+            layer = self.layers[ref] = Held(rec.type, new)
+            sender.ids.setdefault(ref[1], self._id(ref))
+        layer.state = new
+        self._due_for(ref, self._parts(new) - self._parts(state))
+        self._layer_moved(ref)
+        self._later_ack(ref)
+        return True
+
+    def _later_ack(self, ref: tuple[int, int]) -> None:
+        """The further ACK with APPLIED of section 22.3: for a message for which the device reported
+        KEPT, once the owner's layer shows that it is taken after all, while the receiver's version of
+        the record is still the version of that message."""
+        pending = self.later.get(ref)
+        if pending is None:
+            return
+        signer, rid, version, kind = pending
+        rec, layer = self.senders[ref[0]].records.get(ref[1]), self.layers.get(ref)
+        if rec is None or rec.version != version or layer is None:
+            del self.later[ref]  # a later message of the sender has arrived in between
+            return
+        state = layer.state
+        if kind == "DATA":
+            taken = state.removal is not None and not state.removal.stands
+        else:
+            taken = state.keep is not None and state.keep.given_up
+        if taken:
+            del self.later[ref]
+            entry = {"id": rid, "version": version, "outcome": "APPLIED", "receiver_version": version}
+            self.app_acks.setdefault(signer, []).append({**entry, "kept_fields": []})
+
+    def forget(self, key: bytes) -> list[bytes]:
+        """The user forgets a known sender (spec/keys.md, section 3.4; section 20.5): the device discards
+        its kept messages, its owner's layers and what it kept for each sibling about them, and keeps
+        the sender's removed keys as refused keys. Nothing travels to its siblings."""
+        sender = self._sender_of(key)
+        assert sender is not None, "a sender the device knows"
+        known, serial = self._keys(sender), sender.serial
+        self.book.senders.remove(known)
+        self.book.refused += known.removed
+        self.forgotten.append((sender.first, list(known.current), list(known.removed)))
+        del self.senders[serial]
+        self.layers = {ref: layer for ref, layer in self.layers.items() if ref[0] != serial}
+        self.later = {ref: v for ref, v in self.later.items() if ref[0] != serial}
+        self.kept = {k: v for k, v in self.kept.items() if isinstance(k[1], int) or k[1][0] != serial}
+        self.early = [e for e in self.early if e[1] not in known.current + known.removed]
+        kept_now = self._kept_hashes()
+        for s in self.siblings:
+            self.sent[s] = {
+                n: v for n, v in self.sent[s].items() if isinstance(v[2], int) or v[2][0] != serial
+            }
+            self.left[s] = {ref for ref in self.left[s] if isinstance(ref, int) or ref[0] != serial}
+            self.forwards[s] = {f: v for f, v in self.forwards[s].items() if v[3] != serial}
+            for table in (self.fdelivered, self.fsettled, self.fgone, self.frefused, self.fretried):
+                table[s] &= kept_now
+        return []
+
+    def query_received(self, key: bytes, rid: str | None) -> dict[str, Any]:
+        """What the device holds of the sender that has the key, and of its record with the id."""
+        requests = {sibling.hex(): self.requests[sibling][0] for sibling in sorted(self.requests)}
+        out: dict[str, Any] = {
+            "sender": None,
+            "refused": sorted(k.hex() for k in self.book.refused),
+            "forgotten": sorted(
+                (
+                    {
+                        "origin": f[0].hex(),
+                        "current": sorted(k.hex() for k in f[1]),
+                        "removed": sorted(k.hex() for k in f[2]),
+                    }
+                    for f in self.forgotten
+                ),
+                key=lambda f: f["origin"],
+            ),
+            "highest": str(self.highest),
+            "requests": requests,
+        }
+        sender = self._sender_of(key)
+        if sender is None:
+            return out
+        known = self._keys(sender)
+        out["sender"] = {
+            "origin": sender.first.hex(),
+            "known_by": "user" if sender.known_by is None else sorted(k.hex() for k in sender.known_by),
+            "current": sorted(k.hex() for k in known.current),
+            "removed": sorted(k.hex() for k in known.removed),
+            "kept": [
+                {
+                    "message_hash": sha(raw).hex(),
+                    "delivered": [s.hex() for s in sorted(self.siblings) if sha(raw) in self.fdelivered[s]],
+                }
+                for raw, _ in sender.kept()
+            ],
+        }
+        record_key = None if rid is None else uuid_key(rid)
+        if record_key is None:
+            return out
+        rec, layer = sender.records.get(record_key), self.layers.get((sender.serial, record_key))
+        out["received"] = rec and {
+            "type": rec.type,
+            "version": str(rec.version),
+            "state": "there" if rec.there else "tombstone",
+            "message_hash": sha(rec.message).hex(),
+            "beside": rec.beside
+            and {"version": str(rec.beside.version), "message_hash": sha(rec.beside.message).hex()},
+        }
+        out["layer"] = None
+        if layer is not None:
+            siblings = {}
+            for sibling in sorted(self.siblings):
+                kept = self.kept.get((sibling, (sender.serial, record_key)), Kept())
+                delivered = kept.delivered & self._parts(layer.state)
+                siblings[sibling.hex()] = {
+                    "known": kept.known,
+                    "delivered": sorted(p[0] for p in delivered if isinstance(p, tuple)),
+                    "removal": any(isinstance(p, Removal) for p in delivered),
+                    "keep": any(isinstance(p, Keep) for p in delivered),
+                }
+            state_of = state_json(layer.state, True)
+            out["layer"] = {"type": layer.type, "state": state_of, "siblings": siblings}
+        fp = None if rec is None or rec.schema is None else schema_fingerprint(rec.schema)
+        b = None if rec is None else rec.beside
+        beside = None if b is None or b.schema is None else (b.values, schema_fingerprint(b.schema))
+        state, fields = shown(
+            None if rec is None else rec.there,
+            rec.values if rec else {},
+            fp,
+            layer.state if layer else None,
+            rec.version if rec else 0,
+            beside,
+        )
+        out["shown"] = {
+            "record": state,
+            "fields": {
+                name: {"value": value.hex(), "schema": schema.hex(), "from": source}
+                for name, (value, schema, source) in fields.items()
+            },
+        }
+        return out
 
     # --- what the device holds, for the vectors ---
 
@@ -3998,7 +5442,20 @@ def device_of_json(v: dict[str, Any], bytes_in: Callable[[Any], bytes] = bytes.f
         v["offer_ids"],
         v["request_ids"],
         [bytes.fromhex(k) for k in v["relay"]],
+        [bytes.fromhex(k) for k in v.get("refused", [])],
+        v.get("forward_ids", []),
+        v.get("on_delete", "delete"),
     )
+    for sender in v.get("senders", []):
+        device.know(sender, bytes_in)
+    for f in v.get("forgotten", []):
+        device.forgotten.append(
+            (
+                bytes.fromhex(f["origin"]),
+                [bytes.fromhex(k) for k in f["current"]],
+                [bytes.fromhex(k) for k in f["removed"]],
+            )
+        )
     for sibling, fps in v["accepted"].items():
         device.accepted[bytes.fromhex(sibling)] = {bytes.fromhex(fp) for fp in fps}
     for sibling, m in v["manifests"].items():
@@ -4022,11 +5479,21 @@ def play(
         connection = bytes.fromhex(step["from"]) if "from" in step else None
         outcome, sent = device.receive(bytes_in(step["receive"]), connection)
         answer: dict[str, Any] = {"outcome": outcome, "sent": sent}
+    elif "change" in step and "sender" in step["change"]:
+        c = step["change"]  # of a record received from the sender that has that key (section 21.2)
+        values = {name: b"" if value is None else bytes_in(value) for name, value in c["values"].items()}
+        made, sent = device.layer_change(bytes.fromhex(c["sender"]), c["id"], c["action"], values)
+        answer = {"made": made, "sent": sent}
     elif "change" in step:
         c = step["change"]
         values = {name: bytes_in(value) for name, value in c["values"].items()}
         made, sent = device.user_change(c["id"], c["type"], c["action"], values, bytes.fromhex(c["schema"]))
         answer = {"made": made, "sent": sent}
+    elif "take" in step:
+        did, sent = device.take(bytes_in(step["take"]), step.get("schema"), step.get("file", False))
+        answer = {**did, "sent": sent}
+    elif "forget" in step:
+        answer = {"sent": device.forget(bytes.fromhex(step["forget"]))}
     elif "file_record" in step:
         taken, sent = device.file_record(bytes_in(step["file_record"]), step["schema"])
         answer = {"taken": taken, "sent": sent}
@@ -4035,7 +5502,10 @@ def play(
     elif "add" in step:
         answer = {"sent": device.add(bytes.fromhex(step["add"]))}
     elif "remove" in step:
-        answer = {"sent": device.remove(bytes.fromhex(step["remove"]))}
+        sent, now = device.remove(bytes.fromhex(step["remove"]), step.get("move", False))
+        answer = {"sent": sent, "introduced": [k.hex() for k in now]}
+    elif "senders_kept" in step:
+        answer = {"sent": [], "introduced": [k.hex() for k in device.senders_kept()]}
     elif "reconnect" in step:
         answer = {"sent": device.reconnect(bytes.fromhex(step["reconnect"]))}
     elif "days" in step:
@@ -4044,7 +5514,13 @@ def play(
         backup = step["restore"]
         records = [_held_of_json(r)[:2] for r in backup["records"]]
         acted = {bytes.fromhex(sibling): ids for sibling, ids in backup["acted"].items()}
-        answer = {"sent": device.restore(int(backup["highest"]), records, acted)}
+        refused = [bytes.fromhex(k) for k in backup.get("refused", [])]
+        sent = device.restore(
+            int(backup["highest"]), records, acted, backup.get("senders"), refused, bytes_in
+        )
+        answer = {"sent": sent}
+    elif "sender" in step:
+        return device.query_received(bytes.fromhex(step["sender"]), step["query"])
     else:
         return device.query(step["query"])
     assert not device.r, "the step gives a random part that the device does not draw"
@@ -4059,12 +5535,34 @@ def meaning(m: bytes) -> list[dict[str, Any]]:
     kind, rec = envelope["kind"], envelope["record"]
     d = read_all(BODY_OF[kind], envelope["body"][10:])
     base = {"kind": kind, "to": d["to"].hex()}
-    if kind == "CHANGE":
-        r = d["removal"]
-        assert d["origin"] is None
+    if kind == "FORWARD":
+        text = d["schema"]
         return [
             {
                 **base,
+                "record": {"id": rec["id"], "version": str(rec["version"])},
+                "message_hash": sha(d["message"]).hex(),
+                "schema_hash": None if text is None else sha(text.encode()).hex(),
+            }
+        ]
+    if kind == "CHANGE":
+        r, k = d["removal"], d["keep"]
+        # A message with a key in `origin` says so, and gives its keep; one of a record of the set has
+        # neither member.
+        keep = {
+            "keep": k
+            and {
+                "stamp": str(k["stamp"]),
+                "device": k["device"].hex(),
+                "version": str(k["version"]),
+                "given_up": k["given_up"],
+            }
+        }
+        origin = {} if d["origin"] is None else {"origin": d["origin"].hex(), **keep}
+        return [
+            {
+                **base,
+                **origin,
                 "record": {"id": rec["id"], "version": str(rec["version"])},
                 "type": d["type"],
                 "state": str(d["state"]),
@@ -4073,7 +5571,7 @@ def meaning(m: bytes) -> list[dict[str, Any]]:
                 and {"stamp": str(r["stamp"]), "device": r["device"].hex(), "stands": r["stands"]},
                 "fields": {
                     f["name"]: {
-                        "value": f["value"].hex(),
+                        "value": None if f["value"] is None else f["value"].hex(),
                         "schema": f["schema"].hex(),
                         "stamp": str(f["stamp"]),
                         "device": f["device"].hex(),
@@ -4115,8 +5613,16 @@ def meaning(m: bytes) -> list[dict[str, Any]]:
 
 
 def meanings(sent: list[bytes]) -> list[dict[str, Any]]:
-    """The messages of one step as the vectors hold them: in an order that says nothing."""
-    out = [entry for m in sent for entry in meaning(m)]
+    """The messages of one step as the vectors hold them: in an order that says nothing. The order in
+    which the FORWARD messages for one sibling are sent does count (section 20.3), so each says its
+    place among them, from 0 on."""
+    out, place = list[dict[str, Any]](), dict[str, int]()
+    for m in sent:
+        for entry in meaning(m):
+            if entry["kind"] == "FORWARD":
+                entry["position"] = place.get(entry["to"], 0)
+                place[entry["to"]] = entry["position"] + 1
+            out.append(entry)
     return sorted(out, key=lambda e: json.dumps(e, sort_keys=True))
 
 
@@ -4125,6 +5631,13 @@ def meanings(sent: list[bytes]) -> list[dict[str, Any]]:
 PHONE_SEED = test_secret("cat-a-log, phone, Ed25519")
 TABLET_SEED = test_secret("cat-a-log, tablet, Ed25519")
 DEVICE_NAMES = {PHONE: "phone", TABLET: "tablet"}
+# The other app of sections 16.5 to 16.7: Old Brain Fix, with the test key of spec/protocol.md, section 17.1.
+OBF_SEED = test_secret("Old Brain Fix, Ed25519")
+KEY_OBF = bytes(keys.public_key(OBF_SEED))
+FORWARD_ID = "c4a1e2b3-6d7f-4809-9a1b-2c3d4e5f6071"  # the forward of section 16.5
+MANIFEST_FORWARD_ID = "b3a0d1c2-5e6f-4708-8192-a3b4c5d6e7f8"  # the forward before it, which is not shown
+# Appointment.1.avsc as Old Brain Fix offered it: JSON without whitespace (spec/protocol.md, section 17.1).
+APPOINTMENT_OFFERED = json.dumps(json.loads(APPOINTMENT_1), separators=(",", ":"), ensure_ascii=False)
 RECORD_ID = "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80"  # spec/records.md, section 9
 REQUEST_ID = "7c1d9e42-5a3b-4f6c-8d2e-1b0a9c8f7e6d"  # the request of section 16.3
 APPOINTMENT_TYPE = "axt.example.v1.Appointment"
@@ -4137,11 +5650,20 @@ CHANGE_PCF = (
     '{"name":"type","type":"string"},{"name":"state","type":"long"},{"name":"whole","type":"boolean"},'
     '{"name":"removal","type":["null",{"name":"axt.ChangeRemoval","type":"record","fields":[{"name":"stamp",'
     '"type":"long"},{"name":"device","type":{"name":"axt.ChangeRemovalDevice","type":"fixed","size":32}},'
-    '{"name":"stands","type":"boolean"}]}]},{"name":"fields","type":{"type":"array","items":{"name":'
+    '{"name":"stands","type":"boolean"}]}]},{"name":"keep","type":["null",{"name":"axt.ChangeKeep","type":'
+    '"record","fields":[{"name":"stamp","type":"long"},{"name":"device","type":{"name":"axt.ChangeKeepDevice",'
+    '"type":"fixed","size":32}},{"name":"version","type":"long"},{"name":"given_up","type":"boolean"}]}]},'
+    '{"name":"fields","type":{"type":"array",'
+    '"items":{"name":'
     '"axt.ChangeField","type":"record","fields":[{"name":"name","type":"string"},{"name":"schema","type":'
     '{"name":"axt.ChangeFieldSchema","type":"fixed","size":8}},{"name":"value","type":["null","bytes"]},'
     '{"name":"stamp","type":"long"},{"name":"device","type":{"name":"axt.ChangeFieldDevice","type":"fixed",'
     '"size":32}}]}}}]}'
+)
+FINGERPRINTS = {"Change": 0x4D094DAFC5F888C1, "Resync": 0xE8762BD9D559FDF1, "Forward": 0x57476ABF6B053BAD}
+FORWARD_PCF = (
+    '{"name":"axt.Forward","type":"record","fields":[{"name":"to","type":{"name":"axt.ForwardTo",'
+    '"type":"fixed","size":32}},{"name":"message","type":"bytes"},{"name":"schema","type":["null","string"]}]}'
 )
 RESYNC_PCF = (
     '{"name":"axt.Resync","type":"record","fields":[{"name":"to","type":{"name":"axt.ResyncTo","type":"fixed",'
@@ -4202,7 +5724,8 @@ def _text(name: str, text: str) -> Parts:
 
 
 def _key(name: str, key: bytes) -> Parts:
-    return [(key, f"{name}: fixed(32), the {DEVICE_NAMES[key]}'s test key")]
+    whose = "Old Brain Fix's" if key == KEY_OBF else f"the {DEVICE_NAMES[key]}'s"
+    return [(key, f"{name}: fixed(32), {whose} test key")]
 
 
 def change_parts(d: dict[str, Any], notes: dict[str, str]) -> Parts:
@@ -4213,13 +5736,16 @@ def change_parts(d: dict[str, Any], notes: dict[str, str]) -> Parts:
         (SPEC_FP["Change"], "fingerprint of axt.Change, format 1"),
     ]
     parts += _key("to", d["to"])
-    assert d["origin"] is None
-    parts += [(z(0), "origin: union index 0, null")]
+    if d["origin"] is None:
+        parts += [(z(0), "origin: union index 0, null")]
+    else:
+        parts += [(z(1), "origin: union index 1, axt.ChangeOrigin"), *_key("origin", d["origin"])]
     parts += _text("type", d["type"])
     parts += [(z(d["state"]), f"state: long {d['state']}")]
     parts += [(b"\x01" if d["whole"] else b"\x00", f"whole: boolean {str(d['whole']).lower()}")]
-    assert d["removal"] is None, "the examples carry no removal"
+    assert d["removal"] is None and d["keep"] is None, "the examples carry no removal and no keep"
     parts += [(z(0), "removal: union index 0, null")]
+    parts += [(z(0), "keep: union index 0, null")]
     n = len(d["fields"])
     parts += [(z(n), f"fields: array block of {n} items")]
     for i, f in enumerate(d["fields"]):
@@ -4299,6 +5825,9 @@ def example_device(seed: bytes, sibling: bytes, state: State, highest: int) -> S
 
 
 EXAMPLE_MESSAGES: dict[str, bytes] = {}  # the messages of section 16, for the vectors
+EXAMPLE_OTHERS: dict[
+    str, bytes
+] = {}  # the messages of Old Brain Fix in section 16.5, which other scripts hold
 PLAYED: list["Session"] = []  # the sessions that `check` played, for the vectors
 
 
@@ -4376,16 +5905,16 @@ def check_envelopes() -> None:
 
 
 def check_schemas(out: list[str]) -> None:
-    """Section 15: the canonical forms and the fingerprints of axt.Change and axt.Resync, with fastavro and
-    the Apache avro package, and that the three unions have null first and the default null."""
+    """Section 15: the canonical forms and the fingerprints of axt.Change, axt.Resync and axt.Forward, with
+    fastavro and the Apache avro package, and that the five unions have null first and the default null."""
     out.append("== Section 15: schemas ==")
     out.append("| Schema | Envelope format | CRC-64-AVRO | As bytes |")
-    for name, pcf in (("Change", CHANGE_PCF), ("Resync", RESYNC_PCF)):
+    for name, pcf in (("Change", CHANGE_PCF), ("Resync", RESYNC_PCF), ("Forward", FORWARD_PCF)):
         text = SPEC_TEXT[name]
         assert to_parsing_canonical_form(fastavro.parse_schema(json.loads(text))) == pcf, name
         assert avro.schema.parse(pcf).canonical_form == pcf, f"{name}: the two libraries disagree"
         fp = tm.rules.crc64_avro(pcf.encode())
-        assert fp == {"Change": 0xD3849ACAFC9D62E8, "Resync": 0xE8762BD9D559FDF1}[name], (
+        assert fp == FINGERPRINTS[name], (
             f"the fingerprint of axt.{name} is not that of spec/sync.md, section 15"
         )
         assert fp.to_bytes(8, "little") == SPEC_FP[name] == tm.rules.apache_fingerprint(text), name
@@ -4393,18 +5922,25 @@ def check_schemas(out: list[str]) -> None:
         out.append(f"| `axt.{name}` | 1 | `0x{fp:016x}` | `{SPEC_FP[name].hex(' ')}` |")
     change_fields = {f["name"]: f for f in json.loads(SPEC_TEXT["Change"])["fields"]}
     value = next(f for f in change_fields["fields"]["type"]["items"]["fields"] if f["name"] == "value")
-    for f in (change_fields["origin"], change_fields["removal"], value):
+    forward_schema = json.loads(SPEC_TEXT["Forward"])["fields"][2]
+    for f in (
+        change_fields["origin"],
+        change_fields["removal"],
+        change_fields["keep"],
+        value,
+        forward_schema,
+    ):
         assert f["type"][0] == "null" and f["default"] is None, f["name"]
-    # A writer without the three reads as null in each, with both libraries.
+    # A writer without the four reads as null in each, with both libraries.
     old = json.loads(SPEC_TEXT["Change"])
-    old["fields"] = [f for f in old["fields"] if f["name"] not in ("origin", "removal")]
+    old["fields"] = [f for f in old["fields"] if f["name"] not in ("origin", "removal", "keep")]
     items = next(f for f in old["fields"] if f["name"] == "fields")["type"]["items"]
     items["fields"] = [f for f in items["fields"] if f["name"] != "value"]
     entry = {"name": "title", "schema": SCHEMA_1, "stamp": 100, "device": PHONE}
     datum = {"to": TABLET, "type": APPOINTMENT_TYPE, "state": 101, "whole": False, "fields": [entry]}
     buf = io.BytesIO()
     fastavro.schemaless_writer(buf, fastavro.parse_schema(old), datum)
-    want = {**datum, "origin": None, "removal": None, "fields": [{**entry, "value": None}]}
+    want = {**datum, "origin": None, "removal": None, "keep": None, "fields": [{**entry, "value": None}]}
     assert (
         fastavro.schemaless_reader(io.BytesIO(buf.getvalue()), fastavro.parse_schema(old), SPEC["Change"])
         == want
@@ -4484,6 +6020,7 @@ def check_messages(out: list[str]) -> None:
         "state": 111,
         "whole": False,
         "removal": None,
+        "keep": None,
         "fields": entries(state, ["start", "location"]),
     }
     assert change_version(d) == 111 and change_problem(d, 111) is None
@@ -4553,6 +6090,7 @@ def check_messages(out: list[str]) -> None:
         "state": 117,
         "whole": True,
         "removal": None,
+        "keep": None,
         "fields": entries(state, list(APPOINTMENT)),
     }
     assert change_version(d) == 117
@@ -4632,8 +6170,178 @@ def check_messages(out: list[str]) -> None:
 def show(out: list[str], title: str, parts: Parts, m: bytes) -> None:
     out.append("")
     out.append(f"== {title}: {len(m)} bytes, SHA-256 {hashlib.sha256(m).hexdigest()} ==")
-    out.append(keys.dump(parts))
+    out.append(dump(parts))
     out.append(f"signed bytes: {len(keys.MESSAGE_PREFIX) + len(m) - 74}, signature {m[-64:].hex()}")
+
+
+def dump(parts: Parts) -> str:
+    """Annotated hex in the layout of spec/envelope.md; a value of more than 1,024 bytes, the text of a
+    schema, is shown shortened, as spec/protocol.md, section 17.3, shows it."""
+    offset, lines = 0, list[str]()
+    for data, note in parts:
+        if len(data) > 1024:
+            lines.append(f"{offset:04x}  {(data[:4].hex(' ') + ' ... ' + data[-2:].hex(' ')):<23}  {note}")
+        else:
+            lines += keys.dump([(bytes(offset), ""), (data, note)]).split("\n")[
+                -1 - max(1, -(-len(data) // 8)) : -1
+            ]
+        offset += len(data)
+    return "\n".join([*lines, f"{offset:04x}  end"])
+
+
+def check_received(out: list[str]) -> None:
+    """Sections 16.5 to 16.7, the steps 1 and 2 of section 22.4: the DATA of Old Brain Fix, the phone's
+    FORWARD of it and the tablet's ACK, and the tablet's CHANGE of the owner's layer with the phone's ACK,
+    built field by field and played through the model of a device."""
+    z = keys.zigzag
+    assert KEY_OBF.hex() == "da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7"
+    assert len(APPOINTMENT_OFFERED.encode()) == 6389 and schema_fingerprint(APPOINTMENT_OFFERED) == SCHEMA_1
+    phone = SetDevice(
+        PHONE_SEED,
+        [TABLET],
+        [APPOINTMENT_1],
+        195,
+        others=[KEY_OBF],
+        forward_ids=[MANIFEST_FORWARD_ID, FORWARD_ID],
+    )
+    tablet = SetDevice(TABLET_SEED, [PHONE], [APPOINTMENT_1], 190)
+    for device, sibling in ((phone, TABLET), (tablet, PHONE)):
+        device.accepted[sibling].add(SCHEMA_1)  # the offers of section 16.1
+        device.offered[sibling][SCHEMA_1] = APPOINTMENT_1
+    # Before 16.5: the phone keeps the MANIFEST of Old Brain Fix and forwards it; the tablet so knows the
+    # sender, without a question. Nothing of this forward is shown.
+    manifest = message(OBF_SEED, "MANIFEST", None, body_of("Manifest", me.OLD_BRAIN_FIX))
+    EXAMPLE_OTHERS["the MANIFEST of Old Brain Fix"] = manifest
+    did, sent = phone.take(manifest, None)
+    assert did == {"taken": True} and len(sent) == 1
+    assert tablet._sender_of(KEY_OBF) is None
+    assert tablet.receive(sent[0]) == ("APPLIED", []) and tablet.book.key_state(KEY_OBF)[0] == "current"
+    assert phone.receive(tablet.flush_acks()[0]) == (None, [])
+
+    # 16.5: the DATA of Old Brain Fix, version 1, and the phone's FORWARD of it.
+    record: Parts = [
+        (MARKER, "single-object marker"),
+        (SCHEMA_1, f"fingerprint of {APPOINTMENT_TYPE}, version 1"),
+    ]
+    record += [(VALUE[name], f"{name}: the value of section 16.1") for name in APPOINTMENT]
+    data_parts, data = message_parts(OBF_SEED, "DATA", (RECORD_ID, 1), record)
+    assert data == data_message("other app", 1, APPOINTMENT_1, APPOINTMENT)
+    EXAMPLE_OTHERS["the DATA of Old Brain Fix"] = data
+    out.append("")
+    out.append(
+        f"16.5: the DATA of Old Brain Fix: {len(data)} bytes, SHA-256 {hashlib.sha256(data).hexdigest()}, "
+        f"signature {data[-64:].hex()}"
+    )
+    did, sent = phone.take(data, APPOINTMENT_OFFERED)
+    assert did == {"outcome": "APPLIED", "kept_fields": []} and len(sent) == 1
+    (ack,) = phone.flush_acks()
+    assert meaning(ack) == [
+        {
+            "kind": "ACK",
+            "to": KEY_OBF.hex(),
+            "id": RECORD_ID,
+            "version": "1",
+            "outcome": "APPLIED",
+            "receiver_version": "1",
+            "kept_fields": [],
+        }
+    ]
+    d: dict[str, Any] = {"to": TABLET, "message": data, "schema": APPOINTMENT_OFFERED}
+    text = APPOINTMENT_OFFERED.encode()
+    body: Parts = [
+        (MARKER, "single-object marker"),
+        (SPEC_FP["Forward"], "fingerprint of axt.Forward, format 1"),
+    ]
+    body += _key("to", TABLET)
+    body += [(z(len(data)), f"message: bytes length {len(data)}")]
+    body += [(part, f"message: {note}") for part, note in data_parts]
+    body += [(z(1), "schema: union index 1, string"), (z(len(text)), f"schema: string length {len(text)}")]
+    body += [(text, f"Appointment.1.avsc without whitespace ({len(text)} bytes of UTF-8 JSON)")]
+    assert b"".join(p[0] for p in body) == body_of("Forward", d), "the body differs from fastavro"
+    assert apache_body("Forward", body_of("Forward", d)) == d
+    parts, m = message_parts(PHONE_SEED, "FORWARD", (FORWARD_ID, 1), body)
+    assert sent == [m], "the phone of the model sends this FORWARD"
+    assert KINDS.index("FORWARD") == 13
+    show(out, "16.5: the phone's FORWARD", parts, m)
+    EXAMPLE_MESSAGES["the FORWARD of sync.md, section 16.5"] = m
+    before = copy.deepcopy(tablet)
+    assert tablet.receive(m) == ("APPLIED", []), tablet.what
+    got = tablet.query_received(KEY_OBF, RECORD_ID)
+    assert got["received"] == {
+        "type": APPOINTMENT_TYPE,
+        "version": "1",
+        "state": "there",
+        "message_hash": hashlib.sha256(data).hexdigest(),
+        "beside": None,
+    }
+    # The same bytes are a kept message of the tablet, delivered to the phone: nothing goes back.
+    assert got["sender"]["kept"][-1] == {
+        "message_hash": hashlib.sha256(data).hexdigest(),
+        "delivered": [PHONE.hex()],
+    }
+    assert got["shown"]["record"] == THERE and got["layer"] is None
+
+    # 16.6: the tablet's ACK for the forward.
+    (ack,) = tablet.flush_acks()
+    entry = {"id": FORWARD_ID, "version": 1, "outcome": "APPLIED", "receiver_version": 1, "kept_fields": []}
+    assert ack == message(TABLET_SEED, "ACK", None, body_of("Ack", {"to": PHONE, "records": [entry]}))
+    assert ack[-64:] == all_sign(TABLET_SEED, keys.MESSAGE_PREFIX + ack[10:-64])
+    assert apache_body("Ack", read_all("Envelope", ack[10:])["body"]) == {"to": PHONE, "records": [entry]}
+    out.append(f"16.6: the tablet's ACK: {len(ack)} bytes, SHA-256 {hashlib.sha256(ack).hexdigest()}")
+    EXAMPLE_MESSAGES["the ACK of sync.md, section 16.6"] = ack
+    assert phone.receive(ack) == (None, []) and phone.what == "1 entries taken"
+    assert phone.query_received(KEY_OBF, RECORD_ID)["sender"]["kept"][-1]["delivered"] == [TABLET.hex()]
+    # The same FORWARD once more, and the same DATA in a forward with another id: DUPLICATE.
+    assert tablet.receive(m) == ("DUPLICATE", [])
+    other = message(PHONE_SEED, "FORWARD", (MANIFEST_FORWARD_ID, 1), body_of("Forward", d))
+    assert tablet.receive(other) == ("DUPLICATE", []) and len(meanings(tablet.flush_acks())) == 2
+    assert before.receive(other) == ("APPLIED", [])
+
+    # 16.7: the tablet's user sets the location, with the stamps 200 and 201.
+    tablet.at(0, [200 - 191, 201 - 201])
+    made, sent = tablet.layer_change(KEY_OBF, RECORD_ID, "set", {"location": VALUE_WEBER})
+    assert made and len(sent) == 1 and tablet.highest == 201
+    layer = FieldState(VALUE_WEBER, 200, TABLET, SCHEMA_1)
+    change_d: dict[str, Any] = {
+        "to": PHONE,
+        "origin": KEY_OBF,
+        "type": APPOINTMENT_TYPE,
+        "state": 201,
+        "whole": True,
+        "removal": None,
+        "keep": None,
+        "fields": [entry_of("location", layer)],
+    }
+    assert change_version(change_d) == 201 and change_problem(change_d, 201) is None
+    body = change_parts(change_d, {"location": f'the value: "{WEBER}" as an Avro string'})
+    assert b"".join(p[0] for p in body) == body_of("Change", change_d), "the body differs from fastavro"
+    assert apache_body("Change", body_of("Change", change_d)) == change_d
+    parts, m = message_parts(TABLET_SEED, "CHANGE", (RECORD_ID, 201), body)
+    assert sent == [m], "the tablet of the model sends this CHANGE, and no FORWARD before it"
+    show(out, "16.7: the tablet's CHANGE with a key in origin", parts, m)
+    EXAMPLE_MESSAGES["the CHANGE of sync.md, section 16.7"] = m
+    phone.at(0, [205 - 202])
+    assert phone.receive(m) == ("APPLIED", []), phone.what
+    (ack,) = phone.flush_acks()
+    entry = {
+        "id": RECORD_ID,
+        "version": 201,
+        "outcome": "APPLIED",
+        "receiver_version": 205,
+        "kept_fields": [],
+    }
+    assert ack == message(PHONE_SEED, "ACK", None, body_of("Ack", {"to": TABLET, "records": [entry]}))
+    assert ack[-64:] == all_sign(PHONE_SEED, keys.MESSAGE_PREFIX + ack[10:-64])
+    out.append(f"16.7: the phone's ACK: {len(ack)} bytes, SHA-256 {hashlib.sha256(ack).hexdigest()}")
+    EXAMPLE_MESSAGES["the ACK of sync.md, section 16.7"] = ack
+    assert phone.highest == 205
+    for device in (phone, tablet):
+        got = device.query_received(KEY_OBF, RECORD_ID)
+        assert got["layer"]["state"] == state_json(State({"location": layer}, None, device.highest), True)
+        fields = got["shown"]["fields"]
+        assert fields["location"] == {"value": VALUE_WEBER.hex(), "schema": SCHEMA_1.hex(), "from": "owner"}
+        assert fields["start"] == {"value": VALUE["start"].hex(), "schema": SCHEMA_1.hex(), "from": "sender"}
+    assert tablet.receive(ack) == (None, []) and tablet.highest == 205
 
 
 # --- sessions of one device with its siblings (sections 7 to 13) ---------------------------------------
@@ -4647,6 +6355,8 @@ SEEDS = {
     "other app": test_secret("Old Brain Fix, Ed25519"),  # a current key of another known sender
     "refused": test_secret("Old Brain Fix, old device, Ed25519"),  # a removed key of another sender
     "stranger": test_secret("a stranger, Ed25519"),  # a key the device does not know
+    "other app, new": test_secret("Old Brain Fix, new device, Ed25519"),  # a second device of that sender
+    "second app": test_secret("a second app, Ed25519"),  # another sender
 }
 KEY = {name: bytes(keys.public_key(seed)) for name, seed in SEEDS.items()}
 LAPTOP = KEY["laptop"]
@@ -4757,6 +6467,9 @@ def entry(name: str, f: FieldState) -> dict[str, Any]:
     return {"name": name, "schema": f.schema, "value": f.value, "stamp": f.stamp, "device": f.device}
 
 
+entry_of = entry
+
+
 def change_message(
     sender: str,
     state: int,
@@ -4768,6 +6481,7 @@ def change_message(
     type_name: str = APPOINTMENT_TYPE,
     version: int | None = None,
     origin: bytes | None = None,
+    keep: Keep | None = None,
 ) -> bytes:
     """A CHANGE as a sibling writes it, or with a part that breaks a rule."""
     entries = [entry(n, f) for n, f in fields.items()] if isinstance(fields, dict) else fields
@@ -4778,9 +6492,11 @@ def change_message(
         "state": state,
         "whole": whole,
         "removal": removal and {"stamp": removal.stamp, "device": removal.device, "stands": removal.stands},
+        "keep": keep
+        and {"stamp": keep.stamp, "device": keep.device, "version": keep.version, "given_up": keep.given_up},
         "fields": entries,
     }
-    stamps = [state, *(e["stamp"] for e in entries), *([removal.stamp] if removal else [])]
+    stamps = [state, *(e["stamp"] for e in entries), *(p.stamp for p in (removal, keep) if p is not None)]
     record = (rid, max(stamps) if version is None else version)
     return message(SEEDS[sender], "CHANGE", record, body_of("Change", d))
 
@@ -4893,7 +6609,9 @@ def _fields_brief(fields: dict[str, Any]) -> str:
     groups: dict[tuple[int, str], list[str]] = {}
     for name, f in fields.items():
         who = WHO.get(bytes.fromhex(f["device"]), "?")[0]
-        groups.setdefault((int(f["stamp"]), who), []).append(name)
+        groups.setdefault((int(f["stamp"]), who), []).append(
+            name if f["value"] is not None else f"{name}=null"
+        )
     return (
         " ".join(
             f"{','.join(names) if len(names) < 7 else 'all seven'}@{stamp}{who}"
@@ -4910,8 +6628,18 @@ def _removal_brief(r: dict[str, Any] | None) -> str:
     return f" removal@{r['stamp']}{who}{'' if r['stands'] else ', taken back'}"
 
 
+def _keep_brief(k: dict[str, Any] | None) -> str:
+    if k is None:
+        return ""
+    who = WHO.get(bytes.fromhex(k["device"]), "?")[0]
+    given = ", given up" if k["given_up"] else ""
+    return f" keep@{k['stamp']}{who} of version {k['version']}{given}"
+
+
 def brief(answer: dict[str, Any]) -> list[str]:
     """The answer of a step in a few words, as the cases below write out what they expect."""
+    if "refused" in answer:  # a query about a sender, and about a record received from it
+        return _received_brief(answer)
     if "highest" in answer:  # a query
         record = answer["record"]
         asking = ", ".join(WHO[bytes.fromhex(k)] for k in answer["requests"])
@@ -4932,20 +6660,32 @@ def brief(answer: dict[str, Any]) -> list[str]:
             out.append(f"{WHO[bytes.fromhex(key)]}: {what if s['known'] else 'not known'}")
         return out
     out = []
+    if "introduced" in answer:
+        names = ", ".join(WHO[bytes.fromhex(k)] for k in answer["introduced"]) or "no sender"
+        out.append(f"chain and MANIFEST to: {names}")
     for name in ("outcome", "made", "taken"):
         if name in answer:
-            out.append(f"{name}: {answer[name]}")
+            kept = f", kept {answer['kept_fields']}" if answer.get("kept_fields") else ""
+            out.append(f"{name}: {answer[name]}{kept}")
     for m in answer["sent"]:
         to = WHO[bytes.fromhex(m["to"])]
-        if m["kind"] == "CHANGE":
+        if m["kind"] == "FORWARD":
+            what = SAYS.get(m["message_hash"], m["message_hash"][:8])
+            schema = "" if m["schema_hash"] is None else f", with {SAYS.get(m['schema_hash'], 'a schema')}"
+            version = "" if m["record"]["version"] == "1" else f", version {m['record']['version']}"
+            out.append(f"FORWARD {m['record']['id'][:8]} to {to}, #{m['position']}{version}: {what}{schema}")
+        elif m["kind"] == "CHANGE":
             rid = "" if m["record"]["id"] == RECORD_ID else f" of {m['record']['id'][:8]}"
+            rid += f", origin {WHO[bytes.fromhex(m['origin'])]}," if "origin" in m else ""
             text = f"CHANGE{rid} to {to}, version {m['record']['version']}, state {m['state']}, "
             text += f"{'whole' if m['whole'] else 'in part'}: {_fields_brief(m['fields'])}"
-            out.append(text + _removal_brief(m["removal"]))
+            out.append(text + _removal_brief(m["removal"]) + _keep_brief(m.get("keep")))
         elif m["kind"] == "ACK":
             rid = "" if m["id"] == RECORD_ID else f" of {m['id'][:8]}"
+            kept = f", kept {m['kept_fields']}" if m["kept_fields"] else ""
             out.append(
-                f"ACK{rid} to {to}: version {m['version']} {m['outcome']}, receiver {m['receiver_version']}"
+                f"ACK{rid} to {to}: version {m['version']} {m['outcome']}, "
+                f"receiver {m['receiver_version']}{kept}"
             )
         elif m["kind"] == "ERROR":
             more = "".join(f", {k} {m[k]}" for k in ("fingerprint", "field") if m[k] is not None)
@@ -4964,6 +6704,69 @@ def brief(answer: dict[str, Any]) -> list[str]:
         revision = read_all("Manifest", envelope["body"][10:])["revision"]
         to = WHO[bytes.fromhex(passed["to"])]
         out.append(f"MANIFEST of the {WHO[envelope['sender']]}, revision {revision}, passed on to {to}")
+    return out
+
+
+SAYS: dict[str, str] = {}  # what a message or a schema text of the sessions is, by its SHA-256, for `brief`
+
+
+def named(what: str, data: bytes) -> bytes:
+    """Give a message of another app, or a schema text, a name for the lines that `brief` writes."""
+    SAYS[hashlib.sha256(data).hexdigest()] = what
+    return data
+
+
+def _received_brief(answer: dict[str, Any]) -> list[str]:
+    """A query about a sender and one of its records, in a few lines."""
+
+    def who(k: str) -> str:
+        return WHO[bytes.fromhex(k)]
+
+    sender = answer["sender"]
+    refused = f"; refused: {', '.join(who(k) for k in answer['refused'])}" if answer["refused"] else ""
+    for f in answer["forgotten"]:
+        refused += f"; forgotten: {', '.join(who(k) for k in f['current'])}"
+    asking = ", ".join(who(k) for k in answer["requests"])
+    tail = f"; highest {answer['highest']}{refused}" + (f"; a request open to {asking}" if asking else "")
+    if sender is None:
+        return [f"no known sender{tail}"]
+    line = f"sender first known by {who(sender['origin'])}; "
+    if sender["known_by"] != "user":
+        line += f"known by forwards of {', '.join(who(k) for k in sender['known_by']) or 'no sibling'}; "
+    line += f"current: {', '.join(who(k) for k in sender['current'])}"
+    line += f"; removed: {', '.join(who(k) for k in sender['removed'])}" if sender["removed"] else ""
+    out = [line + tail]
+    for kept in sender["kept"]:
+        to = ", ".join(who(k) for k in kept["delivered"]) or "no sibling"
+        out.append(f"kept: {SAYS.get(kept['message_hash'], kept['message_hash'][:8])}; delivered to {to}")
+    if "shown" not in answer:
+        return out
+    rec, layer, shown_ = answer["received"], answer["layer"], answer["shown"]
+    if rec is None:
+        out.append("sender's layer: none")
+    else:
+        what = SAYS.get(rec["message_hash"], rec["message_hash"][:8])
+        line = f"sender's layer: {rec['state']}, version {rec['version']}, type {rec['type']}, from {what}"
+        if rec["beside"] is not None:
+            b = rec["beside"]
+            line += f"; beside it {SAYS.get(b['message_hash'], b['message_hash'][:8])}"
+        out.append(line)
+    if layer is None:
+        out.append("owner's layer: none")
+    else:
+        state = layer["state"]
+        line = f"owner's layer: state stamp {state['state_stamp']}; {_fields_brief(state['fields'])}"
+        line += _removal_brief(state["removal"]) + _keep_brief(state["keep"])
+        out.append(line + f"; type {layer['type']}")
+        for key, s in layer["siblings"].items():
+            delivered = (
+                "all" if s["delivered"] == sorted(state["fields"]) else ",".join(s["delivered"]) or "nothing"
+            )
+            what = f"known, delivered: {delivered}{' and the removal' if s['removal'] else ''}"
+            what += " and the keep" if s["keep"] else ""
+            out.append(f"{who(key)}: {what if s['known'] else 'not known'}")
+    owner = sorted(n for n, f in shown_["fields"].items() if f["from"] == "owner")
+    out.append(f"shows: {shown_['record']}" + (f"; the owner's value in {', '.join(owner)}" if owner else ""))
     return out
 
 
@@ -5015,6 +6818,31 @@ class Session:
 
     def acks(self) -> list[bytes]:
         return self.step({"flush_acks": True})
+
+    def take(
+        self, m: bytes, schema: str | None = None, r: tuple[int, ...] = (), file: bool = False
+    ) -> list[bytes]:
+        """A message of another app reaches the device from that app itself, or in a file of it."""
+        step: dict[str, Any] = {"take": m, "now_ms": "0", "r": list(r)}
+        if schema is not None:
+            step["schema"] = schema
+        return self.step({**step, "file": True} if file else step)
+
+    def owner(
+        self,
+        action: str,
+        values: dict[str, bytes | None],
+        r: tuple[int, ...],
+        sender: str = "other app",
+        rid: str = RECORD_ID,
+    ) -> list[bytes]:
+        """The device's user changes a record received from the sender that has that key."""
+        c = {"id": rid, "sender": KEY[sender].hex(), "action": action, "values": values}
+        return self.step({"change": c, "now_ms": "0", "r": list(r)})
+
+    def about(self, rid: str | None = RECORD_ID, sender: str = "other app") -> None:
+        """What the device holds of the sender that has that key, and of its record."""
+        self.step({"query": rid, "sender": KEY[sender].hex()})
 
     def query(self, rid: str = RECORD_ID) -> None:
         self.step({"query": rid})
@@ -5132,7 +6960,6 @@ def sessions() -> list[Session]:
     # --- the body (step 6 and section 8.2) ---
     none = FieldState(b"\x00", 1, TABLET, SCHEMA_NONE)
     invalid: list[tuple[str, dict[str, Any]]] = [
-        ("a key in origin", {"fields": weber, "origin": KEY["other app"]}),
         ("a type with an empty name between two dots", {"type_name": "axt..Appointment", "whole": True}),
         ("a type that begins with a digit", {"type_name": "9lives.Cat", "whole": True}),
         ("an empty type", {"type_name": "", "whole": True}),
@@ -6316,6 +8143,2208 @@ def sessions() -> list[Session]:
     return out
 
 
+# --- the owner's layer without a device: its merge and what it shows (sections 21.1 and 22.1) ----------
+
+
+def null(stamp: int, device: bytes, schema: bytes = SCHEMA_1) -> FieldState:
+    """A field state whose value is null: the owner discarded a change of the field (section 21.1)."""
+    return FieldState(None, stamp, device, schema)
+
+
+assert bytes_order(SCHEMA_1, SCHEMA_2) > 0, "the fingerprint of version 1 is the higher one"
+# The merge of section 4 on states that hold null values, with the results that section 21.1 gives.
+LAYER_MERGES: list[MergeCase] = [
+    (
+        "an owner's layer: a later null value is taken over a value",
+        State({"a": f(1, 10, PHONE)}, None, 11),
+        State({"a": null(20, TABLET)}, None, 21),
+        (0, 11, 0),
+        {"a": "other"},
+        False,
+        False,
+        22,
+        22,
+    ),
+    (
+        "an owner's layer: a later value is taken over a null value",
+        State({"a": null(10, PHONE)}, None, 11),
+        State({"a": f(1, 20, TABLET)}, None, 21),
+        (0, 11, 0),
+        {"a": "other"},
+        False,
+        False,
+        22,
+        22,
+    ),
+    (
+        "an owner's layer: with equal stamps and device keys the empty bytes are taken over a null value",
+        State({"a": null(10, PHONE)}, None, 11),
+        State({"a": f(b"", 10, PHONE)}, None, 12),
+        (0, 11, 0),
+        {"a": "other"},
+        False,
+        False,
+        13,
+        13,
+    ),
+    (
+        "an owner's layer: with equal stamps and device keys a null value is not taken over the empty bytes",
+        State({"a": f(b"", 10, PHONE)}, None, 11),
+        State({"a": null(10, PHONE)}, None, 12),
+        (0, 11, 0),
+        {"a": "own"},
+        False,
+        False,
+        11,
+        12,
+    ),
+    (
+        "an owner's layer: two null values with equal stamps and device keys, the higher schema is taken",
+        State({"a": null(10, PHONE, SCHEMA_2)}, None, 11),
+        State({"a": null(10, PHONE, SCHEMA_1)}, None, 12),
+        (0, 11, 0),
+        {"a": "other"},
+        False,
+        False,
+        13,
+        13,
+    ),
+    (
+        "an owner's layer: two null values with equal stamps and device keys, the lower schema is not taken",
+        State({"a": null(10, PHONE, SCHEMA_1)}, None, 11),
+        State({"a": null(10, PHONE, SCHEMA_2)}, None, 12),
+        (0, 11, 0),
+        {"a": "own"},
+        False,
+        False,
+        11,
+        12,
+    ),
+    (
+        "an owner's layer: a removal that is not later than a field state with a null value does not delete",
+        State({"a": f(1, 10, PHONE)}, None, 11),
+        State({"a": null(30, TABLET)}, gone(20, TABLET), 31),
+        (0, 11, 0),
+        {"a": "other"},
+        True,
+        False,
+        32,
+        32,
+    ),
+    (
+        "an owner's layer: a removal that is later than a field state with a null value deletes",
+        State({"a": null(10, PHONE)}, None, 11),
+        State({}, gone(20, TABLET), 21),
+        (0, 11, 0),
+        {"a": "own"},
+        True,
+        True,
+        22,
+        22,
+    ),
+]
+
+# What a device shows of a received record (section 22.1): whether the sender's layer is there (None
+# without a record message), the owner's layer, what the record is, and for each field that shows the
+# layer its value comes from. The sender's layer holds a title and a location.
+SHOWN_VALUES = {"title": encoded("Vet"), "location": encoded("")}
+ShownCase = tuple[str, bool | None, State | None, str, dict[str, str]]
+_BOTH = {"title": "sender", "location": "sender"}
+SHOWN: list[ShownCase] = [
+    ("no record message and no owner's layer: the record is not there", None, None, NOT_THERE, {}),
+    (
+        "no record message: the record is not there, whatever the owner's layer holds",
+        None,
+        State({"location": f("Praxis", 200, TABLET)}, None, 201),
+        NOT_THERE,
+        {},
+    ),
+    (
+        "the record is there and has no owner's layer: every field has the sender's value",
+        True,
+        None,
+        THERE,
+        _BOTH,
+    ),
+    (
+        "the record is there: a field has the owner's value if the layer holds one for it",
+        True,
+        State({"location": f("Praxis", 200, TABLET)}, None, 201),
+        THERE,
+        {"title": "sender", "location": "owner"},
+    ),
+    (
+        "a field state with a null value is no owner's value: the sender's value shows",
+        True,
+        State({"location": null(210, PHONE)}, None, 211),
+        THERE,
+        _BOTH,
+    ),
+    (
+        "an owner's value for a field that the kept DATA does not have is not shown",
+        True,
+        State({"room": f("2", 200, TABLET, SCHEMA_2)}, None, 201),
+        THERE,
+        _BOTH,
+    ),
+    (
+        "a removal that stands and is later than every field state: deleted by the owner",
+        True,
+        State({"location": f("Praxis", 200, TABLET)}, gone(210, PHONE), 211),
+        BY_OWNER,
+        {},
+    ),
+    (
+        "a removal that stands and no field state: deleted by the owner",
+        True,
+        State({}, gone(210, PHONE), 211),
+        BY_OWNER,
+        {},
+    ),
+    (
+        "a removal that was taken back: the record is there, with the owner's values",
+        True,
+        State({"location": f("Praxis", 200, TABLET)}, back(220, PHONE), 221),
+        THERE,
+        {"title": "sender", "location": "owner"},
+    ),
+    (
+        "a removal that stands and a later owner's value: deleted by the owner, whatever the stamps",
+        True,
+        State({"location": f("Praxis", 220, TABLET)}, gone(210, PHONE), 221),
+        BY_OWNER,
+        {},
+    ),
+    (
+        "a removal that stands and a later field state with a null value: deleted by the owner",
+        True,
+        State({"location": null(220, TABLET)}, gone(210, PHONE), 221),
+        BY_OWNER,
+        {},
+    ),
+]
+
+# The merge of two keeps (section 21.1): the label, the keep of the device's own layer and that of the
+# other, and whether the other's is taken. The higher version first, then the stamp, then the device key,
+# and with all three equal the keep that is given up.
+KEEP_MERGES: list[tuple[str, Keep | None, Keep, bool]] = [
+    ("a keep: one that the device does not hold is taken", None, Keep(210, TABLET, 4), True),
+    (
+        "keeps: the higher version stands over a higher stamp, a keep for an older deletion never "
+        "takes the place of one for a newer deletion",
+        Keep(210, PHONE, 5),
+        Keep(300, TABLET, 4),
+        False,
+    ),
+    ("keeps: the higher version is taken", Keep(300, PHONE, 4), Keep(210, TABLET, 5), True),
+    ("keeps: with equal versions the higher stamp is taken", Keep(210, PHONE, 4), Keep(220, TABLET, 4), True),
+    (
+        "keeps: with equal versions and stamps the higher device key is taken",
+        Keep(210, PHONE, 4),
+        Keep(210, TABLET, 4),
+        True,
+    ),
+    (
+        "keeps: with all three equal the keep that is given up is taken",
+        Keep(210, PHONE, 4),
+        Keep(210, PHONE, 4, True),
+        True,
+    ),
+    (
+        "keeps: with all three equal a keep that is not given up is not taken over one that is",
+        Keep(210, PHONE, 4, True),
+        Keep(210, PHONE, 4),
+        False,
+    ),
+    ("keeps: the same keep is no part taken", Keep(210, PHONE, 4), Keep(210, PHONE, 4), False),
+    (
+        "keeps: a keep given up for a newer deletion stands over a keep for an older one",
+        Keep(300, PHONE, 4),
+        Keep(220, TABLET, 5, True),
+        True,
+    ),
+]
+KEEP_OWN = State({"location": f("Praxis", 200, TABLET)}, None, 301)
+KEEP_CLOCK = (0, 301, 0)
+
+
+def keep_states(own: Keep | None, other: Keep) -> tuple[State, State]:
+    return dataclasses.replace(KEEP_OWN, keep=own), State({}, None, 231, other)
+
+
+# A sender's layer that ends in a DELETE of the version 4 (section 22.1, rules 3a and 3b): the label,
+# whether the device holds the DATA beside the tombstone, the owner's layer, and what the device shows.
+TombstoneCase = tuple[str, bool, State | None, str, dict[str, str]]
+_PRAXIS = {"location": f("Praxis", 200, TABLET)}
+TOMBSTONES: list[TombstoneCase] = [
+    ("a tombstone and no owner's layer: deleted by its sender", True, None, BY_SENDER, {}),
+    (
+        "a tombstone and owner's values without a keep: deleted by its sender, owner's values keep nothing",
+        True,
+        State(_PRAXIS, None, 201),
+        BY_SENDER,
+        {},
+    ),
+    (
+        "a keep of the version of the DELETE: kept, the DATA beside the tombstone with the owner's values",
+        True,
+        State(_PRAXIS, None, 211, Keep(210, PHONE, 4)),
+        AGAINST,
+        {"title": "sender", "location": "owner"},
+    ),
+    (
+        "a keep of a version above that of the DELETE: kept",
+        True,
+        State(_PRAXIS, None, 211, Keep(210, PHONE, 5)),
+        AGAINST,
+        {"title": "sender", "location": "owner"},
+    ),
+    (
+        "a keep without an owner's value keeps nothing: deleted by its sender",
+        True,
+        State({}, None, 211, Keep(210, PHONE, 4)),
+        BY_SENDER,
+        {},
+    ),
+    (
+        "a keep whose owner's values were all discarded keeps nothing: deleted by its sender",
+        True,
+        State({"location": null(212, PHONE)}, None, 213, Keep(210, PHONE, 4)),
+        BY_SENDER,
+        {},
+    ),
+    (
+        "a keep of a version below that of the DELETE: deleted by its sender",
+        True,
+        State(_PRAXIS, None, 211, Keep(210, PHONE, 3)),
+        BY_SENDER,
+        {},
+    ),
+    (
+        "a keep that was given up, of the version of the DELETE: deleted by its sender",
+        True,
+        State(_PRAXIS, None, 221, Keep(220, TABLET, 4, True)),
+        BY_SENDER,
+        {},
+    ),
+    (
+        "a keep that was given up, of a version above that of the DELETE: deleted by its sender",
+        True,
+        State(_PRAXIS, None, 221, Keep(220, TABLET, 5, True)),
+        BY_SENDER,
+        {},
+    ),
+    (
+        "a keep, but no DATA beside the tombstone: deleted by its sender",
+        False,
+        State(_PRAXIS, None, 211, Keep(210, PHONE, 4)),
+        BY_SENDER,
+        {},
+    ),
+    (
+        "a keep and an owner's removal that stands: deleted by the owner",
+        True,
+        State(_PRAXIS, gone(220, TABLET), 221, Keep(210, PHONE, 4)),
+        BY_OWNER,
+        {},
+    ),
+    (
+        "a keep and an owner's removal that was taken back: kept",
+        True,
+        State(_PRAXIS, back(230, TABLET), 231, Keep(210, PHONE, 4)),
+        AGAINST,
+        {"title": "sender", "location": "owner"},
+    ),
+]
+TOMBSTONE_VERSION = 4
+
+
+def check_layers(out: list[str]) -> None:
+    """The merge of an owner's layer, which can hold null values (section 21.1), and what a device shows
+    from the two layers (section 22.1), against the results written out above."""
+    for label, own, other, clock, stands, removal_taken, is_gone, stamp, top in LAYER_MERGES:
+        done = device_merge(own, other, *clock)
+        got = (done.merged.stands, done.merged.removal_taken, done.deleted, done.state.state_stamp)
+        assert (*got, done.highest) == (stands, removal_taken, is_gone, stamp, top), label
+        # The other way round the same field states and the same removal stand (section 4.5).
+        assert own is not None
+        back_ = merge(other, own)
+        assert (back_.fields, back_.removal) == (done.merged.fields, done.merged.removal), label
+    for label, there, layer, state, sources in SHOWN:
+        got_state, fields = shown(there, SHOWN_VALUES, SCHEMA_1, layer)
+        assert (got_state, {n: source for n, (_, _, source) in fields.items()}) == (state, sources), label
+    for label, has, layer, state, sources in TOMBSTONES:
+        beside = (SHOWN_VALUES, SCHEMA_1) if has else None
+        got_state, fields = shown(False, {}, None, layer, TOMBSTONE_VERSION, beside)
+        assert (got_state, {n: source for n, (_, _, source) in fields.items()}) == (state, sources), label
+    for label, own_keep, other_keep, taken in KEEP_MERGES:
+        own, other = keep_states(own_keep, other_keep)
+        done = device_merge(own, other, *KEEP_CLOCK)
+        assert done.merged.keep_taken == taken and done.state.keep == (other_keep if taken else own_keep), (
+            label
+        )
+        assert done.state.state_stamp == (302 if taken else 301), label
+        back_ = merge(other, own)  # the other way round the same keep stands (section 4.5)
+        assert back_.keep == done.state.keep, label
+    shown_n = len(SHOWN) + len(TOMBSTONES)
+    out.append(f"The owner's layer: {len(LAYER_MERGES)} merges with null values, {shown_n} records shown")
+
+
+# --- sessions about what the set got from other apps (sections 17 to 24) -------------------------------
+
+FORWARD_IDS = [f"0000000{n}-f0a0-4000-8000-00000000000{n}" for n in range(1, 10)]  # of the phone's forwards
+TABLET_FORWARD = "0000000a-f0a0-4000-8000-00000000000a"  # of a forward of the tablet
+TABLET_FORWARD_2 = "0000000b-f0a0-4000-8000-00000000000b"
+TABLET_FORWARD_3 = "0000000c-f0a0-4000-8000-00000000000c"
+TABLET_FORWARD_4 = "0000000d-f0a0-4000-8000-00000000000d"
+named("the schema as offered", APPOINTMENT_OFFERED.encode())
+
+
+def other_data(
+    version: int,
+    sender: str = "other app",
+    rid: str = RECORD_ID,
+    schema: str = APPOINTMENT_OFFERED,
+    more: bytes = b"",
+    **values: Any,
+) -> bytes:
+    """A DATA of another app with the appointment of section 16.1, or with other values in some fields."""
+    what = f"DATA version {version}" + ("" if sender == "other app" else f" of the {sender}")
+    what += "" if rid == RECORD_ID else f", id {rid[:8]}"
+    what += "".join(
+        f", {name} {v!r}" if isinstance(v, (str, int)) and len(str(v)) < 40 else f", {name} changed"
+        for name, v in values.items()
+    )
+    datum = dict(APPOINTMENT) if json.loads(schema)["name"] == "Appointment" else {}
+    return named(what, data_message(sender, version, schema, {**datum, **values}, rid, more))
+
+
+def other_delete(version: int, sender: str = "other app", rid: str = RECORD_ID) -> bytes:
+    what = f"DELETE version {version}" + ("" if sender == "other app" else f" of the {sender}")
+    return named(what, data_message(sender, version, "", {}, rid))
+
+
+def other_manifest(revision: int, sender: str = "other app") -> bytes:
+    what = f"MANIFEST revision {revision}" + ("" if sender == "other app" else f" of the {sender}")
+    return named(what, manifest_message(sender, revision, "Old Brain Fix"))
+
+
+def chain_message(
+    kind: str, signer: str, device: str, proof_by: str | None = None, more: bytes = b""
+) -> bytes:
+    """A DEVICE_ADD or a DEVICE_REMOVE of another app (spec/keys.md, sections 5.2 and 5.3); `proof_by`
+    names another key that signs the proof of an addition, which then does not verify."""
+    if kind == keys.ADD:
+        proof = keys.sign(SEEDS[proof_by or device], keys.proof_bytes(KEY[signer], KEY[device]))
+        body = body_of("DeviceAdd", {"device": KEY[device], "proof": bytes(proof)})
+    else:
+        body = body_of("DeviceRemove", {"device": KEY[device]})
+    what = f"{kind} of the {device} by the {signer}"
+    return named(what, message(SEEDS[signer], kind, None, body + more))
+
+
+def forward_message(
+    sender: str,
+    inner: bytes,
+    schema: str | None = None,
+    fid: str = TABLET_FORWARD,
+    to: str = "phone",
+    version: int | None = 1,
+    more: bytes = b"",
+) -> bytes:
+    """A FORWARD as a sibling writes it, or one that breaks a rule; with no version, without `record`."""
+    body = body_of("Forward", {"to": KEY[to], "message": inner, "schema": schema}) + more
+    return message(SEEDS[sender], "FORWARD", None if version is None else (fid, version), body)
+
+
+def forward_id(m: bytes) -> str:
+    """The id of the forward of a FORWARD that the device sent."""
+    rid: str = read_all("Envelope", m[10:])["record"]["id"]
+    return rid
+
+
+def kept_json(
+    m: bytes, delivered: tuple[str, ...] = (), schema: str | None = None, type_name: str | None = None
+) -> dict[str, Any]:
+    """A kept message of a sender in the `device` of a session, with the siblings it is delivered to."""
+    return {
+        "message": m.hex(),
+        "schema": schema,
+        "type": type_name,
+        "delivered": [KEY[s].hex() for s in delivered],
+    }
+
+
+def layer_json(
+    state: State, known: dict[str, list[str] | None], rid: str = RECORD_ID, type_name: str = APPOINTMENT_TYPE
+) -> dict[str, Any]:
+    """An owner's layer in the `device` of a session, in the form of a record of the set, with its keep
+    in the state and, for each sibling, whether the keep is delivered to it."""
+    v = record_json(state, known, rid, type_name)
+    v["state"] = state_json(state, True)
+    for s in v["siblings"].values():
+        s["keep"] = state.keep is not None
+    return {name: v[name] for name in ("id", "type", "state", "siblings")}
+
+
+def sender_json(
+    current: tuple[str, ...] = ("other app",),
+    removed: tuple[str, ...] = (),
+    origin: str | None = None,
+    chain: tuple[dict[str, Any], ...] = (),
+    manifests: tuple[dict[str, Any], ...] = (),
+    records: tuple[dict[str, Any], ...] = (),
+    layers: tuple[dict[str, Any], ...] = (),
+) -> dict[str, Any]:
+    """A known sender in the `device` of a session."""
+    return {
+        "origin": KEY[origin or current[0]].hex(),
+        "current": [KEY[k].hex() for k in current],
+        "removed": [KEY[k].hex() for k in removed],
+        "chain": list(chain),
+        "manifests": list(manifests),
+        "records": list(records),
+        "layers": list(layers),
+    }
+
+
+def received_device(
+    senders: list[dict[str, Any]],
+    siblings: tuple[str, ...] = ("tablet",),
+    refused: tuple[str, ...] = (),
+    records: tuple[dict[str, Any], ...] = (),
+    on_delete: str | None = None,
+    **more: Any,
+) -> dict[str, Any]:
+    """The `device` of a session about received records: the phone, which has given or seen the stamps up
+    to 195, with the senders it knows and the ids it gives its forwards; with `on_delete`, what its set
+    does with a DELETE that meets owner's values."""
+    device = device_json(list(records), siblings, **{"highest": 195, **more})
+    return {
+        **device,
+        "refused": [KEY[k].hex() for k in refused],
+        "forward_ids": FORWARD_IDS,
+        "senders": senders,
+        **({} if on_delete is None else {"on_delete": on_delete}),
+    }
+
+
+def received_sessions() -> list[Session]:
+    """The sessions of the phone about the messages of other apps and the owner's layers. `SAID_RECEIVED`
+    holds what the rules of sections 17 to 24 require of every step."""
+    out: list[Session] = []
+    z = keys.zigzag
+    one, two = ("tablet",), ("tablet", "laptop")
+    text = APPOINTMENT_OFFERED
+    m1, m2 = other_manifest(1), other_manifest(2)
+    d1, d2, d3 = other_data(1), other_data(2), other_data(3)
+    weber = FieldState(VALUE_WEBER, 200, TABLET)
+    obf = KEY["other app"]
+
+    def new(label: str, refs: list[str], device: dict[str, Any]) -> Session:
+        s = Session(label, refs, device)
+        out.append(s)
+        return s
+
+    def empty(siblings: tuple[str, ...] = one, **more: Any) -> dict[str, Any]:
+        """The phone knows no other sender."""
+        return received_device([], siblings, **more)
+
+    def known(
+        siblings: tuple[str, ...] = one,
+        delivered: tuple[str, ...] | None = None,
+        layer: State | None = None,
+        record: bytes = d1,
+        **more: Any,
+    ) -> dict[str, Any]:
+        """The phone knows Old Brain Fix by its one key and keeps its MANIFEST of revision 1 and one DATA
+        of the appointment, both delivered to every sibling, or to those named; with `layer`, it holds
+        that owner's layer of the record, known and delivered to every sibling."""
+        to = siblings if delivered is None else delivered
+        layers = () if layer is None else (layer_json(layer, dict.fromkeys(siblings)),)
+        if layer is not None:
+            more = {"highest": 205, **more}  # it has given or seen the stamps of the layer
+        sender = sender_json(
+            manifests=(kept_json(m1, to),), records=(kept_json(record, to, text),), layers=layers
+        )
+        return received_device([sender], siblings, **more)
+
+    def layer_change(state: int, fields: dict[str, FieldState], **more: Any) -> bytes:
+        """A CHANGE of the tablet with the key of Old Brain Fix in `origin`."""
+        return change_message("tablet", state, fields, **{"origin": obf, **more})
+
+    # --- who sent it (section 18.3, steps 1 to 3) ---
+    x1 = other_data(1, "second app")  # a DATA of a key that the phone does not know
+    members = {"removed": ("old phone",), "others": ("other app",), "gone": ("refused",)}
+    for who, what in [
+        ("phone", "the device's own key is ignored"),
+        ("old phone", "a removed key of the device's own set is rejected without a report"),
+        ("other app", "a current key of another known sender is rejected with INVALID_MESSAGE"),
+        ("refused", "a removed key of another sender, or a refused key, is rejected without a report"),
+        ("stranger", "a key the device does not know is not processed"),
+    ]:
+        s = new(f"a FORWARD of {what}", ["sync.md 7.1", "sync.md 18.3"], empty(**members))
+        s.receive(forward_message(who, x1, text))
+        s.acks()
+        s.about(None, "second app")
+    s = new(
+        "step 1: a FORWARD without a record is reported to a sibling and to another app, and to no other key",
+        ["sync.md 18.1", "sync.md 18.3", "protocol.md 8.2"],
+        empty(**members),
+    )
+    for who in ("tablet", "other app", "stranger", "old phone"):
+        s.receive(forward_message(who, x1, text, version=None))
+    s.acks()
+    s.about(None, "second app")
+    s = new(
+        "step 2: the body of a FORWARD of another app is not read",
+        ["sync.md 18.3", "sync.md 7.1"],
+        empty(**members),
+    )
+    s.receive(message(SEEDS["other app"], "FORWARD", (TABLET_FORWARD, 1), b"no body of a FORWARD"))
+    s.receive(message(SEEDS["stranger"], "FORWARD", (TABLET_FORWARD, 1), b"no body of a FORWARD"))
+    s.acks()
+    s = new("step 3: a FORWARD whose body is no axt.Forward is rejected", ["sync.md 18.3"], empty())
+    s.receive(forward_message("tablet", x1, text, more=b"\x00"))
+    s.receive(message(TABLET_SEED, "FORWARD", (TABLET_FORWARD, 1), body_of("Resync", {"to": PHONE})))
+    s.receive(message(TABLET_SEED, "FORWARD", (TABLET_FORWARD, 1), b""))
+    s.acks()
+    s.about(None, "second app")
+    s = new(
+        "step 3: a FORWARD of a sibling for another device is ignored",
+        ["sync.md 18.3", "protocol.md 9.1"],
+        empty(two),
+    )
+    s.receive(forward_message("tablet", x1, text, to="laptop"))
+    s.acks()
+    s.about(None, "second app")
+
+    # --- the id and the version of the forward (steps 4 to 6) ---
+    for label, fid in [
+        ("an id that is no UUID", "not-a-uuid"),
+        ("the nil UUID", "00000000-0000-0000-0000-000000000000"),
+        ("the max UUID", "ffffffff-ffff-ffff-ffff-ffffffffffff"),
+    ]:
+        s = new(f"step 4: a FORWARD with {label} is rejected", ["sync.md 18.1", "sync.md 18.3"], empty())
+        s.receive(forward_message("tablet", x1, text, fid=fid))
+        s.acks()
+        s.about(None, "second app")
+    for label, version in [("0", 0), ("-1", -1)]:
+        s = new(f"step 5: a FORWARD with the version {label} is rejected", ["sync.md 18.3"], empty())
+        s.receive(forward_message("tablet", x1, text, version=version))
+        s.acks()
+    s = new("step 6: a FORWARD with the version 2 is rejected", ["sync.md 18.1", "sync.md 18.3"], empty())
+    s.receive(forward_message("tablet", x1, text, version=2))
+    s.acks()
+    s.about(None, "second app")
+
+    # --- the body (steps 7 to 11 and section 18.2) ---
+    def of(kind: str, record: tuple[str, int] | None, body: bytes) -> bytes:
+        """A message of the second app, of whatever kind and with whatever body."""
+        return message(SEEDS["second app"], kind, record, body)
+
+    x_body: bytes = read_all("Envelope", x1[10:])["body"]
+    x_manifest: bytes = read_all("Envelope", other_manifest(1, "second app")[10:])["body"]
+    x_add: bytes = read_all("Envelope", chain_message(keys.ADD, "second app", "stranger")[10:])["body"]
+    x_delete = other_delete(1, "second app")
+    never = ("OFFER", "ACCEPT", "DECLINE", "ACK", "ERROR", "DEVICE_JOIN", "CHANGE", "RESYNC", "FORWARD")
+    later = ("WITHDRAW", "PROPOSAL", "PROPOSAL_REPLY")
+    assert sorted((*never, *later, *FORWARDED)) == sorted(KINDS)
+    bodies: list[tuple[str, bytes, str | None, str]] = [
+        ("step 7: an empty message", b"", text, "INVALID_MESSAGE"),
+        ("step 7: a message of 9 bytes", x1[:9], text, "INVALID_MESSAGE"),
+        ("step 7: a message that does not begin with C3 01", b"\xc3\x02" + x1[2:], text, "INVALID_MESSAGE"),
+        (
+            "step 8: a message with the fingerprint of no envelope format",
+            x1[:2] + SPEC_FP["Change"] + x1[10:],
+            text,
+            "FORMAT_UNSUPPORTED",
+        ),
+        ("step 9: a message with a byte after its envelope", x1 + b"\x00", text, "INVALID_MESSAGE"),
+        ("step 9: a message whose envelope is cut short", x1[:-1], text, "INVALID_MESSAGE"),
+        ("step 9: a message whose format field is 2", x1[:10] + z(2) + x1[11:], text, "INVALID_MESSAGE"),
+        *[
+            (
+                f"step 9: a forwarded {kind}",
+                of(kind, (RECORD_ID, 1) if kind in ("CHANGE", "RESYNC", "FORWARD") else None, b""),
+                None,
+                "INVALID_MESSAGE",
+            )
+            for kind in (*never, *later)
+        ],
+        ("step 9: a forwarded DATA without a record", of("DATA", None, x_body), text, "INVALID_MESSAGE"),
+        ("step 9: a forwarded DELETE without a record", of("DELETE", None, b""), None, "INVALID_MESSAGE"),
+        (
+            "step 9: a forwarded MANIFEST with a record",
+            of("MANIFEST", (RECORD_ID, 1), x_manifest),
+            None,
+            "INVALID_MESSAGE",
+        ),
+        (
+            "step 9: a forwarded DELETE with a body",
+            of("DELETE", (RECORD_ID, 1), x_body),
+            None,
+            "INVALID_MESSAGE",
+        ),
+        (
+            "step 9: a forwarded DATA with an empty body",
+            of("DATA", (RECORD_ID, 1), b""),
+            text,
+            "INVALID_MESSAGE",
+        ),
+        (
+            "step 9: a forwarded DATA whose body has 9 bytes",
+            of("DATA", (RECORD_ID, 1), x_body[:9]),
+            text,
+            "INVALID_MESSAGE",
+        ),
+        (
+            "step 9: a forwarded DATA whose body does not begin with C3 01",
+            of("DATA", (RECORD_ID, 1), b"\xc3\x02" + x_body[2:]),
+            text,
+            "INVALID_MESSAGE",
+        ),
+        (
+            "step 9: a forwarded MANIFEST whose body has the fingerprint of axt.DeviceAdd",
+            of("MANIFEST", None, MARKER + SPEC_FP["DeviceAdd"] + x_manifest[10:]),
+            None,
+            "INVALID_MESSAGE",
+        ),
+        (
+            "step 9: a forwarded DEVICE_ADD whose body has the fingerprint of axt.DeviceRemove",
+            of("DEVICE_ADD", None, MARKER + SPEC_FP["DeviceRemove"] + x_add[10:]),
+            None,
+            "INVALID_MESSAGE",
+        ),
+        (
+            "step 9: a forwarded MANIFEST with an empty body",
+            of("MANIFEST", None, b""),
+            None,
+            "INVALID_MESSAGE",
+        ),
+        ("step 9: a schema with a forwarded DELETE", x_delete, text, "INVALID_MESSAGE"),
+        (
+            "step 9: a schema with a forwarded MANIFEST",
+            other_manifest(1, "second app"),
+            text,
+            "INVALID_MESSAGE",
+        ),
+        ("step 9: no schema with a forwarded DATA", x1, None, "INVALID_MESSAGE"),
+        ("step 10: a schema of 256 KiB and one byte", x1, padded_schema(262145), "TOO_LARGE"),
+        ("step 10: a schema nested to a depth of 65", x1, nested_schema(65), "TOO_LARGE"),
+        ("step 10: a text above 256 KiB that is no schema, before step 11", x1, "x" * 262145, "TOO_LARGE"),
+        ("step 11: a schema that is no JSON text", x1, text[:-1], "INVALID_MESSAGE"),
+        ("step 11: a schema that is no schema of a record", x1, '"string"', "INVALID_MESSAGE"),
+        ("step 11: a schema that is no Avro schema", x1, '{"type":"record"}', "INVALID_MESSAGE"),
+        ("step 11: a schema with another fingerprint than the body names", x1, PET_1, "INVALID_MESSAGE"),
+    ]
+    for label, inner, schema, code in bodies:
+        refs = ["sync.md 18.2", "sync.md 18.3"] + (
+            ["sync.md 24.3", "envelope.md 8"] if "step 10" in label else []
+        )
+        s = new(f"{label} is rejected with {code}", refs, empty())
+        s.receive(forward_message("tablet", inner, schema))
+        s.acks()
+        s.about(None, "second app")
+    within: list[tuple[str, str]] = [
+        ("step 10: a schema of exactly 256 KiB", padded_schema(262144)),
+        ("step 10: a schema nested to a depth of 64", nested_schema(64)),
+        (
+            "step 11: the schema with the whitespace of its file, which has the same fingerprint",
+            APPOINTMENT_1,
+        ),
+    ]
+    for label, schema in within:
+        named("a schema with that fingerprint", schema.encode())
+        s = new(f"{label} is taken", ["sync.md 18.2", "sync.md 18.3", "sync.md 24.3"], empty())
+        s.receive(forward_message("tablet", x1, schema))
+        s.acks()
+        s.about(sender="second app")
+
+    # --- the signature and the sender of the message inside (steps 12 to 14) ---
+    version_at = x1.index(RECORD_ID.encode()) + 36
+    assert x1[version_at] == z(1)[0]
+    signatures = [
+        ("a changed signature", x1[:-1] + bytes([x1[-1] ^ 1])),
+        ("a version changed after it was signed", x1[:version_at] + z(2) + x1[version_at + 1 :]),
+        ("the signature of another key", x1[:-64] + other_data(1)[-64:]),
+    ]
+    for label, inner in signatures:
+        s = new(
+            f"step 12: a forwarded message with {label} is rejected with SIGNATURE_INVALID",
+            ["sync.md 18.3", "keys.md 2.3"],
+            empty(),
+        )
+        s.receive(forward_message("tablet", inner, text))
+        s.acks()
+        s.about(None, "second app")
+    small = bytes([1]) + bytes(31)  # a point of small order: no valid key (spec/keys.md, section 2.3)
+    sender_at = x1.index(KEY["second app"])
+    assert keys.key_problem(small) is not None
+    s = new(
+        "step 12: a forwarded message whose sender is no valid key is rejected with SIGNATURE_INVALID",
+        ["sync.md 18.3", "keys.md 2.3"],
+        empty(),
+    )
+    s.receive(forward_message("tablet", x1[:sender_at] + small + x1[sender_at + 32 :], text))
+    s.acks()
+    own = other_data(1, "phone")
+    s = new(
+        "step 12 comes before step 13: a message of the device's own key whose signature does not verify",
+        ["sync.md 18.3"],
+        empty(),
+    )
+    s.receive(forward_message("tablet", own[:-1] + bytes([own[-1] ^ 1]), text))
+    s.acks()
+    for who, what in [
+        ("phone", "the device's own key"),
+        ("tablet", "the sibling that forwards it"),
+        ("laptop", "another sibling"),
+        ("old phone", "a removed key of the device's own set"),
+    ]:
+        s = new(
+            f"step 13: a forwarded message of {what} is rejected with INVALID_MESSAGE",
+            ["sync.md 18.3", "sync.md 19.2"],
+            empty(two, removed=("old phone",)),
+        )
+        s.receive(forward_message("tablet", other_data(1, who), text))
+        s.acks()
+        s.about(None, who)
+    s = new(
+        "step 14: a forwarded message of a refused key is rejected with NOT_ACCEPTED",
+        ["sync.md 18.3", "sync.md 19.2", "keys.md 3.4"],
+        empty(refused=("refused",)),
+    )
+    s.receive(forward_message("tablet", other_data(1, "refused"), text))
+    s.receive(forward_message("tablet", other_manifest(1, "refused"), fid=TABLET_FORWARD_2))
+    s.acks()
+    s.about(None, "refused")
+
+    # --- a sender made known, and a message that reaches a third device (sections 19.2 and 20.3) ---
+    for label, inner, schema in [
+        ("MANIFEST", m1, None),
+        ("DATA", d1, text),
+        ("DELETE", other_delete(4), None),
+    ]:
+        s = new(
+            f"a forwarded {label} of a key the device does not know makes a known sender, and goes on to "
+            "the third device and not back",
+            ["sync.md 19.2", "sync.md 18.4", "sync.md 20.1", "sync.md 20.2", "sync.md 20.3"],
+            empty(two),
+        )
+        s.receive(forward_message("tablet", inner, schema))
+        s.acks()
+        s.about()
+
+    # --- a forwarded MANIFEST (section 19.4) ---
+    s = new(
+        "a forwarded MANIFEST with a higher revision replaces the kept one; the same again is a duplicate",
+        ["sync.md 19.4", "sync.md 18.4", "sync.md 20.1"],
+        known(),
+    )
+    s.receive(forward_message("tablet", m2))
+    s.receive(forward_message("tablet", m2))
+    s.receive(forward_message("tablet", m2, fid=TABLET_FORWARD_2))
+    s.acks()
+    s.about(None)
+    s = new(
+        "a forwarded MANIFEST with a lower revision is a duplicate, and the kept one is due for that "
+        "sibling again",
+        ["sync.md 19.4", "sync.md 20.2"],
+        received_device([sender_json(manifests=(kept_json(m2, one),))]),
+    )
+    s.receive(forward_message("tablet", m1))
+    s.acks()
+    s.about(None)
+    manifest_body: bytes = read_all("Envelope", m2[10:])["body"]
+    for label, inner in [
+        ("the revision 0", manifest_message("other app", 0, "Old Brain Fix")),
+        ("a body cut short", message(SEEDS["other app"], "MANIFEST", None, manifest_body[:-1])),
+        ("a byte after its body", message(SEEDS["other app"], "MANIFEST", None, manifest_body + b"\x00")),
+    ]:
+        s = new(
+            f"a forwarded MANIFEST with {label} is rejected with MANIFEST_INVALID",
+            ["sync.md 19.4", "manifest.md 4"],
+            known(),
+        )
+        s.receive(forward_message("tablet", inner))
+        s.acks()
+        s.about(None)
+    s = new(
+        "a forwarded MANIFEST that is not valid makes no sender known",
+        ["sync.md 19.4", "sync.md 18.3"],
+        empty(),
+    )
+    s.receive(forward_message("tablet", manifest_message("other app", 0, "Old Brain Fix")))
+    s.about(None)
+    moved = sender_json(("other app, new",), ("other app",), "other app", records=(kept_json(d1, one, text),))
+    s = new(
+        "a forwarded MANIFEST never takes the place of one that the device took live from the key itself",
+        ["sync.md 19.4", "manifest.md 6"],
+        known(),
+    )
+    s.take(other_manifest(3))
+    s.receive(forward_message("tablet", other_manifest(4)))
+    s.acks()
+    s.about(None)
+    s = new(
+        "a forwarded MANIFEST of a removed key of a known sender is not taken",
+        ["sync.md 19.4", "sync.md 19.2"],
+        received_device([moved]),
+    )
+    s.receive(forward_message("tablet", m2))
+    s.acks()
+    s.about(None)
+
+    # --- a forwarded DATA or DELETE (section 19.5) ---
+    s = new(
+        "a forwarded DATA with a higher version is taken, the same bytes again are a duplicate, and of "
+        "the same version in other bytes the one with the higher SHA-256 stands",
+        ["sync.md 19.5", "sync.md 18.4", "sync.md 20.1", "records.md 5.2"],
+        known(),
+    )
+    s.receive(forward_message("tablet", d2, text))
+    s.receive(forward_message("tablet", d2, text, fid=TABLET_FORWARD_2))
+    dentist, doctor = other_data(2, title="Dentist"), other_data(2, title="Doctor")
+    assert sha(doctor) < sha(d2) < sha(dentist)
+    s.receive(forward_message("tablet", dentist, text, fid=TABLET_FORWARD_3))
+    s.receive(forward_message("tablet", doctor, text, fid=TABLET_FORWARD_4))
+    s.acks()
+    s.about()
+    s = new(
+        "a forwarded DATA with a lower version is a duplicate, and the kept message is due for that "
+        "sibling again",
+        ["sync.md 19.5", "sync.md 20.2", "sync.md 18.4"],
+        known(record=d3),
+    )
+    s.receive(forward_message("tablet", d2, text))
+    s.acks()
+    s.about()
+    s = new(
+        "the version rule comes before the body: a forwarded DATA of the kept version that does not "
+        "decode is a duplicate",
+        ["sync.md 19.5"],
+        known(),
+    )
+    s.receive(forward_message("tablet", other_data(1, more=b"\x00"), text))
+    s.acks()
+    for label, rid, version, code in [
+        ("an id that is no UUID", "not-a-uuid", 2, "RECORD_ID_INVALID"),
+        ("the nil UUID as its id", "00000000-0000-0000-0000-000000000000", 2, "RECORD_ID_INVALID"),
+        ("the version 0", RECORD_ID, 0, "VERSION_INVALID"),
+    ]:
+        s = new(f"a forwarded DATA with {label} is rejected with {code}", ["sync.md 19.5"], known())
+        s.receive(forward_message("tablet", other_data(version, rid=rid), text))
+        s.acks()
+        s.about()
+    s = new(
+        "a forwarded DELETE with the version 0 is rejected with VERSION_INVALID", ["sync.md 19.5"], known()
+    )
+    s.receive(forward_message("tablet", other_delete(0)))
+    s.acks()
+    s.about()
+    pet = other_data(2, schema=PET_1, **tm.rules.DATA["Pet"])
+    s = new(
+        "a forwarded DATA of another type than the record's is rejected with TYPE_CHANGED",
+        ["sync.md 19.5", "protocol.md 6.2"],
+        known(),
+    )
+    s.receive(forward_message("tablet", pet, PET_1))
+    s.acks()
+    s.about()
+    lone = sender_json(layers=(layer_json(State({"location": weber}, None, 205), {"tablet": None}),))
+    s = new(
+        "a forwarded DATA of another type than the owner's layer keeps is rejected with TYPE_CHANGED",
+        ["sync.md 19.5", "sync.md 21.1"],
+        received_device([lone], highest=205),
+    )
+    s.receive(forward_message("tablet", other_data(1, schema=PET_1, **tm.rules.DATA["Pet"]), PET_1))
+    s.acks()
+    s.about()
+    cut = message(SEEDS["other app"], "DATA", (RECORD_ID, 2), read_all("Envelope", d2[10:])["body"][:-1])
+    start = dict(date_time(10, 0, NOW), month=13)
+    for label, inner, code in [
+        ("a byte after its record", other_data(2, more=b"\x00"), "UNDECODABLE"),
+        ("a body cut short", cut, "UNDECODABLE"),
+        ("a start in a thirteenth month", other_data(2, start=start), "VALUE_INVALID"),
+    ]:
+        s = new(
+            f"a forwarded DATA with {label} is rejected with {code}",
+            ["sync.md 19.5", "protocol.md 6.2"],
+            known(),
+        )
+        s.receive(forward_message("tablet", inner, text))
+        s.acks()
+        s.about()
+    checked = json.loads(text)
+    checked["fields"][0]["axt.pattern"] = "^[A-Z]{10}$"  # a check that the title "Vet" breaks
+    checked_text = named(
+        "a schema with a check", json.dumps(checked, separators=(",", ":")).encode()
+    ).decode()
+    assert schema_fingerprint(checked_text) == SCHEMA_1 and not re.match("^[A-Z]{10}$", APPOINTMENT["title"])
+    s = new(
+        "a forwarded DATA with a value that breaks a check of an attribute is taken all the same",
+        ["sync.md 19.5", "metadata.md 7.1"],
+        known(),
+    )
+    s.receive(forward_message("tablet", other_data(2, schema=checked_text), checked_text))
+    s.acks()
+    s.about()
+    s = new(
+        "a forwarded DATA of a type the device does not know is taken and kept",
+        ["sync.md 19.5", "sync.md 17.2"],
+        known(two),
+    )
+    s.receive(
+        forward_message("tablet", other_data(1, rid=OTHER_ID, schema=PET_1, **tm.rules.DATA["Pet"]), PET_1)
+    )
+    s.acks()
+    s.about(OTHER_ID)
+    s = new(
+        "a forwarded DATA whose schema does not resolve against the device's own is taken",
+        ["sync.md 19.5"],
+        known(),
+    )
+    s.receive(forward_message("tablet", other_data(2, schema=APPOINTMENT_3, title=7), APPOINTMENT_3))
+    s.acks()
+    s.about()
+    s = new(
+        "a forwarded DELETE leaves a tombstone, an older DATA is kept beside it, and a later DATA brings "
+        "the record back",
+        ["sync.md 19.5", "sync.md 20.1", "records.md 5.3"],
+        known(),
+    )
+    s.receive(forward_message("tablet", other_delete(3)))
+    s.about()
+    s.receive(forward_message("tablet", d2, text, fid=TABLET_FORWARD_2))
+    s.receive(forward_message("tablet", d1, text, fid=TABLET_FORWARD_4))
+    s.about()
+    s.receive(forward_message("tablet", other_data(4), text, fid=TABLET_FORWARD_3))
+    s.acks()
+    s.about()
+    # A forwarded record message signed with a key removed since (sections 19.2 and 20.2).
+    moved_add = chain_message(keys.ADD, "other app", "other app, new")
+    moved_rem = chain_message(keys.REMOVE, "other app, new", "other app")
+
+    def moved_away(delivered: tuple[str, ...], records: tuple[dict[str, Any], ...] = ()) -> dict[str, Any]:
+        """The phone knows Old Brain Fix, which moved to a new device and removed the old key, with that
+        removal delivered to the siblings named."""
+        chain = (kept_json(moved_add, one), kept_json(moved_rem, delivered))
+        sender = sender_json(("other app, new",), ("other app",), "other app", chain=chain, records=records)
+        return received_device([sender])
+
+    s = new(
+        "a forwarded DATA of a removed key is taken when the device's removal of that key is delivered to "
+        "the sibling",
+        ["sync.md 19.2", "sync.md 18.3", "keys.md 3.3"],
+        moved_away(one),
+    )
+    s.receive(forward_message("tablet", d2, text))
+    s.acks()
+    s.about()
+    s = new(
+        "a forwarded DATA of a removed key is rejected with NOT_ACCEPTED when the sibling has not shown "
+        "that it has the removal, and the removal goes to it",
+        ["sync.md 19.2", "sync.md 18.3", "sync.md 18.4"],
+        moved_away(()),
+    )
+    s.receive(forward_message("tablet", d2, text))
+    s.acks()
+    s.about()
+    s = new(
+        "a sibling that has forwarded a removal of that key has it, whatever the device did with it: its "
+        "DATA of the removed key is then taken",
+        ["sync.md 19.2", "sync.md 20.2"],
+        moved_away(()),
+    )
+    s.receive(forward_message("tablet", moved_rem))
+    s.receive(forward_message("tablet", d2, text, fid=TABLET_FORWARD_2))
+    s.acks()
+    s.about()
+    s = new(
+        "after NOT_ACCEPTED for a message of a removed key, the sibling's forward of the removal makes it "
+        "due again after the ACK; once more, and then it is settled",
+        ["sync.md 20.2", "sync.md 19.2", "sync.md 18.4"],
+        moved_away(one, (kept_json(d2, (), text),)),
+    )
+    first = s.step({"reconnect": KEY["tablet"].hex()})
+    s.receive(error_message("tablet", "NOT_ACCEPTED", first[0]))
+    s.receive(forward_message("tablet", moved_rem))
+    again = s.acks()
+    once = s.receive(
+        error_message("tablet", "NOT_ACCEPTED", [m for m in again if meaning(m)[0]["kind"] == "FORWARD"][0])
+    )
+    s.receive(error_message("tablet", "NOT_ACCEPTED", once[0]))
+    s.about()
+    s = new(
+        "a removal that the device only keeps to try again does not make the key removed",
+        ["sync.md 19.2", "sync.md 19.3"],
+        known(),
+    )
+    s.receive(forward_message("tablet", chain_message(keys.REMOVE, "other app", "other app, new")))
+    s.receive(forward_message("tablet", d2, text, fid=TABLET_FORWARD_2))
+    s.acks()
+    s.about()
+
+    # The four cases of section 19.5, step 7, in a FORWARD and from the sender itself.
+    del3, del2 = other_delete(3), other_delete(2)
+
+    def tomb(beside: bytes | None = d2, delete: bytes = del3) -> dict[str, Any]:
+        """The phone holds a tombstone of the appointment, with that DATA beside it or none."""
+        kept = () if beside is None else (kept_json(beside, one, text),)
+        recs = (*kept, kept_json(delete, one, type_name=APPOINTMENT_TYPE))
+        return received_device([sender_json(manifests=(kept_json(m1, one),), records=recs)])
+
+    def give(s: Session, how: str, m: bytes, schema: str | None, fid: str = TABLET_FORWARD) -> None:
+        """The message reaches the phone in a FORWARD of the tablet, or from the sender itself."""
+        if how == "forwarded":
+            s.receive(forward_message("tablet", m, schema, fid=fid))
+        else:
+            s.take(m, schema)
+
+    for how in ("forwarded", "from the sender"):
+        tail = "APPLIED" if how == "forwarded" else "the outcome of the version rule"
+        s = new(
+            f"case 1 of step 7, {how}: a DATA below the tombstone goes beside it; {tail}",
+            ["sync.md 19.5", "sync.md 20.1", "records.md 5.2"],
+            tomb(None),
+        )
+        give(s, how, d2, text)
+        s.acks()
+        s.about()
+        s = new(
+            f"case 2 of step 7, {how}: the kept message in other bytes that stands replaces it; {tail}",
+            ["sync.md 19.5", "sync.md 20.1"],
+            known(record=d2),
+        )
+        give(s, how, other_data(2, title="Doctor"), text)
+        give(s, how, other_data(2, title="Dentist"), text, TABLET_FORWARD_2)
+        s.acks()
+        s.about()
+        s = new(
+            f"case 3 of step 7, {how}: a DELETE takes the place of a DATA of the same version, and nothing "
+            f"stays beside it; {tail}",
+            ["sync.md 19.5", "sync.md 20.1"],
+            known(record=d2),
+        )
+        give(s, how, del2, None)
+        s.acks()
+        s.about()
+        s = new(
+            f"case 4 of step 7, {how}: the DATA beside the tombstone in other bytes that stands replaces it; "
+            f"{tail}",
+            ["sync.md 19.5", "sync.md 20.1"],
+            tomb(),
+        )
+        give(s, how, other_data(2, title="Doctor"), text)
+        give(s, how, other_data(2, title="Dentist"), text, TABLET_FORWARD_2)
+        s.acks()
+        s.about()
+        s = new(
+            f"a DATA below the tombstone, {how}, that does not decode is not taken",
+            ["sync.md 19.5", "protocol.md 6.2"],
+            tomb(None),
+        )
+        give(s, how, other_data(2, more=b"\x00"), text)
+        s.acks()
+        s.about()
+    s = new(
+        "a DELETE above a DELETE keeps the DATA beside the new tombstone",
+        ["sync.md 19.5", "sync.md 20.1"],
+        tomb(),
+    )
+    s.receive(forward_message("tablet", other_delete(5)))
+    s.acks()
+    s.about()
+    s = new(
+        "a DATA above the DELETE ends the DATA beside the tombstone",
+        ["sync.md 20.1", "records.md 5.3"],
+        tomb(),
+    )
+    s.receive(forward_message("tablet", other_data(4), text))
+    s.acks()
+    s.about()
+    s = new(
+        "a forwarded DATA below the DATA beside the tombstone makes only that DATA due again, not the DELETE",
+        ["sync.md 20.2", "sync.md 19.5"],
+        tomb(),
+    )
+    s.receive(forward_message("tablet", d1, text))
+    s.acks()
+    s = new(
+        "a forwarded DELETE for an id the device does not have leaves a tombstone without a type",
+        ["sync.md 19.5", "records.md 5.1", "records.md 5.3"],
+        known(),
+    )
+    s.receive(forward_message("tablet", other_delete(3, rid=OTHER_ID)))
+    s.acks()
+    s.about(OTHER_ID)
+    s = new(
+        "a forwarded DATA changes nothing in the owner's layer, and nothing goes to its sender",
+        ["sync.md 19.1", "sync.md 19.5", "sync.md 22.1", "sync.md 17.2"],
+        known(layer=State({"location": weber}, None, 205)),
+    )
+    s.receive(forward_message("tablet", other_data(3, location="Praxis"), text))
+    s.acks()
+    s.about()
+
+    # --- a forwarded DEVICE_ADD or DEVICE_REMOVE (section 19.3) ---
+    add = chain_message(keys.ADD, "other app", "other app, new")
+    remove = chain_message(keys.REMOVE, "other app, new", "other app")
+    s = new(
+        "a forwarded DEVICE_ADD and a forwarded DEVICE_REMOVE are applied and kept, one by one; a repeat "
+        "of each is a duplicate",
+        ["sync.md 19.3", "sync.md 18.4", "sync.md 20.1", "keys.md 5.5"],
+        known(two),
+    )
+    s.receive(forward_message("tablet", add))
+    s.receive(forward_message("tablet", add, fid=TABLET_FORWARD_2))
+    s.about(None)
+    s.receive(forward_message("tablet", remove, fid=TABLET_FORWARD_3))
+    s.receive(forward_message("tablet", remove, fid=TABLET_FORWARD_4))
+    s.acks()
+    s.about()
+    s = new(
+        "a forwarded DEVICE_ADD whose signer the device does not know, for a current key of a known "
+        "sender, adds the signer to that sender",
+        ["sync.md 19.3", "keys.md 5.5"],
+        known(),
+    )
+    s.receive(forward_message("tablet", chain_message(keys.ADD, "other app, new", "other app")))
+    s.acks()
+    s.about(None)
+    s = new(
+        "a forwarded DEVICE_ADD whose signer and device the device does not know makes the signer a "
+        "known sender with both keys",
+        ["sync.md 19.3", "sync.md 19.2"],
+        empty(),
+    )
+    s.receive(forward_message("tablet", add))
+    s.acks()
+    s.about(None)
+    early = chain_message(keys.REMOVE, "other app", "other app, new")
+    s = new(
+        "a forwarded DEVICE_REMOVE of a key that is not yet a key of the sender is kept and applied "
+        "after the addition; it is a kept message only from then on",
+        ["sync.md 19.3", "sync.md 20.1", "sync.md 20.3"],
+        known(two),
+    )
+    s.receive(forward_message("tablet", early))
+    s.about(None)
+    s.receive(forward_message("tablet", add, fid=TABLET_FORWARD_2))
+    s.acks()
+    s.about(None)
+    s = new(
+        "a forwarded DEVICE_REMOVE whose signer the device does not know makes the signer a known "
+        "sender and is kept to be tried again",
+        ["sync.md 19.3", "sync.md 19.2"],
+        empty(),
+    )
+    s.receive(forward_message("tablet", early))
+    s.acks()
+    s.about(None)
+    rejected: list[tuple[str, bytes, dict[str, Any]]] = [
+        (
+            "a proof that does not verify",
+            chain_message(keys.ADD, "other app", "other app, new", proof_by="stranger"),
+            known(),
+        ),
+        ("its own signer as the device", chain_message(keys.REMOVE, "other app", "other app"), known()),
+        (
+            "a removed key as its signer and a current key as its device",
+            chain_message(keys.REMOVE, "other app", "other app, new"),
+            received_device([moved]),
+        ),
+        (
+            "a signer the device does not know and a removed key of another known sender as its device",
+            chain_message(keys.ADD, "second app", "other app"),
+            received_device([moved]),
+        ),
+    ]
+    for label, inner, device in rejected:
+        kind = read_all("Envelope", inner[10:])["kind"]
+        s = new(
+            f"a forwarded {kind} with {label} is rejected with DEVICE_REJECTED",
+            ["sync.md 19.3", "sync.md 18.4", "keys.md 5.5"],
+            device,
+        )
+        s.receive(forward_message("tablet", inner))
+        s.acks()
+        s.about(None)
+        s.about(None, "second app")
+    for label, inner in [
+        (
+            "as its device: it counts as a key of no known sender",
+            chain_message(keys.ADD, "second app", "refused"),
+        ),
+        (
+            "as its signer: it counts as a key of no known sender",
+            chain_message(keys.ADD, "refused", "second app"),
+        ),
+    ]:
+        s = new(
+            f"a forwarded DEVICE_ADD with a refused key {label}, and the key stops being refused",
+            ["sync.md 19.3", "sync.md 18.3", "sync.md 20.5", "keys.md 3.4"],
+            known(refused=("refused",)),
+        )
+        s.receive(forward_message("tablet", inner))
+        s.acks()
+        s.about(None, "second app")
+    s = new(
+        "a forwarded DEVICE_ADD rejected only because its signer is removed by now is kept and tried "
+        "again: APPLIED, and no try applies it while the signer stays removed",
+        ["sync.md 19.3", "keys.md 5.5"],
+        received_device([moved]),
+    )
+    s.receive(forward_message("tablet", chain_message(keys.ADD, "other app", "second app")))
+    s.receive(
+        forward_message("tablet", chain_message(keys.ADD, "other app, new", "stranger"), fid=TABLET_FORWARD_2)
+    )
+    s.acks()
+    s.about(None)
+    s.about(None, "second app")
+    notes = FieldState(text_value("Bring the card"), 190, TABLET)
+    first_of = sender_json(
+        records=(kept_json(d1, one, text),),
+        layers=(layer_json(State({"location": weber}, None, 201), dict.fromkeys(one)),),
+    )
+    second_of = sender_json(
+        ("second app",),
+        records=(kept_json(x1, one, text),),
+        layers=(layer_json(State({"notes": notes}, None, 191), dict.fromkeys(one)),),
+    )
+    s = new(
+        "a forwarded DEVICE_ADD that joins two senders: one sender, the records by the version rule, "
+        "and the owner's layers merged under a new state stamp",
+        ["sync.md 23.4", "sync.md 19.3", "keys.md 5.5", "sync.md 21.1"],
+        received_device([first_of, second_of], highest=205),
+    )
+    s.receive(forward_message("tablet", chain_message(keys.ADD, "other app", "second app")), (0,))
+    s.acks()
+    s.about()
+    s.about(None, "second app")
+    s = new(
+        "a join whose merge takes nothing from the other layer takes no new state stamp",
+        ["sync.md 23.4", "sync.md 3.3"],
+        received_device(
+            [
+                first_of,
+                sender_json(
+                    ("second app",),
+                    records=(kept_json(x1, one, text),),
+                    layers=(layer_json(State({"location": weber}, None, 191), dict.fromkeys(one)),),
+                ),
+            ],
+            highest=205,
+        ),
+    )
+    s.receive(forward_message("tablet", chain_message(keys.ADD, "other app", "second app")))
+    s.acks()
+    s.about()
+    s = new(
+        "a forwarded DEVICE_ADD whose body does not decode is rejected with INVALID_MESSAGE",
+        ["sync.md 19.3"],
+        known(),
+    )
+    s.receive(forward_message("tablet", chain_message(keys.ADD, "other app", "other app, new", more=b"\x00")))
+    s.acks()
+    s.about(None)
+
+    # --- the answering device forwards, and takes the outcomes (sections 17.2, 18.4, 20.2 and 20.3) ---
+    s = new(
+        "a DATA of another app is answered by the device that got it and forwarded to each sibling; "
+        "each outcome delivers it",
+        ["sync.md 17.2", "sync.md 18.1", "sync.md 18.4", "sync.md 20.1", "sync.md 20.2", "sync.md 20.3"],
+        known(two),
+    )
+    sent = s.take(d2, text)
+    s.acks()
+    s.receive(ack_message("tablet", [(1, "APPLIED", 1)], rid=forward_id(sent_to(sent, "tablet"))))
+    s.about()
+    s.receive(ack_message("laptop", [(1, "DUPLICATE", 1)], rid=forward_id(sent_to(sent, "laptop"))))
+    s.about()
+    s.step({"reconnect": KEY["tablet"].hex()})
+    s = new(
+        "STALE for a forward is taken as DUPLICATE; the first outcome stands, and an entry for another "
+        "id is ignored",
+        ["sync.md 18.4", "sync.md 9.2"],
+        known(),
+    )
+    sent = s.take(d2, text)
+    s.receive(ack_message("tablet", [(1, "STALE", 7)], rid=forward_id(sent[0])))
+    s.about(None)
+    s.receive(ack_message("tablet", [(1, "APPLIED", 1)], rid=forward_id(sent[0])))
+    s.receive(ack_message("tablet", [(1, "APPLIED", 1)], rid=FORWARD_IDS[8]))
+    s.about(None)
+    s = new(
+        "an entry with the version 2 is no outcome of a forward",
+        ["sync.md 18.4", "sync.md 9.2"],
+        known(),
+    )
+    sent = s.take(d2, text)
+    s.receive(ack_message("tablet", [(2, "APPLIED", 1)], rid=forward_id(sent[0])))
+    s.about(None)
+    s = new(
+        "an ACK of a sibling with the outcome MERGED for a forward is not valid, and delivers nothing",
+        ["sync.md 18.4", "sync.md 9.1"],
+        known(),
+    )
+    sent = s.take(d2, text)
+    s.receive(ack_message("tablet", [(1, "MERGED", 1)], rid=forward_id(sent[0])))
+    s.about(None)
+    s = new(
+        "a later version takes the place of a kept message: it is forwarded anew, and an outcome for "
+        "the forward of the earlier one delivers nothing",
+        ["sync.md 18.4", "sync.md 20.1", "sync.md 20.2", "sync.md 20.3"],
+        known(),
+    )
+    first = s.take(d2, text)
+    s.take(d3, text)
+    s.receive(ack_message("tablet", [(1, "APPLIED", 1)], rid=forward_id(first[0])))
+    s.about()
+    for code, fingerprint, what in [
+        (
+            "FORMAT_UNSUPPORTED for its own envelope",
+            SPEC_FP["Envelope"],
+            "the device sends the same FORWARD again",
+        ),
+        ("FORMAT_UNSUPPORTED for the message inside", SCHEMA_NONE, "the forward is settled"),
+        ("NOT_ACCEPTED", None, "the forward is settled"),
+        ("DEVICE_REJECTED", None, "the forward is settled"),
+        ("INVALID_MESSAGE", None, "the forward is settled"),
+        ("SIGNATURE_INVALID", None, "the forward is settled"),
+        ("TOO_LARGE", None, "the forward is settled"),
+    ]:
+        s = new(
+            f"after {code} of a sibling for a FORWARD, {what}",
+            ["sync.md 18.4", "sync.md 20.2", "sync.md 20.3"],
+            known(),
+        )
+        sent = s.take(d2, text)
+        s.receive(error_message("tablet", code.split()[0], sent[0], fingerprint))
+        s.step({"reconnect": KEY["tablet"].hex()})
+        s.about(None)
+    s = new(
+        "an ERROR that names no forward the device keeps changes nothing",
+        ["sync.md 18.4", "sync.md 9.3"],
+        known(),
+    )
+    sent = s.take(d2, text)
+    other = forward_message("phone", d2, text, fid=FORWARD_IDS[8], to="tablet")
+    s.receive(error_message("tablet", "NOT_ACCEPTED", other))
+    s.receive(ack_message("tablet", [(1, "APPLIED", 1)], rid=forward_id(sent[0])))
+    s.about(None)
+    s = new(
+        "a forward that an error settled is due again after a RESYNC of that sibling, as a new forward",
+        ["sync.md 18.4", "sync.md 20.2", "sync.md 20.4"],
+        known(),
+    )
+    sent = s.take(d2, text)
+    s.receive(error_message("tablet", "NOT_ACCEPTED", sent[0]))
+    s.receive(resync_message("tablet"))
+    s.acks()
+    s.about(None)
+
+    # --- the order, and when a FORWARD goes again (section 20.3) ---
+    m_new = other_manifest(1, "other app, new")
+    d_other = other_data(1, rid=OTHER_ID)
+    full = sender_json(
+        ("other app", "other app, new"),
+        chain=(kept_json(add),),
+        manifests=(kept_json(m1), kept_json(m_new)),
+        records=(kept_json(d1, (), text), kept_json(d_other, (), text)),
+    )
+    second = sender_json(("second app",), records=(kept_json(x1, (), text),))
+    s = new(
+        "on the first channel to a sibling every kept message is forwarded, sender by sender: the "
+        "additions, then the manifests, then the record messages",
+        ["sync.md 20.3", "sync.md 20.1", "sync.md 23.3"],
+        received_device([second, full]),
+    )
+    s.step({"reconnect": KEY["tablet"].hex()})
+    s.about(None)
+    s.about(None, "second app")
+    s = new(
+        "a FORWARD without an outcome goes again in a later connection as the same message, and after "
+        "15 days as a new forward",
+        ["sync.md 20.2", "sync.md 20.3", "sync.md 24.3"],
+        known(),
+    )
+    s.take(d2, text)
+    s.step({"reconnect": KEY["tablet"].hex()})
+    s.step({"days": 16})
+    s.step({"reconnect": KEY["tablet"].hex()})
+    s = new(
+        "through a relay a FORWARD without an outcome goes again after 14 days, the same message, and "
+        "not before",
+        ["sync.md 20.3", "sync.md 24.1", "sync.md 24.3"],
+        known(relay=("tablet",)),
+    )
+    s.take(d2, text)
+    s.step({"days": 13})
+    s.step({"days": 1})
+    s.step({"days": 13})
+    s.step({"days": 1})
+    s = new(
+        "an outcome that arrives later than 15 days after the FORWARD last went is ignored",
+        ["sync.md 20.2", "sync.md 24.3"],
+        known(),
+    )
+    sent = s.take(d2, text)
+    s.step({"days": 15})
+    s.about(None)
+    s.step({"days": 1})
+    s.receive(ack_message("tablet", [(1, "APPLIED", 1)], rid=forward_id(sent[0])))
+    s.about(None)
+    big = other_data(2, notes="n" * (MAX_MESSAGE - 3000))
+    assert len(big) < MAX_MESSAGE < len(forward_message("phone", big, text, to="tablet"))
+    s = new(
+        "a kept message whose FORWARD would be above 16 MiB is not forwarded; the owner's layer of its "
+        "record still travels",
+        ["sync.md 20.3", "sync.md 18.2", "sync.md 24.3", "sync.md 21.5"],
+        known(),
+    )
+    s.take(big, text)
+    s.owner("set", {"location": VALUE_WEBER}, (4, 0))
+    s.about(None)
+
+    # --- the answer to a RESYNC (section 20.4) ---
+    layer = State({"location": weber}, None, 205)  # the phone took it from the tablet, as in section 16.7
+    s = new(
+        "the answer to a RESYNC holds a new forward of every kept message, then the records of the set, "
+        "then the owner's layers, and then the acknowledgement",
+        ["sync.md 20.4", "sync.md 11.2", "sync.md 21.5", "sync.md 3.3"],
+        known(layer=layer, records=(record_json(BASE, {"tablet": None}),)),
+    )
+    s.receive(resync_message("tablet"), (0, 0))
+    s.acks()
+    s.about()
+    s = new(
+        "after a RESYNC the outcome of a forward that the device sent before it is ignored",
+        ["sync.md 20.2", "sync.md 20.4"],
+        known(),
+    )
+    sent = s.take(d2, text)
+    s.receive(resync_message("tablet"))
+    s.receive(ack_message("tablet", [(1, "APPLIED", 1)], rid=forward_id(sent[0])))
+    s.about(None)
+
+    # --- forgetting a sender (section 20.5) ---
+    s = new(
+        "forgetting a sender discards its kept messages and owner's layers and sends nothing; a "
+        "forward of a sibling makes it known again",
+        ["sync.md 20.5", "sync.md 19.2", "keys.md 3.4"],
+        known(layer=layer),
+    )
+    s.step({"forget": obf.hex()})
+    s.acks()
+    s.about()
+    s.receive(forward_message("tablet", d2, text))
+    s.about()
+    s = new(
+        "after forgetting, a forward of a message signed with a removed key of the sender is rejected "
+        "with NOT_ACCEPTED, and one of another key makes the sender known again",
+        ["sync.md 20.5", "sync.md 18.3", "keys.md 3.4"],
+        received_device([sender_json(("other app, new",), ("other app",), "other app")]),
+    )
+    s.step({"forget": KEY["other app, new"].hex()})
+    s.about(None)
+    s.receive(forward_message("tablet", d1, text))
+    s.receive(forward_message("tablet", other_data(1, "other app, new"), text, fid=TABLET_FORWARD_2))
+    s.acks()
+    s.about(None, "other app, new")
+
+    s = new(
+        "a forwarded addition that names a forgotten key as its device makes the sender known again, and "
+        "the device asks that sibling with RESYNC",
+        ["sync.md 20.5", "sync.md 19.3", "keys.md 3.4"],
+        known(),
+    )
+    s.step({"forget": obf.hex()})
+    s.receive(forward_message("tablet", chain_message(keys.ADD, "second app", "other app")))
+    s.acks()
+    s.about(None)
+    s = new(
+        "a forward of a forgotten key whose message fails a later step leaves the sender forgotten",
+        ["sync.md 20.5", "sync.md 18.3"],
+        known(),
+    )
+    s.step({"forget": obf.hex()})
+    s.receive(forward_message("tablet", other_data(2, more=b"\x00"), text))
+    s.acks()
+    s.about(None)
+
+    s = new(
+        "an installation without a sibling: the user's deletion goes on standing beside the sender's "
+        "tombstone, and a later DATA is KEPT",
+        ["records.md 6.3", "sync.md 21.1", "sync.md 22.2"],
+        received_device(
+            [
+                sender_json(
+                    manifests=(kept_json(m1),),
+                    records=(kept_json(d2, (), text),),
+                    layers=(layer_json(State({}, gone(200, PHONE), 201), {}),),
+                )
+            ],
+            (),
+        ),
+    )
+    s.take(other_delete(3))
+    s.take(other_data(4), text)
+    s.acks()
+    s.about()
+
+    # --- the chain and the MANIFEST on the removal of a sibling (sections 17.2, 19.2 and 23.2) ---
+    def by(who: tuple[str, ...] | None, *senders: str) -> list[dict[str, Any]]:
+        out = []
+        for name in senders:
+            v = sender_json((name,), records=(kept_json(other_data(1, name), two, text),))
+            if who is not None:
+                v["known_by"] = [KEY[k].hex() for k in who]
+            out.append(v)
+        return out
+
+    s = new(
+        "on the removal of a sibling the chain and the MANIFEST go at once to a sender known by the user, "
+        "and to one known only by forwards of that sibling only once the user has kept it",
+        ["sync.md 17.2", "sync.md 19.2", "sync.md 23.2", "keys.md 5.9"],
+        received_device([*by(None, "other app"), *by(("laptop",), "second app")], two),
+    )
+    s.step({"remove": KEY["laptop"].hex()})
+    s.about(None, "second app")
+    s.step({"senders_kept": True})
+    s.step({"senders_kept": True})
+    s = new(
+        "a sender known by forwards of two siblings is not known only by forwards of the removed one: the "
+        "chain and the MANIFEST go at once",
+        ["sync.md 17.2", "sync.md 19.2"],
+        received_device(by(("laptop", "tablet"), "second app"), two),
+    )
+    s.step({"remove": KEY["laptop"].hex()})
+    s = new(
+        "a device that does not show the list, or whose user forgets the sender, sends it nothing because of "
+        "the removal",
+        ["sync.md 17.2", "sync.md 20.5"],
+        received_device(by(("laptop",), "second app"), two),
+    )
+    s.step({"remove": KEY["laptop"].hex()})
+    s.step({"forget": KEY["second app"].hex()})
+    s.step({"senders_kept": True})
+    s = new(
+        "at the end of a move the device holds nothing back",
+        ["sync.md 17.2", "keys.md 5.7"],
+        received_device(by(("laptop",), "second app"), two),
+    )
+    s.step({"remove": KEY["laptop"].hex(), "move": True})
+    s = new(
+        "each sibling that forwards a message of a sender known by forwards is recorded",
+        ["sync.md 19.2"],
+        received_device([], two),
+    )
+    s.receive(forward_message("tablet", x1, text))
+    s.receive(forward_message("laptop", x1, text, fid=TABLET_FORWARD_2))
+    s.acks()
+    s.about(None, "second app")
+
+    # --- a removed and a new device (sections 23.2 and 23.3) ---
+    s = new(
+        "after the removal of a sibling the device keeps nothing for it and takes no outcome and no "
+        "FORWARD of it; its kept messages stay",
+        ["sync.md 23.2", "sync.md 20.2"],
+        known(two),
+    )
+    sent = s.take(d2, text)
+    s.step({"remove": KEY["laptop"].hex()})
+    s.receive(ack_message("laptop", [(1, "APPLIED", 1)], rid=forward_id(sent_to(sent, "laptop"))))
+    s.receive(forward_message("laptop", d3, text))
+    s.acks()
+    s.about()
+    s = new(
+        "a device that joins gets every kept message, and after the offer every owner's layer whole",
+        ["sync.md 23.3", "sync.md 20.3", "sync.md 21.5", "sync.md 7.2"],
+        known(layer=layer),
+    )
+    s.step({"add": LAPTOP.hex()})
+    s.receive(answer_message("laptop", OFFER_IDS[0], APPOINTMENT_TYPE))
+    s.about()
+
+    # --- a restored device (section 23.1) ---
+    unstamped = State({"location": FieldState(VALUE_WEBER, 0, PHONE)}, None, 150)
+    backup_sender = sender_json(
+        manifests=(kept_json(m1),),
+        records=(kept_json(d1, (), text),),
+        layers=(layer_json(unstamped, {}),),
+    )
+    s = new(
+        "a restored device forwards nothing and sends no layer before its request is acknowledged; "
+        "a field never stamped of a layer gets the stamp -1",
+        ["sync.md 23.1", "sync.md 12.1", "sync.md 4.6", "sync.md 20.3", "sync.md 3.3"],
+        known(layer=layer),
+    )
+    backup = {"highest": "150", "records": [], "acted": {}, "senders": [backup_sender], "refused": []}
+    s.step({"restore": backup, "now_ms": "0", "r": []})
+    s.about()
+    s.receive(forward_message("tablet", d1, text))
+    s.receive(forward_message("tablet", d2, text, fid=TABLET_FORWARD_2))
+    s.receive(request_ack("tablet", REQUEST_IDS[0]))
+    s.receive(answer_message("tablet", OFFER_IDS[0], APPOINTMENT_TYPE), (0,))
+    s.acks()
+    s.about()
+
+    # --- a file of another app (section 24.2) ---
+    s = new(
+        "what a device takes from a file of another app it forwards, and reports to no one",
+        ["sync.md 24.2", "sync.md 17.1", "sync.md 22.2", "transports.md 2.2"],
+        known(),
+    )
+    s.take(m2, file=True)
+    s.take(d2, text, file=True)
+    s.take(d2, text, file=True)
+    s.acks()
+    s.about()
+    s = new(
+        "a MANIFEST of a file replaces the kept one only with a higher revision; one that the app sends "
+        "in a live connection applies whatever its revision",
+        ["sync.md 24.2", "sync.md 20.1", "manifest.md 6"],
+        received_device([sender_json(manifests=(kept_json(m2, one),))]),
+    )
+    s.take(m1, file=True)
+    s.take(m1)
+    s.about(None)
+
+    # --- the owner's layer: what a change stamps and sends (sections 21.1, 21.2, 21.3 and 21.5) ---
+    s = new(
+        "a change of a received record goes whole in a CHANGE with the sender's key in origin, and "
+        "the next change in part",
+        ["sync.md 21.1", "sync.md 21.2", "sync.md 21.3", "sync.md 21.5", "sync.md 16.7"],
+        known(),
+    )
+    s.owner("set", {"location": VALUE_WEBER}, (4, 0))
+    s.receive(ack_message("tablet", [(201, "APPLIED", 205)]))
+    s.about()
+    s.owner("set", {"notes": text_value("bring the vaccination card")}, (4, 0))
+    s.about()
+    s = new(
+        "discarding a change gives the field a null value with the schema of the field state it replaces",
+        ["sync.md 21.1", "sync.md 21.2", "sync.md 22.1"],
+        known(layer=layer),
+    )
+    s.owner("discard", {"location": None}, (4, 0))
+    s.about()
+    s = new(
+        "deleting a received record puts a removal into the owner's layer, and taking it again a "
+        "removal that was taken back",
+        ["sync.md 21.1", "sync.md 21.2", "sync.md 22.1", "records.md 6.3"],
+        known(layer=layer),
+    )
+    s.owner("delete", {}, (4, 0))
+    s.about()
+    s.owner("take_back", {}, (4, 0))
+    s.about()
+    s = new(
+        "the FORWARD of a record's kept message goes before the CHANGE of its owner's layer",
+        ["sync.md 20.3", "sync.md 21.5"],
+        known(delivered=()),
+    )
+    s.owner("set", {"location": VALUE_WEBER}, (4, 0))
+    s = new(
+        "the schema that a field state of a layer names is offered before the CHANGE",
+        ["sync.md 21.5", "sync.md 7.2"],
+        known(accepted={}),
+    )
+    s.owner("set", {"location": VALUE_WEBER}, (4, 0))
+    s.receive(answer_message("tablet", OFFER_IDS[0], APPOINTMENT_TYPE))
+    s = new(
+        "origin is the key by which the device first knew the sender, also when that key is removed",
+        ["sync.md 21.3"],
+        received_device([moved]),
+    )
+    s.owner("set", {"location": VALUE_WEBER}, (4, 0), sender="other app, new")
+    s.about(sender="other app, new")
+
+    s = new(
+        "at the limit of the stamps a device changes no received record",
+        ["sync.md 21.1", "sync.md 21.2", "sync.md 2.3"],
+        known(highest=LAST_CHANGE_BASE),
+    )
+    s.owner("set", {"location": VALUE_WEBER}, (0, 0))
+    s.about()
+    s = new(
+        "a device that can take no state stamp for a layer merges it and sends no CHANGE of it",
+        ["sync.md 21.5", "sync.md 21.1", "sync.md 2.3", "sync.md 9.1"],
+        known(two, highest=MAX - 5),
+    )
+    s.receive(layer_change(201, {"location": weber}), (0,))
+    s.acks()
+    s.about()
+
+    # --- a CHANGE with a key in origin: processing (section 21.4) ---
+    s = new(
+        "a CHANGE with a key in origin is merged into the owner's layer: a device without the layer "
+        "takes it, also from a message that is not whole",
+        ["sync.md 21.4", "sync.md 21.3", "sync.md 8.4", "sync.md 22.1", "sync.md 16.7"],
+        known(),
+    )
+    s.receive(layer_change(201, {"location": weber}), (3,))
+    s.acks()
+    s.about()
+    s = new(
+        "a later field state of a layer is taken, the same is a duplicate, and an earlier one is "
+        "stale and makes the device's own due again",
+        ["sync.md 21.4", "sync.md 8.4", "sync.md 10.1"],
+        known(layer=layer),
+    )
+    later_ = FieldState(text_value("Praxis"), 210, TABLET)
+    s.receive(layer_change(211, {"location": later_}), (0,))
+    s.receive(layer_change(211, {"location": later_}))
+    s.receive(layer_change(201, {"location": weber}))
+    s.acks()
+    s.about()
+    s = new(
+        "a null value in a layer is a field state like any other: a later one is taken, and the "
+        "sender's value shows again",
+        ["sync.md 21.1", "sync.md 21.4", "sync.md 22.1"],
+        known(layer=layer),
+    )
+    s.receive(layer_change(211, {"location": FieldState(None, 210, TABLET)}), (0,))
+    s.acks()
+    s.about()
+    s = new(
+        "with equal stamps and device keys a null value is lower than a value",
+        ["sync.md 21.1", "sync.md 4.1"],
+        known(layer=layer),
+    )
+    s.receive(layer_change(201, {"location": FieldState(None, 200, TABLET)}))
+    s.acks()
+    s.about()
+    s = new(
+        "with equal stamps and device keys a value is taken over a null value",
+        ["sync.md 21.1", "sync.md 4.1"],
+        known(layer=State({"location": FieldState(None, 200, TABLET)}, None, 205)),
+    )
+    s.receive(layer_change(201, {"location": weber}), (0,))
+    s.acks()
+    s.about()
+    s = new(
+        "a removal in a layer deletes the record by the owner on the device that merges it, and one "
+        "that was taken back brings it back",
+        ["sync.md 21.1", "sync.md 21.4", "sync.md 22.1", "sync.md 4.3"],
+        known(layer=layer),
+    )
+    s.receive(layer_change(211, {}, removal=Removal(210, TABLET)), (0,))
+    s.about()
+    s.receive(layer_change(221, {}, removal=Removal(220, TABLET, False)), (0,))
+    s.acks()
+    s.about()
+    s = new(
+        "a layer is held without the record: a CHANGE before the FORWARD of the record is taken, with "
+        "the schema of the sibling's offer, and the record shows once its message arrives",
+        ["sync.md 21.1", "sync.md 21.4", "sync.md 22.1", "sync.md 20.3"],
+        received_device([sender_json()]),
+    )
+    s.receive(offer_message("tablet", OFFER_IDS[5], [text]))
+    s.receive(layer_change(201, {"location": weber}), (3,))
+    s.about()
+    s.step({"reconnect": KEY["tablet"].hex()})
+    s.receive(layer_change(211, {"notes": FieldState(text_value("call first"), 210, TABLET)}), (0,))
+    s.receive(forward_message("tablet", d1, text))
+    s.acks()
+    s.about()
+    room = FieldState(ROOM, 200, TABLET, SCHEMA_2)
+    s = new(
+        "steps 7 and 8: the schema is looked up among those of the record's sender and of the sibling's "
+        "offers, not among the device's own",
+        ["sync.md 21.4", "keys.md 2.4"],
+        known(schemas=(APPOINTMENT_1, APPOINTMENT_2)),
+    )
+    s.receive(layer_change(201, {"room": room}))
+    s.acks()
+    s.about()
+    x2 = other_data(1, "second app", schema=APPOINTMENT_2, room="2")
+    s = new(
+        "step 7: a schema that the device keeps of another sender only is not found",
+        ["sync.md 21.4", "keys.md 2.4"],
+        received_device(
+            [
+                sender_json(records=(kept_json(d1, one, text),)),
+                sender_json(("second app",), records=(kept_json(x2, one, APPOINTMENT_2),)),
+            ]
+        ),
+    )
+    s.receive(layer_change(201, {"room": room}))
+    s.acks()
+    s = new(
+        "step 7 holds for an entry with a null value as well",
+        ["sync.md 21.4"],
+        known(),
+    )
+    s.receive(layer_change(201, {"room": FieldState(None, 200, TABLET, SCHEMA_2)}))
+    s.acks()
+    for label, name, value in [
+        ("a value", "nowhere", VALUE_WEBER),
+        ("a null value", "nowhere", None),
+    ]:
+        s = new(
+            f"step 8: an entry with {label} whose name is no field of its schema is rejected",
+            ["sync.md 21.4", "sync.md 8.3"],
+            known(),
+        )
+        s.receive(layer_change(201, {name: FieldState(value, 200, TABLET)}))
+        s.acks()
+        s.about()
+    s = new(
+        "step 9: a CHANGE with another type than the sender's layer keeps is rejected with TYPE_CHANGED",
+        ["sync.md 21.4"],
+        known(),
+    )
+    s.receive(layer_change(211, {}, removal=Removal(210, TABLET), type_name=PET_TYPE))
+    s.acks()
+    s.about()
+    for who, what, code in [
+        ("phone", "the device's own key", "INVALID_MESSAGE"),
+        ("tablet", "a sibling", "INVALID_MESSAGE"),
+        ("old phone", "a removed key of the device's own set", "INVALID_MESSAGE"),
+        ("stranger", "a key of no known sender", "RECORD_UNKNOWN"),
+        ("refused", "a refused key", "RECORD_UNKNOWN"),
+    ]:
+        s = new(
+            f"step 10: a CHANGE whose origin is {what} is rejected with {code}",
+            ["sync.md 21.4", "sync.md 21.3"],
+            known(removed=("old phone",), refused=("refused",)),
+        )
+        s.receive(layer_change(211, {}, removal=Removal(210, TABLET), origin=KEY[who]))
+        s.acks()
+    s = new(
+        "step 10 comes before step 7: with a schema it does not hold, a CHANGE whose origin is no known "
+        "sender is rejected with RECORD_UNKNOWN",
+        ["sync.md 21.4"],
+        known(),
+    )
+    s.receive(layer_change(201, {"location": weber}, origin=KEY["stranger"]))
+    s.acks()
+    s = new(
+        "step 10: origin names the sender by a removed key and by a second current key as well",
+        ["sync.md 21.4", "sync.md 21.3"],
+        received_device(
+            [
+                sender_json(
+                    ("other app, new", "second app"),
+                    ("other app",),
+                    "other app, new",
+                    records=(kept_json(d1, one, text),),
+                )
+            ]
+        ),
+    )
+    s.receive(layer_change(201, {"location": weber}), (3,))
+    s.receive(
+        layer_change(
+            211, {"notes": FieldState(text_value("call first"), 210, TABLET)}, origin=KEY["second app"]
+        ),
+        (0,),
+    )
+    s.acks()
+    s.about(sender="other app, new")
+    bad_start = FieldState(field_value(APPOINTMENT_JSON, "start", start), 200, TABLET)
+    for label, fields, code in [
+        ("a value that does not decode", {"location": FieldState(b"\x7f", 200, TABLET)}, "UNDECODABLE"),
+        ("a time value that is not valid", {"start": bad_start}, "VALUE_INVALID"),
+    ]:
+        s = new(
+            f"steps 11 and 12: a CHANGE with a key in origin and {label} is rejected with {code}",
+            ["sync.md 21.4", "sync.md 8.3"],
+            known(),
+        )
+        s.receive(layer_change(201, fields))
+        s.acks()
+        s.about()
+
+    # --- RECORD_UNKNOWN for a layer (section 21.5) ---
+    s = new(
+        "after RECORD_UNKNOWN for a layer the device forwards the sender's kept messages again and "
+        "sends the layer only when the sibling has an outcome, APPLIED or DUPLICATE, for one",
+        ["sync.md 21.5", "sync.md 20.2", "sync.md 9.3", "sync.md 10.3"],
+        known(relay=("tablet",)),
+    )
+    sent = s.owner("set", {"location": VALUE_WEBER}, (4, 0))
+    again = s.receive(error_message("tablet", "RECORD_UNKNOWN", sent[0]))
+    s.about()
+    s.step({"days": 14})
+    s.receive(ack_message("tablet", [(1, "DUPLICATE", 1)], rid=forward_id(again[1])))
+    s.receive(ack_message("tablet", [(1, "APPLIED", 1)], rid=forward_id(again[0])))
+    s.about()
+    s = new(
+        "after RECORD_UNKNOWN for a layer a change of the owner sends the layer whole, once",
+        ["sync.md 21.5"],
+        known(relay=("tablet",)),
+    )
+    sent = s.owner("set", {"location": VALUE_WEBER}, (4, 0))
+    s.receive(error_message("tablet", "RECORD_UNKNOWN", sent[0]))
+    s.step({"days": 14})
+    sent = s.owner("set", {"notes": text_value("call first")}, (4, 0))
+    s.receive(
+        error_message(
+            "tablet",
+            "RECORD_UNKNOWN",
+            sent_to([m for m in sent if meaning(m)[0]["kind"] == "CHANGE"], "tablet"),
+        )
+    )
+    s.step({"days": 14})
+    s = new(
+        "after RECORD_UNKNOWN twice in a row for a layer, an outcome for a forward no longer ends the "
+        "wait; a change of the owner does",
+        ["sync.md 21.5"],
+        known(),
+    )
+    sent = s.owner("set", {"location": VALUE_WEBER}, (4, 0))
+    again = s.receive(error_message("tablet", "RECORD_UNKNOWN", sent[0]))
+    layer_again = s.receive(ack_message("tablet", [(1, "APPLIED", 1)], rid=forward_id(again[0])))
+    more = s.receive(error_message("tablet", "RECORD_UNKNOWN", sent_to(layer_again, "tablet")))
+    s.receive(ack_message("tablet", [(1, "DUPLICATE", 1)], rid=forward_id(more[0])))
+    s.owner("set", {"notes": text_value("call first")}, (4, 0))
+    s = new(
+        "after RECORD_UNKNOWN for a layer a RESYNC of that sibling ends the wait",
+        ["sync.md 21.5", "sync.md 20.4"],
+        known(),
+    )
+    sent = s.owner("set", {"location": VALUE_WEBER}, (4, 0))
+    s.receive(error_message("tablet", "RECORD_UNKNOWN", sent[0]))
+    s.receive(resync_message("tablet"), (0,))
+    s.acks()
+
+    # --- what the answering device reports (sections 17.2 and 22.2; spec/records.md, sections 5.2 and 6) ---
+    s = new(
+        "the steps 1 to 4 of the example of section 22.4, on the phone",
+        ["sync.md 22.4", "sync.md 22.2", "sync.md 17.2", "sync.md 16.5", "sync.md 16.6", "sync.md 16.7"],
+        received_device([sender_json()]),
+    )
+    v3 = other_data(3, start=date_time(10, 30, NOW + 1_800_000), notes="Bring the vaccination card")
+    sent = s.take(m1)
+    s.receive(ack_message("tablet", [(1, "APPLIED", 1)], rid=forward_id(sent[0])))
+    sent = s.take(d1, text)
+    s.receive(ack_message("tablet", [(1, "APPLIED", 1)], rid=forward_id(sent[0])))
+    s.receive(layer_change(201, {"location": weber}, whole=True), (3,))
+    s.acks()
+    s.about()
+    s.take(v3, text)
+    s.take(v3, text)
+    s.acks()
+    s.about()
+    # Steps 5 and 6 of section 22.4: a set that deletes, and a set that keeps.
+    d4, d5 = other_delete(4), other_data(5)
+    weber_v3 = sender_json(
+        manifests=(kept_json(m1, one),),
+        records=(kept_json(v3, one, text),),
+        layers=(layer_json(State({"location": weber}, None, 205), dict.fromkeys(one)),),
+    )
+    for choice, what in [
+        ("delete", "a set that deletes tidies the layer, APPLIED, and the record is deleted by its sender"),
+        ("keep", "a set that keeps sets a keep, KEPT, and the record is kept against the deletion"),
+    ]:
+        s = new(
+            f"{what}: the steps 5 and 6 of the example of section 22.4, on the phone",
+            ["sync.md 22.4", "sync.md 22.2", "sync.md 22.1", "sync.md 21.2", "records.md 6.4"],
+            received_device([weber_v3], highest=205, on_delete=choice),
+        )
+        s.take(d4, None, (4, 0))
+        s.acks()
+        s.about()
+        s.take(d5, text)
+        s.acks()
+        s.about()
+    s = new(
+        "a DELETE that meets an owner's removal that stands changes nothing in the layer: APPLIED",
+        ["sync.md 22.2", "sync.md 22.1", "records.md 6.3"],
+        received_device(
+            [
+                sender_json(
+                    manifests=(kept_json(m1, one),),
+                    records=(kept_json(d2, one, text),),
+                    layers=(
+                        layer_json(State({"location": weber}, gone(203, TABLET), 205), dict.fromkeys(one)),
+                    ),
+                )
+            ],
+            highest=205,
+            on_delete="keep",
+        ),
+    )
+    s.take(other_delete(3))
+    s.acks()
+    s.about()
+    s = new(
+        "a set that keeps sets no keep for a record of which it holds no DATA: it tidies the layer",
+        ["sync.md 22.2", "sync.md 21.1", "sync.md 21.2"],
+        received_device(
+            [sender_json(layers=(layer_json(State({"location": weber}, None, 205), dict.fromkeys(one)),))],
+            highest=205,
+            on_delete="keep",
+        ),
+    )
+    s.take(other_delete(3), None, (4, 0))
+    s.acks()
+    s.about()
+    s = new(
+        "a device that can take no stamp sets no keep and tidies nothing: APPLIED for the DELETE",
+        ["sync.md 22.2", "sync.md 2.3"],
+        received_device([weber_v3], highest=LAST_CHANGE_BASE, on_delete="keep"),
+    )
+    s.take(d4, None, (0, 0))
+    s.acks()
+    s.about()
+    kept_v4 = sender_json(
+        manifests=(kept_json(m1, one),),
+        records=(kept_json(v3, one, text), kept_json(d4, one)),
+        layers=(layer_json(State({"location": weber}, None, 211, Keep(210, PHONE, 4)), dict.fromkeys(one)),),
+    )
+    s = new(
+        "the further ACK: after KEPT for a DELETE, the user gives up the keep and the device sends APPLIED",
+        ["sync.md 22.3", "sync.md 21.2", "protocol.md 7.3"],
+        received_device([weber_v3], highest=205, on_delete="keep"),
+    )
+    s.take(d4, None, (4, 0))
+    s.acks()
+    s.owner("give_up", {}, (1, 0))
+    s.acks()
+    s.about()
+    s = new(
+        "the further ACK: a keep given up on the tablet reaches the answering device in a CHANGE",
+        ["sync.md 22.3", "sync.md 21.4", "protocol.md 7.3"],
+        received_device([weber_v3], highest=205, on_delete="keep"),
+    )
+    s.take(d4, None, (4, 0))
+    s.acks()
+    s.receive(layer_change(221, {}, keep=Keep(220, TABLET, 4, True)), (0,))
+    s.acks()
+    s.about()
+    s = new(
+        "no further ACK when a later message of the sender has arrived in between",
+        ["sync.md 22.3"],
+        received_device([weber_v3], highest=205, on_delete="keep"),
+    )
+    s.take(d4, None, (4, 0))
+    s.take(d5, text)
+    s.acks()
+    s.owner("set", {"location": VALUE_WEBER}, (1, 0))
+    s.acks()
+    s = new(
+        "the further ACK: after KEPT for a DATA of a record the owner deleted, the user takes it again",
+        ["sync.md 22.3", "sync.md 22.2", "records.md 6.3", "protocol.md 7.3"],
+        known(layer=State({}, Removal(200, TABLET), 205), record=d2),
+    )
+    s.take(d3, text)
+    s.acks()
+    s.owner("take_back", {}, (1, 0))
+    s.acks()
+    s.about()
+    s = new(
+        "a keep that arrives after APPLIED for the DELETE and the tidying keeps nothing: the layer holds "
+        "no owner's value",
+        ["sync.md 22.2", "sync.md 22.1", "sync.md 21.4"],
+        received_device([weber_v3], highest=205),
+    )
+    s.take(d4, None, (4, 0))
+    s.acks()
+    s.receive(layer_change(221, {}, keep=Keep(220, TABLET, 4)), (0,))
+    s.acks()
+    s.about()
+    s = new(
+        "a keep with an owner's value that arrives after APPLIED for the DELETE shows the record again and "
+        "is not reported",
+        ["sync.md 22.3", "sync.md 22.1", "sync.md 21.4"],
+        received_device([sender_json(manifests=(kept_json(m1, one),), records=(kept_json(v3, one, text),))]),
+    )
+    s.take(d4)
+    s.acks()
+    s.receive(layer_change(221, {"location": weber}, keep=Keep(220, TABLET, 4)), (0,))
+    s.acks()
+    s.about()
+    s = new(
+        "the user keeps a record that its sender deleted only with an owner's value, and gives the keep "
+        "up again",
+        ["sync.md 21.2", "sync.md 21.1", "sync.md 22.1", "sync.md 21.5"],
+        received_device(
+            [
+                sender_json(
+                    manifests=(kept_json(m1, one),), records=(kept_json(v3, one, text), kept_json(d4, one))
+                )
+            ]
+        ),
+    )
+    s.about()
+    s.owner("keep", {}, ())
+    s.owner("give_up", {}, ())
+    s.owner("set", {"location": VALUE_WEBER}, (4, 0))
+    s.owner("keep", {}, (4, 0))
+    s.about()
+    s.owner("give_up", {}, (4, 0))
+    s.about()
+    s = new(
+        "a keep in a CHANGE is a part: an earlier one is STALE and makes the device's keep due again",
+        ["sync.md 21.4", "sync.md 21.1", "sync.md 8.4"],
+        received_device([kept_v4], highest=211),
+    )
+    s.receive(layer_change(215, {}, keep=Keep(209, TABLET, 4)))
+    s.receive(layer_change(216, {}, keep=Keep(210, PHONE, 4)))
+    s.acks()
+    s = new(
+        "a DATA beside a tombstone travels to a new device, before the DELETE",
+        ["sync.md 23.3", "sync.md 20.1", "sync.md 20.3", "sync.md 22.1"],
+        received_device([kept_v4], highest=211),
+    )
+    s.step({"add": KEY["laptop"].hex()})
+    s = new(
+        "a DATA for a record that the owner deleted stays deleted: KEPT; an older one is STALE",
+        ["sync.md 22.2", "sync.md 22.1", "records.md 6.3", "records.md 5.2"],
+        known(layer=State({}, Removal(200, TABLET), 205), record=d2),
+    )
+    s.take(d3, text)
+    s.take(d1, text)
+    s.acks()
+    s.about()
+    s = new(
+        "a DATA that brings the owner's value is APPLIED, and the owner's layer stays",
+        ["sync.md 22.2", "records.md 6.1"],
+        known(layer=layer),
+    )
+    s.take(other_data(2, location=WEBER), text)
+    s.acks()
+    s.about()
+    s = new(
+        "a DELETE of a record without an owner's layer leaves a tombstone on the answering device and, "
+        "forwarded, on its sibling",
+        ["sync.md 22.2", "sync.md 22.1", "records.md 5.3"],
+        known(),
+    )
+    s.take(other_delete(2))
+    s.acks()
+    s.about()
+    return out
+
+
+def padded_schema(size: int) -> str:
+    """The offered schema of the appointment with a longer `doc`, so that its text has `size` bytes; its
+    fingerprint stays, since the canonical form holds no `doc`."""
+    schema = json.loads(APPOINTMENT_OFFERED)
+    schema["doc"] += "x" * (size - len(APPOINTMENT_OFFERED.encode()))
+    out = json.dumps(schema, separators=(",", ":"), ensure_ascii=False)
+    assert len(out.encode()) == size and schema_fingerprint(out) == SCHEMA_1
+    return out
+
+
+def nested_schema(depth: int) -> str:
+    """The offered schema of the appointment with an attribute nested so that its JSON text has that
+    depth (spec/envelope.md, section 8); its fingerprint stays."""
+    schema = json.loads(APPOINTMENT_OFFERED)
+    nest: Any = 0
+    while tm.rules.json_depth({**schema, "x-nest": nest}) < depth:
+        nest = [nest]
+    schema["x-nest"] = nest
+    out = json.dumps(schema, separators=(",", ":"), ensure_ascii=False)
+    assert tm.rules.json_depth(json.loads(out)) == depth and schema_fingerprint(out) == SCHEMA_1
+    return out
+
+
 SAID: dict[str, list[list[str]]] = {
     "a CHANGE of the device's own key is ignored": [
         [
@@ -6599,16 +10628,6 @@ SAID: dict[str, list[list[str]]] = {
         [
             "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
-        ],
-    ],
-    "step 6: a CHANGE with a key in origin is rejected": [
-        [
-            "outcome: None",
-            "ERROR to tablet: INVALID_MESSAGE",
-        ],
-        [],
-        [
-            "no record; highest 101",
         ],
     ],
     "step 6: a CHANGE with a type with an empty name between two dots is rejected": [
@@ -8908,7 +12927,9 @@ SAID: dict[str, list[list[str]]] = {
             "RESYNC 00000001 to laptop",
             "RESYNC 00000002 to tablet",
         ],
-        [],
+        [
+            "chain and MANIFEST to: no sender",
+        ],
         [
             (
                 "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101; "
@@ -9246,7 +13267,9 @@ SAID: dict[str, list[list[str]]] = {
             "outcome: APPLIED",
             "CHANGE to laptop, version 122, state 122, in part: location@110p notes@120t",
         ],
-        [],
+        [
+            "chain and MANIFEST to: no sender",
+        ],
         [],
         [
             "outcome: None",
@@ -9415,12 +13438,3885 @@ SAID: dict[str, list[list[str]]] = {
             "no record; highest 0",
         ],
     ],
+    "a FORWARD of the device's own key is ignored": [
+        [
+            "outcome: None",
+        ],
+        [],
+        [
+            "no known sender; highest 195; refused: refused",
+        ],
+    ],
+    "a FORWARD of a removed key of the device's own set is rejected without a report": [
+        [
+            "outcome: None",
+        ],
+        [],
+        [
+            "no known sender; highest 195; refused: refused",
+        ],
+    ],
+    "a FORWARD of a current key of another known sender is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to other app: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195; refused: refused",
+        ],
+    ],
+    "a FORWARD of a removed key of another sender, or a refused key, is rejected without a report": [
+        [
+            "outcome: None",
+        ],
+        [],
+        [
+            "no known sender; highest 195; refused: refused",
+        ],
+    ],
+    "a FORWARD of a key the device does not know is not processed": [
+        [
+            "outcome: None",
+        ],
+        [],
+        [
+            "no known sender; highest 195; refused: refused",
+        ],
+    ],
+    "step 1: a FORWARD without a record is reported to a sibling and to another app, and to no other key": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [
+            "outcome: None",
+            "ERROR to other app: INVALID_MESSAGE",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "outcome: None",
+        ],
+        [],
+        [
+            "no known sender; highest 195; refused: refused",
+        ],
+    ],
+    "step 2: the body of a FORWARD of another app is not read": [
+        [
+            "outcome: None",
+            "ERROR to other app: INVALID_MESSAGE",
+        ],
+        [
+            "outcome: None",
+        ],
+        [],
+    ],
+    "step 3: a FORWARD whose body is no axt.Forward is rejected": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 3: a FORWARD of a sibling for another device is ignored": [
+        [
+            "outcome: None",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 4: a FORWARD with an id that is no UUID is rejected": [
+        [
+            "outcome: None",
+            "ERROR to tablet: RECORD_ID_INVALID",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 4: a FORWARD with the nil UUID is rejected": [
+        [
+            "outcome: None",
+            "ERROR to tablet: RECORD_ID_INVALID",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 4: a FORWARD with the max UUID is rejected": [
+        [
+            "outcome: None",
+            "ERROR to tablet: RECORD_ID_INVALID",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 5: a FORWARD with the version 0 is rejected": [
+        [
+            "outcome: None",
+            "ERROR to tablet: VERSION_INVALID",
+        ],
+        [],
+    ],
+    "step 5: a FORWARD with the version -1 is rejected": [
+        [
+            "outcome: None",
+            "ERROR to tablet: VERSION_INVALID",
+        ],
+        [],
+    ],
+    "step 6: a FORWARD with the version 2 is rejected": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 7: an empty message is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 7: a message of 9 bytes is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 7: a message that does not begin with C3 01 is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 8: a message with the fingerprint of no envelope format is rejected with FORMAT_UNSUPPORTED": [
+        [
+            "outcome: None",
+            "ERROR to tablet: FORMAT_UNSUPPORTED, fingerprint c188f8c5af4d094d",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a message with a byte after its envelope is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a message whose envelope is cut short is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a message whose format field is 2 is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a forwarded OFFER is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a forwarded ACCEPT is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a forwarded DECLINE is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a forwarded ACK is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a forwarded ERROR is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a forwarded DEVICE_JOIN is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a forwarded CHANGE is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a forwarded RESYNC is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a forwarded FORWARD is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a forwarded WITHDRAW is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a forwarded PROPOSAL is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a forwarded PROPOSAL_REPLY is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a forwarded DATA without a record is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a forwarded DELETE without a record is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a forwarded MANIFEST with a record is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a forwarded DELETE with a body is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a forwarded DATA with an empty body is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a forwarded DATA whose body has 9 bytes is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a forwarded DATA whose body does not begin with C3 01 is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    (
+        "step 9: a forwarded MANIFEST whose body has the fingerprint of axt.DeviceAdd is "
+        "rejected with INVALID_MESSAGE"
+    ): [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    (
+        "step 9: a forwarded DEVICE_ADD whose body has the fingerprint of "
+        "axt.DeviceRemove is rejected with INVALID_MESSAGE"
+    ): [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a forwarded MANIFEST with an empty body is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a schema with a forwarded DELETE is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: a schema with a forwarded MANIFEST is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 9: no schema with a forwarded DATA is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 10: a schema of 256 KiB and one byte is rejected with TOO_LARGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: TOO_LARGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 10: a schema nested to a depth of 65 is rejected with TOO_LARGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: TOO_LARGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 10: a text above 256 KiB that is no schema, before step 11 is rejected with TOO_LARGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: TOO_LARGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 11: a schema that is no JSON text is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 11: a schema that is no schema of a record is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 11: a schema that is no Avro schema is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 11: a schema with another fingerprint than the body names is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 10: a schema of exactly 256 KiB is taken": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            (
+                "sender first known by second app; known by forwards of tablet; current: second "
+                "app; highest 195"
+            ),
+            "kept: DATA version 1 of the second app; delivered to tablet",
+            (
+                "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA "
+                "version 1 of the second app"
+            ),
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "step 10: a schema nested to a depth of 64 is taken": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            (
+                "sender first known by second app; known by forwards of tablet; current: second "
+                "app; highest 195"
+            ),
+            "kept: DATA version 1 of the second app; delivered to tablet",
+            (
+                "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA "
+                "version 1 of the second app"
+            ),
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "step 11: the schema with the whitespace of its file, which has the same fingerprint is taken": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            (
+                "sender first known by second app; known by forwards of tablet; current: second "
+                "app; highest 195"
+            ),
+            "kept: DATA version 1 of the second app; delivered to tablet",
+            (
+                "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA "
+                "version 1 of the second app"
+            ),
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "step 12: a forwarded message with a changed signature is rejected with SIGNATURE_INVALID": [
+        [
+            "outcome: None",
+            "ERROR to tablet: SIGNATURE_INVALID",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    (
+        "step 12: a forwarded message with a version changed after it was signed is "
+        "rejected with SIGNATURE_INVALID"
+    ): [
+        [
+            "outcome: None",
+            "ERROR to tablet: SIGNATURE_INVALID",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 12: a forwarded message with the signature of another key is rejected with SIGNATURE_INVALID": [
+        [
+            "outcome: None",
+            "ERROR to tablet: SIGNATURE_INVALID",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 12: a forwarded message whose sender is no valid key is rejected with SIGNATURE_INVALID": [
+        [
+            "outcome: None",
+            "ERROR to tablet: SIGNATURE_INVALID",
+        ],
+        [],
+    ],
+    "step 12 comes before step 13: a message of the device's own key whose signature does not verify": [
+        [
+            "outcome: None",
+            "ERROR to tablet: SIGNATURE_INVALID",
+        ],
+        [],
+    ],
+    "step 13: a forwarded message of the device's own key is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 13: a forwarded message of the sibling that forwards it is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 13: a forwarded message of another sibling is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    (
+        "step 13: a forwarded message of a removed key of the device's own set is "
+        "rejected with INVALID_MESSAGE"
+    ): [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "step 14: a forwarded message of a refused key is rejected with NOT_ACCEPTED": [
+        [
+            "outcome: None",
+            "ERROR to tablet: NOT_ACCEPTED",
+        ],
+        [
+            "outcome: None",
+            "ERROR to tablet: NOT_ACCEPTED",
+        ],
+        [],
+        [
+            "no known sender; highest 195; refused: refused",
+        ],
+    ],
+    (
+        "a forwarded MANIFEST of a key the device does not know makes a known sender, and "
+        "goes on to the third device and not back"
+    ): [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to laptop, #0: MANIFEST revision 1",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; known by forwards of tablet; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "sender's layer: none",
+            "owner's layer: none",
+            "shows: none",
+        ],
+    ],
+    (
+        "a forwarded DATA of a key the device does not know makes a known sender, and "
+        "goes on to the third device and not back"
+    ): [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to laptop, #0: DATA version 1, with the schema as offered",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; known by forwards of tablet; current: other app; highest 195",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    (
+        "a forwarded DELETE of a key the device does not know makes a known sender, and "
+        "goes on to the third device and not back"
+    ): [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to laptop, #0: DELETE version 4",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; known by forwards of tablet; current: other app; highest 195",
+            "kept: DELETE version 4; delivered to tablet",
+            "sender's layer: tombstone, version 4, type None, from DELETE version 4",
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    "a forwarded MANIFEST with a higher revision replaces the kept one; the same again is a duplicate": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "outcome: DUPLICATE",
+        ],
+        [
+            "outcome: DUPLICATE",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+            "ACK of 0000000a to tablet: version 1 DUPLICATE, receiver 1",
+            "ACK of 0000000b to tablet: version 1 DUPLICATE, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 2; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+        ],
+    ],
+    (
+        "a forwarded MANIFEST with a lower revision is a duplicate, and the kept one is "
+        "due for that sibling again"
+    ): [
+        [
+            "outcome: DUPLICATE",
+            "FORWARD 00000001 to tablet, #0: MANIFEST revision 2",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 DUPLICATE, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 2; delivered to no sibling",
+        ],
+    ],
+    "a forwarded MANIFEST with the revision 0 is rejected with MANIFEST_INVALID": [
+        [
+            "outcome: None",
+            "ERROR to tablet: MANIFEST_INVALID",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+        ],
+    ],
+    "a forwarded MANIFEST with a body cut short is rejected with MANIFEST_INVALID": [
+        [
+            "outcome: None",
+            "ERROR to tablet: MANIFEST_INVALID",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+        ],
+    ],
+    "a forwarded MANIFEST with a byte after its body is rejected with MANIFEST_INVALID": [
+        [
+            "outcome: None",
+            "ERROR to tablet: MANIFEST_INVALID",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+        ],
+    ],
+    "a forwarded MANIFEST that is not valid makes no sender known": [
+        [
+            "outcome: None",
+            "ERROR to tablet: MANIFEST_INVALID",
+        ],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "a forwarded MANIFEST never takes the place of one that the device took live from the key itself": [
+        [
+            "taken: True",
+            "FORWARD 00000001 to tablet, #0: MANIFEST revision 3",
+        ],
+        [
+            "outcome: DUPLICATE",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 DUPLICATE, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 3; delivered to no sibling",
+            "kept: DATA version 1; delivered to tablet",
+        ],
+    ],
+    "a forwarded MANIFEST of a removed key of a known sender is not taken": [
+        [
+            "outcome: DUPLICATE",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 DUPLICATE, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app, new; removed: other app; highest 195",
+            "kept: DATA version 1; delivered to tablet",
+        ],
+    ],
+    (
+        "a forwarded DATA with a higher version is taken, the same bytes again are a "
+        "duplicate, and of the same version in other bytes the one with the higher "
+        "SHA-256 stands"
+    ): [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "outcome: DUPLICATE",
+        ],
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "outcome: DUPLICATE",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+            "ACK of 0000000b to tablet: version 1 DUPLICATE, receiver 1",
+            "ACK of 0000000c to tablet: version 1 APPLIED, receiver 1",
+            "ACK of 0000000d to tablet: version 1 DUPLICATE, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2, title 'Dentist'; delivered to tablet",
+            (
+                "sender's layer: there, version 2, type axt.example.v1.Appointment, from DATA "
+                "version 2, title 'Dentist'"
+            ),
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    (
+        "a forwarded DATA with a lower version is a duplicate, and the kept message is "
+        "due for that sibling again"
+    ): [
+        [
+            "outcome: DUPLICATE",
+            "FORWARD 00000001 to tablet, #0: DATA version 3, with the schema as offered",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 DUPLICATE, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 3; delivered to no sibling",
+            "sender's layer: there, version 3, type axt.example.v1.Appointment, from DATA version 3",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    (
+        "the version rule comes before the body: a forwarded DATA of the kept version "
+        "that does not decode is a duplicate"
+    ): [
+        [
+            "outcome: DUPLICATE",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 DUPLICATE, receiver 1",
+        ],
+    ],
+    "a forwarded DATA with an id that is no UUID is rejected with RECORD_ID_INVALID": [
+        [
+            "outcome: None",
+            "ERROR to tablet: RECORD_ID_INVALID",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "a forwarded DATA with the nil UUID as its id is rejected with RECORD_ID_INVALID": [
+        [
+            "outcome: None",
+            "ERROR to tablet: RECORD_ID_INVALID",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "a forwarded DATA with the version 0 is rejected with VERSION_INVALID": [
+        [
+            "outcome: None",
+            "ERROR to tablet: VERSION_INVALID",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "a forwarded DELETE with the version 0 is rejected with VERSION_INVALID": [
+        [
+            "outcome: None",
+            "ERROR to tablet: VERSION_INVALID",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "a forwarded DATA of another type than the record's is rejected with TYPE_CHANGED": [
+        [
+            "outcome: None",
+            "ERROR to tablet: TYPE_CHANGED",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "a forwarded DATA of another type than the owner's layer keeps is rejected with TYPE_CHANGED": [
+        [
+            "outcome: None",
+            "ERROR to tablet: TYPE_CHANGED",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 205",
+            "sender's layer: none",
+            "owner's layer: state stamp 205; location@200t; type axt.example.v1.Appointment",
+            "tablet: known, delivered: all",
+            "shows: none",
+        ],
+    ],
+    "a forwarded DATA with a byte after its record is rejected with UNDECODABLE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: UNDECODABLE",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "a forwarded DATA with a body cut short is rejected with UNDECODABLE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: UNDECODABLE",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "a forwarded DATA with a start in a thirteenth month is rejected with VALUE_INVALID": [
+        [
+            "outcome: None",
+            "ERROR to tablet: VALUE_INVALID, field start",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "a forwarded DATA with a value that breaks a check of an attribute is taken all the same": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to tablet",
+            "sender's layer: there, version 2, type axt.example.v1.Appointment, from DATA version 2",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "a forwarded DATA of a type the device does not know is taken and kept": [
+        [
+            "outcome: APPLIED",
+            (
+                "FORWARD 00000001 to laptop, #0: DATA version 1, id 7b1e6c2a, name 'Mimi', "
+                "species 'cat', breed 'Maine Coon', sex 'FEMALE', neutered True, birthday "
+                "changed, microchip '276098100000000', notes '', with a schema"
+            ),
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to laptop, tablet",
+            "kept: DATA version 1; delivered to laptop, tablet",
+            (
+                "kept: DATA version 1, id 7b1e6c2a, name 'Mimi', species 'cat', breed 'Maine "
+                "Coon', sex 'FEMALE', neutered True, birthday changed, microchip "
+                "'276098100000000', notes ''; delivered to tablet"
+            ),
+            (
+                "sender's layer: there, version 1, type axt.example.v1.Pet, from DATA version 1, "
+                "id 7b1e6c2a, name 'Mimi', species 'cat', breed 'Maine Coon', sex 'FEMALE', "
+                "neutered True, birthday changed, microchip '276098100000000', notes ''"
+            ),
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "a forwarded DATA whose schema does not resolve against the device's own is taken": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2, title 7; delivered to tablet",
+            (
+                "sender's layer: there, version 2, type axt.example.v1.Appointment, from DATA "
+                "version 2, title 7"
+            ),
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    (
+        "a forwarded DELETE leaves a tombstone, an older DATA is kept beside it, and a "
+        "later DATA brings the record back"
+    ): [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "kept: DELETE version 3; delivered to tablet",
+            (
+                "sender's layer: tombstone, version 3, type axt.example.v1.Appointment, from "
+                "DELETE version 3; beside it DATA version 1"
+            ),
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "outcome: DUPLICATE",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to no sibling",
+            "kept: DELETE version 3; delivered to tablet",
+            (
+                "sender's layer: tombstone, version 3, type axt.example.v1.Appointment, from "
+                "DELETE version 3; beside it DATA version 2"
+            ),
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+            "ACK of 0000000b to tablet: version 1 APPLIED, receiver 1",
+            "ACK of 0000000c to tablet: version 1 APPLIED, receiver 1",
+            "ACK of 0000000d to tablet: version 1 DUPLICATE, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 4; delivered to tablet",
+            "sender's layer: there, version 4, type axt.example.v1.Appointment, from DATA version 4",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    (
+        "a forwarded DATA of a removed key is taken when the device's removal of that key "
+        "is delivered to the sibling"
+    ): [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app, new; removed: other app; highest 195",
+            "kept: DEVICE_ADD of the other app, new by the other app; delivered to tablet",
+            "kept: DEVICE_REMOVE of the other app by the other app, new; delivered to tablet",
+            "kept: DATA version 2; delivered to tablet",
+            "sender's layer: there, version 2, type axt.example.v1.Appointment, from DATA version 2",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    (
+        "a forwarded DATA of a removed key is rejected with NOT_ACCEPTED when the sibling "
+        "has not shown that it has the removal, and the removal goes to it"
+    ): [
+        [
+            "outcome: None",
+            "ERROR to tablet: NOT_ACCEPTED",
+            "FORWARD 00000001 to tablet, #0: DEVICE_REMOVE of the other app by the other app, new",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app, new; removed: other app; highest 195",
+            "kept: DEVICE_ADD of the other app, new by the other app; delivered to tablet",
+            "kept: DEVICE_REMOVE of the other app by the other app, new; delivered to no sibling",
+            "sender's layer: none",
+            "owner's layer: none",
+            "shows: none",
+        ],
+    ],
+    (
+        "a sibling that has forwarded a removal of that key has it, whatever the device "
+        "did with it: its DATA of the removed key is then taken"
+    ): [
+        [
+            "outcome: DUPLICATE",
+        ],
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 DUPLICATE, receiver 1",
+            "ACK of 0000000b to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app, new; removed: other app; highest 195",
+            "kept: DEVICE_ADD of the other app, new by the other app; delivered to tablet",
+            "kept: DEVICE_REMOVE of the other app by the other app, new; delivered to tablet",
+            "kept: DATA version 2; delivered to tablet",
+            "sender's layer: there, version 2, type axt.example.v1.Appointment, from DATA version 2",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    (
+        "after NOT_ACCEPTED for a message of a removed key, the sibling's forward of the "
+        "removal makes it due again after the ACK; once more, and then it is settled"
+    ): [
+        [
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "outcome: DUPLICATE",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 DUPLICATE, receiver 1",
+            "FORWARD 00000002 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "outcome: None",
+            "FORWARD 00000003 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "sender first known by other app; current: other app, new; removed: other app; highest 195",
+            "kept: DEVICE_ADD of the other app, new by the other app; delivered to tablet",
+            "kept: DEVICE_REMOVE of the other app by the other app, new; delivered to tablet",
+            "kept: DATA version 2; delivered to no sibling",
+            "sender's layer: there, version 2, type axt.example.v1.Appointment, from DATA version 2",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "a removal that the device only keeps to try again does not make the key removed": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+            "ACK of 0000000b to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to tablet",
+            "sender's layer: there, version 2, type axt.example.v1.Appointment, from DATA version 2",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "case 1 of step 7, forwarded: a DATA below the tombstone goes beside it; APPLIED": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to tablet",
+            "kept: DELETE version 3; delivered to tablet",
+            (
+                "sender's layer: tombstone, version 3, type axt.example.v1.Appointment, from "
+                "DELETE version 3; beside it DATA version 2"
+            ),
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    "case 2 of step 7, forwarded: the kept message in other bytes that stands replaces it; APPLIED": [
+        [
+            "outcome: DUPLICATE",
+        ],
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 DUPLICATE, receiver 1",
+            "ACK of 0000000b to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2, title 'Dentist'; delivered to tablet",
+            (
+                "sender's layer: there, version 2, type axt.example.v1.Appointment, from DATA "
+                "version 2, title 'Dentist'"
+            ),
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    (
+        "case 3 of step 7, forwarded: a DELETE takes the place of a DATA of the same "
+        "version, and nothing stays beside it; APPLIED"
+    ): [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DELETE version 2; delivered to tablet",
+            "sender's layer: tombstone, version 2, type axt.example.v1.Appointment, from DELETE version 2",
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    (
+        "case 4 of step 7, forwarded: the DATA beside the tombstone in other bytes that "
+        "stands replaces it; APPLIED"
+    ): [
+        [
+            "outcome: DUPLICATE",
+        ],
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 DUPLICATE, receiver 1",
+            "ACK of 0000000b to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2, title 'Dentist'; delivered to tablet",
+            "kept: DELETE version 3; delivered to tablet",
+            (
+                "sender's layer: tombstone, version 3, type axt.example.v1.Appointment, from "
+                "DELETE version 3; beside it DATA version 2, title 'Dentist'"
+            ),
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    "a DATA below the tombstone, forwarded, that does not decode is not taken": [
+        [
+            "outcome: None",
+            "ERROR to tablet: UNDECODABLE",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DELETE version 3; delivered to tablet",
+            "sender's layer: tombstone, version 3, type axt.example.v1.Appointment, from DELETE version 3",
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    (
+        "case 1 of step 7, from the sender: a DATA below the tombstone goes beside it; "
+        "the outcome of the version rule"
+    ): [
+        [
+            "outcome: STALE",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "ACK to other app: version 2 STALE, receiver 3",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to no sibling",
+            "kept: DELETE version 3; delivered to tablet",
+            (
+                "sender's layer: tombstone, version 3, type axt.example.v1.Appointment, from "
+                "DELETE version 3; beside it DATA version 2"
+            ),
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    (
+        "case 2 of step 7, from the sender: the kept message in other bytes that stands "
+        "replaces it; the outcome of the version rule"
+    ): [
+        [
+            "outcome: DUPLICATE",
+        ],
+        [
+            "outcome: DUPLICATE",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, title 'Dentist', with the schema as offered",
+        ],
+        [
+            "ACK to other app: version 2 DUPLICATE, receiver 2",
+            "ACK to other app: version 2 DUPLICATE, receiver 2",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2, title 'Dentist'; delivered to no sibling",
+            (
+                "sender's layer: there, version 2, type axt.example.v1.Appointment, from DATA "
+                "version 2, title 'Dentist'"
+            ),
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    (
+        "case 3 of step 7, from the sender: a DELETE takes the place of a DATA of the "
+        "same version, and nothing stays beside it; the outcome of the version rule"
+    ): [
+        [
+            "outcome: DUPLICATE",
+            "FORWARD 00000001 to tablet, #0: DELETE version 2",
+        ],
+        [
+            "ACK to other app: version 2 DUPLICATE, receiver 2",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DELETE version 2; delivered to no sibling",
+            "sender's layer: tombstone, version 2, type axt.example.v1.Appointment, from DELETE version 2",
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    (
+        "case 4 of step 7, from the sender: the DATA beside the tombstone in other bytes "
+        "that stands replaces it; the outcome of the version rule"
+    ): [
+        [
+            "outcome: STALE",
+        ],
+        [
+            "outcome: STALE",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, title 'Dentist', with the schema as offered",
+        ],
+        [
+            "ACK to other app: version 2 STALE, receiver 3",
+            "ACK to other app: version 2 STALE, receiver 3",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2, title 'Dentist'; delivered to no sibling",
+            "kept: DELETE version 3; delivered to tablet",
+            (
+                "sender's layer: tombstone, version 3, type axt.example.v1.Appointment, from "
+                "DELETE version 3; beside it DATA version 2, title 'Dentist'"
+            ),
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    "a DATA below the tombstone, from the sender, that does not decode is not taken": [
+        [
+            "outcome: STALE",
+        ],
+        [
+            "ACK to other app: version 2 STALE, receiver 3",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DELETE version 3; delivered to tablet",
+            "sender's layer: tombstone, version 3, type axt.example.v1.Appointment, from DELETE version 3",
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    "a DELETE above a DELETE keeps the DATA beside the new tombstone": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to tablet",
+            "kept: DELETE version 5; delivered to tablet",
+            (
+                "sender's layer: tombstone, version 5, type axt.example.v1.Appointment, from "
+                "DELETE version 5; beside it DATA version 2"
+            ),
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    "a DATA above the DELETE ends the DATA beside the tombstone": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 4; delivered to tablet",
+            "sender's layer: there, version 4, type axt.example.v1.Appointment, from DATA version 4",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "a forwarded DATA below the DATA beside the tombstone makes only that DATA due again, not the DELETE": [
+        [
+            "outcome: DUPLICATE",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 DUPLICATE, receiver 1",
+        ],
+    ],
+    "a forwarded DELETE for an id the device does not have leaves a tombstone without a type": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "kept: DELETE version 3; delivered to tablet",
+            "sender's layer: tombstone, version 3, type None, from DELETE version 3",
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    "a forwarded DATA changes nothing in the owner's layer, and nothing goes to its sender": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 205",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 3, location 'Praxis'; delivered to tablet",
+            (
+                "sender's layer: there, version 3, type axt.example.v1.Appointment, from DATA "
+                "version 3, location 'Praxis'"
+            ),
+            "owner's layer: state stamp 205; location@200t; type axt.example.v1.Appointment",
+            "tablet: known, delivered: all",
+            "shows: there; the owner's value in location",
+        ],
+    ],
+    (
+        "a forwarded DEVICE_ADD and a forwarded DEVICE_REMOVE are applied and kept, one "
+        "by one; a repeat of each is a duplicate"
+    ): [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to laptop, #0: DEVICE_ADD of the other app, new by the other app",
+        ],
+        [
+            "outcome: DUPLICATE",
+        ],
+        [
+            "sender first known by other app; current: other app, new, other app; highest 195",
+            "kept: DEVICE_ADD of the other app, new by the other app; delivered to tablet",
+            "kept: MANIFEST revision 1; delivered to laptop, tablet",
+            "kept: DATA version 1; delivered to laptop, tablet",
+        ],
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000002 to laptop, #0: DEVICE_REMOVE of the other app by the other app, new",
+        ],
+        [
+            "outcome: DUPLICATE",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+            "ACK of 0000000b to tablet: version 1 DUPLICATE, receiver 1",
+            "ACK of 0000000c to tablet: version 1 APPLIED, receiver 1",
+            "ACK of 0000000d to tablet: version 1 DUPLICATE, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app, new; removed: other app; highest 195",
+            "kept: DEVICE_ADD of the other app, new by the other app; delivered to tablet",
+            "kept: DEVICE_REMOVE of the other app by the other app, new; delivered to tablet",
+            "kept: DATA version 1; delivered to laptop, tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    (
+        "a forwarded DEVICE_ADD whose signer the device does not know, for a current key "
+        "of a known sender, adds the signer to that sender"
+    ): [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app, new, other app; highest 195",
+            "kept: DEVICE_ADD of the other app by the other app, new; delivered to tablet",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+        ],
+    ],
+    (
+        "a forwarded DEVICE_ADD whose signer and device the device does not know makes "
+        "the signer a known sender with both keys"
+    ): [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            (
+                "sender first known by other app; known by forwards of tablet; current: other "
+                "app, new, other app; highest 195"
+            ),
+            "kept: DEVICE_ADD of the other app, new by the other app; delivered to tablet",
+        ],
+    ],
+    (
+        "a forwarded DEVICE_REMOVE of a key that is not yet a key of the sender is kept "
+        "and applied after the addition; it is a kept message only from then on"
+    ): [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to laptop, tablet",
+            "kept: DATA version 1; delivered to laptop, tablet",
+        ],
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to laptop, #0: DEVICE_ADD of the other app, new by the other app",
+            "FORWARD 00000002 to laptop, #1: DEVICE_REMOVE of the other app, new by the other app",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+            "ACK of 0000000b to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; removed: other app, new; highest 195",
+            "kept: DEVICE_ADD of the other app, new by the other app; delivered to tablet",
+            "kept: DEVICE_REMOVE of the other app, new by the other app; delivered to tablet",
+            "kept: MANIFEST revision 1; delivered to laptop, tablet",
+            "kept: DATA version 1; delivered to laptop, tablet",
+        ],
+    ],
+    (
+        "a forwarded DEVICE_REMOVE whose signer the device does not know makes the signer "
+        "a known sender and is kept to be tried again"
+    ): [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; known by forwards of tablet; current: other app; highest 195",
+        ],
+    ],
+    "a forwarded DEVICE_ADD with a proof that does not verify is rejected with DEVICE_REJECTED": [
+        [
+            "outcome: None",
+            "ERROR to tablet: DEVICE_REJECTED",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+        ],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    "a forwarded DEVICE_REMOVE with its own signer as the device is rejected with DEVICE_REJECTED": [
+        [
+            "outcome: None",
+            "ERROR to tablet: DEVICE_REJECTED",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+        ],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    (
+        "a forwarded DEVICE_REMOVE with a removed key as its signer and a current key as "
+        "its device is rejected with DEVICE_REJECTED"
+    ): [
+        [
+            "outcome: None",
+            "ERROR to tablet: DEVICE_REJECTED",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app, new; removed: other app; highest 195",
+            "kept: DATA version 1; delivered to tablet",
+        ],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    (
+        "a forwarded DEVICE_ADD with a signer the device does not know and a removed key "
+        "of another known sender as its device is rejected with DEVICE_REJECTED"
+    ): [
+        [
+            "outcome: None",
+            "ERROR to tablet: DEVICE_REJECTED",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app, new; removed: other app; highest 195",
+            "kept: DATA version 1; delivered to tablet",
+        ],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    (
+        "a forwarded DEVICE_ADD with a refused key as its device: it counts as a key of "
+        "no known sender, and the key stops being refused"
+    ): [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            (
+                "sender first known by second app; known by forwards of tablet; current: second "
+                "app, refused; highest 195"
+            ),
+            "kept: DEVICE_ADD of the refused by the second app; delivered to tablet",
+        ],
+    ],
+    (
+        "a forwarded DEVICE_ADD with a refused key as its signer: it counts as a key of "
+        "no known sender, and the key stops being refused"
+    ): [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            (
+                "sender first known by refused; known by forwards of tablet; current: second app, "
+                "refused; highest 195"
+            ),
+            "kept: DEVICE_ADD of the second app by the refused; delivered to tablet",
+        ],
+    ],
+    (
+        "a forwarded DEVICE_ADD rejected only because its signer is removed by now is "
+        "kept and tried again: APPLIED, and no try applies it while the signer stays "
+        "removed"
+    ): [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+            "ACK of 0000000b to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            (
+                "sender first known by other app; current: stranger, other app, new; removed: "
+                "other app; highest 195"
+            ),
+            "kept: DEVICE_ADD of the stranger by the other app, new; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+        ],
+        [
+            "no known sender; highest 195",
+        ],
+    ],
+    (
+        "a forwarded DEVICE_ADD that joins two senders: one sender, the records by the "
+        "version rule, and the owner's layers merged under a new state stamp"
+    ): [
+        [
+            "outcome: APPLIED",
+            "CHANGE, origin other app, to tablet, version 206, state 206, in part: notes@190t",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: second app, other app; highest 206",
+            "kept: DEVICE_ADD of the second app by the other app; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp 206; notes@190t location@200t; type axt.example.v1.Appointment",
+            "tablet: known, delivered: location",
+            "shows: there; the owner's value in location, notes",
+        ],
+        [
+            "sender first known by other app; current: second app, other app; highest 206",
+            "kept: DEVICE_ADD of the second app by the other app; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+        ],
+    ],
+    "a join whose merge takes nothing from the other layer takes no new state stamp": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: second app, other app; highest 205",
+            "kept: DEVICE_ADD of the second app by the other app; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp 201; location@200t; type axt.example.v1.Appointment",
+            "tablet: known, delivered: all",
+            "shows: there; the owner's value in location",
+        ],
+    ],
+    "a forwarded DEVICE_ADD whose body does not decode is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+        ],
+    ],
+    (
+        "a DATA of another app is answered by the device that got it and forwarded to "
+        "each sibling; each outcome delivers it"
+    ): [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to laptop, #0: DATA version 2, with the schema as offered",
+            "FORWARD 00000002 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "ACK to other app: version 2 APPLIED, receiver 2",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to laptop, tablet",
+            "kept: DATA version 2; delivered to tablet",
+            "sender's layer: there, version 2, type axt.example.v1.Appointment, from DATA version 2",
+            "owner's layer: none",
+            "shows: there",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to laptop, tablet",
+            "kept: DATA version 2; delivered to laptop, tablet",
+            "sender's layer: there, version 2, type axt.example.v1.Appointment, from DATA version 2",
+            "owner's layer: none",
+            "shows: there",
+        ],
+        [],
+    ],
+    (
+        "STALE for a forward is taken as DUPLICATE; the first outcome stands, and an "
+        "entry for another id is ignored"
+    ): [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to tablet",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to tablet",
+        ],
+    ],
+    "an entry with the version 2 is no outcome of a forward": [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to no sibling",
+        ],
+    ],
+    "an ACK of a sibling with the outcome MERGED for a forward is not valid, and delivers nothing": [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to no sibling",
+        ],
+    ],
+    (
+        "a later version takes the place of a kept message: it is forwarded anew, and an "
+        "outcome for the forward of the earlier one delivers nothing"
+    ): [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000002 to tablet, #0: DATA version 3, with the schema as offered",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 3; delivered to no sibling",
+            "sender's layer: there, version 3, type axt.example.v1.Appointment, from DATA version 3",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    (
+        "after FORMAT_UNSUPPORTED for its own envelope of a sibling for a FORWARD, the "
+        "device sends the same FORWARD again"
+    ): [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "outcome: None",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to no sibling",
+        ],
+    ],
+    "after FORMAT_UNSUPPORTED for the message inside of a sibling for a FORWARD, the forward is settled": [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "outcome: None",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to no sibling",
+        ],
+    ],
+    "after NOT_ACCEPTED of a sibling for a FORWARD, the forward is settled": [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "outcome: None",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to no sibling",
+        ],
+    ],
+    "after DEVICE_REJECTED of a sibling for a FORWARD, the forward is settled": [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "outcome: None",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to no sibling",
+        ],
+    ],
+    "after INVALID_MESSAGE of a sibling for a FORWARD, the forward is settled": [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "outcome: None",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to no sibling",
+        ],
+    ],
+    "after SIGNATURE_INVALID of a sibling for a FORWARD, the forward is settled": [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "outcome: None",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to no sibling",
+        ],
+    ],
+    "after TOO_LARGE of a sibling for a FORWARD, the forward is settled": [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "outcome: None",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to no sibling",
+        ],
+    ],
+    "an ERROR that names no forward the device keeps changes nothing": [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to tablet",
+        ],
+    ],
+    "a forward that an error settled is due again after a RESYNC of that sibling, as a new forward": [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "outcome: None",
+            "FORWARD 00000003 to tablet, #1: DATA version 2, with the schema as offered",
+            "FORWARD 00000002 to tablet, #0: MANIFEST revision 1",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+            "ACK to other app: version 2 APPLIED, receiver 2",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to no sibling",
+            "kept: DATA version 2; delivered to no sibling",
+        ],
+    ],
+    (
+        "on the first channel to a sibling every kept message is forwarded, sender by "
+        "sender: the additions, then the manifests, then the record messages"
+    ): [
+        [
+            "FORWARD 00000002 to tablet, #1: DEVICE_ADD of the other app, new by the other app",
+            "FORWARD 00000006 to tablet, #5: DATA version 1, id 7b1e6c2a, with the schema as offered",
+            "FORWARD 00000001 to tablet, #0: DATA version 1 of the second app, with the schema as offered",
+            "FORWARD 00000005 to tablet, #4: DATA version 1, with the schema as offered",
+            "FORWARD 00000003 to tablet, #2: MANIFEST revision 1 of the other app, new",
+            "FORWARD 00000004 to tablet, #3: MANIFEST revision 1",
+        ],
+        [
+            "sender first known by other app; current: other app, new, other app; highest 195",
+            "kept: DEVICE_ADD of the other app, new by the other app; delivered to no sibling",
+            "kept: MANIFEST revision 1 of the other app, new; delivered to no sibling",
+            "kept: MANIFEST revision 1; delivered to no sibling",
+            "kept: DATA version 1; delivered to no sibling",
+            "kept: DATA version 1, id 7b1e6c2a; delivered to no sibling",
+        ],
+        [
+            "sender first known by second app; current: second app; highest 195",
+            "kept: DATA version 1 of the second app; delivered to no sibling",
+        ],
+    ],
+    (
+        "a FORWARD without an outcome goes again in a later connection as the same "
+        "message, and after 15 days as a new forward"
+    ): [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [],
+        [
+            "FORWARD 00000002 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+    ],
+    (
+        "through a relay a FORWARD without an outcome goes again after 14 days, the same "
+        "message, and not before"
+    ): [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [],
+        [
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [],
+        [
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+    ],
+    "an outcome that arrives later than 15 days after the FORWARD last went is ignored": [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to no sibling",
+        ],
+        [],
+        [
+            "outcome: None",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to no sibling",
+        ],
+    ],
+    (
+        "a kept message whose FORWARD would be above 16 MiB is not forwarded; the owner's "
+        "layer of its record still travels"
+    ): [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "made: True",
+            "CHANGE, origin other app, to tablet, version 201, state 201, whole: location@200p",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 201",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2, notes changed; delivered to no sibling",
+        ],
+    ],
+    (
+        "the answer to a RESYNC holds a new forward of every kept message, then the "
+        "records of the set, then the owner's layers, and then the acknowledgement"
+    ): [
+        [
+            "outcome: None",
+            "CHANGE to tablet, version 206, state 206, whole: all seven@100p",
+            "CHANGE, origin other app, to tablet, version 207, state 207, whole: location@200t",
+            "FORWARD 00000002 to tablet, #1: DATA version 1, with the schema as offered",
+            "FORWARD 00000001 to tablet, #0: MANIFEST revision 1",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 207",
+            "kept: MANIFEST revision 1; delivered to no sibling",
+            "kept: DATA version 1; delivered to no sibling",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp 207; location@200t; type axt.example.v1.Appointment",
+            "tablet: not known",
+            "shows: there; the owner's value in location",
+        ],
+    ],
+    "after a RESYNC the outcome of a forward that the device sent before it is ignored": [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "outcome: None",
+            "FORWARD 00000003 to tablet, #1: DATA version 2, with the schema as offered",
+            "FORWARD 00000002 to tablet, #0: MANIFEST revision 1",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to no sibling",
+            "kept: DATA version 2; delivered to no sibling",
+        ],
+    ],
+    (
+        "forgetting a sender discards its kept messages and owner's layers and sends "
+        "nothing; a forward of a sibling makes it known again"
+    ): [
+        [],
+        [],
+        [
+            "no known sender; highest 205; forgotten: other app",
+        ],
+        [
+            "outcome: APPLIED",
+            "RESYNC 00000001 to tablet",
+        ],
+        [
+            (
+                "sender first known by other app; known by forwards of tablet; current: other "
+                "app; highest 205; a request open to tablet"
+            ),
+            "kept: DATA version 2; delivered to tablet",
+            "sender's layer: there, version 2, type axt.example.v1.Appointment, from DATA version 2",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    (
+        "after forgetting, a forward of a message signed with a removed key of the sender "
+        "is rejected with NOT_ACCEPTED, and one of another key makes the sender known "
+        "again"
+    ): [
+        [],
+        [
+            "no known sender; highest 195; refused: other app; forgotten: other app, new",
+        ],
+        [
+            "outcome: None",
+            "ERROR to tablet: NOT_ACCEPTED",
+        ],
+        [
+            "outcome: APPLIED",
+            "RESYNC 00000001 to tablet",
+        ],
+        [
+            "ACK of 0000000b to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            (
+                "sender first known by other app; known by forwards of tablet; current: other "
+                "app, new; removed: other app; highest 195; a request open to tablet"
+            ),
+            "kept: DATA version 1 of the other app, new; delivered to tablet",
+        ],
+    ],
+    (
+        "a forwarded addition that names a forgotten key as its device makes the sender "
+        "known again, and the device asks that sibling with RESYNC"
+    ): [
+        [],
+        [
+            "outcome: APPLIED",
+            "RESYNC 00000001 to tablet",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            (
+                "sender first known by other app; known by forwards of tablet; current: second "
+                "app, other app; highest 195; a request open to tablet"
+            ),
+            "kept: DEVICE_ADD of the other app by the second app; delivered to tablet",
+        ],
+    ],
+    "a forward of a forgotten key whose message fails a later step leaves the sender forgotten": [
+        [],
+        [
+            "outcome: None",
+            "ERROR to tablet: UNDECODABLE",
+        ],
+        [],
+        [
+            "no known sender; highest 195; forgotten: other app",
+        ],
+    ],
+    (
+        "an installation without a sibling: the user's deletion goes on standing beside "
+        "the sender's tombstone, and a later DATA is KEPT"
+    ): [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "outcome: KEPT",
+        ],
+        [
+            "ACK to other app: version 3 APPLIED, receiver 3",
+            "ACK to other app: version 4 KEPT, receiver 4",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to no sibling",
+            "kept: DATA version 4; delivered to no sibling",
+            "sender's layer: there, version 4, type axt.example.v1.Appointment, from DATA version 4",
+            "owner's layer: state stamp 201; no field removal@200p; type axt.example.v1.Appointment",
+            "shows: deleted_by_owner",
+        ],
+    ],
+    (
+        "on the removal of a sibling the chain and the MANIFEST go at once to a sender "
+        "known by the user, and to one known only by forwards of that sibling only once "
+        "the user has kept it"
+    ): [
+        [
+            "chain and MANIFEST to: other app",
+        ],
+        [
+            (
+                "sender first known by second app; known by forwards of laptop; current: second "
+                "app; highest 195"
+            ),
+            "kept: DATA version 1 of the second app; delivered to tablet",
+        ],
+        [
+            "chain and MANIFEST to: second app",
+        ],
+        [
+            "chain and MANIFEST to: no sender",
+        ],
+    ],
+    (
+        "a sender known by forwards of two siblings is not known only by forwards of the "
+        "removed one: the chain and the MANIFEST go at once"
+    ): [
+        [
+            "chain and MANIFEST to: second app",
+        ],
+    ],
+    (
+        "a device that does not show the list, or whose user forgets the sender, sends it "
+        "nothing because of the removal"
+    ): [
+        [
+            "chain and MANIFEST to: no sender",
+        ],
+        [],
+        [
+            "chain and MANIFEST to: no sender",
+        ],
+    ],
+    "at the end of a move the device holds nothing back": [
+        [
+            "chain and MANIFEST to: second app",
+        ],
+    ],
+    "each sibling that forwards a message of a sender known by forwards is recorded": [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to laptop, #0: DATA version 1 of the second app, with the schema as offered",
+        ],
+        [
+            "outcome: DUPLICATE",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+            "ACK of 0000000b to laptop: version 1 DUPLICATE, receiver 1",
+        ],
+        [
+            (
+                "sender first known by second app; known by forwards of laptop, tablet; current: "
+                "second app; highest 195"
+            ),
+            "kept: DATA version 1 of the second app; delivered to laptop, tablet",
+        ],
+    ],
+    (
+        "after the removal of a sibling the device keeps nothing for it and takes no "
+        "outcome and no FORWARD of it; its kept messages stay"
+    ): [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to laptop, #0: DATA version 2, with the schema as offered",
+            "FORWARD 00000002 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "chain and MANIFEST to: other app",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "ACK to other app: version 2 APPLIED, receiver 2",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to no sibling",
+            "sender's layer: there, version 2, type axt.example.v1.Appointment, from DATA version 2",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "a device that joins gets every kept message, and after the offer every owner's layer whole": [
+        [
+            "FORWARD 00000002 to laptop, #1: DATA version 1, with the schema as offered",
+            "FORWARD 00000001 to laptop, #0: MANIFEST revision 1",
+            "OFFER 00000001 to laptop: axt.example.v1.Appointment version 1",
+        ],
+        [
+            "outcome: None",
+            "CHANGE, origin other app, to laptop, version 205, state 205, whole: location@200t",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 205",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp 205; location@200t; type axt.example.v1.Appointment",
+            "laptop: not known",
+            "tablet: known, delivered: all",
+            "shows: there; the owner's value in location",
+        ],
+    ],
+    (
+        "a restored device forwards nothing and sends no layer before its request is "
+        "acknowledged; a field never stamped of a layer gets the stamp -1"
+    ): [
+        [
+            "RESYNC 00000001 to tablet",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 150; a request open to tablet",
+            "kept: MANIFEST revision 1; delivered to no sibling",
+            "kept: DATA version 1; delivered to no sibling",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp 150; location@-1p; type axt.example.v1.Appointment",
+            "tablet: not known",
+            "shows: there; the owner's value in location",
+        ],
+        [
+            "outcome: DUPLICATE",
+        ],
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "outcome: None",
+            "FORWARD 00000001 to tablet, #0: MANIFEST revision 1",
+            "OFFER 00000001 to tablet: axt.example.v1.Appointment version 1",
+        ],
+        [
+            "outcome: None",
+            "CHANGE, origin other app, to tablet, version 151, state 151, whole: location@-1p",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 DUPLICATE, receiver 1",
+            "ACK of 0000000b to tablet: version 1 APPLIED, receiver 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 151",
+            "kept: MANIFEST revision 1; delivered to no sibling",
+            "kept: DATA version 2; delivered to tablet",
+            "sender's layer: there, version 2, type axt.example.v1.Appointment, from DATA version 2",
+            "owner's layer: state stamp 151; location@-1p; type axt.example.v1.Appointment",
+            "tablet: not known",
+            "shows: there; the owner's value in location",
+        ],
+    ],
+    "what a device takes from a file of another app it forwards, and reports to no one": [
+        [
+            "taken: True",
+            "FORWARD 00000001 to tablet, #0: MANIFEST revision 2",
+        ],
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000002 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "outcome: DUPLICATE",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 2; delivered to no sibling",
+            "kept: DATA version 2; delivered to no sibling",
+            "sender's layer: there, version 2, type axt.example.v1.Appointment, from DATA version 2",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    (
+        "a MANIFEST of a file replaces the kept one only with a higher revision; one that "
+        "the app sends in a live connection applies whatever its revision"
+    ): [
+        [
+            "taken: False",
+        ],
+        [
+            "taken: True",
+            "FORWARD 00000001 to tablet, #0: MANIFEST revision 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to no sibling",
+        ],
+    ],
+    (
+        "a change of a received record goes whole in a CHANGE with the sender's key in "
+        "origin, and the next change in part"
+    ): [
+        [
+            "made: True",
+            "CHANGE, origin other app, to tablet, version 201, state 201, whole: location@200p",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 205",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp 201; location@200p; type axt.example.v1.Appointment",
+            "tablet: known, delivered: all",
+            "shows: there; the owner's value in location",
+        ],
+        [
+            "made: True",
+            "CHANGE, origin other app, to tablet, version 211, state 211, in part: notes@210p",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 211",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp 211; location@200p notes@210p; type axt.example.v1.Appointment",
+            "tablet: known, delivered: location",
+            "shows: there; the owner's value in location, notes",
+        ],
+    ],
+    "discarding a change gives the field a null value with the schema of the field state it replaces": [
+        [
+            "made: True",
+            "CHANGE, origin other app, to tablet, version 211, state 211, whole: location=null@210p",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 211",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp 211; location=null@210p; type axt.example.v1.Appointment",
+            "tablet: known, delivered: nothing",
+            "shows: there",
+        ],
+    ],
+    (
+        "deleting a received record puts a removal into the owner's layer, and taking it "
+        "again a removal that was taken back"
+    ): [
+        [
+            "made: True",
+            "CHANGE, origin other app, to tablet, version 211, state 211, in part: no field removal@210p",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 211",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp 211; location@200t removal@210p; type axt.example.v1.Appointment",
+            "tablet: known, delivered: all",
+            "shows: deleted_by_owner",
+        ],
+        [
+            "made: True",
+            (
+                "CHANGE, origin other app, to tablet, version 217, state 217, in part: no field "
+                "removal@216p, taken back"
+            ),
+        ],
+        [
+            "sender first known by other app; current: other app; highest 217",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            (
+                "owner's layer: state stamp 217; location@200t removal@216p, taken back; type "
+                "axt.example.v1.Appointment"
+            ),
+            "tablet: known, delivered: all",
+            "shows: there; the owner's value in location",
+        ],
+    ],
+    "the FORWARD of a record's kept message goes before the CHANGE of its owner's layer": [
+        [
+            "made: True",
+            "CHANGE, origin other app, to tablet, version 201, state 201, whole: location@200p",
+            "FORWARD 00000002 to tablet, #1: DATA version 1, with the schema as offered",
+            "FORWARD 00000001 to tablet, #0: MANIFEST revision 1",
+        ],
+    ],
+    "the schema that a field state of a layer names is offered before the CHANGE": [
+        [
+            "made: True",
+            "OFFER 00000001 to tablet: axt.example.v1.Appointment version 1",
+        ],
+        [
+            "outcome: None",
+            "CHANGE, origin other app, to tablet, version 201, state 201, whole: location@200p",
+        ],
+    ],
+    "origin is the key by which the device first knew the sender, also when that key is removed": [
+        [
+            "made: True",
+            "CHANGE, origin other app, to tablet, version 201, state 201, whole: location@200p",
+        ],
+        [
+            "sender first known by other app; current: other app, new; removed: other app; highest 201",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp 201; location@200p; type axt.example.v1.Appointment",
+            "tablet: not known",
+            "shows: there; the owner's value in location",
+        ],
+    ],
+    "at the limit of the stamps a device changes no received record": [
+        [
+            "made: False",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 9223372036854710272",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "a device that can take no state stamp for a layer merges it and sends no CHANGE of it": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK to tablet: version 201 APPLIED, receiver 201",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 9223372036854775802",
+            "kept: MANIFEST revision 1; delivered to laptop, tablet",
+            "kept: DATA version 1; delivered to laptop, tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp None; location@200t; type axt.example.v1.Appointment",
+            "laptop: not known",
+            "tablet: known, delivered: all",
+            "shows: there; the owner's value in location",
+        ],
+    ],
+    (
+        "a CHANGE with a key in origin is merged into the owner's layer: a device without "
+        "the layer takes it, also from a message that is not whole"
+    ): [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK to tablet: version 201 APPLIED, receiver 205",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 205",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp 205; location@200t; type axt.example.v1.Appointment",
+            "tablet: known, delivered: all",
+            "shows: there; the owner's value in location",
+        ],
+    ],
+    (
+        "a later field state of a layer is taken, the same is a duplicate, and an earlier "
+        "one is stale and makes the device's own due again"
+    ): [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "outcome: DUPLICATE",
+        ],
+        [
+            "outcome: STALE",
+            "CHANGE, origin other app, to tablet, version 212, state 212, whole: location@210t",
+        ],
+        [
+            "ACK to tablet: version 211 APPLIED, receiver 212",
+            "ACK to tablet: version 211 DUPLICATE, receiver 212",
+            "ACK to tablet: version 201 STALE, receiver 212",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 212",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp 212; location@210t; type axt.example.v1.Appointment",
+            "tablet: known, delivered: nothing",
+            "shows: there; the owner's value in location",
+        ],
+    ],
+    (
+        "a null value in a layer is a field state like any other: a later one is taken, "
+        "and the sender's value shows again"
+    ): [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK to tablet: version 211 APPLIED, receiver 212",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 212",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp 212; location=null@210t; type axt.example.v1.Appointment",
+            "tablet: known, delivered: all",
+            "shows: there",
+        ],
+    ],
+    "with equal stamps and device keys a null value is lower than a value": [
+        [
+            "outcome: STALE",
+            "CHANGE, origin other app, to tablet, version 205, state 205, whole: location@200t",
+        ],
+        [
+            "ACK to tablet: version 201 STALE, receiver 205",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 205",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp 205; location@200t; type axt.example.v1.Appointment",
+            "tablet: known, delivered: nothing",
+            "shows: there; the owner's value in location",
+        ],
+    ],
+    "with equal stamps and device keys a value is taken over a null value": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK to tablet: version 201 APPLIED, receiver 206",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 206",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp 206; location@200t; type axt.example.v1.Appointment",
+            "tablet: known, delivered: all",
+            "shows: there; the owner's value in location",
+        ],
+    ],
+    (
+        "a removal in a layer deletes the record by the owner on the device that merges "
+        "it, and one that was taken back brings it back"
+    ): [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 212",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp 212; location@200t removal@210t; type axt.example.v1.Appointment",
+            "tablet: known, delivered: all and the removal",
+            "shows: deleted_by_owner",
+        ],
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK to tablet: version 211 APPLIED, receiver 212",
+            "ACK to tablet: version 221 APPLIED, receiver 222",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 222",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            (
+                "owner's layer: state stamp 222; location@200t removal@220t, taken back; type "
+                "axt.example.v1.Appointment"
+            ),
+            "tablet: known, delivered: all and the removal",
+            "shows: there; the owner's value in location",
+        ],
+    ],
+    (
+        "a layer is held without the record: a CHANGE before the FORWARD of the record is "
+        "taken, with the schema of the sibling's offer, and the record shows once its "
+        "message arrives"
+    ): [
+        [
+            "outcome: None",
+            "ACCEPT 00000006 to tablet: axt.example.v1.Appointment",
+        ],
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 205",
+            "sender's layer: none",
+            "owner's layer: state stamp 205; location@200t; type axt.example.v1.Appointment",
+            "tablet: known, delivered: all",
+            "shows: none",
+        ],
+        [],
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+            "ACK to tablet: version 201 APPLIED, receiver 205",
+            "ACK to tablet: version 211 APPLIED, receiver 212",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 212",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp 212; location@200t notes@210t; type axt.example.v1.Appointment",
+            "tablet: known, delivered: all",
+            "shows: there; the owner's value in location, notes",
+        ],
+    ],
+    (
+        "steps 7 and 8: the schema is looked up among those of the record's sender and of "
+        "the sibling's offers, not among the device's own"
+    ): [
+        [
+            "outcome: None",
+            "ERROR to tablet: SCHEMA_UNKNOWN, fingerprint 051c22f83081ef02",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "step 7: a schema that the device keeps of another sender only is not found": [
+        [
+            "outcome: None",
+            "ERROR to tablet: SCHEMA_UNKNOWN, fingerprint 051c22f83081ef02",
+        ],
+        [],
+    ],
+    "step 7 holds for an entry with a null value as well": [
+        [
+            "outcome: None",
+            "ERROR to tablet: SCHEMA_UNKNOWN, fingerprint 051c22f83081ef02",
+        ],
+        [],
+    ],
+    "step 8: an entry with a value whose name is no field of its schema is rejected": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "step 8: an entry with a null value whose name is no field of its schema is rejected": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "step 9: a CHANGE with another type than the sender's layer keeps is rejected with TYPE_CHANGED": [
+        [
+            "outcome: None",
+            "ERROR to tablet: TYPE_CHANGED",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    "step 10: a CHANGE whose origin is the device's own key is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+    ],
+    "step 10: a CHANGE whose origin is a sibling is rejected with INVALID_MESSAGE": [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+    ],
+    (
+        "step 10: a CHANGE whose origin is a removed key of the device's own set is "
+        "rejected with INVALID_MESSAGE"
+    ): [
+        [
+            "outcome: None",
+            "ERROR to tablet: INVALID_MESSAGE",
+        ],
+        [],
+    ],
+    "step 10: a CHANGE whose origin is a key of no known sender is rejected with RECORD_UNKNOWN": [
+        [
+            "outcome: None",
+            "ERROR to tablet: RECORD_UNKNOWN",
+        ],
+        [],
+    ],
+    "step 10: a CHANGE whose origin is a refused key is rejected with RECORD_UNKNOWN": [
+        [
+            "outcome: None",
+            "ERROR to tablet: RECORD_UNKNOWN",
+        ],
+        [],
+    ],
+    (
+        "step 10 comes before step 7: with a schema it does not hold, a CHANGE whose "
+        "origin is no known sender is rejected with RECORD_UNKNOWN"
+    ): [
+        [
+            "outcome: None",
+            "ERROR to tablet: RECORD_UNKNOWN",
+        ],
+        [],
+    ],
+    "step 10: origin names the sender by a removed key and by a second current key as well": [
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK to tablet: version 201 APPLIED, receiver 205",
+            "ACK to tablet: version 211 APPLIED, receiver 212",
+        ],
+        [
+            (
+                "sender first known by other app, new; current: second app, other app, new; "
+                "removed: other app; highest 212"
+            ),
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp 212; location@200t notes@210t; type axt.example.v1.Appointment",
+            "tablet: known, delivered: all",
+            "shows: there; the owner's value in location, notes",
+        ],
+    ],
+    (
+        "steps 11 and 12: a CHANGE with a key in origin and a value that does not decode "
+        "is rejected with UNDECODABLE"
+    ): [
+        [
+            "outcome: None",
+            "ERROR to tablet: UNDECODABLE",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    (
+        "steps 11 and 12: a CHANGE with a key in origin and a time value that is not "
+        "valid is rejected with VALUE_INVALID"
+    ): [
+        [
+            "outcome: None",
+            "ERROR to tablet: VALUE_INVALID, field start",
+        ],
+        [],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: none",
+            "shows: there",
+        ],
+    ],
+    (
+        "after RECORD_UNKNOWN for a layer the device forwards the sender's kept messages "
+        "again and sends the layer only when the sibling has an outcome, APPLIED or "
+        "DUPLICATE, for one"
+    ): [
+        [
+            "made: True",
+            "CHANGE, origin other app, to tablet, version 201, state 201, whole: location@200p",
+        ],
+        [
+            "outcome: None",
+            "FORWARD 00000002 to tablet, #1: DATA version 1, with the schema as offered",
+            "FORWARD 00000001 to tablet, #0: MANIFEST revision 1",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 201",
+            "kept: MANIFEST revision 1; delivered to no sibling",
+            "kept: DATA version 1; delivered to no sibling",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp 201; location@200p; type axt.example.v1.Appointment",
+            "tablet: not known",
+            "shows: there; the owner's value in location",
+        ],
+        [
+            "FORWARD 00000002 to tablet, #1: DATA version 1, with the schema as offered",
+            "FORWARD 00000001 to tablet, #0: MANIFEST revision 1",
+        ],
+        [
+            "outcome: None",
+            "CHANGE, origin other app, to tablet, version 201, state 201, whole: location@200p",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 201",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp 201; location@200p; type axt.example.v1.Appointment",
+            "tablet: not known",
+            "shows: there; the owner's value in location",
+        ],
+    ],
+    "after RECORD_UNKNOWN for a layer a change of the owner sends the layer whole, once": [
+        [
+            "made: True",
+            "CHANGE, origin other app, to tablet, version 201, state 201, whole: location@200p",
+        ],
+        [
+            "outcome: None",
+            "FORWARD 00000002 to tablet, #1: DATA version 1, with the schema as offered",
+            "FORWARD 00000001 to tablet, #0: MANIFEST revision 1",
+        ],
+        [
+            "FORWARD 00000002 to tablet, #1: DATA version 1, with the schema as offered",
+            "FORWARD 00000001 to tablet, #0: MANIFEST revision 1",
+        ],
+        [
+            "made: True",
+            "CHANGE, origin other app, to tablet, version 207, state 207, whole: location@200p notes@206p",
+        ],
+        [
+            "outcome: None",
+            "FORWARD 00000002 to tablet, #1: DATA version 1, with the schema as offered",
+            "FORWARD 00000001 to tablet, #0: MANIFEST revision 1",
+        ],
+        [
+            "FORWARD 00000002 to tablet, #1: DATA version 1, with the schema as offered",
+            "FORWARD 00000001 to tablet, #0: MANIFEST revision 1",
+        ],
+    ],
+    (
+        "after RECORD_UNKNOWN twice in a row for a layer, an outcome for a forward no "
+        "longer ends the wait; a change of the owner does"
+    ): [
+        [
+            "made: True",
+            "CHANGE, origin other app, to tablet, version 201, state 201, whole: location@200p",
+        ],
+        [
+            "outcome: None",
+            "FORWARD 00000002 to tablet, #1: DATA version 1, with the schema as offered",
+            "FORWARD 00000001 to tablet, #0: MANIFEST revision 1",
+        ],
+        [
+            "outcome: None",
+            "CHANGE, origin other app, to tablet, version 201, state 201, whole: location@200p",
+        ],
+        [
+            "outcome: None",
+            "FORWARD 00000002 to tablet, #1: DATA version 1, with the schema as offered",
+            "FORWARD 00000003 to tablet, #0: MANIFEST revision 1",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "made: True",
+            "CHANGE, origin other app, to tablet, version 207, state 207, whole: location@200p notes@206p",
+        ],
+    ],
+    "after RECORD_UNKNOWN for a layer a RESYNC of that sibling ends the wait": [
+        [
+            "made: True",
+            "CHANGE, origin other app, to tablet, version 201, state 201, whole: location@200p",
+        ],
+        [
+            "outcome: None",
+            "FORWARD 00000002 to tablet, #1: DATA version 1, with the schema as offered",
+            "FORWARD 00000001 to tablet, #0: MANIFEST revision 1",
+        ],
+        [
+            "outcome: None",
+            "CHANGE, origin other app, to tablet, version 202, state 202, whole: location@200p",
+            "FORWARD 00000004 to tablet, #1: DATA version 1, with the schema as offered",
+            "FORWARD 00000003 to tablet, #0: MANIFEST revision 1",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+        ],
+    ],
+    "the steps 1 to 4 of the example of section 22.4, on the phone": [
+        [
+            "taken: True",
+            "FORWARD 00000001 to tablet, #0: MANIFEST revision 1",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000002 to tablet, #0: DATA version 1, with the schema as offered",
+        ],
+        [
+            "outcome: None",
+        ],
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK to other app: version 1 APPLIED, receiver 1",
+            "ACK to tablet: version 201 APPLIED, receiver 205",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 205",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "sender's layer: there, version 1, type axt.example.v1.Appointment, from DATA version 1",
+            "owner's layer: state stamp 205; location@200t; type axt.example.v1.Appointment",
+            "tablet: known, delivered: all",
+            "shows: there; the owner's value in location",
+        ],
+        [
+            "outcome: MERGED, kept ['location']",
+            (
+                "FORWARD 00000003 to tablet, #0: DATA version 3, start changed, notes 'Bring the "
+                "vaccination card', with the schema as offered"
+            ),
+        ],
+        [
+            "outcome: DUPLICATE",
+        ],
+        [
+            "ACK to other app: version 3 MERGED, receiver 3, kept ['location']",
+            "ACK to other app: version 3 DUPLICATE, receiver 3",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 205",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            (
+                "kept: DATA version 3, start changed, notes 'Bring the vaccination card'; "
+                "delivered to no sibling"
+            ),
+            (
+                "sender's layer: there, version 3, type axt.example.v1.Appointment, from DATA "
+                "version 3, start changed, notes 'Bring the vaccination card'"
+            ),
+            "owner's layer: state stamp 205; location@200t; type axt.example.v1.Appointment",
+            "tablet: known, delivered: all",
+            "shows: there; the owner's value in location",
+        ],
+    ],
+    (
+        "a set that deletes tidies the layer, APPLIED, and the record is deleted by its "
+        "sender: the steps 5 and 6 of the example of section 22.4, on the phone"
+    ): [
+        [
+            "outcome: APPLIED",
+            "CHANGE, origin other app, to tablet, version 211, state 211, whole: location=null@210p",
+            "FORWARD 00000001 to tablet, #0: DELETE version 4",
+        ],
+        [
+            "ACK to other app: version 4 APPLIED, receiver 4",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 211",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 3, start changed, notes 'Bring the vaccination card'; delivered to tablet",
+            "kept: DELETE version 4; delivered to no sibling",
+            (
+                "sender's layer: tombstone, version 4, type axt.example.v1.Appointment, from "
+                "DELETE version 4; beside it DATA version 3, start changed, notes 'Bring the "
+                "vaccination card'"
+            ),
+            "owner's layer: state stamp 211; location=null@210p; type axt.example.v1.Appointment",
+            "tablet: known, delivered: nothing",
+            "shows: deleted_by_sender",
+        ],
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000002 to tablet, #0: DATA version 5, with the schema as offered",
+        ],
+        [
+            "ACK to other app: version 5 APPLIED, receiver 5",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 211",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 5; delivered to no sibling",
+            "sender's layer: there, version 5, type axt.example.v1.Appointment, from DATA version 5",
+            "owner's layer: state stamp 211; location=null@210p; type axt.example.v1.Appointment",
+            "tablet: known, delivered: nothing",
+            "shows: there",
+        ],
+    ],
+    (
+        "a set that keeps sets a keep, KEPT, and the record is kept against the deletion: "
+        "the steps 5 and 6 of the example of section 22.4, on the phone"
+    ): [
+        [
+            "outcome: KEPT",
+            (
+                "CHANGE, origin other app, to tablet, version 211, state 211, in part: no field "
+                "keep@210p of version 4"
+            ),
+            "FORWARD 00000001 to tablet, #0: DELETE version 4",
+        ],
+        [
+            "ACK to other app: version 4 KEPT, receiver 4",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 211",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 3, start changed, notes 'Bring the vaccination card'; delivered to tablet",
+            "kept: DELETE version 4; delivered to no sibling",
+            (
+                "sender's layer: tombstone, version 4, type axt.example.v1.Appointment, from "
+                "DELETE version 4; beside it DATA version 3, start changed, notes 'Bring the "
+                "vaccination card'"
+            ),
+            (
+                "owner's layer: state stamp 211; location@200t keep@210p of version 4; type "
+                "axt.example.v1.Appointment"
+            ),
+            "tablet: known, delivered: all",
+            "shows: kept; the owner's value in location",
+        ],
+        [
+            "outcome: MERGED, kept ['location']",
+            "FORWARD 00000002 to tablet, #0: DATA version 5, with the schema as offered",
+        ],
+        [
+            "ACK to other app: version 5 MERGED, receiver 5, kept ['location']",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 211",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 5; delivered to no sibling",
+            "sender's layer: there, version 5, type axt.example.v1.Appointment, from DATA version 5",
+            (
+                "owner's layer: state stamp 211; location@200t keep@210p of version 4; type "
+                "axt.example.v1.Appointment"
+            ),
+            "tablet: known, delivered: all",
+            "shows: there; the owner's value in location",
+        ],
+    ],
+    "a DELETE that meets an owner's removal that stands changes nothing in the layer: APPLIED": [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DELETE version 3",
+        ],
+        [
+            "ACK to other app: version 3 APPLIED, receiver 3",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 205",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to tablet",
+            "kept: DELETE version 3; delivered to no sibling",
+            (
+                "sender's layer: tombstone, version 3, type axt.example.v1.Appointment, from "
+                "DELETE version 3; beside it DATA version 2"
+            ),
+            "owner's layer: state stamp 205; location@200t removal@203t; type axt.example.v1.Appointment",
+            "tablet: known, delivered: all and the removal",
+            "shows: deleted_by_owner",
+        ],
+    ],
+    "a set that keeps sets no keep for a record of which it holds no DATA: it tidies the layer": [
+        [
+            "outcome: APPLIED",
+            "CHANGE, origin other app, to tablet, version 211, state 211, whole: location=null@210p",
+            "FORWARD 00000001 to tablet, #0: DELETE version 3",
+        ],
+        [
+            "ACK to other app: version 3 APPLIED, receiver 3",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 211",
+            "kept: DELETE version 3; delivered to no sibling",
+            "sender's layer: tombstone, version 3, type None, from DELETE version 3",
+            "owner's layer: state stamp 211; location=null@210p; type axt.example.v1.Appointment",
+            "tablet: known, delivered: nothing",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    "a device that can take no stamp sets no keep and tidies nothing: APPLIED for the DELETE": [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DELETE version 4",
+        ],
+        [
+            "ACK to other app: version 4 APPLIED, receiver 4",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 9223372036854710272",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 3, start changed, notes 'Bring the vaccination card'; delivered to tablet",
+            "kept: DELETE version 4; delivered to no sibling",
+            (
+                "sender's layer: tombstone, version 4, type axt.example.v1.Appointment, from "
+                "DELETE version 4; beside it DATA version 3, start changed, notes 'Bring the "
+                "vaccination card'"
+            ),
+            "owner's layer: state stamp 205; location@200t; type axt.example.v1.Appointment",
+            "tablet: known, delivered: all",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    "the further ACK: after KEPT for a DELETE, the user gives up the keep and the device sends APPLIED": [
+        [
+            "outcome: KEPT",
+            (
+                "CHANGE, origin other app, to tablet, version 211, state 211, in part: no field "
+                "keep@210p of version 4"
+            ),
+            "FORWARD 00000001 to tablet, #0: DELETE version 4",
+        ],
+        [
+            "ACK to other app: version 4 KEPT, receiver 4",
+        ],
+        [
+            "made: True",
+            (
+                "CHANGE, origin other app, to tablet, version 214, state 214, in part: no field "
+                "keep@213p of version 4, given up"
+            ),
+        ],
+        [
+            "ACK to other app: version 4 APPLIED, receiver 4",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 214",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 3, start changed, notes 'Bring the vaccination card'; delivered to tablet",
+            "kept: DELETE version 4; delivered to no sibling",
+            (
+                "sender's layer: tombstone, version 4, type axt.example.v1.Appointment, from "
+                "DELETE version 4; beside it DATA version 3, start changed, notes 'Bring the "
+                "vaccination card'"
+            ),
+            (
+                "owner's layer: state stamp 214; location@200t keep@213p of version 4, given up; "
+                "type axt.example.v1.Appointment"
+            ),
+            "tablet: known, delivered: all",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    "the further ACK: a keep given up on the tablet reaches the answering device in a CHANGE": [
+        [
+            "outcome: KEPT",
+            (
+                "CHANGE, origin other app, to tablet, version 211, state 211, in part: no field "
+                "keep@210p of version 4"
+            ),
+            "FORWARD 00000001 to tablet, #0: DELETE version 4",
+        ],
+        [
+            "ACK to other app: version 4 KEPT, receiver 4",
+        ],
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK to tablet: version 221 APPLIED, receiver 222",
+            "ACK to other app: version 4 APPLIED, receiver 4",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 222",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 3, start changed, notes 'Bring the vaccination card'; delivered to tablet",
+            "kept: DELETE version 4; delivered to no sibling",
+            (
+                "sender's layer: tombstone, version 4, type axt.example.v1.Appointment, from "
+                "DELETE version 4; beside it DATA version 3, start changed, notes 'Bring the "
+                "vaccination card'"
+            ),
+            (
+                "owner's layer: state stamp 222; location@200t keep@220t of version 4, given up; "
+                "type axt.example.v1.Appointment"
+            ),
+            "tablet: known, delivered: all and the keep",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    "no further ACK when a later message of the sender has arrived in between": [
+        [
+            "outcome: KEPT",
+            (
+                "CHANGE, origin other app, to tablet, version 211, state 211, in part: no field "
+                "keep@210p of version 4"
+            ),
+            "FORWARD 00000001 to tablet, #0: DELETE version 4",
+        ],
+        [
+            "outcome: MERGED, kept ['location']",
+            "FORWARD 00000002 to tablet, #0: DATA version 5, with the schema as offered",
+        ],
+        [
+            "ACK to other app: version 5 MERGED, receiver 5, kept ['location']",
+            "ACK to other app: version 4 KEPT, receiver 4",
+        ],
+        [
+            "made: True",
+            (
+                "CHANGE, origin other app, to tablet, version 214, state 214, whole: "
+                "location@213p keep@210p of version 4"
+            ),
+        ],
+        [],
+    ],
+    "the further ACK: after KEPT for a DATA of a record the owner deleted, the user takes it again": [
+        [
+            "outcome: KEPT",
+            "FORWARD 00000001 to tablet, #0: DATA version 3, with the schema as offered",
+        ],
+        [
+            "ACK to other app: version 3 KEPT, receiver 3",
+        ],
+        [
+            "made: True",
+            (
+                "CHANGE, origin other app, to tablet, version 208, state 208, whole: no field "
+                "removal@207p, taken back"
+            ),
+        ],
+        [
+            "ACK to other app: version 3 APPLIED, receiver 3",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 208",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 3; delivered to no sibling",
+            "sender's layer: there, version 3, type axt.example.v1.Appointment, from DATA version 3",
+            (
+                "owner's layer: state stamp 208; no field removal@207p, taken back; type "
+                "axt.example.v1.Appointment"
+            ),
+            "tablet: known, delivered: all",
+            "shows: there",
+        ],
+    ],
+    (
+        "a keep that arrives after APPLIED for the DELETE and the tidying keeps nothing: "
+        "the layer holds no owner's value"
+    ): [
+        [
+            "outcome: APPLIED",
+            "CHANGE, origin other app, to tablet, version 211, state 211, whole: location=null@210p",
+            "FORWARD 00000001 to tablet, #0: DELETE version 4",
+        ],
+        [
+            "ACK to other app: version 4 APPLIED, receiver 4",
+        ],
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK to tablet: version 221 APPLIED, receiver 222",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 222",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 3, start changed, notes 'Bring the vaccination card'; delivered to tablet",
+            "kept: DELETE version 4; delivered to no sibling",
+            (
+                "sender's layer: tombstone, version 4, type axt.example.v1.Appointment, from "
+                "DELETE version 4; beside it DATA version 3, start changed, notes 'Bring the "
+                "vaccination card'"
+            ),
+            (
+                "owner's layer: state stamp 222; location=null@210p keep@220t of version 4; type "
+                "axt.example.v1.Appointment"
+            ),
+            "tablet: known, delivered: nothing and the keep",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    (
+        "a keep with an owner's value that arrives after APPLIED for the DELETE shows the "
+        "record again and is not reported"
+    ): [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DELETE version 4",
+        ],
+        [
+            "ACK to other app: version 4 APPLIED, receiver 4",
+        ],
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "ACK to tablet: version 221 APPLIED, receiver 222",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 222",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 3, start changed, notes 'Bring the vaccination card'; delivered to tablet",
+            "kept: DELETE version 4; delivered to no sibling",
+            (
+                "sender's layer: tombstone, version 4, type axt.example.v1.Appointment, from "
+                "DELETE version 4; beside it DATA version 3, start changed, notes 'Bring the "
+                "vaccination card'"
+            ),
+            (
+                "owner's layer: state stamp 222; location@200t keep@220t of version 4; type "
+                "axt.example.v1.Appointment"
+            ),
+            "tablet: known, delivered: all and the keep",
+            "shows: kept; the owner's value in location",
+        ],
+    ],
+    (
+        "the user keeps a record that its sender deleted only with an owner's value, and "
+        "gives the keep up again"
+    ): [
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 3, start changed, notes 'Bring the vaccination card'; delivered to tablet",
+            "kept: DELETE version 4; delivered to tablet",
+            (
+                "sender's layer: tombstone, version 4, type axt.example.v1.Appointment, from "
+                "DELETE version 4; beside it DATA version 3, start changed, notes 'Bring the "
+                "vaccination card'"
+            ),
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+        [
+            "made: False",
+        ],
+        [
+            "made: False",
+        ],
+        [
+            "made: True",
+            "CHANGE, origin other app, to tablet, version 201, state 201, whole: location@200p",
+        ],
+        [
+            "made: True",
+            (
+                "CHANGE, origin other app, to tablet, version 207, state 207, whole: "
+                "location@200p keep@206p of version 4"
+            ),
+        ],
+        [
+            "sender first known by other app; current: other app; highest 207",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 3, start changed, notes 'Bring the vaccination card'; delivered to tablet",
+            "kept: DELETE version 4; delivered to tablet",
+            (
+                "sender's layer: tombstone, version 4, type axt.example.v1.Appointment, from "
+                "DELETE version 4; beside it DATA version 3, start changed, notes 'Bring the "
+                "vaccination card'"
+            ),
+            (
+                "owner's layer: state stamp 207; location@200p keep@206p of version 4; type "
+                "axt.example.v1.Appointment"
+            ),
+            "tablet: not known",
+            "shows: kept; the owner's value in location",
+        ],
+        [
+            "made: True",
+            (
+                "CHANGE, origin other app, to tablet, version 213, state 213, whole: "
+                "location@200p keep@212p of version 4, given up"
+            ),
+        ],
+        [
+            "sender first known by other app; current: other app; highest 213",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 3, start changed, notes 'Bring the vaccination card'; delivered to tablet",
+            "kept: DELETE version 4; delivered to tablet",
+            (
+                "sender's layer: tombstone, version 4, type axt.example.v1.Appointment, from "
+                "DELETE version 4; beside it DATA version 3, start changed, notes 'Bring the "
+                "vaccination card'"
+            ),
+            (
+                "owner's layer: state stamp 213; location@200p keep@212p of version 4, given up; "
+                "type axt.example.v1.Appointment"
+            ),
+            "tablet: not known",
+            "shows: deleted_by_sender",
+        ],
+    ],
+    "a keep in a CHANGE is a part: an earlier one is STALE and makes the device's keep due again": [
+        [
+            "outcome: STALE",
+            (
+                "CHANGE, origin other app, to tablet, version 211, state 211, in part: no field "
+                "keep@210p of version 4"
+            ),
+        ],
+        [
+            "outcome: DUPLICATE",
+        ],
+        [
+            "ACK to tablet: version 216 DUPLICATE, receiver 211",
+            "ACK to tablet: version 215 STALE, receiver 211",
+        ],
+    ],
+    "a DATA beside a tombstone travels to a new device, before the DELETE": [
+        [
+            (
+                "FORWARD 00000002 to laptop, #1: DATA version 3, start changed, notes 'Bring the "
+                "vaccination card', with the schema as offered"
+            ),
+            "FORWARD 00000003 to laptop, #2: DELETE version 4",
+            "FORWARD 00000001 to laptop, #0: MANIFEST revision 1",
+            "OFFER 00000001 to laptop: axt.example.v1.Appointment version 1",
+        ],
+    ],
+    "a DATA for a record that the owner deleted stays deleted: KEPT; an older one is STALE": [
+        [
+            "outcome: KEPT",
+            "FORWARD 00000001 to tablet, #0: DATA version 3, with the schema as offered",
+        ],
+        [
+            "outcome: STALE",
+        ],
+        [
+            "ACK to other app: version 3 KEPT, receiver 3",
+            "ACK to other app: version 1 STALE, receiver 3",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 205",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 3; delivered to no sibling",
+            "sender's layer: there, version 3, type axt.example.v1.Appointment, from DATA version 3",
+            "owner's layer: state stamp 205; no field removal@200t; type axt.example.v1.Appointment",
+            "tablet: known, delivered: all and the removal",
+            "shows: deleted_by_owner",
+        ],
+    ],
+    "a DATA that brings the owner's value is APPLIED, and the owner's layer stays": [
+        [
+            "outcome: APPLIED",
+            (
+                "FORWARD 00000001 to tablet, #0: DATA version 2, location 'Dr. Weber, Hauptstr. "
+                "5', with the schema as offered"
+            ),
+        ],
+        [
+            "ACK to other app: version 2 APPLIED, receiver 2",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 205",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2, location 'Dr. Weber, Hauptstr. 5'; delivered to no sibling",
+            (
+                "sender's layer: there, version 2, type axt.example.v1.Appointment, from DATA "
+                "version 2, location 'Dr. Weber, Hauptstr. 5'"
+            ),
+            "owner's layer: state stamp 205; location@200t; type axt.example.v1.Appointment",
+            "tablet: known, delivered: all",
+            "shows: there; the owner's value in location",
+        ],
+    ],
+    (
+        "a DELETE of a record without an owner's layer leaves a tombstone on the "
+        "answering device and, forwarded, on its sibling"
+    ): [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DELETE version 2",
+        ],
+        [
+            "ACK to other app: version 2 APPLIED, receiver 2",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 195",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 1; delivered to tablet",
+            "kept: DELETE version 2; delivered to no sibling",
+            (
+                "sender's layer: tombstone, version 2, type axt.example.v1.Appointment, from "
+                "DELETE version 2; beside it DATA version 1"
+            ),
+            "owner's layer: none",
+            "shows: deleted_by_sender",
+        ],
+    ],
 }
 
 
 def check_sessions(out: list[str]) -> None:
     """Every session says what the rules require of it, step by step."""
-    played = sessions()
+    played = [*sessions(), *received_sessions()]
     assert len({s.label for s in played}) == len(played) == len(SAID), "one expectation for each session"
     for s in played:
         assert s.said == SAID[s.label], (s.label, s.said)
@@ -9441,11 +17337,13 @@ def check() -> list[str]:
     check_deletion(out)
     check_counted(out)
     check_cases(out)
+    check_layers(out)
     check_properties(out)
     EXAMPLE_MESSAGES.clear()
     check_field_values()
     check_schemas(out)
     check_messages(out)
+    check_received(out)
     check_envelopes()
     check_sessions(out)
     return out

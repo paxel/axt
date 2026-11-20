@@ -1024,8 +1024,9 @@ def encoding_category() -> Category:
         "Ack": 0x38DD09198076E05C,
         "Error": 0x7CA5B3D13DBCF383,
         "QrPayload": 0xDDBCA858F745D131,
-        "Change": 0xD3849ACAFC9D62E8,
+        "Change": 0x4D094DAFC5F888C1,
         "Resync": 0xE8762BD9D559FDF1,
+        "Forward": 0x57476ABF6B053BAD,
     }
     sections = {
         "Envelope": "envelope.md 10.1",
@@ -1036,6 +1037,7 @@ def encoding_category() -> Category:
         "QrPayload": "transports.md 6",
         "Change": "sync.md 15",
         "Resync": "sync.md 15",
+        "Forward": "sync.md 15",
     }
     for name, want in published.items():
         text = (REPO / "types" / "axt" / f"{name}.avsc").read_text(encoding="utf-8")
@@ -1079,7 +1081,7 @@ def encoding_category() -> Category:
     goods.append(("a message of exactly 16 MiB", at_limit, ["envelope.md 8"]))
     # The kinds that come with later tickets: format 1 has their symbols, and no document their bodies.
     later = [k for k in pe.KINDS if k not in pe.BODY_SCHEMA and k not in pe.RECORD_KINDS]
-    assert later == ["FORWARD", "WITHDRAW", "PROPOSAL", "PROPOSAL_REPLY"]
+    assert later == ["WITHDRAW", "PROPOSAL", "PROPOSAL_REPLY"]
     goods += [
         (
             f"an envelope of the kind {kind}, which no document defines yet, with an empty body",
@@ -1093,7 +1095,13 @@ def encoding_category() -> Category:
         ("the CHANGE of sync.md, section 16.2", ["sync.md 8.1", "sync.md 16.2"]),
         ("the RESYNC of sync.md, section 16.3", ["sync.md 11.1", "sync.md 16.3"]),
         ("the whole CHANGE of sync.md, section 16.4", ["sync.md 8.1", "sync.md 16.4"]),
+        ("the FORWARD of sync.md, section 16.5", ["sync.md 18.1", "sync.md 16.5"]),
+        ("the CHANGE of sync.md, section 16.7", ["sync.md 21.3", "sync.md 16.7"]),
     ]
+    # The messages of Old Brain Fix that the FORWARD of section 16.5 and the one before it carry are
+    # those that the other documents show.
+    assert sy.EXAMPLE_OTHERS["the MANIFEST of Old Brain Fix"] == pe.m2
+    assert sy.APPOINTMENT_OFFERED == pe.APPOINTMENT_TEXT and sy.KEY_OBF == OBF
     assert [pe.fp8(pe.fingerprints[n][1]) for n in pe.SYNC] == [sy.SPEC_FP[n] for n in pe.SYNC]
     goods += [(label, sy.EXAMPLE_MESSAGES[label], refs) for label, refs in sync_messages]
     for label, m, refs in goods:
@@ -1211,6 +1219,18 @@ def encoding_category() -> Category:
         for label in ("the CHANGE of sync.md, section 16.2", "the RESYNC of sync.md, section 16.3")
     )
     assert change_body[10 + 32] == 0  # origin: union index 0, null
+    forward: bytes = sy.EXAMPLE_MESSAGES["the FORWARD of sync.md, section 16.5"]
+    forward_body = cast(bytes, sy.read_all("Envelope", forward[10:])["body"])
+    schema_at = len(forward_body) - len(sy.APPOINTMENT_OFFERED.encode()) - 3  # the union index of schema
+    assert forward_body[schema_at : schema_at + 3] == keys.zigzag(1) + keys.zigzag(6389)
+    without_schema = sy.body_of("Forward", {"to": sy.TABLET, "message": pe.m2, "schema": None})
+    c.add(
+        "decode_body",
+        "the body of a FORWARD of a MANIFEST, whose schema is null",
+        ["envelope.md 2.3", "sync.md 18.1"],
+        {"kind": "FORWARD", "body": B(without_schema)},
+        accept({"value": {"to": H(sy.TABLET), "message": H(pe.m2), "schema": None}}),
+    )
     for label, kind, body in [
         ("an ACK body with a byte left over", "ACK", ack_body + b"\x00"),
         ("an ACK body cut short", "ACK", ack_body[:-1]),
@@ -1237,6 +1257,27 @@ def encoding_category() -> Category:
             "CHANGE",
             change_body[: 10 + 32] + keys.zigzag(2) + change_body[10 + 33 :],
         ),
+        ("a FORWARD body with a byte left over", "FORWARD", forward_body + b"\x00"),
+        ("a FORWARD body cut short", "FORWARD", forward_body[:-1]),
+        ("a FORWARD body cut within its message", "FORWARD", forward_body[:200]),
+        ("a FORWARD body whose key has 31 bytes", "FORWARD", forward_body[:10] + forward_body[11:]),
+        (
+            "a FORWARD body with the fingerprint of axt.Change",
+            "FORWARD",
+            forward_body[:2] + sy.SPEC_FP["Change"] + forward_body[10:],
+        ),
+        (
+            "a FORWARD body with schema union index 2",
+            "FORWARD",
+            forward_body[:schema_at] + keys.zigzag(2) + forward_body[schema_at + 1 :],
+        ),
+        (
+            "a FORWARD body whose schema is no UTF-8",
+            "FORWARD",
+            forward_body[: schema_at + 3] + b"\xff" + forward_body[schema_at + 4 :],
+        ),
+        ("a FORWARD body of the RESYNC schema", "FORWARD", resync_body),
+        ("an empty body for a FORWARD", "FORWARD", b""),
         ("a RESYNC body whose key has 31 bytes", "RESYNC", resync_body[:-1]),
         ("a RESYNC body of the CHANGE schema", "RESYNC", change_body),
         (
@@ -2243,6 +2284,89 @@ def protocol_category() -> Category:
             accept({"format": want}),
         )
 
+    # The key to which a sender offers, and what it sends again after a removal at the receiver.
+    k1, k2, k3 = (bytes(keys.public_key(sy.test_secret(f"receiver device {n}"))) for n in (1, 2, 3))
+    contact: list[tuple[str, list[bytes], list[bytes], list[tuple[bytes, str]], list[bytes]]] = [
+        (
+            "the key from which the sender last got a record message",
+            [k1, k2],
+            [k1, k2],
+            [(k1, "ACK"), (k2, "DATA")],
+            [k2],
+        ),
+        (
+            "a MANIFEST, a DEVICE_ADD and a DEVICE_REMOVE do not move the contact key",
+            [k1, k2],
+            [k1, k2],
+            [(k1, "ACK"), (k2, "MANIFEST"), (k2, "DEVICE_ADD"), (k2, "DEVICE_REMOVE")],
+            [k1],
+        ),
+        (
+            "with no other message from any current key, any current key of which it holds a manifest",
+            [k1, k2, k3],
+            [k1, k3],
+            [(k2, "MANIFEST"), (k3, "DEVICE_REMOVE")],
+            [k1, k3],
+        ),
+        (
+            "after the removal of the contact key, the current key it last got a message from",
+            [k2, k3],
+            [k2, k3],
+            [(k2, "ACK"), (k1, "ACK"), (k3, "MANIFEST")],
+            [k2],
+        ),
+        (
+            "a key of which the sender holds no manifest is not the contact key",
+            [k1, k2],
+            [k1],
+            [(k1, "ACK"), (k2, "ACK")],
+            [k1],
+        ),
+    ]
+    for label, current, manifests, got, want_keys in contact:
+        assert pe.contact_keys(current, manifests, got) == sorted(want_keys), label
+        c.add(
+            "contact_key",
+            label,
+            ["protocol.md 9.1", "sync.md 17.2"],
+            {
+                "current": [k.hex() for k in current],
+                "manifests": [k.hex() for k in manifests],
+                "got": [{"key": k.hex(), "kind": kind} for k, kind in got],
+            },
+            accept({"keys": sorted(k.hex() for k in want_keys)}),
+        )
+    resend: list[tuple[str, list[tuple[str, dict[bytes, str]]], list[bytes], list[str]]] = [
+        (
+            "a record whose only outcome is of a removed key is sent again, one with an outcome of a current "
+            "key is not",
+            [("a", {k1: "APPLIED"}), ("b", {k1: "APPLIED", k2: "DUPLICATE"}), ("c", {})],
+            [k1],
+            ["a", "c"],
+        ),
+        (
+            "outcomes of two removed keys count for nothing",
+            [("a", {k1: "MERGED", k2: "KEPT"}), ("b", {k3: "STALE"})],
+            [k1, k2],
+            ["a"],
+        ),
+    ]
+    for label, records, removed, want_ids in resend:
+        assert pe.resend_after_removal(records, removed) == want_ids, label
+        c.add(
+            "resend_after_removal",
+            label,
+            ["protocol.md 7.4", "protocol.md 11", "sync.md 17.2"],
+            {
+                "records": [
+                    {"id": rid, "outcomes": {k.hex(): o for k, o in outcomes.items()}}
+                    for rid, outcomes in records
+                ],
+                "removed": [k.hex() for k in removed],
+            },
+            accept({"ids": want_ids}),
+        )
+
     A, T, P_, N = (
         "axt.example.v1.Appointment",
         "axt.example.v1.Task",
@@ -2392,13 +2516,25 @@ def protocol_category() -> Category:
         )
     # A CHANGE and a RESYNC travel between the devices of one set only: one of another app is rejected
     # (spec/sync.md, section 7.1), and so is one whose record is missing or does not belong.
-    to_obf = {"to": OBF, "origin": None, "type": A, "state": 3, "whole": True, "removal": None, "fields": []}
+    to_obf = {
+        "to": OBF,
+        "origin": None,
+        "type": A,
+        "state": 3,
+        "whole": True,
+        "removal": None,
+        "keep": None,
+        "fields": [],
+    }
     change_body, resync_body = sy.body_of("Change", to_obf), sy.body_of("Resync", {"to": OBF})
+    forward_body = sy.body_of("Forward", {"to": OBF, "message": pe.del_unknown, "schema": None})
     for label, m in [
         ("a CHANGE of another app", sy.message(CAT_SEED, "CHANGE", (AID, 3), change_body)),
         ("a RESYNC of another app", sy.message(CAT_SEED, "RESYNC", (sy.REQUEST_ID, 1), resync_body)),
         ("a CHANGE without a record", sy.message(CAT_SEED, "CHANGE", None, change_body)),
         ("a RESYNC without a record", sy.message(CAT_SEED, "RESYNC", None, resync_body)),
+        ("a FORWARD of another app", sy.message(CAT_SEED, "FORWARD", (sy.FORWARD_ID, 1), forward_body)),
+        ("a FORWARD without a record", sy.message(CAT_SEED, "FORWARD", None, forward_body)),
     ]:
         run_session(
             c,
@@ -3359,7 +3495,7 @@ def records_category() -> Category:
         ],
     )
     scenario(
-        "a record its user deleted stays deleted; a later DELETE turns it into a tombstone",
+        "a record its user deleted stays deleted, also beside a later DELETE, and a DATA after it is KEPT",
         ["records.md 6.3"],
         per_field_delete,
         [
@@ -3367,7 +3503,8 @@ def records_category() -> Category:
             (user_delete(), None),
             (data(2, v3), done("KEPT", 2, "deleted_by_user", None)),
             (data(1, v1), done("STALE", 2, "deleted_by_user", None)),
-            (delete(3), done("APPLIED", 3, "tombstone", None)),
+            (delete(3), done("APPLIED", 3, "deleted_by_user", None)),
+            (data(4, v3), done("KEPT", 4, "deleted_by_user", None)),
         ],
     )
     for policy, outcome, value in [
@@ -3880,10 +4017,14 @@ def file_category() -> Category:
         "state": 3,
         "whole": True,
         "removal": None,
+        "keep": None,
         "fields": [],
     }
     sync_change = sy.message(CAT_SEED, "CHANGE", (RECORD_IDS["r1"], 3), sy.body_of("Change", whole_change))
     sync_resync = sy.message(CAT_SEED, "RESYNC", (sy.REQUEST_ID, 1), sy.body_of("Resync", {"to": NEW}))
+    # A FORWARD of the file's sender, with a DATA of Old Brain Fix inside: a file holds none.
+    forwarded = {"to": NEW, "message": D(30, seed=OBF_SEED), "schema": text(A_)}
+    sync_forward = sy.message(CAT_SEED, "FORWARD", (sy.FORWARD_ID, 1), sy.body_of("Forward", forwarded))
     offer = pe.make_message(
         "OFFER",
         CAT_SEED,
@@ -3980,6 +4121,11 @@ def file_category() -> Category:
             container([sync_resync, D(29)], [schema(A_)]),
             ["transports.md 2.1", "transports.md 2.2", "sync.md 13.3"],
         ),
+        (
+            "a FORWARD",
+            container([sync_forward, D(31)], [schema(A_)]),
+            ["transports.md 2.1", "transports.md 2.2", "sync.md 13.3", "sync.md 24.2"],
+        ),
         ("a message of another sender", container([D(14, seed=OBF_SEED)], [schema(A_)]), ["keys.md 2.5"]),
         (
             "a DEVICE_ADD after a record message",
@@ -4041,8 +4187,10 @@ def sync_category() -> Category:
         "sync",
         "The devices of one owner: the next stamp, what a change stamps, the merge of two states of a "
         "record per field and for the removal, when a record is deleted, the record message of a "
-        "state, beginning to stamp, what a device does after STALE, and one device with its siblings: "
-        "the CHANGE and RESYNC messages it processes and sends (spec/sync.md).",
+        "state, beginning to stamp, what a device does after STALE, what a device shows of a record "
+        "received from another app, and one device with its siblings: the CHANGE, RESYNC and FORWARD "
+        "messages it processes and sends, for the records of the set and for what the set got from "
+        "other apps (spec/sync.md).",
     )
     S, J = sy.stamp_json, sy.state_json
     # The schemas of the field states: version 1 of the example type, and a version 2 made for the cases.
@@ -4137,6 +4285,7 @@ def sync_category() -> Category:
         done: Any,
         sibling_stamp: int | None = None,
         to_pass: int | None = None,
+        layer: bool = False,
     ) -> None:
         now_ms, highest, r = clock
         c.add(
@@ -4144,8 +4293,8 @@ def sync_category() -> Category:
             label,
             refs,
             {
-                "own": J(own),
-                "other": J(other),
+                "own": J(own, layer),
+                "other": J(other, layer),
                 "now_ms": S(now_ms),
                 "highest": S(highest),
                 "r": r,
@@ -4154,7 +4303,7 @@ def sync_category() -> Category:
             },
             accept(
                 {
-                    "state": J(done.state),
+                    "state": J(done.state, layer),
                     "stands": done.merged.stands,
                     "removal_taken": done.merged.removal_taken,
                     "deleted": done.deleted,
@@ -4174,6 +4323,15 @@ def sync_category() -> Category:
         assert (*got, done.highest) == (stands, removal_taken, gone, stamp, top), label
         refs = [*merge_refs, "sync.md 3.4"] if "never stamped" in label else merge_refs
         merge_vector(label, limit(label, refs), own, other, clock, done)
+    for label, own, other, clock, stands, removal_taken, gone, stamp, top in sy.LAYER_MERGES:
+        done = sy.device_merge(own, other, *clock)
+        got = (done.merged.stands, done.merged.removal_taken, done.deleted, done.state.state_stamp)
+        assert (*got, done.highest) == (stands, removal_taken, gone, stamp, top), label
+        merge_vector(label, ["sync.md 21.1", "sync.md 4.1", "sync.md 4.3"], own, other, clock, done)
+    for label, own_keep, other_keep, _ in sy.KEEP_MERGES:
+        own, other = sy.keep_states(own_keep, other_keep)
+        done = sy.device_merge(own, other, *sy.KEEP_CLOCK)
+        merge_vector(label, ["sync.md 21.1", "sync.md 4.4"], own, other, sy.KEEP_CLOCK, done, layer=True)
     for label, own, other, clock, seen, to_pass, seen_after, pass_after, stamp in sy.KEPT:
         done = sy.device_merge(own, other, *clock, seen, to_pass)
         assert (done.sibling_stamp, done.to_pass, done.state.state_stamp) == (seen_after, pass_after, stamp)
@@ -4286,6 +4444,55 @@ def sync_category() -> Category:
             accept({"resend": S(resend), "to_pass": S(kept), "highest": S(top)}),
         )
 
+    # What a device shows of a received record, from its two layers.
+    for label, there, layer, state, sources in sy.SHOWN:
+        got_state, fields = sy.shown(there, sy.SHOWN_VALUES, sy.SCHEMA_1, layer)
+        assert (got_state, {n: source for n, (_, _, source) in fields.items()}) == (state, sources), label
+        sender: Any = None
+        if there:
+            values = {name: H(value) for name, value in sy.SHOWN_VALUES.items()}
+            sender = {"state": "there", "values": values, "schema": H(sy.SCHEMA_1)}
+        c.add(
+            "shown",
+            label,
+            ["sync.md 22.1", "sync.md 21.1", "sync.md 17.1"],
+            {"sender": sender, "layer": J(layer, True)},
+            accept(
+                {
+                    "record": state,
+                    "fields": {
+                        name: {"value": H(value), "schema": H(schema), "from": source}
+                        for name, (value, schema, source) in fields.items()
+                    },
+                }
+            ),
+        )
+    for label, has, layer, state, sources in sy.TOMBSTONES:
+        values = {name: H(value) for name, value in sy.SHOWN_VALUES.items()}
+        beside = (sy.SHOWN_VALUES, sy.SCHEMA_1) if has else None
+        got_state, fields = sy.shown(False, {}, None, layer, sy.TOMBSTONE_VERSION, beside)
+        assert (got_state, {n: source for n, (_, _, source) in fields.items()}) == (state, sources), label
+        sender = {
+            "state": "tombstone",
+            "version": S(sy.TOMBSTONE_VERSION),
+            "beside": {"values": values, "schema": H(sy.SCHEMA_1)} if has else None,
+        }
+        c.add(
+            "shown",
+            label,
+            ["sync.md 22.1", "sync.md 21.1", "sync.md 20.1"],
+            {"sender": sender, "layer": J(layer, True)},
+            accept(
+                {
+                    "record": state,
+                    "fields": {
+                        name: {"value": H(value), "schema": H(schema), "from": source}
+                        for name, (value, schema, source) in fields.items()
+                    },
+                }
+            ),
+        )
+
     # One device with its siblings: the sessions of the script, which has checked what each step says.
     def wire(v: Any) -> Any:
         """A step as a vector holds it: its messages and values as Bytes."""
@@ -4303,7 +4510,7 @@ def sync_category() -> Category:
             "siblings",
             played.label,
             played.refs,
-            {"device": played.device, "steps": wire(played.steps)},
+            {"device": wire(played.device), "steps": wire(played.steps)},
             {"steps": played.answers},
         )
     return c
@@ -4372,8 +4579,8 @@ def same_values(v: Any) -> Any:
 # spec/conformance.md, section 7.4, counts them.
 COUNTS = {
     "encoding": (
-        {"fingerprint": 20, "decode_message": 39, "decode_body": 25, "encode_message": 5},
-        {"decode_message": 17, "decode_body": 12},
+        {"fingerprint": 21, "decode_message": 40, "decode_body": 37, "encode_message": 5},
+        {"decode_message": 17, "decode_body": 21},
     ),
     "types": ({"fingerprint": 8, "decode_record": 63}, {"decode_record": 21}),
     "time": (
@@ -4411,8 +4618,8 @@ COUNTS = {
             "open": 8,
         },
     ),
-    "protocol": ({"choose_format": 3, "session": 34}, {}),
-    "file": ({"read_file": 55}, {"read_file": 37}),
+    "protocol": ({"choose_format": 3, "contact_key": 5, "resend_after_removal": 2, "session": 36}, {}),
+    "file": ({"read_file": 56}, {"read_file": 38}),
     "qr": ({"parse_qr": 28, "qr_text": 4}, {"parse_qr": 21}),
     "local": ({"hello_frame": 2, "connection": 20}, {}),
     "relay": ({"mailbox_id": 2, "request": 7, "reaction": 28, "listing": 3}, {}),
@@ -4421,12 +4628,13 @@ COUNTS = {
         {
             "next_stamp": 23,
             "change": 34,
-            "merge": 87,
+            "merge": 104,
             "deleted": 22,
             "begin_stamping": 3,
             "stale": 10,
             "pass_version": 5,
-            "siblings": 206,
+            "shown": 23,
+            "siblings": 422,
         },
         {},
     ),

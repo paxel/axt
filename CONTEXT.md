@@ -28,7 +28,13 @@ The vocabulary of this repository. The specification in [spec/](spec/README.md) 
 
 **Tombstone**: what a receiver keeps of a record its sender deleted: its id and the version of the deletion.
 
-**Local change**: a change the receiver's user makes to a received record in the receiver. It stays there and is not sent back.
+**Local change**: a change the receiver's user makes to a received record in the receiver. It stays there and is not sent back to the sender; between the devices of one owner it travels as the owner's layer.
+
+**Sender's layer** and **owner's layer**: what a device of a set holds of a record it received from another app: what the sender's record messages brought, and what the owner changed in the record on the devices of the set. A device shows the record that the two give together.
+
+**Forward**: a `FORWARD` message, in which a device passes a message of another app on to a sibling, as the signed message it got. The sibling checks the signature inside, takes the message as if it had received it, and sends nothing to the other app.
+
+**Answering device**: the device of a set that got a message from another app itself. It alone answers the other app, and it forwards the message to its siblings.
 
 **Type**: an Apache Avro schema with a full name. An **example type** is one of the types this repository brings under `axt.example.v1`, so that apps can exchange without agreeing first.
 

@@ -492,6 +492,9 @@ class Receiver:
             return self.result("APPLIED", r)
         r["version"] = m["version"]
         if not is_data:
+            if r["state"] == "deleted_by_user":
+                # The user's deletion goes on standing beside the sender's tombstone (records.md 6.3).
+                return self.result("APPLIED", r)
             if r["state"] == "there" and r["changed"] and self.keep_on_delete:
                 return self.result("KEPT", r)
             r.update(state="tombstone", value=None, changed=set())
@@ -1125,9 +1128,10 @@ def op_merge(i: Any) -> dict[str, Any]:
         stamp_in(i["sibling_stamp"]),
         stamp_in(i["to_pass"]),
     )
+    layer = "keep" in i["own"] if i["own"] is not None else "keep" in i["other"]
     return ok(
         {
-            "state": sy.state_json(done.state),
+            "state": sy.state_json(done.state, layer),
             "stands": done.merged.stands,
             "removal_taken": done.merged.removal_taken,
             "deleted": done.deleted,
@@ -1191,6 +1195,25 @@ def op_pass_version(i: Any) -> dict[str, Any]:
     return ok({"resend": sy.stamp_json(resend), "to_pass": sy.stamp_json(to_pass), "highest": str(highest)})
 
 
+def op_shown(i: Any) -> dict[str, Any]:
+    """What a device shows of a received record, from its two layers (spec/sync.md, section 22.1)."""
+    sender = i["sender"]
+    there = None if sender is None else sender["state"] == "there"
+    values = {name: bytes.fromhex(v) for name, v in sender["values"].items()} if there else {}
+    schema = bytes.fromhex(sender["schema"]) if there else None
+    version, beside = 0, None
+    if there is False:
+        version, b = int(sender["version"]), sender["beside"]
+        if b is not None:
+            beside = ({name: bytes.fromhex(v) for name, v in b["values"].items()}, bytes.fromhex(b["schema"]))
+    state, fields = sy.shown(there, values, schema, sy.state_of_json(i["layer"]), version, beside)
+    shown = {
+        name: {"value": value.hex(), "schema": fp.hex(), "from": source}
+        for name, (value, fp, source) in fields.items()
+    }
+    return ok({"record": state, "fields": shown})
+
+
 def op_siblings(i: Any) -> dict[str, Any]:
     """One device of a set with its siblings, as the model of sync_examples.py plays it."""
     device = sy.device_of_json(i["device"], b_in)
@@ -1227,6 +1250,26 @@ OPS: dict[str, Callable[[Any], dict[str, Any]]] = {
     "listing": op_listing,
     "relay": op_relay,
     "choose_format": lambda i: ok({"format": pe.choose_format(i["own"], i["theirs"])}),
+    "contact_key": lambda i: ok(
+        {
+            "keys": [
+                k.hex()
+                for k in pe.contact_keys(
+                    [bytes.fromhex(k) for k in i["current"]],
+                    [bytes.fromhex(k) for k in i["manifests"]],
+                    [(bytes.fromhex(g["key"]), g["kind"]) for g in i["got"]],
+                )
+            ]
+        }
+    ),
+    "resend_after_removal": lambda i: ok(
+        {
+            "ids": pe.resend_after_removal(
+                [(r["id"], {bytes.fromhex(k): o for k, o in r["outcomes"].items()}) for r in i["records"]],
+                [bytes.fromhex(k) for k in i["removed"]],
+            )
+        }
+    ),
     "session": op_session,
     "fingerprint": op_fingerprint,
     "decode_message": op_decode_message,
@@ -1260,6 +1303,7 @@ OPS: dict[str, Callable[[Any], dict[str, Any]]] = {
         {"stamp": sy.stamp_json(sy.next_stamp(int(i["now_ms"]), int(i["highest"]), i["r"]))}
     ),
     "change": op_change,
+    "shown": op_shown,
     "merge": op_merge,
     "deleted": op_deleted,
     "begin_stamping": op_begin_stamping,

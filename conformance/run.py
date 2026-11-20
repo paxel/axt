@@ -328,13 +328,14 @@ BODY_FPS = {
 }
 BODY_OF = {"OFFER": "Offer", "ACCEPT": "Accept", "DECLINE": "Decline", "ACK": "Ack", "ERROR": "Error"}
 # Between the devices of one set (spec/sync.md, section 15).
-SYNC_FPS = {"Change": "e8629dfcca9a84d3", "Resync": "f1fd59d5d92b76e8"}
-SYNC_OF = {"CHANGE": "Change", "RESYNC": "Resync"}
+SYNC_FPS = {"Change": "c188f8c5af4d094d", "Resync": "f1fd59d5d92b76e8", "Forward": "ad3b056bbf6a4757"}
+SYNC_OF = {"CHANGE": "Change", "RESYNC": "Resync", "FORWARD": "Forward"}
 
 
 def written(hexed: Any, own: bytes, bodies: dict[str, str], fps: dict[str, str]) -> tuple[Any, Any]:
     """The envelope and the body of a message the adapter wrote; raises ValueError if it is not a valid
-    message of its own key, signed, of one of the kinds given. Only a CHANGE and a RESYNC name a record."""
+    message of its own key, signed, of one of the kinds given. Only a CHANGE, a RESYNC and a FORWARD name a
+    record."""
     import fastavro
 
     m = to_bytes(hexed)
@@ -377,15 +378,33 @@ def said(hexed: Any, own: bytes) -> list[dict[str, Any]]:
     env, d = written(hexed, own, {**BODY_OF, **SYNC_OF}, {**BODY_FPS, **SYNC_FPS})
     kind, rec = env["kind"], env["record"]
     base = {"kind": kind, "to": d["to"].hex()}
+    if kind == "FORWARD":
+        text = d["schema"]
+        forward = {
+            "record": {"id": rec["id"], "version": str(rec["version"])},
+            "message_hash": hashlib.sha256(d["message"]).hexdigest(),
+            "schema_hash": None if text is None else hashlib.sha256(text.encode()).hexdigest(),
+        }
+        return [{**base, **forward}]
     if kind == "CHANGE":
-        if d["origin"] is not None or any(f["value"] is None for f in d["fields"]):
-            raise ValueError("a CHANGE with a key in origin or a null value")
+        if d["origin"] is None and any(f["value"] is None for f in d["fields"]):
+            raise ValueError("a CHANGE with a null value and no key in origin")
         if len({f["name"] for f in d["fields"]}) != len(d["fields"]):
             raise ValueError("a CHANGE with a name twice")
-        r = d["removal"]
+        r, k = d["removal"], d["keep"]
+        if d["origin"] is None and k is not None:
+            raise ValueError("a CHANGE with a keep and no key in origin")
+        if d["origin"] is not None:
+            keep = k and {
+                "stamp": str(k["stamp"]),
+                "device": k["device"].hex(),
+                "version": str(k["version"]),
+                "given_up": k["given_up"],
+            }
+            base = {**base, "origin": d["origin"].hex(), "keep": keep}
         fields = {
             f["name"]: {
-                "value": f["value"].hex(),
+                "value": None if f["value"] is None else f["value"].hex(),
                 "schema": f["schema"].hex(),
                 "stamp": str(f["stamp"]),
                 "device": f["device"].hex(),
@@ -446,7 +465,14 @@ def check_siblings(vector: Any, output: Any) -> str | None:
     for n, (w, g) in enumerate(zip(want, got, strict=True)):
         try:
             if "sent" in w:
-                entries = [entry for m in g["sent"] for entry in said(m, own)]
+                entries, place = [], dict[str, int]()
+                for m in g["sent"]:
+                    for entry in said(m, own):
+                        if entry["kind"] == "FORWARD":
+                            # The order of the FORWARD messages for one sibling counts (section 5.14).
+                            entry["position"] = place.get(entry["to"], 0)
+                            place[entry["to"]] = entry["position"] + 1
+                        entries.append(entry)
                 entries.sort(key=lambda e: json.dumps(e, sort_keys=True))
                 passed = [{"to": p["to"], "manifest": to_bytes(p["manifest"]).hex()} for p in g["passed"]]
                 passed.sort(key=lambda p: (p["to"], p["manifest"]))

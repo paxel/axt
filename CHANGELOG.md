@@ -23,6 +23,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - Device sets: an owner's devices, each with its own key, count as one sender, joined by QR code and removable by any other. ([axt-1022](https://github.com/paxel/axt/issues/24))
 - Stamps: every device of an owner changes every record, the later change wins per field, and a record's version is its state stamp. ([axt-1023](https://github.com/paxel/axt/issues/25))
 - Sibling sync: an owner's devices send each other only the changed fields of a record, track acknowledgements, and can ask for everything again. ([axt-1024](https://github.com/paxel/axt/issues/26))
+- Received records between an owner's devices: another app reaches one device, which passes its messages on, and the owner's changes sync too. ([axt-1025](https://github.com/paxel/axt/issues/27))
 
 ---
 

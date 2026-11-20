@@ -11,11 +11,11 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 - **Record**: one datum of a type ([types.md](types.md)), such as one Appointment, together with its id and its version. A record travels in the body of a `DATA` message; its id and version travel in the envelope's `record` field ([envelope.md](envelope.md), section 2).
 - **Record message**: a `DATA` or a `DELETE` message.
 - **Sender** of a record: the app that created the record and sends its versions: one installation, or the installations of one owner on several devices, which [keys.md](keys.md), section 5, makes one device set. A receiver knows a sender by the first key it accepted from it and by the keys added to it and removed from it since. Where this document says "the same sender", it means any current key of that set.
-- **Receiver**: an app that takes records from a sender, through a live connection, a relay or a file.
+- **Receiver**: an app that takes records from a sender, through a live connection, a relay or a file: one installation, or the devices of one set, of which the sender has to reach only one ([sync.md](sync.md), section 17.2).
 - **Local change**: a change the receiver's user makes to a received record in the receiver, including its deletion there.
 - **Tombstone**: what a receiver keeps of a record its sender deleted: its id and the version of the deletion.
 
-A record has one sender. Only its sender sends versions of it; where the sender is a device set, each of its devices does, and [sync.md](sync.md) defines how they change the same record. A receiver's local changes stay in the receiver and are not sent back as versions of the record; a receiver that sends a record of its own, even one copied from a received record, sends it as a new record with an id of its own.
+A record has one sender. Only its sender sends versions of it; where the sender is a device set, each of its devices does, and [sync.md](sync.md) defines how they change the same record. A receiver's local changes stay in the receiver: they are not sent back to the sender and are never versions of the record. Where the receiver is a device set, the record messages that one of its devices got and the local changes travel between its own devices, and only there ([sync.md](sync.md), sections 17 to 22). A receiver that sends a record of its own, even one copied from a received record, sends it as a new record with an id of its own.
 
 ## 2. Record ids
 
@@ -73,6 +73,8 @@ For every record of every sender, a receiver keeps:
 - whether the record is there, deleted by its sender (a tombstone), or deleted by the receiver's user;
 - for a record that is there, what it needs to tell local changes from values it took from the sender (section 6).
 
+A receiver that is a device set keeps this on each of its devices. The device that gets a record message passes it on to the others, so that all come to the same receiver's version of the record, and the local changes are kept apart from what the sender sent, as a layer that the devices merge among themselves ([sync.md](sync.md), sections 17.1 and 21.1).
+
 ### 5.2 The version rule
 
 A receiver compares the version of each record message with its own version of the record:
@@ -84,7 +86,7 @@ A receiver compares the version of each record message with its own version of t
 | Equal to the receiver's version          | Changes nothing; the message is a duplicate           | `DUPLICATE`                 |
 | Lower than the receiver's version        | Changes nothing; the message is older than its state  | `STALE`                     |
 
-The rule is the same for `DATA` and `DELETE`. Whenever the message's version is higher, the receiver's version becomes the message's version, also when the receiver keeps local changes against it (section 6). A receiver MAY skip decoding the body of a `DATA` message that is a duplicate or stale.
+The rule is the same for `DATA` and `DELETE`. Whenever the message's version is higher, the receiver's version becomes the message's version, also when the receiver keeps local changes against it (section 6). A receiver MAY skip decoding the body of a `DATA` message that is a duplicate or stale. A receiver that keeps the messages of its senders for the other devices of its set keeps a few duplicate or stale messages all the same, such as a `DATA` below a deletion, and decodes those; the outcome stays as the table gives it ([sync.md](sync.md), sections 19.5 and 20.1).
 
 Transports may deliver a message twice, late or out of order: a relay holds messages, and a user may open an old file again. The version rule makes the result independent of that order: as long as the receiver's user changes nothing, a receiver that has got any set of messages about a record ends in the state of the one with the highest version.
 
@@ -99,6 +101,8 @@ Transports may deliver a message twice, late or out of order: a relay holds mess
 ## 6. The receiver's own changes
 
 A receiver MAY let its user change received records. If it does, it either keeps its user's changes when an update or a deletion arrives, or takes the sender's message over them. It SHOULD keep them, as far as it can per field (section 6.1). This section says how a receiver keeps them; section 7 says how it reports what it did.
+
+Where the receiver runs on several devices of one owner, the devices of the set are one receiver. Wherever this section lets a receiver choose, per field or the whole record in sections 6.1 and 6.2, and to delete or to keep in section 6.4, the devices of one set MUST choose alike. The device that got the message from the sender applies this section and reports the outcome; the user's changes, and the user's decisions where a receiver asks, reach the other devices of the set, so that all of them show the same record ([sync.md](sync.md), section 22).
 
 ### 6.1 Per field
 
@@ -119,7 +123,7 @@ A receiver that does not track changes per field treats any local change as a ch
 
 ### 6.3 A record the user deleted
 
-A record the receiver's user deleted stays deleted: a `DATA` with a higher version MUST NOT bring it back unless the user agrees, and the outcome is `KEPT`. The receiver MAY offer its user to take the record again. The receiver keeps the id and its version of such a record as long as it would keep a tombstone (section 5.3), so that a later update does not create the record again. A `DELETE` with a higher version turns such a record into a tombstone, outcome `APPLIED`.
+A record the receiver's user deleted stays deleted: a `DATA` with a higher version MUST NOT bring it back unless the user agrees, and the outcome is `KEPT`. The receiver MAY offer its user to take the record again. The receiver keeps the id and its version of such a record as long as it would keep a tombstone (section 5.3), so that a later update does not create the record again. A `DELETE` with a higher version has the outcome `APPLIED`: the receiver keeps the sender's tombstone (section 5.3), and the user's deletion goes on standing beside it, so a later `DATA` with a higher version has the outcome `KEPT` again until the user takes the record again. A receiver that keeps an owner's layer of its received records keeps the user's deletion there as a removal that stands, on one device or on several ([sync.md](sync.md), sections 21.1 and 22.2); a record that its user deleted while the installation counted gets such a removal when the installation begins to keep an owner's layer.
 
 ### 6.4 A deletion meets local changes
 

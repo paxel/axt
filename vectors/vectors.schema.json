@@ -217,6 +217,34 @@
     {
      "if": {
       "properties": {
+       "op": {"const": "contact_key"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["current", "manifests", "got"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "resend_after_removal"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["records", "removed"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
        "op": {"const": "connection"}
       }
      },
@@ -665,6 +693,20 @@
     {
      "if": {
       "properties": {
+       "op": {"const": "shown"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["sender", "layer"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
        "op": {"const": "siblings"}
       }
      },
@@ -949,7 +991,7 @@
       "items": {
        "properties": {
         "op": {
-         "enum": ["choose_format", "session"]
+         "enum": ["choose_format", "contact_key", "resend_after_removal", "session"]
         }
        }
       }
@@ -1069,7 +1111,7 @@
       "items": {
        "properties": {
         "op": {
-         "enum": ["begin_stamping", "change", "deleted", "merge", "next_stamp", "pass_version", "siblings", "stale"]
+         "enum": ["begin_stamping", "change", "deleted", "merge", "next_stamp", "pass_version", "shown", "siblings", "stale"]
         }
        }
       }

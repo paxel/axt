@@ -4,7 +4,7 @@
 Checks the schemas of the protocol messages, types/axt/Offer.avsc,
 Accept.avsc, Decline.avsc, Ack.avsc and Error.avsc, and with the same
 schema rules those of the messages between the devices of one set,
-Change.avsc and Resync.avsc, whose examples sync_examples.py produces, then
+Change.avsc, Resync.avsc and Forward.avsc, whose examples sync_examples.py produces, then
 plays a live exchange from cat-a-log to Old Brain Fix with signed messages
 and prints each as annotated hex:
 
@@ -92,7 +92,7 @@ _spec.loader.exec_module(tm)
 
 PROTOCOL = ["Offer", "Accept", "Decline", "Ack", "Error"]
 DEVICES = ["DeviceJoin", "DeviceAdd", "DeviceRemove"]
-SYNC = ["Change", "Resync"]  # the bodies of spec/sync.md, whose examples sync_examples.py produces
+SYNC = ["Change", "Resync", "Forward"]  # the bodies of spec/sync.md, whose examples sync_examples.py produces
 ALL_SPEC = ["Envelope", "Manifest"] + DEVICES + PROTOCOL + SYNC
 
 # --- the limits of spec/protocol.md -------------------------------------------
@@ -213,9 +213,14 @@ BODY_SCHEMA = {
     "DEVICE_REMOVE": "DeviceRemove",
     "CHANGE": "Change",
     "RESYNC": "Resync",
+    "FORWARD": "Forward",
 }
 RECORD_KINDS = {"DATA", "DELETE"}
-SYNC_KINDS = {"CHANGE", "RESYNC"}  # between the devices of one set only (spec/sync.md, section 7.1)
+SYNC_KINDS = {
+    "CHANGE",
+    "RESYNC",
+    "FORWARD",
+}  # between the devices of one set only (spec/sync.md, section 7.1)
 DEVICE_KINDS = {"DEVICE_JOIN", "DEVICE_ADD", "DEVICE_REMOVE"}
 CHAIN_KINDS = {"DEVICE_ADD", "DEVICE_REMOVE"}  # signed with a key of a device set, not the connection's
 
@@ -978,6 +983,28 @@ class App:
 def make_body_manifest(manifest: dict[str, Any]) -> tuple[None, bytes]:
     body: bytes = me.encode_body(manifest)
     return None, body
+
+
+NOT_CONTACT = ("DEVICE_ADD", "DEVICE_REMOVE", "MANIFEST")  # do not move the contact key (section 9.1)
+
+
+def contact_keys(current: list[bytes], manifests: list[bytes], got: list[tuple[bytes, str]]) -> list[bytes]:
+    """The keys of a receiver with several current keys to which a sender offers (section 9.1): the current
+    key, of which it holds a manifest, from which it last got a valid message other than a DEVICE_ADD, a
+    DEVICE_REMOVE or a MANIFEST; or, with no such message from any current key, any current key of which
+    it holds a manifest, the sender's choice. `got` lists the valid messages in the order received, each
+    with its sender's key and its kind."""
+    usable = [k for k in current if k in manifests]
+    for key, kind in reversed(got):
+        if kind not in NOT_CONTACT and key in usable:
+            return [key]
+    return sorted(usable)
+
+
+def resend_after_removal(records: list[tuple[str, dict[bytes, str]]], removed: list[bytes]) -> list[str]:
+    """The ids of the record messages that a sender sends again after a key of the receiver was removed
+    (sections 7.4 and 11): those whose only outcomes are of removed keys, or that have none."""
+    return [rid for rid, outcomes in records if not set(outcomes) - set(removed)]
 
 
 def choose_format(own: list[int], theirs: list[int]) -> int | None:

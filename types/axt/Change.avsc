@@ -2,7 +2,7 @@
   "type": "record",
   "name": "Change",
   "namespace": "axt",
-  "doc": "The body of a CHANGE message: field states and the removal of one record, sent by a device to another device of its own sender. Defined in spec/sync.md. The record's id is in the envelope's record field, whose version is the highest stamp in this body. Its schema changes only with a new envelope format.",
+  "doc": "The body of a CHANGE message: field states and the removal of one record, sent by a device to another device of its own sender, or, with a key in origin, the field states, the removal and the keep of the owner's layer of a record received from another app. Defined in spec/sync.md. The record's id is in the envelope's record field, whose version is the highest stamp in this body. Its schema changes only with a new envelope format.",
   "fields": [
     {
       "name": "to",
@@ -26,7 +26,7 @@
         }
       ],
       "default": null,
-      "doc": "Null for a record of the device set itself. Otherwise the key by which the devices of the set know the sender of a record they received from another app: the message then carries what the owner did with that received record. A device sets it to null until spec/sync.md defines messages with a key here."
+      "doc": "Null for a record of the device set itself. Otherwise a key of the sender of a record that the set received from another app, the key by which the sending device first knew that sender: the message then carries the owner's layer of that received record, what the owner did with it on the devices of the set. The receiving device finds the sender among the current and the removed keys of the senders it knows. Defined in spec/sync.md, section 21.3."
     },
     {
       "name": "type",
@@ -41,7 +41,7 @@
     {
       "name": "whole",
       "type": "boolean",
-      "doc": "True when fields holds every field state the sending device holds of the record and the device does not hold the record incompletely. False when fields holds only some of them. A device that does not have the record, or holds only its removal, takes it only from a message in which this is true."
+      "doc": "True when fields holds every field state the sending device holds of the record and the device does not hold the record incompletely. False when fields holds only some of them. A device that does not have a record of its set, or holds only its removal, takes it only from a message in which this is true. For the owner's layer of a received record it is not looked at: a device that holds no layer of the record takes the layer from any message."
     },
     {
       "name": "removal",
@@ -79,6 +79,47 @@
       "doc": "The removal the sending device holds of the record, when the message carries it. Null when the device holds none or the message does not carry it; null never takes a removal away."
     },
     {
+      "name": "keep",
+      "type": [
+        "null",
+        {
+          "type": "record",
+          "name": "ChangeKeep",
+          "doc": "The keep in the owner's layer of a record received from another app: the mark that the owner keeps the record against a deletion by its sender, or has given that keeping up. Defined in spec/sync.md, section 21.1.",
+          "fields": [
+            {
+              "name": "stamp",
+              "type": "long",
+              "doc": "The stamp of the change that set the keep, at least 1."
+            },
+            {
+              "name": "device",
+              "type": {
+                "type": "fixed",
+                "name": "ChangeKeepDevice",
+                "size": 32,
+                "doc": "An Ed25519 public key in the encoding of RFC 8032. Defined in spec/keys.md."
+              },
+              "doc": "The Ed25519 public key of the device that set the keep."
+            },
+            {
+              "name": "version",
+              "type": "long",
+              "doc": "The version of the sender's deletion that the owner keeps the record against, or the higher version of the keep it took the place of; or, for a keep that was given up, of the deletion whose keeping the owner gave up; at least 1. The record is kept only against a deletion whose version is not above this one. Of two keeps, the one with the higher version stands, so a keep for an older deletion never takes the place of one for a newer deletion."
+            },
+            {
+              "name": "given_up",
+              "type": "boolean",
+              "default": false,
+              "doc": "False for a keep. True for a keep that the owner gave up, so that the sender's deletion is taken: it keeps nothing. With equal version, stamp and device, a keep given up stands over one that is not."
+            }
+          ]
+        }
+      ],
+      "default": null,
+      "doc": "The keep the sending device holds in the owner's layer of the record, when the message carries it. Null when the device holds none or the message does not carry it; null never takes a keep away. Always null in a message whose origin is null."
+    },
+    {
       "name": "fields",
       "type": {
         "type": "array",
@@ -109,7 +150,7 @@
                 "bytes"
               ],
               "default": null,
-              "doc": "The value of the field: the bytes the changing device wrote, in Avro binary encoding under the type the field has in the schema named in schema. They are passed on unchanged. Null is for a message whose origin is a key; its meaning is defined in spec/sync.md, and a device never writes null here while origin is null."
+              "doc": "The value of the field: the bytes the changing device wrote, in Avro binary encoding under the type the field has in the schema named in schema. They are passed on unchanged. Null only in a message whose origin is a key: the owner discarded a change of the field of a received record, and the sender's value shows again. A device never writes null here while origin is null."
             },
             {
               "name": "stamp",

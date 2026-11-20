@@ -1,8 +1,8 @@
 # Sync between the devices of one owner
 
-Status: sections 1 to 16 written, 0.1.0. Still to come, as further sections of this document: what the devices of a set do with the records they received from other apps ([axt-1025](https://github.com/paxel/axt/issues/27)). Until 0.1.0 is released, that part may still change the details this document leaves to it, and the schemas of `axt.Change` and `axt.Resync` may still change in place; their fingerprints (section 15) and the examples (section 16) are then produced again.
+Status: written, 0.1.0. Until 0.1.0 is released, the schemas of `axt.Change`, `axt.Resync` and `axt.Forward` may still change in place; their fingerprints (section 15) and the examples (section 16) are then produced again.
 
-This document defines how the devices of one owner, which [keys.md](keys.md), section 5, makes one device set, change the same records: the stamp every change carries, the state a device keeps of a record, how two states of one record merge per field, when a record counts as deleted, and which version a device gives a record toward other apps. Sections 1 to 6 say what a device keeps and how it merges, whatever brings a state from one device to another. Sections 7 to 16 define the messages that bring it: `CHANGE`, which carries field states and the removal of one record from a device to a sibling, and `RESYNC`, with which a device asks a sibling for every record again; what a device sends to which sibling, how it is acknowledged and sent again, and what a restored, a removed and a new device do.
+This document defines how the devices of one owner, which [keys.md](keys.md), section 5, makes one device set, change the same records: the stamp every change carries, the state a device keeps of a record, how two states of one record merge per field, when a record counts as deleted, and which version a device gives a record toward other apps. Sections 1 to 6 say what a device keeps and how it merges, whatever brings a state from one device to another. Sections 7 to 16 define the messages that bring it: `CHANGE`, which carries field states and the removal of one record from a device to a sibling, and `RESYNC`, with which a device asks a sibling for every record again; what a device sends to which sibling, how it is acknowledged and sent again, and what a restored, a removed and a new device do. Sections 17 to 24 define what the devices of a set do with what they got from other apps: `FORWARD`, in which a device passes a message of another app on to a sibling, so that another app has to reach only one device; and the owner's changes of a received record, which travel in `CHANGE` messages that name the record's sender.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in BCP 14 ([RFC 2119](https://www.rfc-editor.org/rfc/rfc2119), [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174)) when, and only when, they appear in all capitals, as shown here.
 
@@ -493,11 +493,11 @@ A device knows its own set as a receiver knows a sender: it applies the addition
 - A device keeps for each sibling what [keys.md](keys.md), section 3.3, keeps for each current key of a known sender: its encryption key, its relay and mailbox, and its kept manifest ([manifest.md](manifest.md), section 6).
 - A key is a sibling until the device applies its removal (section 12.2).
 
-What a device does with a `CHANGE` or a `RESYNC` whose signature verifies depends on its `sender`:
+What a device does with a `CHANGE`, a `RESYNC` or a `FORWARD` (section 18) whose signature verifies depends on its `sender`:
 
 | The `sender` is                                         | The device                                                                                                                                                                                                                                                                           |
 | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| a sibling                                               | processes the message (sections 8.3 and 11.2)                                                                                                                                                                                                                                        |
+| a sibling                                               | processes the message (sections 8.3, 11.2 and 18.3)                                                                                                                                                                                                                                  |
 | the device's own key                                    | ignores it without a report                                                                                                                                                                                                                                                          |
 | a removed key of the device's own set                   | rejects it without a report ([keys.md](keys.md), section 3.3)                                                                                                                                                                                                                        |
 | a current key of another known sender                   | rejects it with the error `INVALID_MESSAGE` ([protocol.md](protocol.md), section 8.2): only the devices of the device's own set send it these kinds                                                                                                                                  |
@@ -539,13 +539,13 @@ Before a device sends a field state that it took from one sibling on to another,
 A `CHANGE` message carries field states, the removal, or both, of one record of the set from a device to one sibling:
 
 - Its `sender` is the key of the device that sends it, and it is signed with that key like every message ([keys.md](keys.md), section 2.2), whichever devices made the changes it carries.
-- Its `record` MUST be present; a `CHANGE` without `record` is no valid message of its kind and is rejected with `INVALID_MESSAGE`, as part of the validity of its envelope ([protocol.md](protocol.md), section 2). `record.id` is the id of the record. `record.version` is the highest stamp in the message: the highest of `state`, of `removal.stamp` if `removal` is not `null`, and of the `stamp` of every entry of `fields`.
+- Its `record` MUST be present; a `CHANGE` without `record` is no valid message of its kind and is rejected with `INVALID_MESSAGE`, as part of the validity of its envelope ([protocol.md](protocol.md), section 2). `record.id` is the id of the record. `record.version` is the highest stamp in the message: the highest of `state`, of `removal.stamp` if `removal` is not `null`, of `keep.stamp` if `keep` is not `null`, and of the `stamp` of every entry of `fields`.
 - Its body MUST be one `axt.Change` in single-object encoding, with the schema [types/axt/Change.avsc](../types/axt/Change.avsc) and, in envelope format 1, the fingerprint of section 15.
 
 | Field             | Avro type                                         | Content                                                                                                                 |
 | ----------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `to`              | `fixed` of 32 bytes, `axt.ChangeTo`               | The device key of the sibling the message is for ([protocol.md](protocol.md), section 9.1)                              |
-| `origin`          | `null` or `fixed` of 32 bytes, `axt.ChangeOrigin` | `null` for a record of the set. A key here is for the records a set received from another app                           |
+| `origin`          | `null` or `fixed` of 32 bytes, `axt.ChangeOrigin` | `null` for a record of the set. A key of another app for the owner's layer of a record received from it (section 21.3)  |
 | `type`            | `string`                                          | The full name of the record's type ([records.md](records.md), section 4.3)                                              |
 | `state`           | `long`                                            | The sending device's state stamp of the record (section 3.3)                                                            |
 | `whole`           | `boolean`                                         | Whether `fields` holds every field state the sending device holds of the record                                         |
@@ -553,14 +553,19 @@ A `CHANGE` message carries field states, the removal, or both, of one record of 
 | `removal.stamp`   | `long`                                            | The removal's `stamp`                                                                                                   |
 | `removal.device`  | `fixed` of 32 bytes, `axt.ChangeRemovalDevice`    | The removal's `device`                                                                                                  |
 | `removal.stands`  | `boolean`                                         | The removal's `stands`                                                                                                  |
+| `keep`            | `null` or record `axt.ChangeKeep`                 | The keep of an owner's layer (section 21.1), or `null`. Always `null` where `origin` is `null`                          |
+| `keep.stamp`      | `long`                                            | The keep's `stamp`                                                                                                      |
+| `keep.device`     | `fixed` of 32 bytes, `axt.ChangeKeepDevice`       | The keep's `device`                                                                                                     |
+| `keep.version`    | `long`                                            | The keep's `version`                                                                                                    |
+| `keep.given_up`   | `boolean`                                         | The keep's `given_up`                                                                                                   |
 | `fields`          | array of record `axt.ChangeField`                 | The field states the message carries (section 3.1), in any order                                                        |
 | `fields[].name`   | `string`                                          | The field state's `name`                                                                                                |
 | `fields[].schema` | `fixed` of 8 bytes, `axt.ChangeFieldSchema`       | The field state's `schema`: the fingerprint of the writer schema the value was written with                             |
-| `fields[].value`  | `null` or `bytes`                                 | The field state's `value`, the bytes as the device holds them. `null` is for a message whose `origin` is a key          |
+| `fields[].value`  | `null` or `bytes`                                 | The field state's `value`, the bytes as the device holds them. `null` only where `origin` is a key (section 21.1)       |
 | `fields[].stamp`  | `long`                                            | The field state's `stamp`: 0 for a field never stamped (section 3.4), −1 for a field state of unknown age (section 4.6) |
 | `fields[].device` | `fixed` of 32 bytes, `axt.ChangeFieldDevice`      | The field state's `device`                                                                                              |
 
-- **`origin` and a `null` value.** This document defines the `CHANGE` of a record of the set only. A device MUST set `origin` to `null` and MUST NOT write `null` in a `value`, until this document defines messages with a key in `origin`. Section 8.2 says what a device does with a message that has either.
+- **`origin` and a `null` value.** Sections 8 to 16 describe the `CHANGE` of a record of the set: its `origin` is `null`, and a device MUST NOT write `null` in a `value` of such a message. A `CHANGE` with a key in `origin` carries the owner's layer of a record that the set received from another app, and only it can hold a `null` value; sections 21.3 and 21.4 define it by its differences from what follows.
 - **`state`** is the state stamp the device holds of the record when it writes the message, or the version it counted that stands in its place (sections 2.4 and 3.3). A device that holds no state stamp of a record, because it could take none (section 2.3), sends no `CHANGE` of that record. A device whose state stamp names an earlier state, because it could take none for a later merge or change (section 2.3), sends the state stamp it holds.
 - **`whole`** is `true` exactly when `fields` holds every field state that the device holds of the record and the device does not hold the record incompletely (section 4.3). It is so `true` for every message of a record of which the device holds no field state, such as a deleted record whose field states it discarded, unless it holds that record incompletely. Whether the message carries the removal does not count.
 - **`removal`** is the removal the device holds, with its three parts as it holds them. `null` says that the device holds none or that the message does not carry it; it never takes a removal away (section 3.2).
@@ -571,21 +576,22 @@ A `CHANGE` message carries field states, the removal, or both, of one record of 
 
 The body of a `CHANGE` is valid when:
 
-- `origin` is `null`;
+- `origin` is `null`, or a key (section 21.4);
 - `type` is an Avro full name, names of the form `[A-Za-z_][A-Za-z0-9_]*` joined by dots, of at most 512 bytes;
 - `state` is at least 1;
 - `removal` is `null`, or its `stamp` is at least 1;
+- `keep` is `null`, unless `origin` is a key (section 21.4);
 - `fields` has 0 to 4,096 entries;
 - each `name` is 1 to 512 bytes of UTF-8, and no name appears twice; names are compared as sequences of Unicode code points (section 3.1);
-- each `value` is not `null`;
+- each `value` is not `null`, unless `origin` is a key;
 - each `fields[].stamp` is at least −1;
-- `whole` is `true`, or the message carries something: `fields` is not empty or `removal` is not `null`;
-- `record.version` is the highest of `state`, of `removal.stamp` if `removal` is not `null`, and of every `fields[].stamp`.
+- `whole` is `true`, or the message carries something: `fields` is not empty, `removal` is not `null` or `keep` is not `null`;
+- `record.version` is the highest of `state`, of `removal.stamp` if `removal` is not `null`, of `keep.stamp` if `keep` is not `null`, and of every `fields[].stamp`.
 
-A device MUST reject a `CHANGE` whose body is not valid with the error `INVALID_MESSAGE` ([protocol.md](protocol.md), section 8.2). That holds for a message with a key in `origin` and for one with a `null` value as well, until this document defines them.
+A device MUST reject a `CHANGE` whose body is not valid with the error `INVALID_MESSAGE` ([protocol.md](protocol.md), section 8.2). That holds for a message whose `origin` is `null` and that has a `null` in a `value`. A message with a key in `origin` is processed as section 21.4 says.
 
 - **No stamp is refused.** Every stamp up to the largest `long`, 2^63 − 1, is valid in `state`, in a removal and in a field state (section 2.3). The lowest value of a field state's `stamp` is −1; a device counts neither −1 nor 0 as a stamp seen.
-- **Device keys are not checked.** `removal.device` and `fields[].device` are 32 bytes that the merge compares (section 4.1) and nothing else. A device MUST NOT reject a `CHANGE` because such a key is not a key of its set, is a removed key, or is no valid Ed25519 public key: a field state that a removed device wrote stays in the state of its record, and a `CHANGE` can carry the field state of a device whose addition the receiving device has not applied yet.
+- **Device keys are not checked.** `removal.device`, `keep.device` and `fields[].device` are 32 bytes that the merge compares (sections 4.1 and 21.1) and nothing else. A device MUST NOT reject a `CHANGE` because such a key is not a key of its set, is a removed key, or is no valid Ed25519 public key: a field state that a removed device wrote stays in the state of its record, and a `CHANGE` can carry the field state of a device whose addition the receiving device has not applied yet.
 - **Size.** A `CHANGE` is a message of at most 16 MiB ([envelope.md](envelope.md), section 8); section 10.2 says what a device does with a record that does not fit.
 
 ### 8.3 Processing
@@ -636,7 +642,7 @@ The outcome follows from the merge alone:
 | The device took nothing, and every field state and the removal of the message is the same as the one the device holds (section 4.1, rule 3, and section 4.2)                                       | `DUPLICATE` |
 | The device took nothing, and at least one field state or the removal of the message is not the same as the one the device holds: the device holds a later one                                      | `STALE`     |
 
-A whole message with no entry in `fields` and no removal, for a record of which the device holds a state, has the outcome `DUPLICATE`. A message that is processed a second time has the outcome `DUPLICATE`, or `STALE` if the state of the record has moved on in between (section 4.5).
+A whole message with no entry in `fields`, no removal and no keep, for a record of which the device holds a state, has the outcome `DUPLICATE`. A message that is processed a second time has the outcome `DUPLICATE`, or `STALE` if the state of the record has moved on in between (section 4.5).
 
 ### 8.5 Fields and types the device does not know
 
@@ -664,7 +670,7 @@ A device MUST acknowledge every `CHANGE` that it processed to an outcome (sectio
 | `records[].receiver_version` | The acknowledging device's state stamp of the record after it processed the `CHANGE`, for every outcome |
 | `records[].kept_fields`      | Empty                                                                                                   |
 
-An `ACK` whose `sender` is a sibling reports `CHANGE` messages and requests made with `RESYNC` (section 11.2) and nothing else, since siblings send each other no record messages (section 7.2); an `ACK` of any other sender reports record messages. An entry for a `RESYNC` has the id of the request, the `version` 1, the outcome `APPLIED` or `DUPLICATE`, the `receiver_version` 1 and no kept field. A device so tells by the `sender` of an `ACK` which rules apply to it. An `ACK` of a sibling is valid when:
+An `ACK` whose `sender` is a sibling reports `CHANGE` messages, requests made with `RESYNC` (section 11.2) and forwards (section 18.4), and nothing else, since siblings send each other no record messages (section 7.2); an `ACK` of any other sender reports record messages. An entry for a `RESYNC` has the id of the request, the `version` 1, the outcome `APPLIED` or `DUPLICATE`, the `receiver_version` 1 and no kept field; an entry for a `FORWARD` has the same form, with the id of the forward. A device so tells by the `sender` of an `ACK` which rules apply to it. An `ACK` of a sibling is valid when:
 
 - `records` has 1 to 4,096 entries;
 - each `id` is a UUID in text form, neither nil nor max, and each `version` is at least 1;
@@ -679,7 +685,7 @@ A device MUST report an `ACK` of a sibling that is not valid with `INVALID_MESSA
 
 ### 9.2 What the sender does with an outcome
 
-A device takes the entries of a valid `ACK` of a sibling whose `to` is its own key ([protocol.md](protocol.md), section 9.1). An entry whose id is the id of a request that the device has open with that sibling, with the version 1, acknowledges that request (section 11.3). Every other entry is about a `CHANGE`: the device takes it if its id and version are those of a `CHANGE` to that sibling that the device still keeps (section 10.1), and ignores it without a report otherwise. It so ignores an outcome for a `CHANGE` that already has an outcome or a settling error, for one that arrives later than 15 days after the device last sent that message, for one that it sent before it acted on a `RESYNC` of that sibling (section 11.2), and for one that it sent before it restored a backup (section 12.1).
+A device takes the entries of a valid `ACK` of a sibling whose `to` is its own key ([protocol.md](protocol.md), section 9.1). An entry whose id is the id of a request that the device has open with that sibling, with the version 1, acknowledges that request (section 11.3). An entry whose id is the id of a forward to that sibling that the device still keeps, with the version 1, is the outcome of that forward (section 18.4). Every other entry is about a `CHANGE`: the device takes it if its id and version are those of a `CHANGE` to that sibling that the device still keeps (section 10.1), and ignores it without a report otherwise. It so ignores an outcome for a `CHANGE` that already has an outcome or a settling error, for one that arrives later than 15 days after the device last sent that message, for one that it sent before it acted on a `RESYNC` of that sibling (section 11.2), and for one that it sent before it restored a backup (section 12.1).
 
 | Outcome     | The sibling                                               | The device                                                                                                                                   |
 | ----------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -695,12 +701,12 @@ A device takes the entries of a valid `ACK` of a sibling whose `to` is its own k
 
 ### 9.3 Errors
 
-A `CHANGE` that fails a step of section 8.3 is reported with an `ERROR` ([protocol.md](protocol.md), section 8), whose `record` is the `record` of the `CHANGE`. A device matches an `ERROR` of a sibling to a `CHANGE` by that `record`: its id and version are those of a `CHANGE` to that sibling that the device still keeps (section 10.1). An `ERROR` whose `record` is `null`, or names no message that the device still keeps, is logged and changes nothing, whatever its code; one whose `record` is that of an open request is about a `RESYNC` (section 11.3). The device that sent the `CHANGE`:
+A `CHANGE` that fails a step of section 8.3 is reported with an `ERROR` ([protocol.md](protocol.md), section 8), whose `record` is the `record` of the `CHANGE`. A device matches an `ERROR` of a sibling to a `CHANGE` by that `record`: its id and version are those of a `CHANGE` to that sibling that the device still keeps (section 10.1). An `ERROR` whose `record` is `null`, or names no message that the device still keeps, is logged and changes nothing, whatever its code; one whose `record` is that of an open request is about a `RESYNC` (section 11.3), and one whose `record` is that of a forward that the device still keeps is about a `FORWARD` (section 18.4). The device that sent the `CHANGE`:
 
 | Code                                                      | The device then                                                                                                                                                                                                                                                                                                            |
 | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `SCHEMA_UNKNOWN`                                          | offers the sibling the schema whose fingerprint the error names again (section 7.2), also when an accepted offer of it stood, and, once it is accepted, sends the message again, or, if the state has changed, what is then due (section 10.2). If the error's `fingerprint` is `null`, it sends the message again at once |
-| `RECORD_UNKNOWN`                                          | forgets what the sibling has of the record (section 10.1) and sends the record whole (section 10.2)                                                                                                                                                                                                                        |
+| `RECORD_UNKNOWN`                                          | forgets what the sibling has of the record (section 10.1) and sends the record whole (section 10.2); for a `CHANGE` with a key in `origin`, it acts as section 21.5 says                                                                                                                                                   |
 | `RECORD_ID_INVALID`, `VERSION_INVALID`, `INVALID_MESSAGE` | logs it; it is a fault of its implementation. It does not send that message again                                                                                                                                                                                                                                          |
 | `TYPE_CHANGED`                                            | logs it; the two devices keep the record under two types, which no message resolves. It does not send that message again                                                                                                                                                                                                   |
 | `UNDECODABLE`, `VALUE_INVALID`                            | logs it, and MAY show its user the record and, for `VALUE_INVALID`, the field. It does not send that message again                                                                                                                                                                                                         |
@@ -754,7 +760,7 @@ A device sends to each sibling every part that is due for it, and every record t
 - **A record held incompletely.** A device that holds a record incompletely (section 4.3) sends its parts with `whole` `false`. After `RECORD_UNKNOWN` of a sibling for such a record, it sends that sibling nothing of the record until it holds the record completely, also not in answer to a `RESYNC` of that sibling (section 11.2).
 - **An open request.** A device sends no `CHANGE` to a sibling with which it has a request open, apart from its answer to a request of that sibling (section 11.3).
 - **One message at a time.** A device puts all parts of a record that it sends to a sibling at one time into one `CHANGE`.
-- **One id and version, one message.** Before a device sends a sibling a `CHANGE` of a record, it looks at the `CHANGE` of that record that it last sent to that sibling under its current state stamp. If there is one and the new message differs from it, in `whole`, in `removal` or in the entries of `fields`, whatever their order, the device MUST first take a new state stamp for the record (section 3.3, occasion 5), as the next stamp of section 2.2, and sends the new message with it as `state`. The usual case is a record that goes whole after `RECORD_UNKNOWN` or a `RESYNC`, having gone in part before; another is a resend after a `CHANGE` of the sibling has delivered some of the parts (section 10.1, event 2). The state of the record does not change, nothing becomes due by it, and the device need not send the record to another app for it. Nor is the new state stamp a reason to send any other sibling a `CHANGE`: a part that is on its way to another sibling is not sent again because of it. A message that is the same as the one sent before, a resend, goes under the same state stamp. A device that can take no stamp (section 2.3) does not send the different message. One id and version so name one `CHANGE` for each sibling.
+- **One id and version, one message.** Before a device sends a sibling a `CHANGE` of a record, it looks at the `CHANGE` of that record that it last sent to that sibling under its current state stamp. If there is one and the new message differs from it, in `whole`, in `removal`, in `keep` or in the entries of `fields`, whatever their order, the device MUST first take a new state stamp for the record (section 3.3, occasion 5), as the next stamp of section 2.2, and sends the new message with it as `state`. The usual case is a record that goes whole after `RECORD_UNKNOWN` or a `RESYNC`, having gone in part before; another is a resend after a `CHANGE` of the sibling has delivered some of the parts (section 10.1, event 2). The state of the record does not change, nothing becomes due by it, and the device need not send the record to another app for it. Nor is the new state stamp a reason to send any other sibling a `CHANGE`: a part that is on its way to another sibling is not sent again because of it. A message that is the same as the one sent before, a resend, goes under the same state stamp. A device that can take no stamp (section 2.3) does not send the different message. One id and version so name one `CHANGE` for each sibling.
 - **When.** A device sends a `CHANGE` of a record to a sibling only for one of the reasons of section 10.3. When there is one, it SHOULD send as soon as it has a channel to the sibling and the accepted offers that section 7.2 requires. It MAY send the messages in any order and need not wait for acknowledgements. A part that is due and on its way without an outcome is still due: it travels again in the next `CHANGE` of the record that a reason of section 10.3 brings, and is no reason of its own.
 - **A record that does not fit.** A device MUST NOT send a `CHANGE` above 16 MiB. A record whose whole `CHANGE` would be above it is not sent to a sibling to which it is not known; its due parts are still sent to a sibling to which it is known, when their `CHANGE` fits. A device SHOULD refuse a change of its user that would make the whole `CHANGE` of a record larger than 16 MiB, and SHOULD tell its user about a record that it cannot send.
 
@@ -823,6 +829,7 @@ A device keeps, for each sibling and for as long as that key is a sibling, the i
 - **A channel that ends first.** If a live connection ends before the device has sent the acknowledgement, the device goes on in the next channel it has to that sibling, a later connection or the relay: it sends there every `CHANGE` of the answer that it has not sent yet, sends again those that have no outcome (section 10.3), and then sends the acknowledgement.
 - **A record that cannot be sent.** A record of which section 10.2 lets the device send that sibling nothing, such as one for which it can take no state stamp (section 2.3) or one whose whole `CHANGE` does not fit, is not part of the answer and does not hold up the acknowledgement. A record that the device holds incompletely and for which that sibling has reported `RECORD_UNKNOWN` is still not sent after a `RESYNC`, until the device holds it completely (section 10.2).
 - **No record.** A device that holds no state of any record sends only the acknowledgement.
+- **What the set got from other apps.** The answer also holds a `FORWARD` of every message of another app that the device keeps, and a `CHANGE` of every owner's layer that it holds; section 20.4 gives their order.
 - **Offers.** The offers that the two devices have made to each other stay as they are. The schemas travel again where section 7.2 requires an offer.
 - **Nothing else changes.** The states of the device's records do not change, and neither does what the asking device keeps for it.
 
@@ -837,6 +844,7 @@ A device sends a `RESYNC` to each of its siblings, each with that sibling's key 
 - **After a restore.** A device that restored its data from a backup, or that for another reason cannot rule out that it holds an older state than it held before ([protocol.md](protocol.md), section 10), MUST send a `RESYNC` to every sibling (section 12.1).
 - **After a long absence.** A device that has not listed its mailbox for longer than the holding time of 14 days ([transports.md](transports.md), section 5.5) SHOULD send a `RESYNC` to each sibling it exchanges with through the relay. The siblings would send what has no outcome again on their own (section 10.3), but only after the holding time.
 - **For an incomplete record.** A device that holds a record incompletely (section 4.3) SHOULD send a `RESYNC`.
+- **For a sender known again.** A device to which a `FORWARD` has made a sender known again that its user had forgotten MUST send a `RESYNC` to the sibling that forwarded it (section 20.5).
 - **Otherwise.** A device MAY send a `RESYNC` whenever it has reason to think that it lacks states its siblings hold, for example after it took records from a file of its own set (section 13.4).
 
 A request is **open** from the moment the device decides to ask until it takes the acknowledgement of that request: an entry of a valid `ACK` of that sibling (section 9.1) whose `id` is the id of the request and whose `version` is 1, with the outcome `APPLIED` or `DUPLICATE`. While a request to a sibling is open, the device:
@@ -920,7 +928,7 @@ Through a relay ([transports.md](transports.md), section 5), a device seals each
 
 ### 13.3 File
 
-A file MUST NOT hold a `CHANGE` or a `RESYNC`. Each is for one device, whose key its body names, and belongs to the bookkeeping between two devices, which needs a way back. A reader that finds a `CHANGE` or a `RESYNC` in a file MUST reject the whole file ([transports.md](transports.md), section 2.2), whoever the file's sender is.
+A file MUST NOT hold a `CHANGE` or a `RESYNC`. Each is for one device, whose key its body names, and belongs to the bookkeeping between two devices, which needs a way back. A reader that finds a `CHANGE` or a `RESYNC` in a file MUST reject the whole file ([transports.md](transports.md), section 2.2), whoever the file's sender is. The same holds for a `FORWARD` (section 24.2).
 
 ### 13.4 A file of the device's own set
 
@@ -950,26 +958,31 @@ The record is then not known to any sibling on the device, and travels to each b
 | The wait of a restored device before its user changes a record                                 | Until the acknowledgement of its `RESYNC`, at most 14 days (section 12.1)           |
 | The wait for a sibling after `STALE` from another app                                          | At most 14 days (section 5.3)                                                       |
 
-The lengths are in bytes of UTF-8. A device MUST NOT produce a `CHANGE` above these limits, and MUST NOT reject one for its size, its number of fields or the length of a name while it is within them. The limit of 4,096 fields is far above what a type has; it bounds what a device has to hold for one message, as the 4,096 entries of an `ACK` do.
+The lengths are in bytes of UTF-8. A device MUST NOT produce a `CHANGE` above these limits, and MUST NOT reject one for its size, its number of fields or the length of a name while it is within them. The limit of 4,096 fields is far above what a type has; it bounds what a device has to hold for one message, as the 4,096 entries of an `ACK` do. The limits of a `FORWARD` are in section 24.3.
 
 ## 15. Schema and fingerprint
 
-The schemas of the bodies of `CHANGE` and `RESYNC` are [types/axt/Change.avsc](../types/axt/Change.avsc) and [types/axt/Resync.avsc](../types/axt/Resync.avsc). Each follows the rules that [types.md](types.md), section 5, sets for every example type, where they apply to a schema of the specification, as [manifest.md](manifest.md), section 9, says of the manifest: its nested types are defined in place, with names that begin with the schema's name, and it carries no `axt.version`, since it changes only with the envelope format. The first field of each is `to`. The two fields that may be absent, `origin` and `removal`, and `fields[].value` are unions with `null` first and the default `null` ([types.md](types.md), section 5.3).
+The schemas of the bodies of `CHANGE`, `RESYNC` and `FORWARD` are [types/axt/Change.avsc](../types/axt/Change.avsc), [types/axt/Resync.avsc](../types/axt/Resync.avsc) and [types/axt/Forward.avsc](../types/axt/Forward.avsc). Each follows the rules that [types.md](types.md), section 5, sets for every example type, where they apply to a schema of the specification, as [manifest.md](manifest.md), section 9, says of the manifest: its nested types are defined in place, with names that begin with the schema's name, and it carries no `axt.version`, since it changes only with the envelope format. The first field of each is `to`. The three fields of `axt.Change` that may be absent, `origin`, `removal` and `keep`, its `fields[].value`, and the `schema` of `axt.Forward` are unions with `null` first and the default `null` ([types.md](types.md), section 5.3).
 
 Their Parsing Canonical Forms:
 
 ```json
-{"name":"axt.Change","type":"record","fields":[{"name":"to","type":{"name":"axt.ChangeTo","type":"fixed","size":32}},{"name":"origin","type":["null",{"name":"axt.ChangeOrigin","type":"fixed","size":32}]},{"name":"type","type":"string"},{"name":"state","type":"long"},{"name":"whole","type":"boolean"},{"name":"removal","type":["null",{"name":"axt.ChangeRemoval","type":"record","fields":[{"name":"stamp","type":"long"},{"name":"device","type":{"name":"axt.ChangeRemovalDevice","type":"fixed","size":32}},{"name":"stands","type":"boolean"}]}]},{"name":"fields","type":{"type":"array","items":{"name":"axt.ChangeField","type":"record","fields":[{"name":"name","type":"string"},{"name":"schema","type":{"name":"axt.ChangeFieldSchema","type":"fixed","size":8}},{"name":"value","type":["null","bytes"]},{"name":"stamp","type":"long"},{"name":"device","type":{"name":"axt.ChangeFieldDevice","type":"fixed","size":32}}]}}}]}
+{"name":"axt.Change","type":"record","fields":[{"name":"to","type":{"name":"axt.ChangeTo","type":"fixed","size":32}},{"name":"origin","type":["null",{"name":"axt.ChangeOrigin","type":"fixed","size":32}]},{"name":"type","type":"string"},{"name":"state","type":"long"},{"name":"whole","type":"boolean"},{"name":"removal","type":["null",{"name":"axt.ChangeRemoval","type":"record","fields":[{"name":"stamp","type":"long"},{"name":"device","type":{"name":"axt.ChangeRemovalDevice","type":"fixed","size":32}},{"name":"stands","type":"boolean"}]}]},{"name":"keep","type":["null",{"name":"axt.ChangeKeep","type":"record","fields":[{"name":"stamp","type":"long"},{"name":"device","type":{"name":"axt.ChangeKeepDevice","type":"fixed","size":32}},{"name":"version","type":"long"},{"name":"given_up","type":"boolean"}]}]},{"name":"fields","type":{"type":"array","items":{"name":"axt.ChangeField","type":"record","fields":[{"name":"name","type":"string"},{"name":"schema","type":{"name":"axt.ChangeFieldSchema","type":"fixed","size":8}},{"name":"value","type":["null","bytes"]},{"name":"stamp","type":"long"},{"name":"device","type":{"name":"axt.ChangeFieldDevice","type":"fixed","size":32}}]}}}]}
 ```
 
 ```json
 {"name":"axt.Resync","type":"record","fields":[{"name":"to","type":{"name":"axt.ResyncTo","type":"fixed","size":32}}]}
 ```
 
-| Schema       | Envelope format | CRC-64-AVRO          | As bytes                  |
-| ------------ | --------------- | -------------------- | ------------------------- |
-| `axt.Change` | 1               | `0xd3849acafc9d62e8` | `e8 62 9d fc ca 9a 84 d3` |
-| `axt.Resync` | 1               | `0xe8762bd9d559fdf1` | `f1 fd 59 d5 d9 2b 76 e8` |
+```json
+{"name":"axt.Forward","type":"record","fields":[{"name":"to","type":{"name":"axt.ForwardTo","type":"fixed","size":32}},{"name":"message","type":"bytes"},{"name":"schema","type":["null","string"]}]}
+```
+
+| Schema        | Envelope format | CRC-64-AVRO          | As bytes                  |
+| ------------- | --------------- | -------------------- | ------------------------- |
+| `axt.Change`  | 1               | `0x4d094dafc5f888c1` | `c1 88 f8 c5 af 4d 09 4d` |
+| `axt.Resync`  | 1               | `0xe8762bd9d559fdf1` | `f1 fd 59 d5 d9 2b 76 e8` |
+| `axt.Forward` | 1               | `0x57476abf6b053bad` | `ad 3b 05 6b bf 6a 47 57` |
 
 The fingerprints of this section and the keys, values, messages, lengths and hashes of section 16 were produced with [conformance/tools/sync_examples.py](../conformance/tools/sync_examples.py), which builds each message field by field and checks it against fastavro, the Apache avro package and three implementations of Ed25519. The test vectors of [conformance.md](conformance.md) take precedence over these values.
 
@@ -1017,15 +1030,16 @@ The phone's user moves `start` to 10:30 and sets `location` to "Dr. Weber, Haupt
 | `state`             | 111                                                                                                                                                       |
 | `whole`             | `false`                                                                                                                                                   |
 | `removal`           | `null`                                                                                                                                                    |
+| `keep`              | `null`                                                                                                                                                    |
 | `fields`            | two entries, in this order: `start`, then `location`                                                                                                      |
-| `signature`         | the phone's signature: `8ebace8259a6ab896b97682f8d86bd1d32a62c22dd9393708c1ebb3a39e0db256267e8d9a90b83efe0c5ded9bd6f02cc044bc62056f595df878d7e6f3bd20306` |
+| `signature`         | the phone's signature: `4946f2fcee7acb885e95dd6a6c9502c570eff148c338136b5afcfb3d0447c418d8be0536b9189c9c928f494391a331fdd7d69f7784f58d81a81460c47ad56d0c` |
 
 | `name`     | `schema`                         | `value`                                                                                                                                                                                                                                   | `stamp` | `device` |
 | ---------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | -------- |
 | `start`    | the fingerprint of Appointment.1 | 2025-11-18 10:30:00.000 in `Europe/Berlin`, with the offset 3600 and the instant 1,763,458,200,000 (2025-11-18T09:30:00Z); as bytes: `d2 1f 16 24 14 3c 00 00 02 1a 45 75 72 6f 70 65 2f 42 65 72 6c 69 6e 02 a0 38 02 80 c7 e5 e4 d2 66` | 110     | phone    |
 | `location` | the fingerprint of Appointment.1 | "Dr. Weber, Hauptstr. 5"; as bytes: `2c 44 72 2e 20 57 65 62 65 72 2c 20 48 61 75 70 74 73 74 72 2e 20 35`                                                                                                                                | 110     | phone    |
 
-The message: 385 bytes, SHA-256 `a670440adf7b41107be1b20b57440926e3ccebf4c3497a04cbd856ff7d7677e5`. Its bytes, with offsets in hexadecimal; the signature covers the prefix `AXT-v1 message` with its zero byte and the bytes from offset `000a` to the signature ([keys.md](keys.md), section 2.2):
+The message: 386 bytes, SHA-256 `4a4d95dc78517edfa7b24d416513bec9b48997d2e1e0ac7dec507d9783e02eb3`. Its bytes, with offsets in hexadecimal; the signature covers the prefix `AXT-v1 message` with its zero byte and the bytes from offset `000a` to the signature ([keys.md](keys.md), section 2.2):
 
 ```text
 0000  c3 01                    single-object marker
@@ -1044,9 +1058,9 @@ The message: 385 bytes, SHA-256 `a670440adf7b41107be1b20b57440926e3ccebf4c3497a0
       32 64 34 62 35 63 36 65
       37 66 38 30
 0052  de 01                    record.version: long 111
-0054  d6 03                    body: bytes length 235
+0054  d8 03                    body: bytes length 236
 0056  c3 01                    body: single-object marker
-0058  e8 62 9d fc ca 9a 84 d3  body: fingerprint of axt.Change, format 1
+0058  c1 88 f8 c5 af 4d 09 4d  body: fingerprint of axt.Change, format 1
 0060  ee 08 ea a3 d8 aa 50 73  body: to: fixed(32), the tablet's test key
       43 bc 02 92 4f e9 8d 02
       f9 e4 47 16 27 ac e6 15
@@ -1060,45 +1074,46 @@ The message: 385 bytes, SHA-256 `a670440adf7b41107be1b20b57440926e3ccebf4c3497a0
 009c  de 01                    body: state: long 111
 009e  00                       body: whole: boolean false
 009f  00                       body: removal: union index 0, null
-00a0  04                       body: fields: array block of 2 items
-00a1  0a                       body: fields[0].name: string length 5
-00a2  73 74 61 72 74           body: "start"
-00a7  cd 30 64 2b f8 07 f2 1a  body: fields[0].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
-00af  02                       body: fields[0].value: union index 1, bytes
-00b0  42                       body: fields[0].value: bytes length 33
-00b1  d2 1f 16 24 14 3c 00 00  body: the value: an axt.DateTime, 2025-11-18 10:30:00.000 in Europe/Berlin
+00a0  00                       body: keep: union index 0, null
+00a1  04                       body: fields: array block of 2 items
+00a2  0a                       body: fields[0].name: string length 5
+00a3  73 74 61 72 74           body: "start"
+00a8  cd 30 64 2b f8 07 f2 1a  body: fields[0].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+00b0  02                       body: fields[0].value: union index 1, bytes
+00b1  42                       body: fields[0].value: bytes length 33
+00b2  d2 1f 16 24 14 3c 00 00  body: the value: an axt.DateTime, 2025-11-18 10:30:00.000 in Europe/Berlin
       02 1a 45 75 72 6f 70 65
       2f 42 65 72 6c 69 6e 02
       a0 38 02 80 c7 e5 e4 d2
       66
-00d2  dc 01                    body: fields[0].stamp: long 110
-00d4  c3 38 de 9e 8b c4 ca 4a  body: fields[0].device: fixed(32), the phone's test key
+00d3  dc 01                    body: fields[0].stamp: long 110
+00d5  c3 38 de 9e 8b c4 ca 4a  body: fields[0].device: fixed(32), the phone's test key
       88 6f 9d ae fc 0a 4f 47
       6b d7 c5 fc cf 0d 0a 43
       05 74 d0 fd b8 50 8c e0
-00f4  10                       body: fields[1].name: string length 8
-00f5  6c 6f 63 61 74 69 6f 6e  body: "location"
-00fd  cd 30 64 2b f8 07 f2 1a  body: fields[1].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
-0105  02                       body: fields[1].value: union index 1, bytes
-0106  2e                       body: fields[1].value: bytes length 23
-0107  2c 44 72 2e 20 57 65 62  body: the value: "Dr. Weber, Hauptstr. 5" as an Avro string
+00f5  10                       body: fields[1].name: string length 8
+00f6  6c 6f 63 61 74 69 6f 6e  body: "location"
+00fe  cd 30 64 2b f8 07 f2 1a  body: fields[1].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+0106  02                       body: fields[1].value: union index 1, bytes
+0107  2e                       body: fields[1].value: bytes length 23
+0108  2c 44 72 2e 20 57 65 62  body: the value: "Dr. Weber, Hauptstr. 5" as an Avro string
       65 72 2c 20 48 61 75 70
       74 73 74 72 2e 20 35
-011e  dc 01                    body: fields[1].stamp: long 110
-0120  c3 38 de 9e 8b c4 ca 4a  body: fields[1].device: fixed(32), the phone's test key
+011f  dc 01                    body: fields[1].stamp: long 110
+0121  c3 38 de 9e 8b c4 ca 4a  body: fields[1].device: fixed(32), the phone's test key
       88 6f 9d ae fc 0a 4f 47
       6b d7 c5 fc cf 0d 0a 43
       05 74 d0 fd b8 50 8c e0
-0140  00                       body: fields: end of the array
-0141  8e ba ce 82 59 a6 ab 89  signature: fixed(64)
-      6b 97 68 2f 8d 86 bd 1d
-      32 a6 2c 22 dd 93 93 70
-      8c 1e bb 3a 39 e0 db 25
-      62 67 e8 d9 a9 0b 83 ef
-      e0 c5 de d9 bd 6f 02 cc
-      04 4b c6 20 56 f5 95 df
-      87 8d 7e 6f 3b d2 03 06
-0181  end
+0141  00                       body: fields: end of the array
+0142  49 46 f2 fc ee 7a cb 88  signature: fixed(64)
+      5e 95 dd 6a 6c 95 02 c5
+      70 ef f1 48 c3 38 13 6b
+      5a fc fb 3d 04 47 c4 18
+      d8 be 05 36 b9 18 9c 9c
+      92 8f 49 43 91 a3 31 fd
+      d7 d6 9f 77 84 f5 8d 81
+      a8 14 60 c4 7a d5 6d 0c
+0182  end
 ```
 
 The tablet processes it by section 8.3. It holds the record, so step 10 passes. The merge, for the two names the message holds:
@@ -1191,8 +1206,9 @@ The tablet has given or seen the stamps up to 115. Before it sends the appointme
 | `state`             | 117                                                                                                                                                        |
 | `whole`             | `true`                                                                                                                                                     |
 | `removal`           | `null`                                                                                                                                                     |
+| `keep`              | `null`                                                                                                                                                     |
 | `fields`            | seven entries, in the order of the schema's fields                                                                                                         |
-| `signature`         | the tablet's signature: `9ab0779d184c6b409b3fe4badded825b1e0ccbc18bb5e38f731a34f73083b07046176b748f7cb138ca1877c83ccf006ea033563562a5a186e231eb3db2274803` |
+| `signature`         | the tablet's signature: `9b2a027860f8e499be59c594a5b1118d789f3893e96434b1088130170ee9e78d7f83f98d721f939a7845159e93f6f0f16a79c9021465b0d8db931e7309423409` |
 
 | `name`      | `schema`                         | `value`                                                   | `stamp` | `device` |
 | ----------- | -------------------------------- | --------------------------------------------------------- | ------- | -------- |
@@ -1204,7 +1220,7 @@ The tablet has given or seen the stamps up to 115. Before it sends the appointme
 | `notes`     | the fingerprint of Appointment.1 | ""; as bytes: `00`                                        | 100     | phone    |
 | `reminders` | the fingerprint of Appointment.1 | an empty array; as bytes: `00`                            | 100     | phone    |
 
-The message: 647 bytes, SHA-256 `1c33361873354e9b7c22f6f5569431c99fb51e60fa56d3e6ecc1ac117bd00e3f`. Its bytes, with offsets in hexadecimal; the signature covers the prefix `AXT-v1 message` with its zero byte and the bytes from offset `000a` to the signature ([keys.md](keys.md), section 2.2):
+The message: 648 bytes, SHA-256 `87876edaaafeed32a36537c829a45d4a1c86ac340c0f501729d268eaf9539ca8`. Its bytes, with offsets in hexadecimal; the signature covers the prefix `AXT-v1 message` with its zero byte and the bytes from offset `000a` to the signature ([keys.md](keys.md), section 2.2):
 
 ```text
 0000  c3 01                    single-object marker
@@ -1223,9 +1239,9 @@ The message: 647 bytes, SHA-256 `1c33361873354e9b7c22f6f5569431c99fb51e60fa56d3e
       32 64 34 62 35 63 36 65
       37 66 38 30
 0052  ea 01                    record.version: long 117
-0054  e2 07                    body: bytes length 497
+0054  e4 07                    body: bytes length 498
 0056  c3 01                    body: single-object marker
-0058  e8 62 9d fc ca 9a 84 d3  body: fingerprint of axt.Change, format 1
+0058  c1 88 f8 c5 af 4d 09 4d  body: fingerprint of axt.Change, format 1
 0060  c3 38 de 9e 8b c4 ca 4a  body: to: fixed(32), the phone's test key
       88 6f 9d ae fc 0a 4f 47
       6b d7 c5 fc cf 0d 0a 43
@@ -1239,101 +1255,102 @@ The message: 647 bytes, SHA-256 `1c33361873354e9b7c22f6f5569431c99fb51e60fa56d3e
 009c  ea 01                    body: state: long 117
 009e  01                       body: whole: boolean true
 009f  00                       body: removal: union index 0, null
-00a0  0e                       body: fields: array block of 7 items
-00a1  0a                       body: fields[0].name: string length 5
-00a2  74 69 74 6c 65           body: "title"
-00a7  cd 30 64 2b f8 07 f2 1a  body: fields[0].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
-00af  02                       body: fields[0].value: union index 1, bytes
-00b0  08                       body: fields[0].value: bytes length 4
-00b1  06 56 65 74              body: the value: "Vet" as an Avro string
-00b5  c8 01                    body: fields[0].stamp: long 100
-00b7  c3 38 de 9e 8b c4 ca 4a  body: fields[0].device: fixed(32), the phone's test key
+00a0  00                       body: keep: union index 0, null
+00a1  0e                       body: fields: array block of 7 items
+00a2  0a                       body: fields[0].name: string length 5
+00a3  74 69 74 6c 65           body: "title"
+00a8  cd 30 64 2b f8 07 f2 1a  body: fields[0].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+00b0  02                       body: fields[0].value: union index 1, bytes
+00b1  08                       body: fields[0].value: bytes length 4
+00b2  06 56 65 74              body: the value: "Vet" as an Avro string
+00b6  c8 01                    body: fields[0].stamp: long 100
+00b8  c3 38 de 9e 8b c4 ca 4a  body: fields[0].device: fixed(32), the phone's test key
       88 6f 9d ae fc 0a 4f 47
       6b d7 c5 fc cf 0d 0a 43
       05 74 d0 fd b8 50 8c e0
-00d7  0a                       body: fields[1].name: string length 5
-00d8  73 74 61 72 74           body: "start"
-00dd  cd 30 64 2b f8 07 f2 1a  body: fields[1].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
-00e5  02                       body: fields[1].value: union index 1, bytes
-00e6  42                       body: fields[1].value: bytes length 33
-00e7  d2 1f 16 24 14 3c 00 00  body: the value: an axt.DateTime, 2025-11-18 10:30:00.000 in Europe/Berlin
+00d8  0a                       body: fields[1].name: string length 5
+00d9  73 74 61 72 74           body: "start"
+00de  cd 30 64 2b f8 07 f2 1a  body: fields[1].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+00e6  02                       body: fields[1].value: union index 1, bytes
+00e7  42                       body: fields[1].value: bytes length 33
+00e8  d2 1f 16 24 14 3c 00 00  body: the value: an axt.DateTime, 2025-11-18 10:30:00.000 in Europe/Berlin
       02 1a 45 75 72 6f 70 65
       2f 42 65 72 6c 69 6e 02
       a0 38 02 80 c7 e5 e4 d2
       66
-0108  dc 01                    body: fields[1].stamp: long 110
-010a  c3 38 de 9e 8b c4 ca 4a  body: fields[1].device: fixed(32), the phone's test key
+0109  dc 01                    body: fields[1].stamp: long 110
+010b  c3 38 de 9e 8b c4 ca 4a  body: fields[1].device: fixed(32), the phone's test key
       88 6f 9d ae fc 0a 4f 47
       6b d7 c5 fc cf 0d 0a 43
       05 74 d0 fd b8 50 8c e0
-012a  06                       body: fields[2].name: string length 3
-012b  65 6e 64                 body: "end"
-012e  cd 30 64 2b f8 07 f2 1a  body: fields[2].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
-0136  02                       body: fields[2].value: union index 1, bytes
-0137  02                       body: fields[2].value: bytes length 1
-0138  00                       body: the value: union index 0, null
-0139  c8 01                    body: fields[2].stamp: long 100
-013b  c3 38 de 9e 8b c4 ca 4a  body: fields[2].device: fixed(32), the phone's test key
+012b  06                       body: fields[2].name: string length 3
+012c  65 6e 64                 body: "end"
+012f  cd 30 64 2b f8 07 f2 1a  body: fields[2].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+0137  02                       body: fields[2].value: union index 1, bytes
+0138  02                       body: fields[2].value: bytes length 1
+0139  00                       body: the value: union index 0, null
+013a  c8 01                    body: fields[2].stamp: long 100
+013c  c3 38 de 9e 8b c4 ca 4a  body: fields[2].device: fixed(32), the phone's test key
       88 6f 9d ae fc 0a 4f 47
       6b d7 c5 fc cf 0d 0a 43
       05 74 d0 fd b8 50 8c e0
-015b  0e                       body: fields[3].name: string length 7
-015c  61 6c 6c 5f 64 61 79     body: "all_day"
-0163  cd 30 64 2b f8 07 f2 1a  body: fields[3].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
-016b  02                       body: fields[3].value: union index 1, bytes
-016c  02                       body: fields[3].value: bytes length 1
-016d  00                       body: the value: boolean false
-016e  c8 01                    body: fields[3].stamp: long 100
-0170  c3 38 de 9e 8b c4 ca 4a  body: fields[3].device: fixed(32), the phone's test key
+015c  0e                       body: fields[3].name: string length 7
+015d  61 6c 6c 5f 64 61 79     body: "all_day"
+0164  cd 30 64 2b f8 07 f2 1a  body: fields[3].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+016c  02                       body: fields[3].value: union index 1, bytes
+016d  02                       body: fields[3].value: bytes length 1
+016e  00                       body: the value: boolean false
+016f  c8 01                    body: fields[3].stamp: long 100
+0171  c3 38 de 9e 8b c4 ca 4a  body: fields[3].device: fixed(32), the phone's test key
       88 6f 9d ae fc 0a 4f 47
       6b d7 c5 fc cf 0d 0a 43
       05 74 d0 fd b8 50 8c e0
-0190  10                       body: fields[4].name: string length 8
-0191  6c 6f 63 61 74 69 6f 6e  body: "location"
-0199  cd 30 64 2b f8 07 f2 1a  body: fields[4].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
-01a1  02                       body: fields[4].value: union index 1, bytes
-01a2  2e                       body: fields[4].value: bytes length 23
-01a3  2c 44 72 2e 20 57 65 62  body: the value: "Dr. Weber, Hauptstr. 5" as an Avro string
+0191  10                       body: fields[4].name: string length 8
+0192  6c 6f 63 61 74 69 6f 6e  body: "location"
+019a  cd 30 64 2b f8 07 f2 1a  body: fields[4].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+01a2  02                       body: fields[4].value: union index 1, bytes
+01a3  2e                       body: fields[4].value: bytes length 23
+01a4  2c 44 72 2e 20 57 65 62  body: the value: "Dr. Weber, Hauptstr. 5" as an Avro string
       65 72 2c 20 48 61 75 70
       74 73 74 72 2e 20 35
-01ba  dc 01                    body: fields[4].stamp: long 110
-01bc  c3 38 de 9e 8b c4 ca 4a  body: fields[4].device: fixed(32), the phone's test key
+01bb  dc 01                    body: fields[4].stamp: long 110
+01bd  c3 38 de 9e 8b c4 ca 4a  body: fields[4].device: fixed(32), the phone's test key
       88 6f 9d ae fc 0a 4f 47
       6b d7 c5 fc cf 0d 0a 43
       05 74 d0 fd b8 50 8c e0
-01dc  0a                       body: fields[5].name: string length 5
-01dd  6e 6f 74 65 73           body: "notes"
-01e2  cd 30 64 2b f8 07 f2 1a  body: fields[5].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
-01ea  02                       body: fields[5].value: union index 1, bytes
-01eb  02                       body: fields[5].value: bytes length 1
-01ec  00                       body: the value: a string of length 0
-01ed  c8 01                    body: fields[5].stamp: long 100
-01ef  c3 38 de 9e 8b c4 ca 4a  body: fields[5].device: fixed(32), the phone's test key
+01dd  0a                       body: fields[5].name: string length 5
+01de  6e 6f 74 65 73           body: "notes"
+01e3  cd 30 64 2b f8 07 f2 1a  body: fields[5].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+01eb  02                       body: fields[5].value: union index 1, bytes
+01ec  02                       body: fields[5].value: bytes length 1
+01ed  00                       body: the value: a string of length 0
+01ee  c8 01                    body: fields[5].stamp: long 100
+01f0  c3 38 de 9e 8b c4 ca 4a  body: fields[5].device: fixed(32), the phone's test key
       88 6f 9d ae fc 0a 4f 47
       6b d7 c5 fc cf 0d 0a 43
       05 74 d0 fd b8 50 8c e0
-020f  12                       body: fields[6].name: string length 9
-0210  72 65 6d 69 6e 64 65 72  body: "reminders"
+0210  12                       body: fields[6].name: string length 9
+0211  72 65 6d 69 6e 64 65 72  body: "reminders"
       73
-0219  cd 30 64 2b f8 07 f2 1a  body: fields[6].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
-0221  02                       body: fields[6].value: union index 1, bytes
-0222  02                       body: fields[6].value: bytes length 1
-0223  00                       body: the value: an array without items
-0224  c8 01                    body: fields[6].stamp: long 100
-0226  c3 38 de 9e 8b c4 ca 4a  body: fields[6].device: fixed(32), the phone's test key
+021a  cd 30 64 2b f8 07 f2 1a  body: fields[6].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+0222  02                       body: fields[6].value: union index 1, bytes
+0223  02                       body: fields[6].value: bytes length 1
+0224  00                       body: the value: an array without items
+0225  c8 01                    body: fields[6].stamp: long 100
+0227  c3 38 de 9e 8b c4 ca 4a  body: fields[6].device: fixed(32), the phone's test key
       88 6f 9d ae fc 0a 4f 47
       6b d7 c5 fc cf 0d 0a 43
       05 74 d0 fd b8 50 8c e0
-0246  00                       body: fields: end of the array
-0247  9a b0 77 9d 18 4c 6b 40  signature: fixed(64)
-      9b 3f e4 ba dd ed 82 5b
-      1e 0c cb c1 8b b5 e3 8f
-      73 1a 34 f7 30 83 b0 70
-      46 17 6b 74 8f 7c b1 38
-      ca 18 77 c8 3c cf 00 6e
-      a0 33 56 35 62 a5 a1 86
-      e2 31 eb 3d b2 27 48 03
-0287  end
+0247  00                       body: fields: end of the array
+0248  9b 2a 02 78 60 f8 e4 99  signature: fixed(64)
+      be 59 c5 94 a5 b1 11 8d
+      78 9f 38 93 e9 64 34 b1
+      08 81 30 17 0e e9 e7 8d
+      7f 83 f9 8d 72 1f 93 9a
+      78 45 15 9e 93 f6 f0 f1
+      6a 79 c9 02 14 65 b0 d8
+      db 93 1e 73 09 42 34 09
+0288  end
 ```
 
 The tablet signs the message, although the phone made every change in it (section 13.1). The phone processes it and merges:
@@ -1365,7 +1382,818 @@ That `ACK`: 196 bytes, SHA-256 `d6283680f586f43c358f0f2d3a5aceb18f19d6f1373c8549
 
 Had the tablet's message carried only `start` and `location`, with `whole` `false`, the phone would have merged it in the same way, since it holds the record. A device without the record, such as a phone that restored a backup made before the appointment existed, would have answered such a message with `RECORD_UNKNOWN`, and the tablet would have sent a whole message.
 
+### 16.5 A `FORWARD`
+
+The examples of sections 16.5 to 16.7 are the steps 1 and 2 of section 22.4. They do not continue sections 16.2 to 16.4: the phone and the tablet of section 16.1 are here the two devices of a set that takes a record from another app, and each has given or seen stamps as section 22.4 says, the phone up to 195 and the tablet up to 190. The other app is Old Brain Fix, which signs with the test key `Old Brain Fix, Ed25519` of [protocol.md](protocol.md), section 17.1, whose public key is `da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7`. **These keys are for tests only and MUST NOT be used outside tests.** The phone knows Old Brain Fix by that one key, so it keeps no addition and no removal of it. It keeps the `MANIFEST` that Old Brain Fix sent in the connection, the message of [manifest.md](manifest.md), section 10.3, and has forwarded it to the tablet before the forward of this section, since a manifest goes before a record message (section 20.3). That forward is not shown: by it the tablet took the key of Old Brain Fix as the first key of a new known sender, without a question to its user (section 19.2), and keeps the manifest of that key.
+
+Old Brain Fix sends the appointment of [records.md](records.md), section 9, step 1, to the phone, in a live connection and under an offer of `axt.example.v1.Appointment` that the phone accepted. The offer carried the schema [Appointment.1.avsc](../types/axt/example/v1/Appointment.1.avsc) as the text of [protocol.md](protocol.md), section 17.1: JSON without whitespace, 6,389 bytes. The record has the id `3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80`. The set's own record of section 16.1 has the same id; the two are different records, since their senders differ (section 17.1), and the examples of sections 16.5 to 16.7 are about the received one only.
+
+The `DATA` of Old Brain Fix:
+
+| Part of the message | Value                                                                                                                                                                                                                                                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `format`            | 1                                                                                                                                                                                                                                                                                                                   |
+| `kind`              | `DATA`                                                                                                                                                                                                                                                                                                              |
+| `sender`            | the key of Old Brain Fix                                                                                                                                                                                                                                                                                            |
+| `record.id`         | `3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80`                                                                                                                                                                                                                                                                              |
+| `record.version`    | 1                                                                                                                                                                                                                                                                                                                   |
+| body                | an `axt.example.v1.Appointment` in single-object encoding, with the fingerprint of Appointment.1: `title` "Vet"; `start` 2025-11-18 10:00:00.000 in `Europe/Berlin`, with the offset 3600 and the instant 1,763,456,400,000; `end` `null`; `all_day` `false`; `location` ""; `notes` ""; `reminders` an empty array |
+| `signature`         | the signature of Old Brain Fix: `5c5317aec2ba2d08540017e0fc141a1b7cc3facc85652cd2d84a29cb53db8696e7711510451c21775cc6d52232f166b6129d12b4e17fc674c7f045dea3084802`                                                                                                                                                  |
+
+The `DATA`: 200 bytes, SHA-256 `d0bdcdf95c04da5b42af9d404c6a2b7d3157013d15758cb5d3ac7ee97cd4be0a`. The phone has no record under that id from Old Brain Fix, takes the record, and acknowledges it to Old Brain Fix with `APPLIED` and the receiver's version 1 ([records.md](records.md), section 5.2). It keeps the message with the text of its schema (section 20.1). The kept message is due for the tablet, so the phone forwards it, in a forward to which it gives the id `c4a1e2b3-6d7f-4809-9a1b-2c3d4e5f6071`, a UUID of version 4 chosen for this example:
+
+| Part of the message | Value                                                                                                                                                     |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `format`            | 1                                                                                                                                                         |
+| `kind`              | `FORWARD`, enum index 13                                                                                                                                  |
+| `sender`            | the phone's key                                                                                                                                           |
+| `record.id`         | `c4a1e2b3-6d7f-4809-9a1b-2c3d4e5f6071`, the id of the forward                                                                                             |
+| `record.version`    | 1                                                                                                                                                         |
+| `to`                | the tablet's key                                                                                                                                          |
+| `message`           | the `DATA` above, byte for byte: 200 bytes                                                                                                                |
+| `schema`            | the text of Appointment.1.avsc as Old Brain Fix offered it: 6,389 bytes                                                                                   |
+| `signature`         | the phone's signature: `0d0eaa832c7107217707c63e5c9cb052e282d85eccbb6dc5051d86fb89d881dc371f1e8781c49d8ca04e2055357d96f25b3c1e84818235f03322fa25a33f0603` |
+
+The `FORWARD`: 6,785 bytes, SHA-256 `489fade7a3899293bd44f2d664aa2888b2de126797fbbb144fa9589f52c1b84a`. Its bytes, with offsets in hexadecimal; the text of the schema is shown shortened:
+
+```text
+0000  c3 01                    single-object marker
+0002  16 30 6f 71 b9 ce 9e a8  fingerprint of axt.Envelope, format 1
+000a  02                       format: int 1
+000b  1a                       kind: enum index 13, FORWARD
+000c  c3 38 de 9e 8b c4 ca 4a  sender: fixed(32), the phone's test key
+      88 6f 9d ae fc 0a 4f 47
+      6b d7 c5 fc cf 0d 0a 43
+      05 74 d0 fd b8 50 8c e0
+002c  02                       record: union index 1, axt.RecordRef
+002d  48                       record.id: string length 36
+002e  63 34 61 31 65 32 62 33  "c4a1e2b3-6d7f-4809-9a1b-2c3d4e5f6071"
+      2d 36 64 37 66 2d 34 38
+      30 39 2d 39 61 31 62 2d
+      32 63 33 64 34 65 35 66
+      36 30 37 31
+0052  02                       record.version: long 1
+0053  d8 67                    body: bytes length 6636
+0055  c3 01                    body: single-object marker
+0057  ad 3b 05 6b bf 6a 47 57  body: fingerprint of axt.Forward, format 1
+005f  ee 08 ea a3 d8 aa 50 73  body: to: fixed(32), the tablet's test key
+      43 bc 02 92 4f e9 8d 02
+      f9 e4 47 16 27 ac e6 15
+      54 f1 b4 96 35 f2 4a b2
+007f  90 03                    body: message: bytes length 200
+0081  c3 01                    body: message: single-object marker
+0083  16 30 6f 71 b9 ce 9e a8  body: message: fingerprint of axt.Envelope, format 1
+008b  02                       body: message: format: int 1
+008c  08                       body: message: kind: enum index 4, DATA
+008d  da 9e 54 c9 aa 2d b4 32  body: message: sender: fixed(32), Old Brain Fix's test key
+      44 df 99 88 9d 91 38 c1
+      ca 71 75 d4 ca 09 08 16
+      8f 63 53 0e 4a 7d ed b7
+00ad  02                       body: message: record: union index 1, axt.RecordRef
+00ae  48                       body: message: record.id: string length 36
+00af  33 66 32 63 38 61 35 65  body: message: "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80"
+      2d 39 62 31 64 2d 34 63
+      37 65 2d 38 61 36 66 2d
+      32 64 34 62 35 63 36 65
+      37 66 38 30
+00d3  02                       body: message: record.version: long 1
+00d4  68                       body: message: body: bytes length 52
+00d5  c3 01                    body: message: body: single-object marker
+00d7  cd 30 64 2b f8 07 f2 1a  body: message: body: fingerprint of axt.example.v1.Appointment, version 1
+00df  06 56 65 74              body: message: body: title: the value of section 16.1
+00e3  d2 1f 16 24 14 00 00 00  body: message: body: start: the value of section 16.1
+      02 1a 45 75 72 6f 70 65
+      2f 42 65 72 6c 69 6e 02
+      a0 38 02 80 ea 89 e3 d2
+      66
+0104  00                       body: message: body: end: the value of section 16.1
+0105  00                       body: message: body: all_day: the value of section 16.1
+0106  00                       body: message: body: location: the value of section 16.1
+0107  00                       body: message: body: notes: the value of section 16.1
+0108  00                       body: message: body: reminders: the value of section 16.1
+0109  5c 53 17 ae c2 ba 2d 08  body: message: signature: fixed(64)
+      54 00 17 e0 fc 14 1a 1b
+      7c c3 fa cc 85 65 2c d2
+      d8 4a 29 cb 53 db 86 96
+      e7 71 15 10 45 1c 21 77
+      5c c6 d5 22 32 f1 66 b6
+      12 9d 12 b4 e1 7f c6 74
+      c7 f0 45 de a3 08 48 02
+0149  02                       body: schema: union index 1, string
+014a  ea 63                    body: schema: string length 6389
+014c  7b 22 74 79 ... 5d 7d    body: Appointment.1.avsc without whitespace (6389 bytes of UTF-8 JSON)
+1a41  0d 0e aa 83 2c 71 07 21  signature: fixed(64)
+      77 07 c6 3e 5c 9c b0 52
+      e2 82 d8 5e cc bb 6d c5
+      05 1d 86 fb 89 d8 81 dc
+      37 1f 1e 87 81 c4 9d 8c
+      a0 4e 20 55 35 7d 96 f2
+      5b 3c 1e 84 81 82 35 f0
+      33 22 fa 25 a3 3f 06 03
+1a81  end
+```
+
+The tablet processes it by section 18.3. The inner message is a valid `DATA` of envelope format 1 (steps 7 to 9); the fingerprint of the schema text is the one its body names (step 11); its signature verifies with the key of Old Brain Fix (step 12), which is no key of the tablet's set and no refused key (steps 13 and 14). That key is a current key of a sender the tablet knows, from the forwarded `MANIFEST`. The tablet holds no record under the id from that sender: it takes the record into the sender's layer with the receiver's version 1, keeps the message and the schema text, and shows the appointment (section 19.5). It sends Old Brain Fix nothing. The same bytes are now a kept message of the tablet, so that message is delivered to the phone on the tablet and is not forwarded back (section 20.2).
+
+### 16.6 The `ACK` for a `FORWARD`
+
+The tablet took the record, so the outcome of the forward is `APPLIED` (section 18.4). Its `ACK` to the phone carries one entry:
+
+| Field              | Value                                                         |
+| ------------------ | ------------------------------------------------------------- |
+| `to`               | the phone's key                                               |
+| `id`               | `c4a1e2b3-6d7f-4809-9a1b-2c3d4e5f6071`, the id of the forward |
+| `version`          | 1                                                             |
+| `outcome`          | `APPLIED`                                                     |
+| `receiver_version` | 1                                                             |
+| `kept_fields`      | empty                                                         |
+
+The `ACK`: 196 bytes, SHA-256 `3deb67b063badf1f2c341b35abb0b699cdc7e8b36493da49267cb161dafada69`. When the phone takes it, the kept message is delivered to the tablet. Had the phone sent the same `FORWARD` once more, or the same `DATA` in a forward with another id, the tablet would have changed nothing and answered with the outcome `DUPLICATE`.
+
+### 16.7 A `CHANGE` with a key in `origin`
+
+The tablet's user sets the `location` of the received appointment to "Dr. Weber, Hauptstr. 5". The tablet takes the stamp 200 for the field and the state stamp 201 of the owner's layer (section 21.2). It writes the value under the schema of the kept `DATA`, Appointment.1, which it has offered to the phone and has accepted (section 16.1). The tablet first knew the record's sender by the key of Old Brain Fix, so that key is the `origin`. The layer is not known to the phone, so the `CHANGE` is whole; the kept message of the record is delivered to the phone, so no `FORWARD` goes before it (section 21.5).
+
+| Part of the message | Value                                                                                                                                                      |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `format`            | 1                                                                                                                                                          |
+| `kind`              | `CHANGE`                                                                                                                                                   |
+| `sender`            | the tablet's key                                                                                                                                           |
+| `record.id`         | `3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80`                                                                                                                     |
+| `record.version`    | 201, the highest of 201 and 200                                                                                                                            |
+| `to`                | the phone's key                                                                                                                                            |
+| `origin`            | the key of Old Brain Fix                                                                                                                                   |
+| `type`              | `axt.example.v1.Appointment`                                                                                                                               |
+| `state`             | 201                                                                                                                                                        |
+| `whole`             | `true`                                                                                                                                                     |
+| `removal`           | `null`                                                                                                                                                     |
+| `keep`              | `null`                                                                                                                                                     |
+| `fields`            | one entry: `location`                                                                                                                                      |
+| `signature`         | the tablet's signature: `eef90edd59faeb7f64ccf01178e5c380984a1cfdd7edfafd3f129d24cbda8a4351426b12771be135e7d2a5817023a3081258aa19ef19d8d2ff5942edf291950c` |
+
+| `name`     | `schema`                         | `value`                                             | `stamp` | `device` |
+| ---------- | -------------------------------- | --------------------------------------------------- | ------- | -------- |
+| `location` | the fingerprint of Appointment.1 | "Dr. Weber, Hauptstr. 5", the bytes of section 16.2 | 200     | tablet   |
+
+The `CHANGE`: 335 bytes, SHA-256 `c7a062c2967186d250073cf2b2518ca445318d25809c95ff4330887866070524`. Its bytes, with offsets in hexadecimal:
+
+```text
+0000  c3 01                    single-object marker
+0002  16 30 6f 71 b9 ce 9e a8  fingerprint of axt.Envelope, format 1
+000a  02                       format: int 1
+000b  16                       kind: enum index 11, CHANGE
+000c  ee 08 ea a3 d8 aa 50 73  sender: fixed(32), the tablet's test key
+      43 bc 02 92 4f e9 8d 02
+      f9 e4 47 16 27 ac e6 15
+      54 f1 b4 96 35 f2 4a b2
+002c  02                       record: union index 1, axt.RecordRef
+002d  48                       record.id: string length 36
+002e  33 66 32 63 38 61 35 65  "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80"
+      2d 39 62 31 64 2d 34 63
+      37 65 2d 38 61 36 66 2d
+      32 64 34 62 35 63 36 65
+      37 66 38 30
+0052  92 03                    record.version: long 201
+0054  f2 02                    body: bytes length 185
+0056  c3 01                    body: single-object marker
+0058  c1 88 f8 c5 af 4d 09 4d  body: fingerprint of axt.Change, format 1
+0060  c3 38 de 9e 8b c4 ca 4a  body: to: fixed(32), the phone's test key
+      88 6f 9d ae fc 0a 4f 47
+      6b d7 c5 fc cf 0d 0a 43
+      05 74 d0 fd b8 50 8c e0
+0080  02                       body: origin: union index 1, axt.ChangeOrigin
+0081  da 9e 54 c9 aa 2d b4 32  body: origin: fixed(32), Old Brain Fix's test key
+      44 df 99 88 9d 91 38 c1
+      ca 71 75 d4 ca 09 08 16
+      8f 63 53 0e 4a 7d ed b7
+00a1  34                       body: type: string length 26
+00a2  61 78 74 2e 65 78 61 6d  body: "axt.example.v1.Appointment"
+      70 6c 65 2e 76 31 2e 41
+      70 70 6f 69 6e 74 6d 65
+      6e 74
+00bc  92 03                    body: state: long 201
+00be  01                       body: whole: boolean true
+00bf  00                       body: removal: union index 0, null
+00c0  00                       body: keep: union index 0, null
+00c1  02                       body: fields: array block of 1 items
+00c2  10                       body: fields[0].name: string length 8
+00c3  6c 6f 63 61 74 69 6f 6e  body: "location"
+00cb  cd 30 64 2b f8 07 f2 1a  body: fields[0].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+00d3  02                       body: fields[0].value: union index 1, bytes
+00d4  2e                       body: fields[0].value: bytes length 23
+00d5  2c 44 72 2e 20 57 65 62  body: the value: "Dr. Weber, Hauptstr. 5" as an Avro string
+      65 72 2c 20 48 61 75 70
+      74 73 74 72 2e 20 35
+00ec  90 03                    body: fields[0].stamp: long 200
+00ee  ee 08 ea a3 d8 aa 50 73  body: fields[0].device: fixed(32), the tablet's test key
+      43 bc 02 92 4f e9 8d 02
+      f9 e4 47 16 27 ac e6 15
+      54 f1 b4 96 35 f2 4a b2
+010e  00                       body: fields: end of the array
+010f  ee f9 0e dd 59 fa eb 7f  signature: fixed(64)
+      64 cc f0 11 78 e5 c3 80
+      98 4a 1c fd d7 ed fa fd
+      3f 12 9d 24 cb da 8a 43
+      51 42 6b 12 77 1b e1 35
+      e7 d2 a5 81 70 23 a3 08
+      12 58 aa 19 ef 19 d8 d2
+      ff 59 42 ed f2 91 95 0c
+014f  end
+```
+
+The phone processes it by section 21.4. The key in `origin` is a current key of a sender it knows, so step 10 passes; it holds the schema, and the value decodes as a string. It holds no owner's layer of the record and takes the state of the message. The outcome is `APPLIED`. The phone had given or seen the stamps up to 195; it counts 200 and 201 as seen and takes the state stamp 205 for the layer. Its `ACK` to the tablet carries the id, the version 201, `APPLIED`, the `receiver_version` 205 and no kept field: 198 bytes, SHA-256 `5843bef17607d2bb18ffdf6df39abae414d969d03762bcb47e6c75ed37a7b734`. The phone sends Old Brain Fix nothing. Both devices now show the appointment with `start` 10:00 from the sender's layer and `location` "Dr. Weber, Hauptstr. 5" from the owner's layer (section 22.1).
+
+## 17. Records received from other apps
+
+Sections 17 to 24 define what the devices of a set do with what they got from other apps: the keys of the senders they know, the manifests of those senders, the records they took from them, and what the owner changed in those records. Another app has to reach only one device of the set. That device passes each message of the other app on to its siblings, as the signed message it is, inside a `FORWARD` message (section 18), and what the owner did with a received record travels in `CHANGE` messages that name the record's sender in `origin` (section 21).
+
+### 17.1 Terms
+
+- **Other app**: a sender ([records.md](records.md), section 1) other than the device's own set.
+- **Received record**: a record whose sender is another app. A device identifies it by its sender and its id together ([records.md](records.md), section 2); a record of the set and a received record, or the records of two senders, can have the same id and are different records.
+- **Sender's layer** of a received record: what the record messages of its sender have brought, as [records.md](records.md), section 5.1, keeps it: the full name of its type, the receiver's version, and the record message with the highest version that the device took. The layer **ends in a `DATA`** or **ends in a `DELETE`**, by the kind of that message. Where it ends in a `DELETE`, it also holds, beside the tombstone, the `DATA` with the highest version below that `DELETE` that the device took, if it took one (section 20.1). Only a record message of the record's sender changes it (section 19.5).
+- **Owner's layer** of a received record: what the owner did with the record on the devices of the set: the values the owner gave to fields, the owner's deletion, the taking back of either, and whether the owner keeps the record against a deletion by its sender. It is a state like that of a record of the set, with field states, at most one removal and a state stamp, and with at most one keep (section 21.1). Only a device of the set changes it.
+- **Owner's value** of a field: the value of the field state that the owner's layer holds for the field, if it holds one whose value is not `null`.
+- **Kept message**: a message of another app that a device keeps as the bytes it received, in order to pass it on (section 20.1).
+- **Forwarding**: sending a sibling a kept message in a `FORWARD`.
+- **Answering device**: for a message of another app, the device of the set that got it from that app: in a live connection with it, from its own mailbox at a relay, or from a file that it read. A device that gets the message in a `FORWARD` is not the answering device.
+
+### 17.2 Which device another app sends to, and which device answers
+
+For another app, a set is one sender with several current keys ([keys.md](keys.md), section 5.6). It sends each message to one device:
+
+- **One device is enough.** Another app offers to the current key of the set from which it last got a valid message other than a message of the chain or a `MANIFEST` ([protocol.md](protocol.md), section 9.1), and its record messages travel under the offer that this device accepted, in the same channel ([protocol.md](protocol.md), section 6.1). It need not send anything to another device of the set, and need not know that the set has one.
+- **That device answers.** The device that gets a message of another app processes it as [protocol.md](protocol.md) says, and it alone answers it: with `ACCEPT` or `DECLINE` for an offer, with an `ACK` entry for a record message that it processed to an outcome, with an `ERROR` for a message that it could not process. Each reply carries the key of the other app's device in `to` and the answering device's key as its `sender`. An outcome says what that device did when it processed the message, by what it held then; the other app keeps outcomes for each acknowledging key ([protocol.md](protocol.md), section 7.4).
+- **Its siblings get the message from it.** The answering device keeps the message (section 20.1) and forwards it to each sibling (section 20.3). A sibling that gets it in a `FORWARD` sends nothing to the other app because of it (section 19.1).
+- **The same message to two devices.** Another app MAY send a message to several devices of a set, such as in live connections with two of them. Each device that gets it from the other app is an answering device: each processes it and answers for itself. When one of them forwards the message to the other, that device holds it already, and the forward has the outcome `DUPLICATE` (section 18.4). Both end with the same sender's layer, by the version rule of [records.md](records.md), section 5.2. The other app can so hold two outcomes for one message, one of each device, and the two need not be equal.
+- **A device that is gone.** When a device applies a removal in its own set, so that its chain grows, it MUST send its chain and its `MANIFEST` to every known sender, those that it knows only by forwards included: through the relay to each key of that sender whose encryption key and relay it has, and in its next live connections with that app, as [protocol.md](protocol.md), section 3.3, says for the apps a device exchanges with. Every other app so learns of the removal and holds the manifest of a remaining device. The device sends them at once to every known sender but those that it knows only by forwards of the removed sibling (section 19.2): to such a sender it sends them only once its user has seen the list of those senders that section 19.2 has it show, and has kept that sender, that is, has not forgotten it (section 20.5). A device that does not show the list sends such a sender nothing because of the removal. At the end of a move, where the device may leave the list out ([keys.md](keys.md), section 5.7), it holds nothing back. Without the wait, a stolen device could, before its removal, make its siblings know a sender of its holder's choice by forwards, with a manifest that names a relay and a mailbox of its holder's choice, and every remaining device would contact that host as soon as the owner removed the stolen device. For the other app, the outcomes that the removed key reported no longer count ([protocol.md](protocol.md), section 7.4). An app whose last-contact key of the set was removed sends to another current key of the set of which it holds a manifest, as [protocol.md](protocol.md), section 9.1, says, offers anew there, and sends again, to that key, the current state of each record whose only outcomes are of removed keys of the set, and what has no outcome ([protocol.md](protocol.md), sections 7.4 and 11). Without this, the remaining devices, which know the app only by forwards, would send it nothing, and it could reach no one.
+- **Offers are answered alike.** An app on several devices of one owner is one app. A device SHOULD answer each type of an offer of another app as its siblings would: the devices of a set SHOULD take the same types. Where they do not, nothing breaks: a forwarded record of a type that a device does not take, or does not know, is still kept and passed on (section 19.5).
+- **No introduction by a forward.** A device to which a `FORWARD` has made a sender known (section 19.2) sends that sender nothing because of it: not its chain and not its `MANIFEST`. It introduces itself to that app, with its chain and its `MANIFEST` ([protocol.md](protocol.md), sections 3.3 and 15.1), when it first has a message of its own for it, such as an offer of records of the set, or when it meets it in a live connection. Otherwise one forward of a sibling would make the device contact a host that the forwarded manifest names, whoever chose it. The one exception is the removal of a device of its own set, as above; neither the chain nor the `MANIFEST` moves the key to which the other app offers ([protocol.md](protocol.md), section 9.1).
+
+### 17.3 What does not travel between siblings
+
+Sibling sync carries the messages of other apps and the owner's layer. It does not carry:
+
+- **Offers and their answers.** An offer of another app, the answer to it and the schemas of an offer belong to the channel between that app and one device ([protocol.md](protocol.md), section 4.3). A device that gets a record in a `FORWARD` has accepted no offer by it: a record message that the other app later sends to that device itself needs an offer there. A stored answer of the user for a sender and a type ([protocol.md](protocol.md), section 5.2) stays on the device that stored it.
+- **What other apps have acknowledged.** The outcomes that another app reported to a device for the records of the set stay on that device. Each device sends another app the records for which it has no outcome itself, under its own state stamp (section 5.1); a receiver that has the state already from a sibling applies the higher version or reports `STALE`, and the state is the same.
+- **What a QR code brought.** An encryption key, a relay and a mailbox that a device took from a QR code ([keys.md](keys.md), section 4.2) reach a sibling only in a `MANIFEST` of that key (section 19.4).
+- **A question that is open.** A key about which a device still asks its user ([keys.md](keys.md), section 3.2) is no known sender, and nothing of it is forwarded.
+
+## 18. The `FORWARD` message
+
+### 18.1 Content
+
+A `FORWARD` message carries one message of another app from a device to one sibling:
+
+- Its `sender` is the key of the device that forwards, and it is signed with that key like every message ([keys.md](keys.md), section 2.2). The message inside keeps the `sender` and the signature of the app that sent it.
+- Its `record` MUST be present. It names the forward, not a record. A **forward** is one kept message for one sibling. `record.id` is the id of the forward: a UUID of version 4 or version 7 that the device generates for it as it generates the id of a record ([records.md](records.md), section 2), neither the nil UUID nor the max UUID. A device MUST NOT use the id of a record or of a request (section 11.1) as the id of a forward, and MUST NOT use the id of a forward for a second forward, also not for the same kept message to another sibling; a repeat of a forward (section 20.3) is the same message, with the same id. `record.version` is 1.
+- Its body MUST be one `axt.Forward` in single-object encoding, with the schema [types/axt/Forward.avsc](../types/axt/Forward.avsc) and, in envelope format 1, the fingerprint of section 15.
+
+| Field     | Avro type                            | Content                                                                                                               |
+| --------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `to`      | `fixed` of 32 bytes, `axt.ForwardTo` | The device key of the sibling the message is for ([protocol.md](protocol.md), section 9.1)                            |
+| `message` | `bytes`                              | One complete message of another app, as the device received it                                                        |
+| `schema`  | `null` or `string`                   | For a forwarded `DATA`, the writer schema of its body as its full JSON text; `null` for every other forwarded message |
+
+- **`message`** is a live message ([envelope.md](envelope.md), section 3): the two bytes `C3 01`, the eight bytes of the fingerprint of its envelope format, and the envelope in binary encoding, signature included. For a message that the device got in a live connection it is the bytes of that message, and for one from a relay the bytes after opening and removing the padding ([keys.md](keys.md), section 4.5). For a message that the device read in a file it is `C3 01`, the fingerprint of the envelope format of the file, and the bytes of the datum as the data block holds them; the signed bytes are the same in all three ([keys.md](keys.md), section 2.2). A device MUST NOT decode a message and encode it again in order to forward it.
+- **Which messages.** The forwarded message is a `MANIFEST`, a `DATA`, a `DELETE`, a `DEVICE_ADD` or a `DEVICE_REMOVE` of another app, or a message of another kind whose document says that it is forwarded (section 19.6). A device forwards the messages it keeps by section 20.1, and no others.
+- **`schema`** is, for a forwarded `DATA`, the text of the writer schema with which the device decoded the body: the `schema` of the offer of the other app, or the entry of the file's `axt.schemas`, with every attribute and unchanged ([protocol.md](protocol.md), section 4.1). Its fingerprint is the one the body of the `DATA` names. The other app signed that text in its offer or its file header, not in the `DATA`; in a `FORWARD` the signature of the sibling stands for it (section 19.5).
+
+### 18.2 Validity and limits
+
+The body of a `FORWARD` is valid when:
+
+- `message` has at least 10 bytes and begins with `C3 01`;
+- the bytes after the first 10 are one envelope of the format that the fingerprint names, with no bytes left over, whose `format` field is that format;
+- the kind of that envelope is `MANIFEST`, `DATA`, `DELETE`, `DEVICE_ADD` or `DEVICE_REMOVE`, or another kind whose document says that it is forwarded. `OFFER`, `ACCEPT`, `DECLINE`, `ACK`, `ERROR`, `DEVICE_JOIN`, `CHANGE`, `RESYNC` and `FORWARD` are never forwarded and a message of a kind that no document says is forwarded is not valid here;
+- that envelope carries `record` where its kind requires one and none where its kind has none ([protocol.md](protocol.md), section 2);
+- its body is what its kind requires: for a `DELETE` empty; for a `DATA` a complete single-object encoding, which here means at least 10 bytes that begin with `C3 01` ([envelope.md](envelope.md), section 2.3); for every other kind a complete single-object encoding whose fingerprint is that of the kind's schema in that format;
+- `schema` is `null` for every kind but `DATA`, and a string for a `DATA`;
+- for a `DATA`, `schema` is a JSON text ([RFC 8259](https://www.rfc-editor.org/rfc/rfc8259)) that is an Avro 1.12 schema of a record, and its fingerprint ([envelope.md](envelope.md), section 5) is the fingerprint that the body of the `DATA` names.
+
+Two failures have a code of their own: a `message` whose fingerprint is not that of an envelope format the device supports (`FORMAT_UNSUPPORTED`), and a `schema` above the schema limits of [envelope.md](envelope.md), section 8, which are 256 KiB of JSON text nested to a depth of at most 64 (`TOO_LARGE`). Section 18.3 gives the order.
+
+- **Size.** A `FORWARD` is a message of at most 16 MiB ([envelope.md](envelope.md), section 8), with the forwarded message and the schema text inside it. Section 20.3 says what a device does with a kept message that does not fit.
+- **The signature inside is not part of validity.** It is verified in a step of its own (section 18.3, step 12).
+- **Nor is the content of the inner body.** Validity looks at the fingerprint of the inner body, not at whether the bytes after it decode with that schema. The rules of the inner kind decide that (sections 19.3 to 19.5).
+
+### 18.3 Processing
+
+A device processes a `FORWARD` in these steps. A step that fails ends the processing: the forward has no outcome, the device changes nothing, and it reports the failure to the sibling with the error code named, as [protocol.md](protocol.md), section 8.3, says. Nothing is reported to the app that signed the forwarded message, whatever fails (section 19.1). "Changes nothing" includes the known senders: a key that the inner message would have made a known sender stays unknown when a later step fails, such as for an addition that the table of [keys.md](keys.md), section 5.5, rejects, a `MANIFEST` that is not valid or a `DATA` that does not decode. Below, the **inner message** is the message in `message`, and the **inner sender** is its `sender`.
+
+| Step | Check                                                                                                                                                                                                                                                                           | If it fails                                                                                                                                        |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | The message and its envelope are valid, and its signature verifies, as for every message ([protocol.md](protocol.md), section 8.2). A `FORWARD` without `record` is not valid                                                                                                   | as [protocol.md](protocol.md), section 8.2, says; `INVALID_MESSAGE` without `record`                                                               |
+| 2    | The `sender` is a sibling (section 7.1)                                                                                                                                                                                                                                         | as the table of section 7.1 says for a `CHANGE`; the body is not read                                                                              |
+| 3    | The body is one `axt.Forward` in single-object encoding, with no bytes left over, and its `to` is the device's own key                                                                                                                                                          | `INVALID_MESSAGE` for a body that is not; a message with another key in `to` is ignored without a report ([protocol.md](protocol.md), section 9.1) |
+| 4    | `record.id` is a UUID in text form, neither the nil UUID nor the max UUID                                                                                                                                                                                                       | `RECORD_ID_INVALID`                                                                                                                                |
+| 5    | `record.version` is at least 1                                                                                                                                                                                                                                                  | `VERSION_INVALID`                                                                                                                                  |
+| 6    | `record.version` is 1                                                                                                                                                                                                                                                           | `INVALID_MESSAGE`                                                                                                                                  |
+| 7    | `message` has at least 10 bytes and begins with `C3 01`                                                                                                                                                                                                                         | `INVALID_MESSAGE`                                                                                                                                  |
+| 8    | The bytes 2 to 9 of `message` are the fingerprint of an envelope format the device supports                                                                                                                                                                                     | `FORMAT_UNSUPPORTED`                                                                                                                               |
+| 9    | The rest of the body is valid (section 18.2), apart from the last item of that list, which step 11 checks after the limits of step 10                                                                                                                                           | `INVALID_MESSAGE`                                                                                                                                  |
+| 10   | Inner `DATA`: `schema` is within the schema limits ([envelope.md](envelope.md), section 8)                                                                                                                                                                                      | `TOO_LARGE`                                                                                                                                        |
+| 11   | Inner `DATA`: `schema` is an Avro schema of a record whose fingerprint is the one the inner body names                                                                                                                                                                          | `INVALID_MESSAGE`                                                                                                                                  |
+| 12   | The signature of the inner message verifies with the inner sender's key, over the bytes of `message` from offset 10 to the last 64 ([keys.md](keys.md), sections 2.2 and 2.3)                                                                                                   | `SIGNATURE_INVALID`                                                                                                                                |
+| 13   | The inner sender is no key of the device's own set: not its own key, not a sibling, not a removed key of its set                                                                                                                                                                | `INVALID_MESSAGE`                                                                                                                                  |
+| 14   | The inner sender is no refused key ([keys.md](keys.md), section 3.4), or the inner message is a `DEVICE_ADD` or a `DEVICE_REMOVE`; and an inner record message signed with a removed key of a known sender comes from a sibling that has the removal of that key (section 19.2) | `NOT_ACCEPTED`                                                                                                                                     |
+| 15   | The inner message passes the rules of its kind (sections 19.3 to 19.6)                                                                                                                                                                                                          | the code that the section names                                                                                                                    |
+| 16   | The device has processed the inner message and reaches an outcome (section 18.4)                                                                                                                                                                                                | (no failure)                                                                                                                                       |
+
+- **Steps 1 to 3** are those of a `CHANGE` (section 8.3): a `FORWARD` without `record` is reported only to a sibling and to a current key of another known sender; a `FORWARD` of a key that is no sibling gets the result of its row of section 7.1, which for a current key of another known sender is `INVALID_MESSAGE`, without its body being read.
+- **Step 8.** The error's `fingerprint` is the eight bytes that `message` carries as its envelope fingerprint.
+- **Steps 10 and 11.** The device first measures `schema` in bytes of UTF-8: above 262,144 bytes, step 10 fails. It then parses the text as JSON and counts the nesting while it parses: a text nested deeper than 64 fails step 10 with `TOO_LARGE`, whatever follows that depth, and a device need not parse beyond it. A text within both limits that is no JSON, that is no Avro schema of a record, or whose fingerprint is not the one the inner body names fails step 11 with `INVALID_MESSAGE`.
+- **Step 14** does not apply to an inner `DEVICE_ADD` or `DEVICE_REMOVE`: section 19.3 says what a device does with a refused key there. A forgotten key (section 20.5) is no refused key and passes it. A `MANIFEST` signed with a removed key passes it and is not taken (section 19.4).
+- **Step 12** uses the strict verification of [keys.md](keys.md), section 2.3, which also rejects an inner sender that is no valid key.
+- **Step 13.** A device forwards the messages of other apps only. The messages of the set itself reach a sibling as `CHANGE` messages, its chain as [keys.md](keys.md), section 5.4, says, and its manifests as section 13.2 says.
+- **Every error is about the `FORWARD`.** The `ERROR` carries the hash of the `FORWARD` message in `message_hash` and the `record` of the `FORWARD`, the id of the forward and the version 1, also when the failure is in the inner message. Its `fingerprint` is `null` except at step 8, and its `field` is `null` except for `VALUE_INVALID` (section 19.5).
+- **No user.** A device MUST NOT ask its user before it processes a `FORWARD` of a sibling.
+- **Before the manifest.** In a live connection, a `FORWARD` that arrives before the sibling's valid `MANIFEST` is not processed, and one whose `sender` is not the connection key closes the connection, as for a `CHANGE` (section 7.1).
+
+### 18.4 The outcome, the acknowledgement and errors
+
+The outcome of a `FORWARD` follows from what the device took from the inner message, as the outcome of a `CHANGE` follows from its merge (section 8.4). A device keeps no list of the forwards it has processed:
+
+| The device                                                                                                                                                                                                                                                                        | Outcome     |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| took the inner message: it applied an addition or a removal, or keeps an addition or a removal to try it again (section 19.3); it took the manifest as the kept manifest of its key (section 19.4); or it took the record or the tombstone into the sender's layer (section 19.5) | `APPLIED`   |
+| took nothing, because it holds what the inner message brings, or something later: a repeat of an addition or a removal, a manifest that does not replace the kept one, a record message whose version is equal to or below the receiver's version                                 | `DUPLICATE` |
+
+- A first forward of a message that the device holds already, from the other app itself or from another sibling, has the outcome `DUPLICATE`. So has a forward that is processed a second time, and the same inner message under another id.
+- A forwarded `DATA` that the device keeps beside a tombstone, and a forwarded record message that takes the place of a kept message or of the `DATA` beside a tombstone with the same version (section 19.5, step 7), are taken: the outcome is `APPLIED`.
+- `STALE`, `MERGED`, `KEPT` and `WITHDRAWN` are never the outcome of a `FORWARD`, and no outcome of a `FORWARD` is decided later.
+
+A device MUST acknowledge every `FORWARD` that it processed to an outcome, and only those, with an entry in an `ACK` to the forwarding sibling (section 9.1): the entry's `id` is the id of the forward, its `version` is 1, its `outcome` is `APPLIED` or `DUPLICATE`, its `receiver_version` is 1 and its `kept_fields` is empty. It SHOULD send the `ACK` within 5 seconds of processing the message and MAY collect entries for forwards, for `CHANGE` messages and for requests into one `ACK`.
+
+The device that sent the `FORWARD` takes an entry of a valid `ACK` of that sibling as the outcome of a forward when its `id` is the id of a forward to that sibling that the device still keeps (section 20.2) and its `version` is 1:
+
+- Both outcomes settle the forward and deliver its kept message to the sibling (section 20.2). The device does not send it again.
+- The first outcome for a forward stands. A device that gets `STALE` for a forward takes it as `DUPLICATE`.
+- The `receiver_version` of the entry carries nothing.
+- An entry for a forward that the device no longer keeps is ignored without a report.
+
+An `ERROR` of a sibling is about a `FORWARD` when its `record` is the `record` of a forward to that sibling that the device still keeps. The device that sent the `FORWARD`:
+
+| Code                                                                                                    | The device then                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `FORMAT_UNSUPPORTED` whose `fingerprint` is that of the envelope in which the device sent the `FORWARD` | sends the `FORWARD` again in the chosen format ([protocol.md](protocol.md), section 3.2); while there is one format, that is the same message                                                                                        |
+| `FORMAT_UNSUPPORTED` with any other `fingerprint`                                                       | logs it: the sibling does not read the format of the forwarded message. It does not send that forward again                                                                                                                          |
+| `NOT_ACCEPTED`                                                                                          | logs it: the sibling refuses the inner sender's key, or holds it as removed and has not seen that the device has the removal (section 19.2). It does not send that forward again until section 20.2 makes its kept message due again |
+| `DEVICE_REJECTED`                                                                                       | logs it, and SHOULD tell its user: the two devices know the sender by different keys (section 19.3). It does not send that forward again                                                                                             |
+| every other code                                                                                        | logs it. It does not send that forward again                                                                                                                                                                                         |
+
+A forward that an error settles is not sent again. Its kept message stays not delivered to that sibling, and is forwarded to it anew, in a new forward, only when section 20.2 makes every kept message due for that sibling again. A kept message that takes its place, such as a later version of the record, is forwarded like every new kept message.
+
+## 19. Processing a forwarded message
+
+### 19.1 As if received, and nothing to its sender
+
+A device that has checked a `FORWARD` by the steps 1 to 14 of section 18.3 processes the inner message by the rules of its kind, as if it had received it from its sender outside a live connection, with the differences that sections 19.2 to 19.6 state. Three hold for every kind:
+
+- **Nothing goes to the inner sender.** A device MUST NOT send anything to the inner sender, or to any other device of that app, because of a forwarded message: no `ACK`, no `ERROR`, no `ACCEPT`, no `DECLINE`, no `MANIFEST` and no chain. What the device did with the message goes to the forwarding sibling alone: an outcome in an `ACK`, or an `ERROR` (section 18.4). The other app gets its outcome from the answering device (section 17.2). Messages that the device got from that key itself, and kept while it asked its user about the key (section 19.2), are another matter: for those it is the answering device, and it processes and answers them as [protocol.md](protocol.md) says.
+- **No user is asked.** A device MUST NOT ask its user about a forwarded message or about its sender's key.
+- **The owner's layer stays.** Processing a forwarded message changes the sender's layer, the known senders and their manifests, and nothing else. It sets no keep and discards no owner's value: the answering device does that where the message calls for it, and its change travels in a `CHANGE` (section 22.2). The one change of owner's layers that a forwarded message causes is their merge when a forwarded addition joins two senders (section 23.4).
+
+### 19.2 The sender of a forwarded message
+
+What a device does with a forwarded message whose signature verified depends on the inner sender:
+
+| The inner sender is                                                  | The device                                                                                                                                                                                                                                                                                                                                                                       |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a current key of a known sender                                      | processes the message as that sender's                                                                                                                                                                                                                                                                                                                                           |
+| a removed key of a known sender                                      | processes a record message as that sender's if the forwarding sibling has the removal of that key as well, and rejects the forward with `NOT_ACCEPTED` if not, as below; does not take a `MANIFEST`, with the outcome `DUPLICATE` (section 19.4); takes a `DEVICE_ADD` or a `DEVICE_REMOVE` as [keys.md](keys.md), section 5.5, says for a signer that is removed (section 19.3) |
+| a forgotten key (section 20.5)                                       | makes the sender of that key known again, as section 20.5 says, and then processes the message as that sender's; for a `DEVICE_ADD` or a `DEVICE_REMOVE` that names a forgotten key, as its signer or as its device, acts as section 19.3 says                                                                                                                                   |
+| a key of no known sender that is no refused key and no forgotten key | for a `DEVICE_ADD` or a `DEVICE_REMOVE`, acts as section 19.3 says; for every other kind, makes the key the first key of a new known sender, without asking its user, and processes the message as that sender's                                                                                                                                                                 |
+| a refused key                                                        | rejects the forward of a record message or a `MANIFEST` with `NOT_ACCEPTED` (section 18.3, step 14); takes a `DEVICE_ADD` or a `DEVICE_REMOVE` as section 19.3 says                                                                                                                                                                                                              |
+| a key of the device's own set                                        | rejects the forward with `INVALID_MESSAGE` (section 18.3, step 13)                                                                                                                                                                                                                                                                                                               |
+
+- **A known sender without a question.** A `FORWARD` of a sibling makes the inner sender a known sender ([keys.md](keys.md), section 3.2) on the device, with everything that follows from it: its records are taken, its manifest is used, and a later message that the device gets from that key itself is a message of a known sender. This is sound because the owner accepted the key on the device that forwards. That device is a sibling, whose key the owner added to the set in person ([keys.md](keys.md), section 5.2), and it signs the `FORWARD` and names this device in `to`, so no one else can make a device take a sender in this way. A sibling can change every record of the set as it is; that it also says which other apps the owner accepted gives it no power that it lacks. The inner message still has to carry the valid signature of the key that it makes known.
+- **A question that was open.** If the device was asking its user about that key, or had remembered it as declined ([keys.md](keys.md), section 3.2), the forward ends that: the key is a key of a known sender, and the device processes the messages of that key that it had kept.
+- **How a sender is known.** A device records for each known sender how it came to know it: by its own user, who answered the question of [keys.md](keys.md), section 3.2, or scanned a code; or by forwards, and then of which siblings, each sibling that has forwarded it a message of that sender. A sender that the device's own user confirms later is from then on known by its own user.
+- **A removed key.** A device takes a forwarded record message that is signed with a key it holds as a removed key of the sender only if the forwarding sibling has the removal of that key as well. The sibling **has the removal** when the device's kept removal of that key is delivered to that sibling (section 20.2), or when that sibling has forwarded to the device a removal of that key, a `DEVICE_REMOVE` whose device is that key and whose signature verified, in any bytes: the one that the device keeps or another, whatever the device did with it (section 20.2). A removal that the device only keeps to try again (section 19.3) is no removal that it has: it does not make the key a removed key of the device, and it is no kept message that can be delivered. Otherwise the device rejects the forward with `NOT_ACCEPTED` (section 18.3, step 14); its own kept removal is due for that sibling and is forwarded to it, before anything else of that sender. When the sibling has processed that removal, it forwards its kept message again (section 20.2), and the device then takes it. Without the first half of this rule, a new device of the set would get none of the records that another app sent before it moved to a new device ([keys.md](keys.md), section 5.7). The second half keeps out the messages that a sibling takes from that key after it should have known of the removal, because the removal was delivered to it: whoever holds a removed key cannot push them into the whole set through one sibling that has not applied the removal. It does not keep out the messages that a sibling took from that key before it learned of the removal. Those are kept messages of that sibling, and they still reach the device, and so the whole set, once that sibling has applied the removal and so has it. Nor does it keep out the messages signed with that key that a sibling takes while it only keeps the device's removal to try again (section 19.3): the sibling acknowledges that removal with `APPLIED`, so the removal is delivered to it and the sibling has the removal by the first clause above, although it has not applied it. Such messages reach the set as well. This is a limit of the rule. A message that the device gets from a removed key itself is rejected as [keys.md](keys.md), section 3.3, says.
+- **A sender known by a removed sibling.** When a device applies the removal of a sibling (section 23.2), nothing changes for the senders it knows: they stay known senders, and their messages are applied and forwarded as before. Only its chain and its `MANIFEST` wait, for the senders that it knows only by forwards of the removed device, until its user has kept them (section 17.2). A sender is known **only by forwards** of a sibling when the device knows it by forwards, not by its own user, and that sibling is the only one by whose forwards it knows it. The device SHOULD show its user the senders that it knows only by forwards of the removed device, so that the owner of a lost or stolen device can forget those they do not recognise ([keys.md](keys.md), section 3.4); forgetting does not travel, so the owner does it on each device (section 20.5). After a move to a new device ([keys.md](keys.md), section 5.7) that list is every sender that the new device has not met itself; an app MAY leave the notice out when its user removes a device as the last step of a move that the same user started on that device. The limit is that of [keys.md](keys.md), section 5.9: a device that is in the set can make a sender known on its siblings without a question, and its removal does not undo that.
+- **A sender that joins the device's own set.** When a device applies an addition of its own set whose new device is a key of a sender it knows as another app, as when an installation with contacts of its own joins the set ([keys.md](keys.md), section 5.1), that sender is no other app any more. Its records become records of the set and reach the device as `CHANGE` messages of the new sibling (section 12.3). The device drops, as such, the kept messages of that sender, the sender's layers and the owner's layers of its records, and what it kept for each sibling about them; an owner's value of such a record is lost with its layer.
+- **Devices that know a sender by different keys.** Two devices of a set can know one sender by different keys, such as when two devices of that sender removed each other and the two devices of the set got the removals in different orders ([keys.md](keys.md), section 5.5). Each then rejects the removal that the other forwards, with `DEVICE_REJECTED` (section 19.3), and keeps its own view of the sender's keys. Neither has the other's removal, so by the rule above each rejects, with `NOT_ACCEPTED`, the record messages that the other forwards and that are signed with the key it holds as removed. No message brings the two views together; a device that reports or gets `DEVICE_REJECTED` for a forward SHOULD tell its user.
+
+### 19.3 A forwarded `DEVICE_ADD` or `DEVICE_REMOVE`
+
+A device takes a forwarded `DEVICE_ADD` or `DEVICE_REMOVE` by the steps of [keys.md](keys.md), section 5.5, each forwarded message for itself, with these differences:
+
+- **Step 3, a signer of no known sender.** If the message is a `DEVICE_ADD` whose device is a current key of a known sender, the signer is added to that sender, as that step says. In every other case the signer becomes the first key of a new known sender, without a question to the user (section 19.2), and the device goes on with step 4 and the table. If the table then rejects the message, the signer is not made a known sender: a step that fails changes nothing (section 18.3). No forwarded addition or removal is a message that "cannot be placed".
+- **Applied.** The device applies the addition or the removal as that section says, with a join of two senders where the table has one (section 23.4), and the outcome of the forward is `APPLIED`.
+- **Ignored.** A repeat, and an addition of a key that is not added again, changes nothing; the outcome is `DUPLICATE`.
+- **Kept to be tried again.** A `DEVICE_REMOVE` by a current key whose device is not a key of the signer's sender, which the table keeps "within a chain", is kept: the device tries it again whenever it applies an addition to that sender, forwarded or received from the sender itself, and keeps it for as long as it knows the sender or until it applies. The outcome of the forward is `APPLIED`. A removal that is kept in this way is no kept message of section 20.1 until it is applied. When it applies, it becomes one, and it counts as delivered to the sibling that forwarded it (section 20.2), so it is not forwarded back.
+- **A signer removed by now.** A `DEVICE_ADD` that the table rejects only because its signer is a removed key of its sender is a `DEVICE_ADD` signed with a removed key of a known sender whose device is a key of no known sender or the only key of another known sender: the column "signer removed" in those two rows. It can be an addition that was signed before the removal and reaches the device after it, a chain out of order. It is not settled: the device keeps it and tries it again like a kept removal, and the outcome of the forward is `APPLIED`. While its signer stays a removed key, no try applies it.
+- **A forgotten key.** In a forwarded addition or removal, a forgotten key (section 20.5), as the signer or as the device, first makes its sender known again, as section 20.5 says; the device then takes the message by these steps as one of a known sender. If a later step rejects the message, the sender stays forgotten (section 18.3).
+- **A refused key.** In a forwarded addition or removal, a refused key ([keys.md](keys.md), section 3.4), as the signer or as the device, counts as a key of no known sender, and stops being refused when the message is applied or kept. A sibling so makes a sender that the device had forgotten known again together with its removed keys (section 20.5). Where the message also names a forgotten key, the bullet above applies first, and the refused keys of that sender are then its removed keys again.
+- **Rejected for good.** Every other message that step 2 or the table rejects is not applied, and the forward is rejected with `DEVICE_REJECTED`, in a live connection and through a relay alike. These rejections are final: a proof that does not verify or a key that is not valid, a removal of its own signer, a `DEVICE_REMOVE` signed with a removed key, an addition whose device is a removed key of another known sender, and an addition that would join two senders that each have more than one key or a removed key. The error goes to the forwarding sibling; nothing goes to the signer.
+- **A body that does not decode.** A `DEVICE_ADD` or a `DEVICE_REMOVE` whose body does not decode as one `axt.DeviceAdd` or `axt.DeviceRemove`, with no bytes left over, rejects the forward with `INVALID_MESSAGE`, before the steps of [keys.md](keys.md), section 5.5.
+
+The device MAY show its user the notice that [keys.md](keys.md), section 5.5, allows.
+
+### 19.4 A forwarded `MANIFEST`
+
+A device takes a forwarded `MANIFEST` of another app as a manifest that it received outside a live connection ([manifest.md](manifest.md), section 6):
+
+- A `MANIFEST` whose body does not decode as one `axt.Manifest`, with no bytes left over, or that is not valid ([manifest.md](manifest.md), section 4), rejects the forward with `MANIFEST_INVALID`.
+- If the device keeps no manifest of the inner sender's key, or one with a lower revision that is not marked as below, the forwarded one becomes the kept manifest of that key, with its encryption key and its relay ([keys.md](keys.md), section 4.2), and the device keeps the message (section 20.1). The outcome is `APPLIED`.
+- If the device keeps a manifest of that key with the same or a higher revision, it changes nothing. The outcome is `DUPLICATE`.
+- A `MANIFEST` whose inner sender is a removed key of a known sender is not taken: a removed key has no kept manifest ([keys.md](keys.md), section 5.5). The outcome is `DUPLICATE`.
+- **A manifest taken live.** A `MANIFEST` that the other app sends itself in a live connection applies whatever its revision, and one from a relay or a file only with a higher revision ([manifest.md](manifest.md), section 6). A device marks a kept manifest that it took from the key itself in a live connection. A forwarded `MANIFEST` never takes the place of a marked one, whatever its revision: the outcome is `DUPLICATE`. The mark ends when a later `MANIFEST` reaches the device from that key itself and takes the place of the kept one. An app whose revisions went back sends, live, a manifest with a lower revision than the one a sibling still holds; without the mark, that sibling's forward of the older manifest would undo it. The sibling keeps the older one, since the forwarded newer one has the lower revision, until it gets a manifest from that key itself.
+
+The manifest is that of one device of the other app. A device of the set that later sends that app something of its own offers by it ([protocol.md](protocol.md), section 15.1).
+
+### 19.5 A forwarded `DATA` or `DELETE`
+
+A device processes a forwarded record message by the steps of [protocol.md](protocol.md), section 6.2, as a reader of a file does ([protocol.md](protocol.md), section 15.2), with these differences. The id and the version are those of the inner message's `record`.
+
+| Step of [protocol.md](protocol.md), section 6.2 | For a forwarded record message                                                                                                                                                                                                                                            | If it fails                            |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| 1                                               | done by the steps 7 to 14 of section 18.3                                                                                                                                                                                                                                 | as section 18.3 says                   |
+| 2, 3                                            | as they stand                                                                                                                                                                                                                                                             | `RECORD_ID_INVALID`, `VERSION_INVALID` |
+| 4, 5                                            | do not apply. The writer schema of a `DATA` is the `schema` of the `FORWARD`. No offer and no acceptance of the device is needed, and whether the type fits the device's manifest is not looked at                                                                        | (no failure)                           |
+| 6                                               | as it stands: the device keeps no other full name for the id among the records of that sender, in either layer                                                                                                                                                            | `TYPE_CHANGED`                         |
+| 7                                               | the version rule ([records.md](records.md), section 5.2), against the receiver's version of the sender's layer. A version equal to or below it ends the processing: the device changes nothing, and the outcome of the forward is `DUPLICATE`, apart from the cases below | (no failure)                           |
+| 8                                               | `DATA`: the body decodes with the `schema` of the `FORWARD` alone, with no bytes left over, with well-formed strings, and to a data depth of at most 32. Whether that schema resolves against a schema of the device is not checked                                       | `UNDECODABLE`                          |
+| 9                                               | `DATA`: every time value is valid ([time.md](time.md), section 8). The checks of the attributes of [metadata.md](metadata.md), section 7.1, are not made                                                                                                                  | `VALUE_INVALID`                        |
+| 10                                              | the device takes the message into the sender's layer, as below                                                                                                                                                                                                            | (no failure)                           |
+
+- **Step 10.** The device takes the record, or the tombstone, as [records.md](records.md), sections 5.2 and 5.3, say for a message with a higher version or for an id it does not have: the receiver's version becomes the message's version; a `DATA` makes the record there, with the values of the message and the full name of its schema as the record's type, also over a tombstone; a `DELETE` leaves a tombstone, and beside it stays the `DATA` with the highest version that the device held of the record: the `DATA` that the layer ended in, or, where it ended in a `DELETE` with a lower version, the `DATA` beside that tombstone, if the device holds one. It keeps the message, and for a `DATA` the text of `schema`, as the kept message of the record (section 20.1). The outcome of the forward is `APPLIED`. What the device then shows of the record follows from the two layers (section 22.1).
+- **Step 7, messages that are taken all the same.** Four record messages whose version is equal to or below the receiver's version are taken:
+  1. **A `DATA` below the tombstone.** A `DATA` whose version is below the receiver's version, where the sender's layer ends in a `DELETE` and the device holds beside the tombstone no `DATA` or one with a lower version: the device goes on with the steps 8 and 9 and keeps the `DATA` beside the tombstone, in the place of the one it held there. A device that joined after the deletion so holds both.
+  2. **The kept message in other bytes.** A record message whose version is the receiver's version, of the kind of the kept message with that version and in other bytes, that stands over the kept one by the rule of section 20.1: the device goes on with the steps 8 and 9 and keeps it in the place of the other.
+  3. **A `DELETE` over a `DATA` of the same version.** A `DELETE` whose version is the receiver's version, where the kept message with that version is a `DATA`: the `DELETE` stands (section 20.1). The device takes it in the place of that `DATA`, which it does not keep beside the tombstone, since only a `DATA` below the `DELETE` stands there; the layer so ends in a `DELETE` with no `DATA` beside it.
+  4. **The `DATA` beside the tombstone in other bytes.** A `DATA` whose version is that of the `DATA` that the device keeps beside the tombstone, in other bytes, that stands over that `DATA` by the rule of section 20.1: the device goes on with the steps 8 and 9 and keeps it beside the tombstone in the place of the other.
+
+  In each case the receiver's version stays as it is, and the outcome of the forward is `APPLIED`; a message that fails step 8 or 9 is rejected with the code of that step. The four cases hold also for a record message that the device gets from the sender itself, after the steps 1 to 6 of [protocol.md](protocol.md), section 6.2, with the writer schema of the offer: the device takes the message into the sender's layer in the same way, and the outcome toward the sender is the one of the version rule, `STALE` in the cases 1 and 4 and `DUPLICATE` in the cases 2 and 3. A message of the sender itself that fails step 8 or 9 there is not taken, and its outcome is the same.
+- **The schema.** The text in `schema` counts as a schema that the inner sender offered ([keys.md](keys.md), section 2.4): the forwarding sibling took it from an offer or a file header that the other app signed, and signs for that with the `FORWARD`. The device keeps it among the schemas of that sender, uses it for no record of another sender, and keeps it for as long as it keeps the message.
+- **A type the device does not take or know.** The record is taken, kept and passed on all the same, as a type that the device does not know is between siblings (section 8.5). The device need not show it. Nor does a schema that does not resolve against the device's own keep the record from being taken.
+- **Step 9.** The error's `field` is the path of the first value that fails, as in [protocol.md](protocol.md), section 6.2. A device MUST NOT reject a forwarded `DATA` for a check of an attribute: the answering device decided on those, and a record that one sibling rejected would stay different on the devices of the set.
+- **No decision.** Where [records.md](records.md), section 6, has a receiver choose or ask its user, a device that got the message in a `FORWARD` does neither. It takes the message into the sender's layer; the choice is the answering device's (section 22.2).
+
+### 19.6 Kinds that other documents define
+
+A message of a kind other than those of sections 19.3 to 19.5 is forwarded only if the document that defines the kind says so. That document then says what a device keeps of it (section 20.1) and how a device processes it when it comes in a `FORWARD`; sections 18, 19.1, 19.2 and 20 apply to it as they stand.
+
+## 20. What a device keeps and forwards
+
+### 20.1 Kept messages
+
+For each known sender other than its own set, a device keeps these messages, each as the bytes it received (section 18.1), whichever way they reached it: in a live connection, through a relay, in a file or in a `FORWARD`:
+
+| Kept message                                                                                                                                                                                                                                                                                | Kept until                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| every `DEVICE_ADD` and `DEVICE_REMOVE` that it applied to that sender ([keys.md](keys.md), section 5.5), in the order in which it applied them                                                                                                                                              | the device forgets the sender                                                                                                                                                                                                                                                                                        |
+| for each current key of the sender, the `MANIFEST` message that brought the kept manifest of that key ([manifest.md](manifest.md), section 6)                                                                                                                                               | a `MANIFEST` replaces the kept manifest; the key is removed; the device forgets the sender                                                                                                                                                                                                                           |
+| for each record of the sender, the record message that brought the receiver's version ([records.md](records.md), section 5.1): the `DATA` or the `DELETE` with the highest version that the device processed, and for a `DATA` the text of the writer schema with which it decoded the body | a record message with a higher version takes its place, where a `DATA` that a `DELETE` with a higher version replaces stays by the next row; a record message with the same version takes its place by the rule of one id and version in two forms, below; the device forgets the sender                             |
+| for each record whose kept message is a `DELETE`, the `DATA` with the highest version below it that the device took, with the text of its writer schema: the `DATA` beside the tombstone                                                                                                    | a `DATA` with a higher version below the `DELETE` takes its place, or a `DATA` with the same version by the rule of one id and version in two forms, below; a `DATA` above the `DELETE` arrives; the device forgets the sender. A `DELETE` with a higher version than the kept one keeps it beside the new tombstone |
+| what the document of another kind says is kept (section 19.6)                                                                                                                                                                                                                               | as that document says                                                                                                                                                                                                                                                                                                |
+
+- A message that the device rejected, and a record message with the outcome `DUPLICATE` or `STALE`, is not kept, apart from the cases of section 19.5, step 7, which hold in a `FORWARD` and from the sender itself: a `DATA` that goes beside the tombstone (`STALE` toward the sender), a record message that takes the place of the kept message in other bytes (`DUPLICATE`), a `DELETE` that takes the place of a `DATA` with the same version (`DUPLICATE`), and a `DATA` that takes the place of the `DATA` beside the tombstone in other bytes (`STALE`). The kept message of a record is the one whose version is the receiver's version, whatever outcome the device reported for it, `APPLIED`, `MERGED` or `KEPT`.
+- **One id and version in two forms.** One id and version stand for one record ([records.md](records.md), section 3), but the message can reach two devices of a set in different bytes: signed by two devices of the sender, or written for each under another schema. Every device keeps the same one. Of two `DATA` messages, the one whose writer schema has the higher `axt.version` ([types.md](types.md), section 3.2) stands; with equal versions of the schema, and of two `DELETE` messages, the one whose SHA-256 over the bytes of the message is the higher, compared as 32 unsigned bytes from the first byte on. Of a `DATA` and a `DELETE`, the `DELETE` stands. A device applies this whenever a record message with the receiver's version reaches it in other bytes than those it keeps, and whenever a `DATA` with the version of the `DATA` that it keeps beside a tombstone reaches it in other bytes than that `DATA`: from the sender itself, where the outcome toward the sender is the one of the version rule all the same, `DUPLICATE` for the receiver's version and `STALE` below it, and in a `FORWARD`, where a message that takes the place of the kept one has the outcome `APPLIED` and one that does not has `DUPLICATE` (section 19.5, step 7).
+- **From when.** A device with a sibling MUST keep these messages. An installation that is a set of its own MUST keep them from its first known sender on if its app lets its owner add a device ([keys.md](keys.md), section 5.2): a device that joins later gets the known senders and the received records from these messages alone. What an installation did not keep does not reach its siblings unless the other app sends it again.
+- A device identifies a kept message by the SHA-256 of its bytes, the value that an `ERROR` carries as `message_hash` ([protocol.md](protocol.md), section 8.1).
+
+### 20.2 Delivered and due
+
+A device MUST keep, with its data and through every restart, for each sibling:
+
+- which of its kept messages are **delivered** to that sibling;
+- for every `FORWARD` that it sent to the sibling and that has neither an outcome nor an error that settles it (section 18.4): the id of the forward and which kept message it carried. It keeps this for 15 days after it last sent that `FORWARD` and then drops it, as it does for a `CHANGE` (section 10.1); an outcome or an error that arrives later is ignored;
+- for which kept messages an error settled a forward to that sibling (section 18.4);
+- for each key that it holds as a removed key of a known sender: whether that sibling has forwarded it a removal of that key, that is, a `FORWARD` whose inner message passed step 12 of section 18.3 and decodes as a `DEVICE_REMOVE` whose device is that key, whatever the device then did with it (section 19.2); and whether the device processed such a forward to an outcome and so acknowledged it, which section 20.2 uses below. A `RESYNC` of that sibling that the device acts on (section 20.4) clears both, since the asking sibling may have lost the removal.
+
+A kept message that is not delivered to a sibling is **due** for it. Two events deliver a kept message to a sibling:
+
+1. **The sibling acknowledges.** An outcome of the sibling for a forward (section 18.4) delivers the kept message that the forward carried, if the device still keeps it.
+2. **The sibling forwards.** When the device processes a `FORWARD` of that sibling to an outcome and then keeps a message with exactly the bytes of that `FORWARD`'s `message`, because it took it or because it held the same bytes already, that kept message is delivered to that sibling. A device so does not forward a message back to the sibling it got it from.
+
+These events take it back:
+
+- **A `RESYNC`** of the sibling that the device acts on (section 20.4): no kept message is delivered to that sibling, the device keeps none of the forwards it sent to it before and ignores their outcomes and errors, and what an error had settled is due again.
+- **`RECORD_UNKNOWN`** of the sibling for a `CHANGE` with a key in `origin` (section 21.5): no kept message of that record's sender is delivered to that sibling, and what an error had settled for that sender is due again.
+- **An older message from the sibling.** When the device processes a `FORWARD` of the sibling whose inner message is a record message with a lower version than the receiver's version of that record, or a `MANIFEST` with a lower revision than the kept manifest of that key, the device's kept message of that record or key is no longer delivered to that sibling. The sibling evidently does not hold it. A `DATA` below a `DELETE` that the sender's layer ends in is compared instead with the `DATA` that the device keeps beside the tombstone: if its version is lower than that of this `DATA`, the `DATA` beside the tombstone is no longer delivered to that sibling, and the `DELETE` stays as it was; if the device keeps no `DATA` beside the tombstone, or one with the same or a lower version, nothing is taken back. A sibling that forwards the `DATA` beside its own tombstone so does not make the `DELETE` due again.
+- **A removal that the sibling now has.** When the device processes to an outcome a `FORWARD` of the sibling whose inner message is a `DEVICE_REMOVE`, or takes an outcome of the sibling for its own forward of one, the kept record messages signed with the removed key for which `NOT_ACCEPTED` of that sibling had settled a forward are due for that sibling again (section 19.2). A device MUST send its acknowledgement of a forwarded `DEVICE_REMOVE` before it forwards such a message again, so that the sibling has seen that the device has the removal when the message arrives. After the device has acknowledged a forwarded removal of that key from that sibling, the next `NOT_ACCEPTED` of that sibling for a forward of a record message signed with that key makes that message due for that sibling again, once: a message that overtook the acknowledgement is so forwarded again. A further `NOT_ACCEPTED` for the same message settles it, and the device does not forward it to that sibling again: the sibling then refuses it for reasons of its own, such as a key that it holds as refused after its user forgot the sender (section 20.5). Only a `RESYNC` of that sibling (section 20.4), or another event above that makes every kept message due, brings it back.
+- **The removal of the sibling** (section 23.2): the device discards all it kept for that key.
+- **A restore, or the loss of this bookkeeping** (section 23.1): no kept message is delivered to any sibling, and the device holds of no sibling that the sibling forwarded it a removal or that the device acknowledged one.
+
+A message that the device no longer keeps, because a later one took its place, is no longer delivered or due.
+
+### 20.3 What a device forwards, and when
+
+A device forwards to each sibling every kept message that is due for it, each in a `FORWARD` of its own, as soon as it has a channel to that sibling (section 24.1). A `FORWARD` needs no offer: its schema travels in it.
+
+- **Whichever way the message came.** A kept message is due for every sibling until it is delivered to it, whether the device got the message from the other app or in a `FORWARD` of another sibling. A message so reaches a third device also when the answering device is gone.
+- **Order.** When a device forwards several kept messages of one sender to a sibling, it MUST send them in this order: the additions and removals in the order in which it applied them, then the manifests, then the record messages, and of one record the `DATA` beside a tombstone before the `DELETE`. Only this order within the messages of one sender is required: the order among the messages of different senders, and among the manifests of one sender, is free. It MUST send the `FORWARD` of the kept message of a record before a `CHANGE` with a key in `origin` of that record (section 21.5), unless that kept message is delivered to that sibling. It does not wait for the acknowledgement of one before it sends the next. A relay can still deliver them out of order; sections 19.2, 19.3 and 21.4 give each such case a result.
+- **Without the message.** A kept message that cannot be forwarded to a sibling, because it does not fit or because an error settled its forward, does not hold back the `CHANGE` messages of that record's owner's layer.
+- **A message that does not fit.** A device MUST NOT send a `FORWARD` above 16 MiB. A kept message whose `FORWARD`, with its schema text, would be above it is not forwarded. This is a limit of sibling sync: such a record stays on the device that took it, unless the other app sends it to the other devices too; a device SHOULD tell its user about a record that it cannot pass on. The owner's layer of such a record still travels (section 21.5).
+- **A settled forward.** A kept message for which an error settled a forward to a sibling is not forwarded to that sibling again while it stays settled (section 20.2).
+- **An open request.** A device sends no `FORWARD` to a sibling with which it has a request open, apart from its answer to a request of that sibling, as for a `CHANGE` (section 11.3). It goes on acknowledging that sibling's forwards.
+
+A device sends a sibling a `FORWARD` for these reasons, and for no other:
+
+- **Something is due.** Whenever a kept message is due for a sibling: when the device comes to keep it, on its first channel to that sibling, and after an event of section 20.2 that takes a delivery back.
+- **Without an acknowledgement, in a live connection.** A `FORWARD` with neither an outcome nor an error when its connection ends has not been delivered. The device forwards the kept message again in a later connection or through the relay: the same `FORWARD`, with the same id, while it keeps that forward (section 20.2), and a new forward with a new id after that.
+- **Without an acknowledgement, through a relay.** Once the holding time of 14 days ([transports.md](transports.md), section 5.5) has passed since the device last sent a sibling a `FORWARD` through the relay, with neither an outcome nor an error, and not before, it sends that `FORWARD` again, the same message with the same id, if it still keeps the message it carries.
+- **For the format.** After `FORMAT_UNSUPPORTED` for the envelope of the `FORWARD` itself (section 18.4).
+
+Every repeat is safe: a forwarded message that is processed a second time changes nothing and has the outcome `DUPLICATE` (section 18.4).
+
+### 20.4 The answer to a `RESYNC`
+
+A device that acts on a `RESYNC` of a sibling (section 11.2) also forgets, in step 1 of that section, what it kept for that sibling by section 20.2, and what it kept for it of the owner's layers by section 10.1 (section 21.5). Its answer then holds, in this order:
+
+1. a `FORWARD` of every kept message that it can forward, each as a new forward with a new id, in the order of section 20.3;
+2. the `CHANGE` messages of step 3 of section 11.2, for every record of the set;
+3. a `CHANGE` with a key in `origin` for every received record of which it holds an owner's layer and may send one (section 21.5), each whole and under a new state stamp of that layer, as step 3 of section 11.2 says for a record of the set.
+
+The acknowledgement of the request, step 4 of section 11.2, follows the last of these messages. As for the `CHANGE` messages of a record of the set, the device waits for no acknowledgement of the asking device before it sends the next message or the acknowledgement of the request: the answer ends when it is sent. A kept message that the device cannot forward, and a layer of which it may send nothing, is not part of the answer and does not hold up the acknowledgement. What section 11.2 says of a channel that ends first, of a repeat and of a second request holds for the whole answer.
+
+### 20.5 Forgetting a sender
+
+A device whose user forgets a known sender ([keys.md](keys.md), section 3.4) discards the kept messages of that sender, what it kept for each sibling about them (section 20.2), and the owner's layers of the sender's records together with what it kept for each sibling about those (section 10.1). It keeps the sender's current keys as **forgotten keys**, beside the removed keys that it keeps as refused keys, and keeps for each forgotten sender which forgotten keys and which refused keys were its. Nothing travels to its siblings because of it: forgetting is an act on one device, and no message carries it.
+
+- **A forgotten key is no refused key.** A `FORWARD` of a message signed with a forgotten key, or of a `DEVICE_ADD` or a `DEVICE_REMOVE` that names one as its signer or as its device, makes the sender known again, on the word of the forwarding sibling, as section 19.2 says for a sender made known by a forward: the device knows the sender again with its forgotten keys as its current keys and its refused keys as its removed keys, which so stop being refused, and with none of its records, manifests or kept messages. It then processes the forwarded message as that sender's (sections 19.2 and 19.3). If a later step of section 18.3 fails, the sender stays forgotten (section 18.3). A key stops being forgotten when its sender is known again in this way, or when the key becomes a key of a known sender in another way, such as by the user's acceptance at a first contact.
+- **The sender itself.** A message that the sender itself signs with a forgotten key is a first contact ([keys.md](keys.md), section 3.2), as for every key of a forgotten sender ([keys.md](keys.md), section 3.4).
+- **Forgetting does not travel.** A sibling that knows the sender goes on forwarding its messages, and the first such `FORWARD` makes the sender known on the forgetting device again, with what is forwarded to it from then on. A forwarded record message or `MANIFEST` signed with a key that the device holds as a refused key is rejected with `NOT_ACCEPTED` (section 18.3, step 14) until the sender is known again by a forgotten key, or until a forwarded addition or removal that names that key has ended the refusal (section 19.3).
+- **Forgetting for good.** An owner who wants a sender forgotten forgets it on every device of the set. An app SHOULD tell its user, before it forgets a sender on a device with a sibling, that the other devices still know the sender and bring it back.
+- **A device that got a sender back** in this way holds less of it than its siblings, which hold their kept messages as delivered to it. It MUST send a `RESYNC` to the sibling whose `FORWARD` made the sender known again (section 11.3).
+
+## 21. The owner's layer
+
+### 21.1 The state of the owner's layer
+
+A device holds an owner's layer of a received record once the owner has changed that record on a device of the set. It keeps for it the record's sender, its id, the full name of its type, and a state as section 3 defines it for a record of the set: field states, at most one removal, and a state stamp; and at most one keep. Sections 2 to 4 apply to this state as they stand, with these differences:
+
+- **Only what the owner changed.** The layer holds a field state for a field only once a change of this section, or a merge, has given it one. A field without a field state in the layer has the sender's value (section 22.1); nothing of section 3.1 on the fields of the device's own schema and their defaults applies.
+- **A value can be `null`.** The `value` of a field state of the layer is the bytes of the owner's value, or `null`. A field state with a `null` value says that the owner discarded a change of that field: the field has no owner's value, and the sender's value shows again. It is a field state like any other, with a stamp and a device key, and merges as one.
+- **The removal** is the owner's deletion of the received record on a device of the set, when it stands, and the taking again of the record, when it was taken back ([records.md](records.md), section 6.3).
+- **The owner's removal stands** when the layer holds a removal whose `stands` is `true`, whatever the stamps of its field states. Section 4.3, by which a later field state brings a record of the set back, is not applied to the layer: only a removal that was taken back ends the owner's deletion. A `DELETE` of the sender does not end it either: the sender's tombstone is in the sender's layer, the owner's removal stays in the owner's layer, and a later `DATA` of the sender has the outcome `KEPT` (section 22.2). This holds on every device that keeps an owner's layer, an installation without a sibling included ([records.md](records.md), section 6.3).
+- **The keep** is a part that a record of the set does not have: the mark that the owner keeps the record against a deletion by its sender, or has given that keeping up. It is a `stamp`, the key of the `device` that set it, a `version` and `given_up`. `version` is at least 1 in every keep: in a keep, the version of the sender's `DELETE` against which the record is kept, or the higher `version` of the keep whose place it took (section 21.2); in a keep that is given up, the version of the deletion whose keeping it gives up. `given_up` is `false` in a keep and `true` in a keep that is given up, which keeps nothing. A layer holds at most one keep. A keep is never taken out of a layer; it is replaced only by a later one, which the device sets or takes in a merge. Of two keeps, the later is the one with the higher `version`; with equal versions, the one with the higher `stamp`; with equal stamps, the one with the higher `device`, compared as in section 4.1; with all three equal, the one whose `given_up` is `true`. A keep for an older deletion so never takes the place of one for a newer deletion. In a merge the device takes the keep from the other state when only that state holds one or its keep is the later one, which counts as taking a part (section 4.4). The keep is delivered and due like the removal (section 10.1), identified by its four values, and its stamp is a stamp seen. Section 22.1 says when a keep keeps a record.
+- **The merge** is that of section 4. In rule 3 of section 4.1, a `null` value is lower than every value that is not `null`, the empty bytes included; two field states with `null` values and equal stamps and device keys are decided by `schema`.
+- **The state stamp** is the device's own stamp for the layer, taken on the occasions 1, 2, 3, 5, 6 and 7 of section 3.3. The changes of occasion 1 are those of section 21.2, those that the answering device makes on its own included (section 22.2), and the merge of two layers when two senders join (section 23.4) is a merge of occasions 2 and 3. It names the `CHANGE` messages of the layer. It is no version toward any app: section 5 does not apply to the layer, the device sends no record message from it, and it keeps for it neither a highest state stamp seen from a sibling nor a version to pass.
+- **Never incomplete, never discarded.** The layer is never held incompletely (section 4.3). A device MUST keep the field states of the layer also while the owner's removal stands; the leave of section 4.3 to discard them does not apply.
+- **One clock.** The stamps of the layer come from the device's one clock: every stamp that it gives or sees for a layer counts into its `highest` (section 2.2), and section 2.3 limits its changes of a layer as it limits those of a record of the set.
+- **Changes made while the installation counted.** Section 2.4 applies: when an installation begins to stamp, and so begins to keep owner's layers, each field of a received record that its user had changed gets a field state never stamped, with the stamp 0, the installation's own key and the owner's value (section 3.4), and each received record that its user had deleted gets a removal that stands, with a stamp taken then, also where the sender has deleted the record since ([records.md](records.md), section 6.3). Section 4.6 applies to these field states after a restore.
+- **Without the record.** A device holds the layer also when it holds no record message of the record, such as when a `CHANGE` of the layer reached it before the `FORWARD` of the record did. The record then shows nothing (section 22.1).
+
+A device holds one layer for a record, identified by the record's sender and its id (section 17.1). A layer and a record of the set with the same id are two states and never merge.
+
+### 21.2 What a change stamps
+
+A device stamps what its user does to a received record. Each line is one change; the stamps are taken in the order given, each as the next stamp of section 2.2.
+
+| The user                                                                             | Stamps taken | The device                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------------------------------------ | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| changes one or several fields of a received record                                   | 2            | takes one stamp and gives the layer, with that stamp and its own key, a field state with the new value for each field whose value the change sets; the other field states and the removal stay; then takes the state stamp                                                              |
+| discards the change of one or several fields, so that the sender's values show again | 2            | takes one stamp and gives the layer, with that stamp and its own key, a field state with the value `null` for each of those fields; then takes the state stamp                                                                                                                          |
+| deletes a received record                                                            | 2            | takes one stamp and puts a removal that stands, with that stamp and its own key, into the layer; the field states stay; then takes the state stamp                                                                                                                                      |
+| takes again a record that the owner deleted                                          | 2            | takes one stamp and puts a removal that was taken back, with that stamp and its own key, into the layer; it stamps no field; then takes the state stamp                                                                                                                                 |
+| keeps a record against its sender's deletion                                         | 2            | takes one stamp and puts a keep, with that stamp, its own key, `given_up` `false` and as its `version` the version of the sender's `DELETE`, or the `version` of the keep that the layer holds if that is higher, into the layer, in the place of that keep; then takes the state stamp |
+| gives up the keeping of a record, so that the sender's deletion is taken             | 2            | takes one stamp and puts a keep, with that stamp, its own key, `given_up` `true` and the `version` of the keep it gives up, into the layer, in the place of that keep; then takes the state stamp                                                                                       |
+
+- **The value.** The device writes an owner's value in Avro binary encoding under the type that the field has in the writer schema of the record's kept `DATA` (section 20.1), with the fingerprint of that schema as `schema` and the field's name as that schema has it. For a record of which it keeps no `DATA`, it writes under the schema that the layer's field state of that field names.
+- **The schema of a `null` value.** A field state with a `null` value takes the place of a field state of the layer, and keeps that field state's `schema`.
+- **A set that merges whole.** A set that merges the whole record ([records.md](records.md), section 6.2) treats a change of its user as a change of the whole record: the device gives the layer a field state for every top-level field of the writer schema of the kept `DATA`, with the value the record shows, not only for the fields the user touched.
+- **What may be changed.** A device changes the fields of a received record, and deletes it, only while the record is there on it (section 22.1). It takes a record again only while the owner's removal stands, and discards the change only of a field that has an owner's value. It sets a keep only for a record whose sender's layer ends in a `DELETE`, of which it holds the `DATA` beside the tombstone, and whose owner's layer holds at least one owner's value: a record that the owner never changed is deleted with the sender's `DELETE` ([records.md](records.md), section 6.4). It gives up only a keep that keeps the record (section 22.1).
+- The changes that the answering device makes on its own when it applies a message of the sender, a keep, a discard of every owner's value and the tidying of the layer, are changes of this table (section 22.2). No other device makes one on its own.
+
+### 21.3 The `CHANGE` message with a key in `origin`
+
+The owner's layer travels between the devices of a set in `CHANGE` messages (section 8) whose `origin` is a key. Such a message is a `CHANGE` in every respect that this section does not change:
+
+| Field            | Content for an owner's layer                                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------------------------------ |
+| `record.id`      | The id of the received record                                                                                |
+| `record.version` | The highest stamp in the message, as in section 8.1                                                          |
+| `origin`         | A key of the record's sender, as below                                                                       |
+| `type`           | The full name of the type that the device keeps for the received record                                      |
+| `state`          | The sending device's state stamp of the layer                                                                |
+| `whole`          | Whether `fields` holds every field state that the device holds of the layer                                  |
+| `removal`        | The removal of the layer, or `null`                                                                          |
+| `keep`           | The keep of the layer, or `null`; `null` never takes a keep away                                             |
+| `fields`         | Field states of the layer; a `value` of `null` is that of a field state whose value is `null` (section 21.1) |
+
+- **`origin`** is the key by which the sending device first knew the record's sender: the first key that it accepted for that sender ([keys.md](keys.md), section 3.2), or the key that a `FORWARD` first made known to it (section 19.2). It stays that key when the sender adds keys, and when that key is removed from the sender. When two senders join ([keys.md](keys.md), section 5.5), it is from then on the first key of the sender that stays. A device MUST NOT put a key of its own set there. Two devices of a set can have first known one sender by different keys and then name it by different keys; each names the same sender.
+- **Which record.** The receiving device finds the record's sender as the known sender, other than its own set, that has `origin` among its current keys or its removed keys; a key is a current or a removed key of at most one known sender. The record is the record of that sender with the id `record.id`. Wherever sections 8 to 10 speak of "the record" and of what a device keeps for a record and a sibling, they mean, for a message with a key in `origin`, the owner's layer of that received record, which is another state than a record of the set with the same id.
+- **One id and version, one message.** A device never gives a stamp twice (section 2.2), so its state stamps of a layer and of a record of the set with the same id, or of the layers of two senders' records with the same id, differ. An id and version so name one `CHANGE` of a device to a sibling, whatever its `origin` (section 9.2).
+
+### 21.4 Validity and processing
+
+The body of a `CHANGE` with a key in `origin` is valid by section 8.2, with a `null` in `value` allowed and with a `keep` allowed whose `stamp` is at least 1 and whose `version` is at least 1, whatever its `given_up`; `record.version` is then the highest also of `keep.stamp` (section 8.2), and `keep.device` is not checked. A device processes it by the steps of section 8.3, with these differences:
+
+| Step of section 8.3 | For a message with a key in `origin`                                                                          | If it fails                                     |
+| ------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| 1 to 6              | as they stand, with the validity above                                                                        | as section 8.3 says                             |
+| 7, 8                | for every entry of `fields`, also one whose `value` is `null`, with the schema that the device finds as below | `SCHEMA_UNKNOWN`, `INVALID_MESSAGE`             |
+| 9                   | the device keeps no other full name than `type` for the received record, in either layer                      | `TYPE_CHANGED`                                  |
+| 10                  | `origin` names a sender that the device knows, as below. `whole` is not looked at                             | `INVALID_MESSAGE` or `RECORD_UNKNOWN`, as below |
+| 11, 12              | as they stand, for every entry of `fields` whose `value` is not `null`                                        | `UNDECODABLE`, `VALUE_INVALID`                  |
+| 13                  | the device merges the message into the owner's layer and reaches an outcome (section 8.4)                     | (no failure)                                    |
+
+Step 10 is taken before the steps 7 and 8: the sender is resolved first, so a message with an unknown `origin` gives `RECORD_UNKNOWN` whatever schemas its entries name, which is the result that makes the sibling forward the sender. Step 9 keeps its place after step 8, so the steps are taken in the order 1 to 6, 10, 7, 8, 9, 11, 12 and 13. Step 10, by the key in `origin`:
+
+| `origin` is                                                                        | Result            |
+| ---------------------------------------------------------------------------------- | ----------------- |
+| a current key or a removed key of a known sender other than the device's own set   | the step passes   |
+| a key of the device's own set: its own key, a sibling, or a removed key of its set | `INVALID_MESSAGE` |
+| any other key: a key of no known sender, or a refused key                          | `RECORD_UNKNOWN`  |
+
+- **Steps 7 and 8, the schema.** The schemas of another app are kept apart from those of the set and from those of every other sender ([keys.md](keys.md), section 2.4), since a fingerprint can be the same for two schemas. For an entry of a message with a key in `origin`, the device looks the fingerprint up in this order, and takes the first text it finds:
+  1. among the schemas that it keeps of the record's sender: those that came with the forwards, the offers and the files of that sender (section 19.5), and those that it keeps with a field state of a layer of that sender's records;
+  2. among the schemas of the current offers of the sibling that sent the `CHANGE`, in the channel in which the `CHANGE` came (section 7.2).
+
+  It does not look among its own writer schemas, among the schemas it keeps with field states of records of the set, or among those of another sender. A device that holds the text only from the `FORWARD` of the record so passes step 7 by the first place. A text found in the second place is from then on kept among the schemas of that sender, for as long as the device holds a field state written with it. If the fingerprint is in neither place, step 7 fails with `SCHEMA_UNKNOWN`, and the sending device offers the schema again (section 9.3). The lookup of section 7.3, among all schemas of the set, is for a `CHANGE` whose `origin` is `null`.
+- **`RECORD_UNKNOWN`** says here that the device does not know the sender of the record. The messages that make the sender known have not arrived, or the device has forgotten the sender (section 20.5). Section 21.5 says what the sending device does.
+- **A layer the device lacks.** A device that holds no layer of the record takes the other state as its own, whether the message is whole or not, and keeps `type` for the record if it keeps none. It does so also when it holds no record message of the record (section 21.1). Step 10 of section 8.3, by which a device takes a record it lacks from a whole message alone, is for a record of the set.
+- **The merge, the outcome and the acknowledgement** are those of sections 8.4 and 9.1: the outcome is `APPLIED`, `DUPLICATE` or `STALE`, and `receiver_version` is the acknowledging device's state stamp of the layer. The keep of the message is a part like its removal: taking it gives `APPLIED`, a keep equal in all four values to the one the device holds is the same part, and a keep that is earlier, by the order of section 21.1, than the one the device holds gives `STALE` and makes the device's keep due for that sibling again. The `state` of the message and the `receiver_version` of its acknowledgement are counted as stamps seen and used for nothing else.
+- **Fields the device does not know** are kept and passed on (section 8.5).
+- **Nothing to the sender.** A device sends the record's sender nothing because of a `CHANGE`, apart from the later `ACK` of section 22.3.
+
+### 21.5 What a device sends of a layer
+
+Section 10 applies to an owner's layer as to a record of the set: the device keeps, for each sibling, whether the layer is known to it and which of its parts are delivered; it sends a layer whole on its first transfer and only the due parts after that; it takes a new state stamp before a second, different `CHANGE` under one state stamp; and it sends again for the reasons of section 10.3. The offers of section 7.2 are needed for the schemas that the field states of a layer name, as for every `CHANGE`; section 21.4 says where the receiving device looks such a schema up. Beyond that:
+
+- **After the record's message.** A device sends the `FORWARD` of the kept message of a record before a `CHANGE` of that record's layer, in the order of section 20.3, so that the sibling knows the sender and holds the record when the layer arrives.
+- **`RECORD_UNKNOWN`.** After `RECORD_UNKNOWN` of a sibling for a `CHANGE` with a key in `origin`, the device does not send the record whole at once, as section 9.3 says for a record of the set. It:
+  1. forgets what that sibling has of the layer (section 10.1): the layer is not known to it, and none of its parts is delivered;
+  2. treats every kept message of the record's sender as not delivered to that sibling (section 20.2), and forwards them again in the order of section 20.3: a kept message whose forward the device still keeps without an outcome goes again as the same `FORWARD`, with the same id, and every other in a new forward;
+  3. sends that sibling the layer again, whole, only when it has, after the error, taken an outcome of that sibling, `APPLIED` or `DUPLICATE`, for a forward of a message of that sender, or when a change of the owner or a merge has given the layer a new state stamp, and not before.
+
+  Until one of the two has happened, the reasons of section 10.3 do not hold for that layer and that sibling: neither that the layer is not known to the sibling, nor the resend "at once" after `RECORD_UNKNOWN`, nor the end of the holding time. A `RESYNC` of that sibling that the device acts on ends the wait as well (section 20.4). If the sibling answers that resend with `RECORD_UNKNOWN` again, a second time in a row for that layer with no outcome of the sibling for a `CHANGE` of it in between, only a new state stamp of the layer by a change or a merge, or a `RESYNC` of that sibling, ends the wait from then on: the sibling cannot come to know the sender by what the device holds, and the exchange would otherwise repeat without end.
+- **`RESYNC`.** A device that acts on a `RESYNC` of a sibling forgets what that sibling has of every layer, and sends every layer whole as part of its answer (section 20.4).
+- **No state stamp.** A device that could take no state stamp for a layer (section 2.3) sends no `CHANGE` of it.
+
+## 22. The record a device shows
+
+### 22.1 From the two layers
+
+What a device holds of a received record is its sender's layer (section 20.1) and its owner's layer (section 21.1). The record that the device shows its user, and gives to its app, is a function of these two alone, the same on every device that holds the same layers. No device turns a value of the sender into a value of the owner. The rules are taken in this order, and the first that applies decides:
+
+| Rule | The layers                                                                         | The record is                                                                                                                                                |
+| ---- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0    | the device holds no record message of the record                                   | not there; the device keeps the owner's layer                                                                                                                |
+| 1    | the owner's removal stands (section 21.1)                                          | deleted by the owner ([records.md](records.md), section 6.3), whatever the sender's layer holds                                                              |
+| 2    | the sender's layer ends in a `DATA`                                                | there: each field has the owner's value if the layer holds one for it, and the value of that `DATA` otherwise ([records.md](records.md), section 6.1)        |
+| 3a   | the sender's layer ends in a `DELETE`, and the record is kept against it, as below | there, kept against the deletion ([records.md](records.md), section 6.4): the kept `DATA` beside the tombstone, with the owner's values over it as in rule 2 |
+| 3b   | the sender's layer ends in a `DELETE`, and the record is not kept against it       | deleted by its sender                                                                                                                                        |
+
+- **Kept against the deletion.** A record whose sender's layer ends in a `DELETE` is kept exactly when the owner's layer holds a keep that is not given up and whose `version` is at least the version of that `DELETE`, the owner's layer holds at least one owner's value, the owner's removal does not stand, and the device holds a `DATA` beside the tombstone (section 20.1). In every other case it is deleted (rule 3b). Owner's values alone keep nothing, and a keep alone keeps nothing either: a keep that reaches a device whose owner's layer holds no owner's value is merged all the same (section 21.1), and shows nothing on its own.
+- **The same on every device.** The sender's layer is the same on two devices once each holds the record message with the highest version, and beside a `DELETE` the same `DATA` (sections 19.5 and 20.1); the owner's layer is the same once each has merged the parts of the other (section 4.5). Until then a device shows what the layers it holds give.
+- **An owner's value** is read with the schema that its field state names, resolved against the device's reader schema, like a value of a record of the set (section 3.1). An owner's value for a field that the writer schema of the `DATA` does not have is kept and not shown.
+- **A received record is never sent on as itself.** What a device shows is for its user. It sends no version of a received record to any app ([records.md](records.md), section 1).
+
+### 22.2 What the answering device does and reports
+
+Only the answering device (section 17.1) reports an outcome to the sender, and only it changes the owner's layer on its own when it applies a message. An outcome says what that device did when it processed the message, by the layers as it held them then; the same device can correct it later as section 22.3 says. When a record message with a higher version than the receiver's version, or for an id it does not have, reaches a device from the other app itself, the device takes the message into the sender's layer (section 19.5, step 10, which holds for the answering device as well) and reports by this table. Its rows are taken in order, and the first that applies decides, as in section 22.1: a `DELETE` that meets an owner's removal that stands is decided by the row of the removal, also where the layer holds owner's values, and so is a `DATA` that meets it, with `KEPT`.
+
+| Message  | The owner's layer, as the device holds it                                               | The device                                                                                                                                     | Outcome                                                                                                                                                                 |
+| -------- | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATA`   | its removal stands                                                                      | changes nothing in the layer; the record stays deleted by the owner (rule 1)                                                                   | `KEPT`                                                                                                                                                                  |
+| `DATA`   | no owner's value                                                                        | changes nothing in the layer                                                                                                                   | `APPLIED`                                                                                                                                                               |
+| `DATA`   | at least one owner's value; the set merges per field                                    | changes nothing in the layer                                                                                                                   | `MERGED` if at least one owner's value differs from the value that the message has for that field, with the names of those fields in `kept_fields`; `APPLIED` otherwise |
+| `DATA`   | at least one owner's value; the set merges the whole record                             | either discards every owner's value, by a change of section 21.2, or changes nothing                                                           | `APPLIED` if it discarded them, `KEPT` otherwise                                                                                                                        |
+| `DELETE` | its removal stands                                                                      | changes nothing in the layer                                                                                                                   | `APPLIED`                                                                                                                                                               |
+| `DELETE` | no owner's value                                                                        | changes nothing in the layer                                                                                                                   | `APPLIED`                                                                                                                                                               |
+| `DELETE` | at least one owner's value, and the set deletes ([records.md](records.md), section 6.4) | tidies the layer, as below                                                                                                                     | `APPLIED`                                                                                                                                                               |
+| `DELETE` | at least one owner's value, and the set keeps, or asks its user (as below)              | sets a keep with the version of the `DELETE` (section 21.2), if it holds a `DATA` of the record; tidies the layer and deletes if it holds none | `KEPT` if it set the keep, `APPLIED` otherwise                                                                                                                          |
+
+A message with a version equal to or below the receiver's version has the outcome `DUPLICATE` or `STALE` ([records.md](records.md), section 5.2) and changes nothing in the owner's layer; it can still be taken into the sender's layer by the cases of section 19.5, step 7.
+
+- **A set that asks its user.** Until the user answers, a set that asks its user is handled as a set that keeps: the answering device sets the keep and reports `KEPT` ([protocol.md](protocol.md), section 7.3). The user's later answer is a keep or a give-up (section 22.3).
+
+- **Tidying the layer** is one change of the answering device when it applies a `DELETE` without keeping: it gives the layer a field state with the value `null` for each field that has an owner's value, by a change of section 21.2. A later `DATA` that brings the record back ([records.md](records.md), section 5.3) then starts without those values, as [records.md](records.md), section 9, shows. Without a keep, the record is deleted by rule 3b with or without the tidying; after the tidying the layer holds no owner's value, so a keep that reaches it later keeps nothing either (section 22.1). An owner's value that the answering device did not hold when the `DELETE` arrived, because a sibling's `CHANGE` had not reached it, is not discarded. For a field to which the tidying gave a field state with the value `null`, it shows again when the record comes back if its stamp is above that of the tidying; for a field that the tidying did not touch, it shows again whatever its stamp.
+- **A change that had not arrived.** A change that the owner made on another device and that had not reached the answering device when the `DELETE` arrived does not keep the record: the answering device saw no owner's value, set no keep, and reported `APPLIED`. The record is deleted on every device, and that outcome stands.
+- **Only the answering device.** A device that gets the sender's message in a `FORWARD` sets no keep and tidies nothing on its own (section 19.1). It gets the answering device's change in a `CHANGE`.
+- **The owner's removal goes on standing.** A `DELETE` of the sender does not take the owner's removal away. A later `DATA` of the sender meets it and has the outcome `KEPT`, until the owner takes the record again (section 21.2). This holds on every device that keeps an owner's layer, an installation without a sibling included (section 21.1).
+- **A value that differs.** Two values of a field are compared as the values they decode to, each decoded with the writer schema it was written with, not by their bytes. `kept_fields` names the fields as the writer schema of the message names them ([records.md](records.md), section 7).
+- **A value the message brings.** A device that applies a `DATA` which has, for a field, exactly the owner's value MAY discard the owner's change of that field ([records.md](records.md), section 6.1), by a change of section 21.2 and not silently.
+- **No stamp.** A device that cannot take the two stamps of a change (section 2.3) sets no keep, discards nothing and tidies nothing. It reports `KEPT` for a `DATA` where the table has it choose, and `APPLIED` for a `DELETE`.
+- **A file.** A device that reads a file of another app does the same and reports nothing ([records.md](records.md), section 7).
+
+### 22.3 Choosing alike, and outcomes that change later
+
+[records.md](records.md), section 6, leaves choices to a receiver. The devices of one set are one receiver and MUST choose alike, whichever of them is the answering device:
+
+| The choice                                                                                        | Where                                          | The devices of a set |
+| ------------------------------------------------------------------------------------------------- | ---------------------------------------------- | -------------------- |
+| to merge per field or the whole record                                                            | [records.md](records.md), sections 6.1 and 6.2 | MUST all do the same |
+| for a set that merges the whole record: to take a `DATA` over the owner's changes or to keep them | [records.md](records.md), section 6.2          | MUST all do the same |
+| for a `DELETE` that meets the owner's changes: to delete, to keep, or to ask the user             | [records.md](records.md), section 6.4          | MUST all do the same |
+| whether a `DATA` that brings the owner's value ends the count of that field as changed            | [records.md](records.md), section 6.1          | MUST all do the same |
+
+Where the choice is left to the user, the user's answer is a change of the owner's layer (section 21.2), made on the device on which the user answers, and travels like every change:
+
+- **To keep a record against the sender's deletion**: a keep with the version of the sender's `DELETE` (section 21.2). The answering device of a set that asks sets it at once and reports `KEPT` ([protocol.md](protocol.md), section 7.3); any device sets it when its user decides to keep a record that is deleted by its sender, of which it holds the `DATA` beside the tombstone and whose owner's layer holds an owner's value (section 21.2).
+- **To take the sender's deletion after all**: a keep that is given up, with `given_up` `true`, the `version` of the keep it gives up and a new stamp. The record is then deleted by its sender on every device.
+- **To take again a record that the owner deleted**: a removal that was taken back.
+
+The device that reported `KEPT` for a message sends the further `ACK` with `APPLIED` that [protocol.md](protocol.md), section 7.3, defines when, by the layers it holds, the message is taken after all, while its receiver's version of the record is still the version of that message:
+
+| It reported `KEPT` for                      | It sends `APPLIED` when                                                                                                                                                                                                  |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| a `DATA`, because the owner's removal stood | the owner's layer comes to hold a removal that was taken back, by a change on the device or by a merge                                                                                                                   |
+| a `DELETE`, because it set a keep           | the owner's layer comes to hold a keep that is given up, by a change on the device or by a merge; its `version` is then at least that of the `DELETE`, since a layer's keep never goes to a lower version (section 21.1) |
+
+If a later message of the sender has arrived in between, it sends none. No other change of the layers changes an outcome: a keep that arrives after the device reported `APPLIED` for a `DELETE` shows the record again, where the layer holds an owner's value, and is not reported; a discard of every owner's value under a keep, which deletes the record (section 22.1), does not turn a `KEPT` into `APPLIED` either. If the answering device is removed from the set before its user, or the user of another device, has decided, no later `ACK` is sent: no other device sends one in its place, and the other app keeps `KEPT`. This is a limit of the set as one receiver. A change of the owner on one device and a change of the answering device are decided by their stamps, like two changes of one field (section 4).
+
+### 22.4 Example
+
+The exchange of [records.md](records.md), section 9, without the file of its step 5, with a receiver that runs on a phone and a tablet. The sender sends to the phone, so the phone is the answering device. The set merges per field and deletes a record that its sender deletes, also over the owner's changes. As in section 6.2, the stamps are small numbers that are chosen, not computed, each above every stamp its device had given or seen; before step 1 the phone has given or seen the stamps up to 195 and the tablet those up to 190.
+
+| Step | What happens                                                                      | The phone                                                                                                                                                    | The tablet                                                                                                                                    | Outcome to the sender                     |
+| ---- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| 1    | The sender's `DATA`, version 1, reaches the phone                                 | takes the record; keeps the message; forwards the sender's `MANIFEST` and then the `DATA`                                                                    | takes the sender as a known sender from the forwarded `MANIFEST` and the record from the forwarded `DATA`: `APPLIED` to the phone for each    | `APPLIED`, from the phone                 |
+| 2    | The tablet's user sets `location` to "Dr. Weber, Hauptstr. 5"                     | merges the tablet's `CHANGE` and takes `location`; state stamp 205                                                                                           | field stamp 200, state stamp 201; sends a `CHANGE` with the sender's key in `origin`                                                          | none                                      |
+| 3    | The sender's `DATA`, version 3, with `start` 10:30 and `notes`, reaches the phone | takes it into the sender's layer; changes nothing in the owner's layer; forwards it                                                                          | takes version 3 from the `FORWARD`: `APPLIED` to the phone                                                                                    | `MERGED`, kept `location`, from the phone |
+| 4    | The relay delivers the `DATA` of version 3 to the phone again                     | changes nothing; forwards nothing                                                                                                                            | nothing arrives                                                                                                                               | `DUPLICATE`, from the phone               |
+| 5    | The sender's `DELETE`, version 4, reaches the phone                               | takes the tombstone and keeps the `DATA` of version 3 beside it; tidies the layer: field stamp 210, state stamp 211; forwards the `DELETE`; sends a `CHANGE` | takes the tombstone from the `FORWARD` and keeps its `DATA` of version 3 beside it; merges the `CHANGE` and takes `location`; state stamp 215 | `APPLIED`, from the phone                 |
+| 6    | The sender's `DATA`, version 5, reaches the phone                                 | takes the record as the sender sent it; forwards it                                                                                                          | takes version 5 from the `FORWARD`                                                                                                            | `APPLIED`, from the phone                 |
+
+The layers of the record, which are the same on both devices after each step, and what both devices show:
+
+| After step | `location` in the owner's layer       | Removal | Keep | The sender's layer                                  | Rule | Both devices show                                               |
+| ---------- | ------------------------------------- | ------- | ---- | --------------------------------------------------- | ---- | --------------------------------------------------------------- |
+| 1          | no field state                        | none    | none | `DATA`, version 1                                   | 2    | `start` 10:00, `location` ""                                    |
+| 2          | "Dr. Weber, Hauptstr. 5", 200, tablet | none    | none | `DATA`, version 1                                   | 2    | `start` 10:00, `location` "Dr. Weber, Hauptstr. 5"              |
+| 3 and 4    | "Dr. Weber, Hauptstr. 5", 200, tablet | none    | none | `DATA`, version 3                                   | 2    | `start` 10:30, the `notes`, `location` "Dr. Weber, Hauptstr. 5" |
+| 5          | `null`, 210, phone                    | none    | none | `DELETE`, version 4, beside the `DATA` of version 3 | 3b   | nothing: the record is deleted by its sender                    |
+| 6          | `null`, 210, phone                    | none    | none | `DATA`, version 5                                   | 2    | the record as the sender sent it, `location` ""                 |
+
+- In step 2 the phone holds no layer of the record and takes the tablet's state: it has then seen the stamps 200 and 201 and takes the state stamp 205. Its `ACK` to the tablet reports `APPLIED` with the `receiver_version` 205.
+- In step 3 the owner's value of `location` differs from the "" of the message, so the phone reports `MERGED` with `location` in `kept_fields`. The tablet reports nothing to the sender: it acknowledges the `FORWARD` to the phone.
+- In step 5 the layer holds one owner's value, so tidying it is one field state: `location` with the value `null`, the stamp 210 and the phone's key, and the schema of the field state it replaces. On the tablet, 210 is above 200, so the tablet takes it, has then seen the stamps up to 211, and takes the state stamp 215. The record is deleted on the tablet as soon as the `FORWARD` of the `DELETE` has arrived, whether the `CHANGE` has arrived or not: the layer holds no keep (rule 3b). If the `CHANGE` comes first, the tablet shows the record with the sender's `location` "" until the `FORWARD` arrives.
+- Had the set kept a record against a deletion, the phone would in step 5 have set a keep instead: the stamp 210, the phone's key, the `version` 4 and `given_up` `false`, then the state stamp 211, with the outcome `KEPT`. The tablet would take the keep, having no keep before, and the state stamp 215. Both devices would go on showing the `DATA` of version 3 with the owner's `location` (rule 3a), and in step 6 the phone would report `MERGED` with `location` in `kept_fields`.
+
+## 23. A restored, a removed and a new device, and senders that join
+
+### 23.1 A device that restored a backup
+
+Section 12.1 holds for what a device got from other apps as for the records of the set. A device that restored its data from a backup:
+
+- discards what the backup holds for each sibling by section 20.2, and for the owner's layers by section 10.1: no kept message and no part of a layer is delivered to any sibling, and it keeps none of the forwards and `CHANGE` messages it sent before. An outcome or an error of a sibling for a `FORWARD` that it sent before it restored the backup is ignored;
+- gives the stamp −1 to the field states never stamped of its owner's layers, as to those of the records of the set (section 4.6);
+- asks every sibling with `RESYNC` (section 11.3). Each sibling answers with its kept messages and its owner's layers (section 20.4). A forwarded record message with a higher version than the one of the backup is taken by the version rule, and one that the backup holds already has the outcome `DUPLICATE`; the layers merge by section 4;
+- sends a sibling no `FORWARD` and no `CHANGE` before that sibling has acknowledged the request, apart from its answer to a request of that sibling. After the acknowledgement it forwards every kept message, each of which is then due for that sibling, and sends every layer;
+- takes a new state stamp for a layer before it sends the first `CHANGE` of that layer after the restore (section 3.3, occasion 7).
+
+A message of another app that the device got after the backup was made and forwarded to no sibling is lost with the restore; the other app holds an outcome for it and does not send it again on its own ([protocol.md](protocol.md), section 11). A change of an owner's layer that reached no sibling is lost in the same way.
+
+### 23.2 A removed device
+
+A device that applies the removal of a sibling (section 12.2) also discards what it kept for that key by section 20.2 and every `FORWARD` it had not sent to it yet, and rejects every `FORWARD` signed with that key without a report. It sends its chain and its `MANIFEST` to every known sender, at once to every sender but those that it knows only by forwards of the removed device, and to those only once its user has seen them in the list of section 19.2 and kept them, or at once at the end of a move (section 17.2). It SHOULD show its user that list (section 19.2). Its kept messages and its owner's layers stay as they are: a message that the removed device forwarded before its removal stays a kept message, and a field state that the removed device made in an owner's layer stays in that layer with its key (section 8.2). What another app had sent to the removed device alone, and that device had forwarded to no sibling, is not on the devices of the set. For the other app the outcomes of the removed key no longer count: it sends again, to a remaining device, the current state of each record whose only outcomes are of removed keys of the set, and what has no outcome (section 17.2; [protocol.md](protocol.md), section 7.4).
+
+### 23.3 A new device
+
+No kept message and no part of an owner's layer is delivered to a device that joins a set, and it holds none delivered to any sibling (section 12.3). Each sibling that has a channel to the new device therefore forwards it every kept message that it can forward, in the order of section 20.3, and sends it every owner's layer whole; the first channel is the connection in which it joined. The new device so comes to know every sender that its siblings know, without a question to its user, and holds their manifests, their records and what the owner changed in them.
+
+- **An installation with senders of its own.** An installation that joins a set forwards the messages it kept of the senders it knows (section 20.1) to its siblings, and sends them its owner's layers. Its local changes of received records were never stamped (section 21.1).
+- **A device that takes the place of an old one** ([keys.md](keys.md), section 5.7). The old device is done when, beyond what section 12.3 names, every kept message that it can forward is delivered to the new device and every part of every owner's layer is delivered to it. It SHOULD show its user a kept message that it cannot forward.
+
+### 23.4 Two senders that join
+
+When a device applies an addition that joins two senders ([keys.md](keys.md), section 5.5), from the other app itself or in a `FORWARD`:
+
+- the kept additions and removals of both are kept as those of the sender that stays, and so are the kept manifests of their keys;
+- for a record id that both senders hold, the sender's layer is the one that the rule of [keys.md](keys.md), section 5.5, leaves: the copy with the higher version by the version rule ([records.md](records.md), section 5.2), and with equal versions the copy of the sender that stays. The kept message of the record is that of the copy that stays in this way; the other is discarded;
+- the owner's layers of the two copies of such a record become one layer by the merge of section 4: the layer of the copy that stays is the device's own state, and the other is the other state. The device takes a new state stamp only on the occasions of section 3.3, that is, if it took a part from the other layer or held no layer of the copy that stays; what it took is due for every sibling;
+- what is delivered to a sibling stays delivered, by the bytes of each kept message (section 20.2).
+
+The addition itself is a kept message and is forwarded, so each sibling joins the two senders in the same way.
+
+## 24. Transports, files and limits
+
+### 24.1 Local network and relay
+
+A `FORWARD`, and a `CHANGE` with a key in `origin`, travel between two siblings in a live connection on the local network and through a relay, as section 13 says for a `CHANGE`:
+
+- In a live connection, a `FORWARD` follows the sibling's valid `MANIFEST` and has the connection key as its `sender` ([transports.md](transports.md), section 4.5). The message inside it has another `sender`, which the transport does not look at.
+- Through a relay, a `FORWARD` is sealed for the sibling's encryption key and put into the sibling's mailbox like every message (section 13.2). Padding and sealing apply to the `FORWARD`, not to the message inside it.
+- A device passes a message of another app on to a sibling only in a `FORWARD`. It MUST NOT send a sibling the message itself, as it does with the manifests of the devices of its own set (section 13.2): outside a `FORWARD`, a message of a key that the sibling does not know is a first contact ([keys.md](keys.md), section 3.2).
+
+### 24.2 Files
+
+- **A file never holds a `FORWARD`.** A file MUST NOT hold a `FORWARD`, as it holds no `CHANGE` and no `RESYNC` (section 13.3). A reader that finds one MUST reject the whole file ([transports.md](transports.md), section 2.2).
+- **A file of another app.** A device that reads a file of another app, and takes its sender and its records as [transports.md](transports.md), section 2.2, says, is the answering device for the messages of that file (section 17.1). It keeps the additions and removals at the start of the file that it applied, the file's `MANIFEST` if it took it as the kept manifest, and each record message that it took, with the text of its schema from the file's `axt.schemas` (section 20.1), and forwards them like the messages it gets in any other way (section 18.1). The file's `MANIFEST` is taken only with a higher revision than that of the kept manifest ([manifest.md](manifest.md), section 6), and is no manifest taken live (section 19.4). The owner so opens a file on one device only.
+- **A file of the device's own set** holds records of the set and is read as section 13.4 says. Nothing of it is forwarded.
+- **Writing a file.** A device writes into a file the records of its set alone. It puts no kept message of another app into a file of its own: the messages of a file are those of the file's sender ([keys.md](keys.md), section 2.5).
+
+### 24.3 Limits
+
+| What                                                                                                 | Limit                                                                                         |
+| ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| One `FORWARD` message, including its single-object header, the forwarded message and the schema text | 16 MiB (16,777,216 bytes) ([envelope.md](envelope.md), section 8)                             |
+| `schema` in a `FORWARD`                                                                              | 256 KiB of JSON text, nested to a depth of at most 64 ([envelope.md](envelope.md), section 8) |
+| A message of another app that can be forwarded                                                       | One whose `FORWARD` is at most 16 MiB (section 20.3)                                          |
+| The `ACK` after processing a `FORWARD`                                                               | Within 5 seconds (section 18.4)                                                               |
+| A repeat of a `FORWARD` through a relay                                                              | After the holding time of 14 days, not before (section 20.3)                                  |
+| How long a device keeps a `FORWARD` it sent, for its outcome                                         | 15 days after it last sent it (section 20.2)                                                  |
+| A `CHANGE` with a key in `origin`                                                                    | The limits of section 14                                                                      |
+
+A device MUST NOT produce a `FORWARD` above these limits, and MUST NOT reject one for its size while it is within them.
+
 ## References
 
 - [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) and [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174): key words for requirement levels
 - [RFC 8032](https://www.rfc-editor.org/rfc/rfc8032): Ed25519
+- [RFC 8259](https://www.rfc-editor.org/rfc/rfc8259): JSON
