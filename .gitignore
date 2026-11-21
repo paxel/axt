@@ -8,6 +8,9 @@ build/
 # JavaScript and TypeScript
 node_modules/
 
+# The built documentation site
+site-dist/
+
 # Python
 __pycache__/
 .venv/

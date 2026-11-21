@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="32" height="32" role="img" aria-label="AXT">
+  <title>AXT</title>
+  <style>
+    .wood { fill: #9c6a39 } .steel { fill: #4f5d6b }
+    @media (prefers-color-scheme: dark) { .wood { fill: #c48a52 } .steel { fill: #9fb0bf } }
+  </style>
+  <defs>
+    <mask id="arrows">
+      <rect x="0" y="0" width="100" height="100" fill="#fff"/>
+      <path d="M55 34 Q69 24 80 33" fill="none" stroke="#000" stroke-width="7" stroke-linecap="round"/>
+      <path d="M90 40 L76 38 L83 27Z" fill="#000"/>
+      <path d="M84 42 Q70 52 59 43" fill="none" stroke="#000" stroke-width="7" stroke-linecap="round"/>
+      <path d="M49 36 L63 38 L56 49Z" fill="#000"/>
+    </mask>
+  </defs>
+  <rect class="wood" x="30" y="14" width="14" height="82" rx="7"/>
+  <path class="steel" mask="url(#arrows)" d="M30 16 L58 16 L84 2 Q100 38 84 74 L58 60 L30 60Z"/>
+</svg>

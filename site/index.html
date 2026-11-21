@@ -1,0 +1,65 @@
+<!-- page: title="AXT" summary="AXT, Avro eXchange Transfer: an open standard that lets small, independent apps exchange typed records with each other." -->
+<p class="lede">
+  AXT, Avro eXchange Transfer, is an open standard that lets small, independent apps exchange
+  typed records with each other: by file, over the local network, or through a relay.
+</p>
+
+<h2>What it is</h2>
+<p>
+  Most small apps are islands. They keep their data in their own format, and the only way to move
+  it into another app is to type it again or to write a converter for that one pair of apps. AXT
+  gives such apps a common way to hand records to each other, so that data entered in one app can
+  be used in another.
+</p>
+<p>
+  An example: an appointment kept in cat-a-log, such as a visit to the vet, is sent to Old Brain
+  Fix, which turns it into a reminder, and to a second-brain app, which makes it findable in its
+  search. None of the three apps needs to know the others' internals; they only need to agree on
+  the record's type.
+</p>
+
+<h2>The documentation</h2>
+<p>Five tracks. Press <kbd>/</kbd> to search across all of them.</p>
+<ul class="cards">
+  <li>
+    <a class="card" href="start/index.html">
+      <p class="eyebrow">Track</p>
+      <p class="card-title">Start</p>
+      <p>What AXT is, how an exchange goes, and the terms it uses.</p>
+    </a>
+  </li>
+  <li>
+    <a class="card" href="design/index.html">
+      <p class="eyebrow">Track</p>
+      <p class="card-title">Design an app</p>
+      <p>For the maker of an app: types, the manifest, records, devices and shares.</p>
+    </a>
+  </li>
+  <li>
+    <a class="card" href="library/index.html">
+      <p class="eyebrow">Track</p>
+      <p class="card-title">Implement a library</p>
+      <p>For the author of a library: the parts of AXT in the order to build them, and the conformance suite.</p>
+    </a>
+  </li>
+  <li>
+    <a class="card" href="relay/index.html">
+      <p class="eyebrow">Track</p>
+      <p class="card-title">Run a relay</p>
+      <p>For whoever runs a relay: the reference relay, its settings and its operation.</p>
+    </a>
+  </li>
+  <li>
+    <a class="card" href="spec/index.html">
+      <p class="eyebrow">Track</p>
+      <p class="card-title">Specification</p>
+      <p>The specification itself, and reference pages generated from its schemas.</p>
+    </a>
+  </li>
+</ul>
+
+<h2>Elsewhere</h2>
+<ul>
+  <li><a href="https://github.com/paxel/axt">The standard on GitHub</a>, with its schemas, test vectors and conformance suite, and the <a href="https://github.com/paxel/axt/blob/summer/CHANGELOG.md">changelog</a>.</li>
+  <li><a href="https://github.com/paxel/axt#libraries">The libraries</a>, each in a repository of its own with a site of its own.</li>
+</ul>
