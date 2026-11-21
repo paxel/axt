@@ -86,28 +86,33 @@ void test("CRC-64-AVRO: the empty text, and the fingerprints the specification s
   });
   assert.equal(fingerprintText(0x1n).hex, "0x0000000000000001");
   // Every fingerprint a table of spec/ states for a schema of types/ is the one computed here.
-  /** @type {Map<string, string>} */
+  // Several versions of a type share its full name, so a name may have several fingerprints.
+  /** @type {Map<string, Set<string>>} */
   const stated = new Map();
   const specDir = path.join(REPO_ROOT, "spec");
   for (const file of fs.readdirSync(specDir)) {
     const text = fs.readFileSync(path.join(specDir, file), "utf8");
     for (const m of text.matchAll(/^\| `(axt\.[A-Za-z0-9.]+)`[^\n]*?`(0x[0-9a-f]{16})`/gm)) {
-      stated.set(m[1] ?? "", m[2] ?? "");
+      const name = m[1] ?? "";
+      stated.set(name, (stated.get(name) ?? new Set()).add(m[2] ?? ""));
     }
   }
   const schemas = [
     ...readSchemas(REPO_ROOT, "types/axt"),
     ...readSchemas(REPO_ROOT, "types/axt/example/v1"),
   ];
-  assert.ok(stated.size >= 29, `the tables state ${String(stated.size)} fingerprints`);
+  const statedCount = [...stated.values()].reduce((n, s) => n + s.size, 0);
+  assert.ok(statedCount >= 29, `the tables state ${String(statedCount)} fingerprints`);
+  /** @type {Set<string>} */
+  const matched = new Set();
   for (const schema of schemas) {
     const want = stated.get(schema.name);
-    if (want) assert.equal(fingerprintText(schema.fingerprint).hex, want, schema.name);
+    if (!want) continue;
+    const hex = fingerprintText(schema.fingerprint).hex;
+    assert.ok(want.has(hex), `${schema.file}: ${hex} is not among ${[...want].join(", ")}`);
+    matched.add(`${schema.name} ${hex}`);
   }
-  assert.ok(
-    schemas.filter((s) => stated.has(s.name)).length === stated.size,
-    "every stated fingerprint belongs to a schema",
-  );
+  assert.equal(matched.size, statedCount, "every stated fingerprint belongs to a schema");
 });
 
 void test("doc texts: their Markdown characters escaped, their mentions of spec/ linked", () => {
