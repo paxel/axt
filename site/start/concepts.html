@@ -1,0 +1,131 @@
+<!-- page: title="Concepts" track="start" order=3 summary="The ideas AXT is built on, one short section each: record, sender, device set, manifest, offer, outcome and share, with the spec section and glossary term of each." -->
+<p class="lede">
+  Seven ideas carry most of AXT. Each section below says what one of them is, in a few
+  sentences, and links the section of the specification that defines it. The
+  <a href="../spec/glossary.html">Glossary</a> holds every term.
+</p>
+
+<h2>Record</h2>
+<p>
+  A record is one datum of a type, such as one Appointment, together with its id and its
+  version. The id is a UUID that the sender gives the record when it creates it, and the record
+  keeps it for its whole life. The version rises with every change; a receiver applies a message
+  only if its version is higher than the one it holds. A deletion is a message too, and leaves a
+  tombstone at the receiver, so that an older message cannot bring the record back.
+</p>
+<p>
+  Spec: <a href="../spec/records.html#section-1">Records, sections 1</a> to
+  <a href="../spec/records.html#section-5">5</a>. Glossary:
+  <a href="../spec/glossary.html#term-record">record</a>,
+  <a href="../spec/glossary.html#term-version">version</a>,
+  <a href="../spec/glossary.html#term-tombstone">tombstone</a>.
+</p>
+
+<h2>Sender</h2>
+<p>
+  The sender of a record is the app that created it and sends its versions. Only the sender sends
+  versions of a record. A receiver knows a sender by the first key it accepted from it and by
+  the keys added to it since, and applies an update or a deletion only from that sender. The receiver's user may change a received
+  record in the receiver; that change stays there and is never sent back as a version.
+</p>
+<p>
+  Spec: <a href="../spec/records.html#section-1">Records, section 1</a>;
+  <a href="../spec/keys.html#section-3">Keys, section 3</a>. Glossary:
+  <a href="../spec/glossary.html#term-sender">sender</a>,
+  <a href="../spec/glossary.html#term-receiver">receiver</a>,
+  <a href="../spec/glossary.html#term-local-change">local change</a>.
+</p>
+
+<h2>Device set</h2>
+<p>
+  An owner who runs an app on a phone and a tablet has two installations, each with a signing key
+  of its own. Together they are one device set, and other apps take the set for one sender. Any
+  device of the set can add a new device, by QR code, and remove another, such as a lost one.
+  Every device changes every record of the set: each change carries a stamp from a clock that
+  never runs backwards, and per field the later change wins. After a record's first transfer,
+  the devices send each other only its changed fields. Another app has to reach only one device of the set, which passes the
+  message on to the others.
+</p>
+<p>
+  Spec: <a href="../spec/keys.html#section-5">Keys, section 5</a>;
+  <a href="../spec/sync.html#section-2">Sync, sections 2</a> to
+  <a href="../spec/sync.html#section-4">4</a> and
+  <a href="../spec/sync.html#section-17">section 17</a>. Glossary: the device set is part of
+  <a href="../spec/glossary.html#term-sender">sender</a>; see also
+  <a href="../spec/glossary.html#term-sibling">sibling</a> and
+  <a href="../spec/glossary.html#term-stamp">stamp</a>.
+</p>
+
+<h2>Manifest</h2>
+<p>
+  The manifest is the message in which an app names the types it takes, in which versions, and,
+  in one sentence per type, what it does with them: "An Appointment becomes a Reminder." An app
+  may also take any type. A sender offers only types that fit the receiver's manifest, and shows
+  its user the receiver's sentence before the user chooses what to send. The app name in a
+  manifest is what the app says about itself; the key identifies it.
+</p>
+<p>
+  Spec: <a href="../spec/manifest.html#section-3">Manifest, section 3</a> and
+  <a href="../spec/manifest.html#section-5">section 5</a>; schema
+  <a href="../spec/axt.Manifest.html"><code>axt.Manifest</code></a>. Glossary:
+  <a href="../spec/glossary.html#term-manifest">manifest</a>.
+</p>
+
+<h2>Offer</h2>
+<p>
+  An offer names the types whose records the sender wants to send, with their full writer
+  schemas. The receiver answers each type with an accept or a decline; a type that fits the
+  manifest is still only taken when the receiver accepts it. After that, each record in a live
+  connection names its schema by a fingerprint only. A file has no offer: its header carries the schemas instead.
+</p>
+<p>
+  Spec: <a href="../spec/protocol.html#section-4">Protocol, section 4</a> and
+  <a href="../spec/protocol.html#section-5">section 5</a>; schema
+  <a href="../spec/axt.Offer.html"><code>axt.Offer</code></a>. Glossary:
+  <a href="../spec/glossary.html#term-offer">offer</a>,
+  <a href="../spec/glossary.html#term-fingerprint">fingerprint</a>.
+</p>
+
+<h2>Outcome</h2>
+<p>
+  The outcome is what a receiver did with a record message, and it reports it in an
+  acknowledgement:
+</p>
+<table>
+  <thead>
+    <tr><th>Outcome</th><th>Meaning</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>APPLIED</code></td><td>The receiver took the record, or deleted it, as the message says.</td></tr>
+    <tr><td><code>MERGED</code></td><td>It took the record except the fields its user had changed.</td></tr>
+    <tr><td><code>KEPT</code></td><td>It took nothing, because its user's change covers the whole record.</td></tr>
+    <tr><td><code>DUPLICATE</code></td><td>It already had this version.</td></tr>
+    <tr><td><code>STALE</code></td><td>It already had a higher version.</td></tr>
+    <tr><td><code>WITHDRAWN</code></td><td>It removed its copy of a record that its sender withdrew from it, or held none.</td></tr>
+  </tbody>
+</table>
+<p>
+  A reader of a file reaches the same outcomes but reports nothing. Spec:
+  <a href="../spec/records.html#section-7">Records, section 7</a>; the
+  <a href="../spec/errors.html#outcomes">outcomes</a> on the Errors page. Glossary:
+  <a href="../spec/glossary.html#term-outcome">outcome</a>.
+</p>
+
+<h2>Share</h2>
+<p>
+  To an app of another user, only what the owner chose beforehand leaves. A share is a rule inside
+  the sending app that names, for one such app, the records that go to it: single records, or the
+  records a rule of the app picks. The receiver sees no share, only ordinary records. The owner
+  can withdraw a record from a share; the other app then removes its copy, or may keep it if
+  its user changed it. Where the owner's app takes proposals for a type, the other user can propose a
+  change of a shared record, which the owner's user takes or refuses; a change taken goes out as
+  an ordinary update.
+</p>
+<p>
+  Spec: <a href="../spec/shares.html#section-2">Shares, section 2</a>,
+  <a href="../spec/shares.html#section-3">section 3</a> and
+  <a href="../spec/shares.html#section-12">section 12</a>. Glossary:
+  <a href="../spec/glossary.html#term-share">share</a>,
+  <a href="../spec/glossary.html#term-withdrawal">withdrawal</a>,
+  <a href="../spec/glossary.html#term-proposal">proposal</a>.
+</p>

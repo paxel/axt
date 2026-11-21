@@ -1,0 +1,36 @@
+<!-- page: title="What's new" track="start" order=5 summary="The changes of each AXT release, from the changelog; 0.1.0 is the first release." -->
+<p class="lede">
+  What changed in each release of AXT. Version 0.1.0 is the first release, so its list is
+  everything the standard holds. Below 1.0 a later version may still change things in
+  incompatible ways; each change is listed in the
+  <a href="https://github.com/paxel/axt/blob/summer/CHANGELOG.md">changelog</a>, from which
+  this page is taken.
+</p>
+
+<h2>0.1.0</h2>
+<p>
+  The first release: <a href="https://github.com/paxel/axt/releases/tag/v0.1.0">v0.1.0</a>. Each
+  entry links its ticket.
+</p>
+<h3>Added</h3>
+<ul>
+  <li>The repository skeleton with its licences, contribution rules and spec index. (<a href="https://github.com/paxel/axt/issues/1">axt-1000</a>)</li>
+  <li>The envelope: every message is a signed <code>axt.Envelope</code>, sent live in single-object encoding and in files as an Avro container. (<a href="https://github.com/paxel/axt/issues/2">axt-1001</a>)</li>
+  <li>Eight example types under <code>axt.example.v1</code>, with the rules for naming, versioning and replacing types. (<a href="https://github.com/paxel/axt/issues/3">axt-1002</a>)</li>
+  <li>The time types <code>axt.Date</code>, <code>axt.Time</code>, <code>axt.DateTime</code> and <code>axt.Duration</code>, with time zones, partial dates and duration arithmetic. (<a href="https://github.com/paxel/axt/issues/17">axt-1016</a>)</li>
+  <li>Field metadata: translated labels, help, emoji, formats, I-Regexp patterns and limits, with the error <code>VALUE_INVALID</code> naming the field. (<a href="https://github.com/paxel/axt/issues/18">axt-1017</a>)</li>
+  <li>The example types hold their times in the time types and carry labels, help, emoji and checks in English and German. (<a href="https://github.com/paxel/axt/issues/19">axt-1018</a>)</li>
+  <li>Records with a stable id and a rising version, sent whole, with updates, deletions and the receiver's own changes. (<a href="https://github.com/paxel/axt/issues/4">axt-1003</a>)</li>
+  <li>The manifest, in which an app names the types it takes and what it does with them. (<a href="https://github.com/paxel/axt/issues/5">axt-1004</a>)</li>
+  <li>Ed25519 signatures, relay encryption with HPKE and trust on first use. (<a href="https://github.com/paxel/axt/issues/7">axt-1006</a>)</li>
+  <li>The protocol of offer, accept, decline, data, acknowledgement and errors. (<a href="https://github.com/paxel/axt/issues/6">axt-1005</a>)</li>
+  <li>Three transports: a file, the local network found by QR code, and a relay. (<a href="https://github.com/paxel/axt/issues/8">axt-1007</a>)</li>
+  <li>Test vectors for every category, the time types and invalid values among them, and a conformance runner with a reference adapter. (<a href="https://github.com/paxel/axt/issues/10">axt-1009</a>, <a href="https://github.com/paxel/axt/issues/20">axt-1019</a>)</li>
+  <li>The reference relay, a sealed mailbox anyone can run. (<a href="https://github.com/paxel/axt/issues/9">axt-1008</a>)</li>
+  <li>Device sets: an owner's devices, each with its own key, count as one sender, joined by QR code and removable by any other. (<a href="https://github.com/paxel/axt/issues/24">axt-1022</a>)</li>
+  <li>Stamps: every device of an owner changes every record, the later change wins per field, and a record's version is its state stamp. (<a href="https://github.com/paxel/axt/issues/25">axt-1023</a>)</li>
+  <li>Sibling sync: an owner's devices send each other only the changed fields of a record, track acknowledgements, and can ask for everything again. (<a href="https://github.com/paxel/axt/issues/26">axt-1024</a>)</li>
+  <li>Received records between an owner's devices: another app reaches one device, which passes its messages on, and the owner's changes sync too. (<a href="https://github.com/paxel/axt/issues/27">axt-1025</a>)</li>
+  <li>Shares: another user gets only the records the owner shared with them, and the owner can withdraw a record again. (<a href="https://github.com/paxel/axt/issues/28">axt-1026</a>)</li>
+  <li>Proposals: another user suggests changes to a shared record, which the owner's user takes or refuses; a taken change goes out as an ordinary update. (<a href="https://github.com/paxel/axt/issues/29">axt-1027</a>)</li>
+</ul>

@@ -1,0 +1,136 @@
+<!-- page: title="How an exchange goes" track="start" order=2 summary="The steps of one exchange in a live connection, from the accepted key through manifest, offer and answer to the record and its acknowledgement, and how a relay and a file differ." -->
+<p class="lede">
+  cat-a-log sends Mimi's vet appointment to Old Brain Fix over the local network. This page
+  follows the messages of that exchange, the example of
+  <a href="../spec/protocol.html#section-17">Protocol, section 17</a>, and then says what changes
+  through a relay and in a file.
+</p>
+
+<h2>Before the first record: the key</h2>
+<p>
+  Apps know each other by their signing keys, not by their names. Before two apps exchange
+  records, each user accepts the other app's key. Scanning the other app's QR code in person
+  counts as that confirmation. In any other case, such as a file or a relay message from an
+  unknown key, the app asks its user and shows the other app's short fingerprint to compare:
+  trust on first use (<a href="../spec/keys.html#section-3-2">Keys, section 3.2</a>). Until the
+  user accepts the key, the app applies no record signed with it.
+</p>
+
+<h2>The messages</h2>
+<p>
+  In the example, cat-a-log's user wants to send Mimi's record and her vet appointment. Old Brain
+  Fix's user takes the appointment but not the pet.
+</p>
+<table>
+  <thead>
+    <tr><th>Step</th><th>Message</th><th>What happens</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1, 2</td>
+      <td><code>MANIFEST</code>, both ways</td>
+      <td>
+        Each app sends its <a href="../spec/axt.Manifest.html">manifest</a>: the types it takes,
+        and one sentence per type on what it does with them. Neither waits for the other. Old
+        Brain Fix says, for example, "An Appointment becomes a Reminder."
+      </td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td><code>OFFER</code>, cat-a-log to Old Brain Fix</td>
+      <td>
+        cat-a-log offers the types Pet and Appointment, version 1, with their full schemas. Both
+        fit Old Brain Fix's manifest: the Appointment by its own entry, the Pet because Old Brain
+        Fix takes any other type too.
+      </td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td><code>ACCEPT</code>, Old Brain Fix to cat-a-log</td>
+      <td>Old Brain Fix's user takes the Appointment.</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td><code>DECLINE</code>, Old Brain Fix to cat-a-log</td>
+      <td>
+        The Pet, with the reason <code>NOT_WANTED</code>. A type that fits is not taken by
+        itself: the receiver confirms or declines each one.
+      </td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td><code>DATA</code>, cat-a-log to Old Brain Fix</td>
+      <td>
+        The appointment, version 1. Its body names the schema by its fingerprint only; the full
+        schema came with the offer.
+      </td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td><code>ACK</code>, Old Brain Fix to cat-a-log</td>
+      <td>
+        The outcome <code>APPLIED</code>: Old Brain Fix had no record under that id and took it.
+      </td>
+    </tr>
+  </tbody>
+</table>
+<p>
+  The example goes on with a <code>DATA</code> of the pet, which cat-a-log should not have sent:
+  its type has no accepted offer, and Old Brain Fix answers with the error
+  <code>NOT_ACCEPTED</code> (<a href="../spec/errors.html#error-codes">Errors</a>).
+</p>
+<p>The rules behind each step:</p>
+<ul>
+  <li>The first messages of a connection: <a href="../spec/protocol.html#section-3-1">Protocol, section 3.1</a>.</li>
+  <li>Which types fit a manifest, and offering only those: <a href="../spec/manifest.html#section-5">Manifest, section 5</a>.</li>
+  <li>The offer: <a href="../spec/protocol.html#section-4">Protocol, section 4</a>, schema <a href="../spec/axt.Offer.html"><code>axt.Offer</code></a>.</li>
+  <li>Accept and decline: <a href="../spec/protocol.html#section-5">Protocol, section 5</a>.</li>
+  <li>Applying a record and its outcome: <a href="../spec/records.html#section-5">Records, section 5</a> and <a href="../spec/records.html#section-7">section 7</a>.</li>
+  <li>The acknowledgement: <a href="../spec/protocol.html#section-7">Protocol, section 7</a>, schema <a href="../spec/axt.Ack.html"><code>axt.Ack</code></a>.</li>
+</ul>
+
+<div class="callout">
+  <p class="eyebrow">Note</p>
+  <p>
+    What a sender may offer depends on whose app the receiver is. To an app of another user,
+    only the records that the owner shared with it leave
+    (<a href="../spec/shares.html#section-2-2">Shares, section 2.2</a>). An app of the same user,
+    such as another app on the same phone, may get records without a share, with the user's
+    answer at each offer (<a href="../spec/shares.html#section-2-3">Shares, section 2.3</a>).
+  </p>
+</div>
+
+<h2>Later versions of the record</h2>
+<p>
+  The appointment keeps its id for its whole life. When cat-a-log's user moves it, cat-a-log
+  sends it again under a higher version; when the user cancels it, cat-a-log sends a
+  <code>DELETE</code>. Updates and deletions go through the same steps of offer and answer as new
+  records. A receiver whose own user changed the record keeps those changes where it can, and
+  reports it: <code>MERGED</code> when it kept some fields, <code>KEPT</code> when it took nothing
+  (<a href="../spec/records.html#section-6">Records, section 6</a>). A message that arrives twice,
+  or after a newer one, changes nothing (<a href="../spec/records.html#section-5-2">Records, section 5.2</a>).
+</p>
+
+<h2>Through a relay</h2>
+<p>
+  The messages and the rules are the same, but there is no connection. Each app sends its
+  manifest through the relay, a sender offers by the manifest it keeps of the receiver, and
+  answers and acknowledgements come back through the relay too. The relay may deliver late, out
+  of order or twice; the version rule makes the result the same. Every message is sealed for the
+  receiver's encryption key (<a href="../spec/protocol.html#section-15-1">Protocol, section 15.1</a>).
+</p>
+
+<h2>In a file</h2>
+<p>
+  A file has no way back to its sender. Its signed header lists the schemas in place of an offer,
+  the user who opens the file and the reader's manifest take the place of the answer, and nothing
+  acknowledges it. A file therefore holds no <code>OFFER</code>, <code>ACCEPT</code>,
+  <code>DECLINE</code>, <code>ACK</code> or <code>ERROR</code>; the reader applies its records by
+  the same rules and reports nothing
+  (<a href="../spec/protocol.html#section-15-2">Protocol, section 15.2</a>;
+  <a href="../spec/transports.html#section-2">Transports, section 2</a>).
+</p>
+
+<p>
+  Next: the <a href="concepts.html">Concepts</a>, one short section per term.
+</p>
