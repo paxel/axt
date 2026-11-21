@@ -1,6 +1,6 @@
 # Time
 
-Status: written, 0.1.0. Until 0.1.0 is released, the schemas of the time types may still change in place; their fingerprints (section 9.1) and the examples (section 9.2) are then produced again. From the release on, section 3.3 applies to them.
+Status: released in 0.1.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md). Section 3.3 applies to the time types.
 
 This document defines the four time types of AXT, `axt.Date`, `axt.Time`, `axt.DateTime` and `axt.Duration`: their fields and the rules a value keeps, how a type that holds a time value carries them, what a receiver does when its time zone rules differ from the writer's, and how a duration is added to a date and time.
 

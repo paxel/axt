@@ -1,6 +1,6 @@
 # Field metadata
 
-Status: written, 0.1.0. Until 0.1.0 is released, the attributes and their rules may still change in place; the example of section 9 and the vectors are then produced again.
+Status: released in 0.1.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md).
 
 This document defines the attributes that a schema carries so that a receiver which learns a type only from its schema can show and check each field: labels, help texts and emoji in English and other languages, the order and groups of fields, hints for inputs, formats, patterns and limits. It also says what a sender and a receiver do with a value that breaks a check, and how a receiver names that value.
 

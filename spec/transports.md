@@ -1,6 +1,6 @@
 # Transports
 
-Status: written, 0.1.0. Until 0.1.0 is released, the schema of `axt.QrPayload` may still change in place; its fingerprint (section 6) and the examples (section 7) are then produced again.
+Status: released in 0.1.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md).
 
 This document defines the three ways in which two apps reach each other: a file sent through any messenger, a connection on the local network, and a relay. For the file, it defines which messages a file holds and in which order, and what a reader rejects. For the local network, it defines the QR code that carries an app's key and address, discovery, the TLS connection, the frames on it, the HELLO that authenticates both apps' keys, liveness and the end of a connection, and the connection in which a new device joins the devices of its owner. For the relay, it defines mailboxes and the relay's HTTP interface, the holding time, limits, and what a relay may log.
 

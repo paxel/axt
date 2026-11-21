@@ -1,6 +1,6 @@
 # Protocol
 
-Status: written, 0.1.0. Until 0.1.0 is released, [transports.md](transports.md) may still change the details this document leaves to it, and the schemas of the protocol messages may still change in place; their fingerprints (section 16) and the example (section 17) are then produced again.
+Status: released in 0.1.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md).
 
 This document defines the steps of an exchange between two apps: the first messages of a live connection and the choice of the envelope format, the offer of types with their schemas, the acceptance or refusal of each type, the record messages, the acknowledgement and the error report. It defines the bodies of the messages `OFFER`, `ACCEPT`, `DECLINE`, `ACK` and `ERROR`, how each message is bound to the app it is for and made safe to repeat, timeouts, resends, what a declined or interrupted exchange leaves behind, and how the same messages behave in a live connection, through a relay and in a file.
 

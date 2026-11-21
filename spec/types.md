@@ -1,6 +1,6 @@
 # Example types
 
-Status: written, 0.1.0. Until 0.1.0 is released, the schemas of version 1 may still change in place; their fingerprints (section 7.3) are then produced again. From the release on, section 3 applies to them.
+Status: released in 0.1.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md). Section 3 applies to the example types.
 
 This document defines the example types that apps can use without agreeing first, the names and versions of types, what it means to replace an example type, the rules every example type follows, and the hints a receiver may use to show a record whose type it does not know.
 
