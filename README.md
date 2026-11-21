@@ -45,7 +45,14 @@ An example: an appointment kept in cat-a-log, such as a visit to the vet, is sen
 | [vectors/](vectors/README.md)         | Test vectors: bytes and their expected meaning |
 | [conformance/](conformance/README.md) | The conformance suite every library must pass  |
 | [relay/](relay/README.md)             | The reference relay                            |
-| [libs/](libs/README.md)               | Libraries, one directory per language          |
+
+## Libraries
+
+Each library lives in a repository of its own, is versioned on its own and is published to its language's registry. It states the AXT version it conforms to, and its CI runs the conformance suite of that AXT release against it.
+
+| Language | Repository                                            | Package                   | Conforms to |
+| -------- | ----------------------------------------------------- | ------------------------- | ----------- |
+| Dart     | [paxel/axt-dart](https://github.com/paxel/axt-dart)   | `axt_protocol` on pub.dev | in progress |
 
 ## Specification
 
