@@ -1,6 +1,6 @@
 # Manifest
 
-Status: written, 0.1.0. Until 0.1.0 is released, [protocol.md](protocol.md), [keys.md](keys.md) and [transports.md](transports.md) may still change the details this document leaves to them, and the manifest's schema may still change in place; its fingerprint (section 9) and the examples (section 10) are then produced again.
+Status: released in 0.1.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md).
 
 This document defines the manifest: the message in which an app states which types it takes, in which versions, and what it does with their records, or that it takes any type. It defines the manifest's content and schema, its limits, how a sender uses the other app's manifest to choose what it offers, what happens when a manifest changes, and what a file needs to carry one.
 

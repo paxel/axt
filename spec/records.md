@@ -1,6 +1,6 @@
 # Records
 
-Status: written, 0.1.0. Until 0.1.0 is released, [protocol.md](protocol.md) and [keys.md](keys.md) may still change the details this document leaves to them.
+Status: released in 0.1.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md).
 
 This document defines the stable id and the version every record carries, how a sender sends updates and deletions, how a receiver applies them while keeping what its own user changed, the outcomes a receiver reports for each record, and how one record refers to another.
 

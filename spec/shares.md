@@ -1,6 +1,6 @@
 # Shares between users
 
-Status: written, 0.1.0. Until 0.1.0 is released, [records.md](records.md), [protocol.md](protocol.md) and [sync.md](sync.md) may still change the details this document leaves to them.
+Status: released in 0.1.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md).
 
 This document defines how an app sends the app of another user only the records its own user chose beforehand, how it takes a record back from that user, and how that user suggests a change of a record that it got: the share, which is a rule inside the sending app; what "only predefined records leave" means for a conforming app; the `WITHDRAW` message, with which a sender withdraws one record from one receiver; how a receiver processes it and what it reports; how a withdrawal meets the receiver's own changes, a deletion and a later update; how a withdrawal travels between the devices of the receiver and of the sender, through a relay and in a file; and the `PROPOSAL` and `PROPOSAL_REPLY` messages, with which a receiver proposes changed values of a record to its sender and the sender's user takes or refuses them, with what each side does and how a proposal travels between the devices of either side.
 

@@ -14,7 +14,7 @@
 
 AXT is an open standard that lets small, independent apps exchange typed records with each other.
 
-Status: draft, 0.1.0 in progress. The documents in [spec/](spec/README.md) are stubs or drafts and may still change in incompatible ways. See [CHANGELOG.md](CHANGELOG.md).
+Status: [0.1.0](https://github.com/paxel/axt/releases/tag/v0.1.0) is released. Below 1.0 a later version may still change things in incompatible ways; each change is listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Why
 

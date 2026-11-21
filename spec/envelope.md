@@ -1,6 +1,6 @@
 # Envelope and encoding
 
-Status: written, 0.1.0. Until 0.1.0 is released, the later documents of 0.1.0 may still change the envelope schema; the fingerprint and the examples below are then produced again.
+Status: released in 0.1.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md).
 
 This document defines how AXT messages travel as bytes: the envelope every message is wrapped in, its encoding in a live connection and in a file, the fingerprints that name schemas, schema resolution, the representation of strings, times and ids, the size limits, and the media type and file extension.
 

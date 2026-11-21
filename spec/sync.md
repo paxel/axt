@@ -1,6 +1,6 @@
 # Sync between the devices of one owner
 
-Status: written, 0.1.0. Until 0.1.0 is released, the schemas of `axt.Change`, `axt.Resync` and `axt.Forward` may still change in place; their fingerprints (section 15) and the examples (section 16) are then produced again.
+Status: released in 0.1.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md).
 
 This document defines how the devices of one owner, which [keys.md](keys.md), section 5, makes one device set, change the same records: the stamp every change carries, the state a device keeps of a record, how two states of one record merge per field, when a record counts as deleted, and which version a device gives a record toward other apps. Sections 1 to 6 say what a device keeps and how it merges, whatever brings a state from one device to another. Sections 7 to 16 define the messages that bring it: `CHANGE`, which carries field states and the removal of one record from a device to a sibling, and `RESYNC`, with which a device asks a sibling for every record again; what a device sends to which sibling, how it is acknowledged and sent again, and what a restored, a removed and a new device do. Sections 17 to 24 define what the devices of a set do with what they got from other apps: `FORWARD`, in which a device passes a message of another app on to a sibling, so that another app has to reach only one device; and the owner's changes of a received record, which travel in `CHANGE` messages that name the record's sender.
 

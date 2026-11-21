@@ -1,6 +1,6 @@
 # Conformance
 
-Status: written, 0.1.0. Until 0.1.0 is released, the vectors are produced again whenever another document of 0.1.0 changes a value they hold.
+Status: released in 0.1.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md).
 
 This document defines what it means for a library to conform to AXT. It defines the test vectors (bytes with their expected meaning, and sequences of messages with their expected results), the file format they are kept in, how a result is expressed, and the conformance suite: a runner that drives a library through a small adapter, and a reference adapter that shows the vectors to be consistent.
 

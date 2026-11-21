@@ -1,6 +1,6 @@
 # Keys, signatures and encryption
 
-Status: written, 0.1.0. Until 0.1.0 is released, [protocol.md](protocol.md) and [transports.md](transports.md) may still change the details this document leaves to them, and the schemas of `axt.DeviceJoin`, `axt.DeviceAdd` and `axt.DeviceRemove` may still change in place; their fingerprints (section 6) and the examples (section 7) are then produced again.
+Status: released in 0.1.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md).
 
 This document defines the keys of an installation, how every message is signed and verified, how the schemas a message uses are bound to its sender, how an app meets and remembers another app's key, how messages through a relay are encrypted, and how the devices of one owner, each with a key of its own, count as one sender.
 
