@@ -22,13 +22,13 @@ permissions:
 
 jobs:
   vulns:
-    uses: paxel/gates/.github/workflows/vulns.yml@02a81ad45b815cbed94f9bb6841424a624e8155f # v1.2.0
+    uses: paxel/gates/.github/workflows/vulns.yml@ccb900ba534004ed8bb410f1f48c4097d9a9f530 # v1.3.0
 
   python:
-    uses: paxel/gates/.github/workflows/python.yml@02a81ad45b815cbed94f9bb6841424a624e8155f # v1.2.0
+    uses: paxel/gates/.github/workflows/python.yml@ccb900ba534004ed8bb410f1f48c4097d9a9f530 # v1.3.0
 
   sonar:
     needs: python
-    uses: paxel/gates/.github/workflows/sonar.yml@02a81ad45b815cbed94f9bb6841424a624e8155f # v1.2.0
+    uses: paxel/gates/.github/workflows/sonar.yml@ccb900ba534004ed8bb410f1f48c4097d9a9f530 # v1.3.0
     secrets:
       sonar-token: ${{ secrets.SQ_TOKEN }}
