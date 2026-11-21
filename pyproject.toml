@@ -1,6 +1,6 @@
 [project]
 name = "axt"
-version = "0.1.0"
+version = "0.2.0"
 description = "The conformance suite, the example scripts and the reference relay of AXT"
 requires-python = ">=3.11"
 license = "Apache-2.0 OR MIT"
