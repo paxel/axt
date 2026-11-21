@@ -34,8 +34,11 @@ import { buildSite, collectPages, readVersion } from "./build-site.js";
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 
-/** The paths of a release a site build reads: its pages and its version. */
-export const RELEASE_PATHS = ["site", "pyproject.toml"];
+/**
+ * The paths of a release a site build reads: its pages, its specification and its version. A
+ * release before the site has the specification only.
+ */
+export const RELEASE_PATHS = ["site", "spec", "pyproject.toml"];
 
 const RELEASE_TAG = /^v(\d+)\.(\d+)\.(\d+)$/;
 
@@ -70,7 +73,23 @@ export function compareVersions(a, b) {
 }
 
 /**
- * The release tags that carry the site, newest first.
+ * Whether the tree of a tag holds a file.
+ * @param {string} repoRoot
+ * @param {string} tag
+ * @param {string} file
+ * @returns {boolean}
+ */
+export function tagHas(repoRoot, tag, file) {
+  try {
+    git(repoRoot, ["cat-file", "-e", `${tag}:${file}`], { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The release tags that carry the site or the specification, newest first.
  * @param {string} [repoRoot]
  * @returns {string[]}
  */
@@ -78,26 +97,24 @@ export function listReleaseTags(repoRoot = REPO_ROOT) {
   const tags = git(repoRoot, ["tag", "--list", "v*"])
     .split("\n")
     .filter((tag) => RELEASE_TAG.test(tag));
-  const withSite = tags.filter((tag) => {
-    try {
-      git(repoRoot, ["cat-file", "-e", `${tag}:site/index.html`], { stdio: "pipe" });
-      return true;
-    } catch {
-      return false;
-    }
-  });
-  return withSite.sort((a, b) => compareVersions(a.slice(1), b.slice(1)));
+  const withDocs = tags.filter(
+    (tag) => tagHas(repoRoot, tag, "site/index.html") || tagHas(repoRoot, tag, "spec/README.md"),
+  );
+  return withDocs.sort((a, b) => compareVersions(a.slice(1), b.slice(1)));
 }
 
 /**
- * Extracts the release paths of a tag into destDir; a path the tag lacks fails loudly.
+ * Extracts the release paths a tag has into destDir; a tag with neither the site nor the
+ * specification fails loudly.
  * @param {string} repoRoot
  * @param {string} tag
  * @param {string} destDir
  */
 export function extractTag(repoRoot, tag, destDir) {
+  const paths = RELEASE_PATHS.filter((p) => p === "pyproject.toml" || tagHas(repoRoot, tag, p));
+  if (paths.length === 1) throw new Error(`${tag}: holds neither site/ nor spec/`);
   fs.mkdirSync(destDir, { recursive: true });
-  const archive = execFileSync(GIT, ["archive", "--format=tar", tag, "--", ...RELEASE_PATHS], {
+  const archive = execFileSync(GIT, ["archive", "--format=tar", tag, "--", ...paths], {
     cwd: repoRoot,
     maxBuffer: 512 * 1024 * 1024,
   });
@@ -156,7 +173,14 @@ export function buildAll({
       if (entry.source === "tag") extractTag(repoRoot, tag, entry.root);
       entry.srcDir = path.join(entry.root, "site");
       try {
-        entry.pages = collectPages({ srcDir: entry.srcDir });
+        // A release from before the site is converted as it was released: a section reference
+        // that was never checked then is reported, not fatal.
+        entry.pages = collectPages({
+          srcDir: entry.srcDir,
+          specDir: path.join(entry.root, "spec"),
+          tag: entry.tag,
+          strict: entry.source === "worktree" || fs.existsSync(entry.srcDir),
+        });
       } catch (err) {
         const why = err instanceof Error ? err.message : String(err);
         throw new Error(`${entry.tag ?? "working tree"}: ${why}`, { cause: err });

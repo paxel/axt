@@ -28,6 +28,13 @@ const SITE_V1 = {
   "pyproject.toml": '[project]\nname = "x"\nversion = "1.0.0"\n',
 };
 
+const SPEC_V095 = {
+  "spec/README.md":
+    "# The specification\n\n| Document | Purpose |\n| --- | --- |\n| [A](a.md) | The first |\n",
+  "spec/a.md": "# A\n\n## 1. One\n\nAs section 9 says.\n",
+  "pyproject.toml": '[project]\nname = "x"\nversion = "0.9.5"\n',
+};
+
 /** @type {string} */
 let tmp;
 /** @type {string} */
@@ -71,6 +78,11 @@ before(() => {
   write({ "pyproject.toml": '[project]\nname = "x"\nversion = "0.9.0"\n', "README.md": "old" });
   commitAll("v0.9.0 without a site");
   git(["tag", "v0.9.0"]);
+  // v0.9.5: the specification only, with a reference that was never checked.
+  write(SPEC_V095);
+  commitAll("v0.9.5 with the specification only");
+  git(["tag", "v0.9.5"]);
+  write({ "spec/a.md": "# A\n\n## 1. One\n\nAs section 1 says.\n" });
   write(SITE_V1);
   commitAll("v1.0.0 with the site");
   git(["tag", "v1.0.0"]);
@@ -115,8 +127,8 @@ void test("compareVersions sorts newest first, numerically per part", () => {
   ]);
 });
 
-void test("release tags are the vX.Y.Z tags whose tree carries the site, newest first", () => {
-  assert.deepEqual(listReleaseTags(repo), ["v1.1.0", "v1.0.0"]);
+void test("release tags are the vX.Y.Z tags whose tree carries the site or the specification, newest first", () => {
+  assert.deepEqual(listReleaseTags(repo), ["v1.1.0", "v1.0.0", "v0.9.5"]);
 });
 
 void test("the plan puts the working tree in place of its tag and marks the newest as latest", () => {
@@ -143,7 +155,11 @@ void test("extractTag unpacks the release paths of a tag and fails on a tag that
   assert.match(fs.readFileSync(path.join(dest, "pyproject.toml"), "utf8"), /1\.0\.0/);
   assert.throws(() => {
     extractTag(repo, "v0.9.0", path.join(tmp, "extract-old"));
-  }, /site|pathspec/i);
+  }, /v0\.9\.0: holds neither site\/ nor spec\//);
+  const specOnly = path.join(tmp, "extract-spec");
+  extractTag(repo, "v0.9.5", specOnly);
+  assert.ok(fs.existsSync(path.join(specOnly, "spec/a.md")));
+  assert.ok(!fs.existsSync(path.join(specOnly, "site")));
 });
 
 void test("the root is the latest version, every version lives under /vX.Y.Z/, versions.json lists them", () => {
@@ -160,7 +176,22 @@ void test("the root is the latest version, every version lives under /vX.Y.Z/, v
     { version: "1.2.0", tag: null, path: "v1.2.0/", latest: true },
     { version: "1.1.0", tag: "v1.1.0", path: "v1.1.0/", latest: false },
     { version: "1.0.0", tag: "v1.0.0", path: "v1.0.0/", latest: false },
+    { version: "0.9.5", tag: "v0.9.5", path: "v0.9.5/", latest: false },
   ]);
+});
+
+void test("a release with the specification only is built from its spec/, tolerating its old references", () => {
+  assert.match(read("v0.9.5/index.html"), /The specification of AXT as it was released\./);
+  assert.match(
+    read("v0.9.5/index.html"),
+    /<a href="spec\/index\.html">Read the specification<\/a>/,
+  );
+  const a = read("v0.9.5/spec/a.html");
+  assert.match(a, /<title>A — AXT<\/title>/);
+  assert.match(a, /As section 9 says\./, "the dead reference stays text");
+  assert.match(read("v0.9.5/spec/index.html"), /The first/);
+  assert.match(read("v1.0.0/spec/a.html"), /As section <a href="#section-1">1<\/a> says\./);
+  assert.match(read("spec/a.html"), /blob\/summer|section-1/);
 });
 
 void test("the menu of an old version links the same chapter where it exists and the start page elsewhere", () => {

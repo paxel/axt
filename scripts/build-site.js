@@ -11,6 +11,7 @@ import path from "node:path";
 import http from "node:http";
 import { fileURLToPath } from "node:url";
 import { escapeHtml } from "./site/html.js";
+import { specPages } from "./site/markdown.js";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
@@ -43,7 +44,10 @@ const REPO_URL = "https://github.com/paxel/axt";
 
 /**
  * @typedef {object} CollectOptions
- * @property {string} [srcDir]
+ * @property {string} [srcDir] the page fragments; a release without them is the specification only
+ * @property {string} [specDir] the Markdown of the specification, converted into the Specification track
+ * @property {string | null} [tag] the release the sources come from; links into the repository point at it
+ * @property {boolean} [strict] a section reference to a missing section fails the build; otherwise it is reported
  */
 
 /**
@@ -770,11 +774,47 @@ function guardOutDir(outDir, srcDir) {
  * @param {CollectOptions} [options]
  * @returns {Page[]}
  */
-export function collectPages({ srcDir = path.join(REPO_ROOT, "site") } = {}) {
-  const pages = loadPages(srcDir);
+export function collectPages({
+  srcDir = path.join(REPO_ROOT, "site"),
+  specDir = path.join(path.dirname(srcDir), "spec"),
+  tag = null,
+  strict = true,
+} = {}) {
+  const hasSite = fs.existsSync(srcDir);
+  const pages = hasSite ? loadPages(srcDir) : [];
+  if (fs.existsSync(specDir)) {
+    const spec = specPages(specDir, { repoUrl: REPO_URL, ref: tag ?? "summer", strict });
+    for (const warning of spec.warnings)
+      console.warn(`build-site: ${tag ?? "working tree"}: ${warning}`);
+    for (const page of spec.pages) {
+      if (pages.some((p) => p.url === page.url)) {
+        throw new Error(`${page.url}: written in ${srcDir} and converted from ${specDir}`);
+      }
+      pages.push(page);
+    }
+    if (!hasSite) pages.push(specOnlyLanding());
+  }
   if (!pages.some((p) => p.url === "index.html")) throw new Error(`${srcDir}: no index.html`);
   for (const page of pages) rejectRootRelativeLinks(page);
-  return pages;
+  return sortPages(pages);
+}
+
+/**
+ * The start page of a release that has the specification only, from before the site existed.
+ * @returns {Page}
+ */
+function specOnlyLanding() {
+  return {
+    title: "AXT",
+    track: "",
+    order: 0,
+    summary: "The specification of AXT as it was released.",
+    url: "index.html",
+    body:
+      '<p class="lede">The specification of AXT as it was released. This release came before the ' +
+      "guides; the Specification track holds its documents.</p>\n" +
+      '<p><a href="spec/index.html">Read the specification</a>.</p>',
+  };
 }
 
 /**
