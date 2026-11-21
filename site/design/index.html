@@ -1,9 +1,79 @@
 <!-- page: title="Design an app" track="design" order=0 summary="The Design an app track: what the maker of an app decides when the app exchanges records with AXT." -->
 <p class="lede">
   For the maker of an app that sends or takes records: which types to use, what the manifest says,
-  and how records, devices and shares behave for the app's users.
+  and how records, devices and shares behave for the app's users. The pages are the same in every
+  language and with every library.
 </p>
 
+<h2>The types</h2>
+<ul class="cards">
+  <li>
+    <a class="card" href="types.html">
+      <p class="eyebrow">Decide</p>
+      <p class="card-title">Choose a type</p>
+      <p>An example type or one of your own, its namespace, and the rules that shape it.</p>
+    </a>
+  </li>
+  <li>
+    <a class="card" href="versions.html">
+      <p class="eyebrow">Decide</p>
+      <p class="card-title">Evolve a type</p>
+      <p>Which changes stay compatible under Avro schema resolution, and which make a new type.</p>
+    </a>
+  </li>
+  <li>
+    <a class="card" href="metadata.html">
+      <p class="eyebrow">Decide</p>
+      <p class="card-title">Describe the fields</p>
+      <p>Labels, help, emoji, order, groups, inputs, formats and limits in the schema.</p>
+    </a>
+  </li>
+</ul>
+
+<h2>The exchange</h2>
+<ul class="cards">
+  <li>
+    <a class="card" href="manifest.html">
+      <p class="eyebrow">Decide</p>
+      <p class="card-title">Write the manifest</p>
+      <p>The types your app takes, in which versions, and one purpose sentence for each.</p>
+    </a>
+  </li>
+  <li>
+    <a class="card" href="records.html">
+      <p class="eyebrow">Behaviour</p>
+      <p class="card-title">Updates, deletions and the receiver's changes</p>
+      <p>Ids and versions, and what a receiver keeps when its user changed a record.</p>
+    </a>
+  </li>
+  <li>
+    <a class="card" href="devices.html">
+      <p class="eyebrow">Behaviour</p>
+      <p class="card-title">Run on several devices</p>
+      <p>One owner's devices as one sender: adding, removing, moving, and changes that meet.</p>
+    </a>
+  </li>
+</ul>
+
+<h2>Other users</h2>
+<ul class="cards">
+  <li>
+    <a class="card" href="shares.html">
+      <p class="eyebrow">Decide</p>
+      <p class="card-title">Share records with other users</p>
+      <p>Only shared records leave; a record that leaves a share is withdrawn.</p>
+    </a>
+  </li>
+  <li>
+    <a class="card" href="proposals.html">
+      <p class="eyebrow">Decide</p>
+      <p class="card-title">Proposals</p>
+      <p>A receiver suggests a change; the owner's user takes or refuses it.</p>
+    </a>
+  </li>
+</ul>
+
 <p>
-  The rules behind each page are in the <a href="../spec/index.html">Specification</a>.
+  The rules behind each page are in the <a href="../spec/index.html">Specification</a>, and the
+  terms in its <a href="../spec/glossary.html">Glossary</a>.
 </p>

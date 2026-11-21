@@ -1,0 +1,153 @@
+<!-- page: title="Updates, deletions and the receiver's changes" track="design" order=5 summary="How a record keeps its id and version through updates and deletions, and what a receiver decides when its user has changed a received record." -->
+<p class="lede">
+  A record is sent once and then lives on: its sender updates it, deletes it, may bring it back.
+  A receiver that lets its user change received records decides what happens when the sender's
+  next message meets those changes.
+</p>
+
+<h2>Id and version</h2>
+<p>
+  Every record carries an id and a version in the envelope, not in its fields
+  (<a href="../spec/records.html#section-2">records, sections 2</a> and
+  <a href="../spec/records.html#section-3">3</a>):
+</p>
+<ul>
+  <li>The id is a random or time-ordered UUID that the sender gives the record when it creates it. The record keeps it for its whole life, through every update, a deletion and a return after it. It is unique among all records of the sender, of all types, is never used for a second record, and is the same toward every receiver.</li>
+  <li>The version is a number that rises with every change of the record at its sender, a deletion included. It may have gaps: a sender that changes a record several times before it can send sends only the last state.</li>
+  <li>A receiver knows a record by its sender and its id together. Two senders' records with the same id are two records.</li>
+</ul>
+
+<h2>What a sender sends</h2>
+<ul>
+  <li><strong>An update is the whole record.</strong> A <code>DATA</code> message carries every field, the first version and every update alike. Toward another app no message carries only the changed fields (<a href="../spec/records.html#section-4-1">section 4.1</a>).</li>
+  <li><strong>A deletion is a version.</strong> A <code>DELETE</code> carries the id and the version of the deletion. A <code>DATA</code> with a higher version brings the record back under the same id, so a sender can undo a deletion (<a href="../spec/records.html#section-4-2">section 4.2</a>).</li>
+  <li><strong>The type stays.</strong> Every version of a record is sent with a schema of the same full name (<a href="../spec/records.html#section-4-3">section 4.3</a>; <a href="versions.html">Evolve a type</a>).</li>
+</ul>
+
+<h2>How a receiver applies them</h2>
+<p>
+  A receiver compares the version of each message with the highest version it has seen of the
+  record (<a href="../spec/records.html#section-5-2">section 5.2</a>):
+</p>
+<table>
+  <thead>
+    <tr><th>Version in the message</th><th>The receiver</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>No record under this id</td><td>takes the record, or keeps a tombstone for a <code>DELETE</code></td></tr>
+    <tr><td>Higher</td><td>applies it, keeping its user's changes as below</td></tr>
+    <tr><td>Equal</td><td>changes nothing: a duplicate</td></tr>
+    <tr><td>Lower</td><td>changes nothing: the message is older than what it holds</td></tr>
+  </tbody>
+</table>
+<p>
+  Messages can come twice, late or out of order, through a relay or from an old file. The rule
+  makes the result independent of that: as long as the receiver's user changes nothing, the
+  receiver ends in the state of the message with the highest version. A deleted record leaves a
+  tombstone, its id and the version of the deletion, which the receiver keeps as long as it keeps
+  the sender, so that an old message does not bring the record back
+  (<a href="../spec/records.html#section-5-3">section 5.3</a>).
+</p>
+
+<h2>The receiver's own changes</h2>
+<p>
+  A receiver may let its user change received records. Those changes stay in the receiver: they
+  are never versions of the record and are not sent back
+  (<a href="../spec/records.html#section-1">section 1</a>). If the user wants the sender to change
+  the record, the receiver can propose it, where the sender takes proposals
+  (<a href="proposals.html">Proposals</a>). A record of its own that a receiver makes from a
+  received one, even a copy, is a new record with an id of its own.
+</p>
+<p>When an update arrives, the receiver keeps its user's changes, as far as it can per field (<a href="../spec/records.html#section-6">section 6</a>). That leaves a few choices to the app:</p>
+
+<h3>Per field or the whole record</h3>
+<ul>
+  <li><strong>Per field</strong>, which a receiver should do: for each top-level field, it takes the sender's value if its user has not changed the field and keeps its user's value if the user has. A nested record, an array or a map counts as one value (<a href="../spec/records.html#section-6-1">section 6.1</a>).</li>
+  <li><strong>Whole record</strong>: a receiver that does not track fields treats any change as a change of the whole record, and either takes the whole update or keeps the record as its user left it (<a href="../spec/records.html#section-6-2">section 6.2</a>).</li>
+</ul>
+<p>
+  A field counts as changed from the user's first change until the user discards it, for example
+  with an action that takes the sender's value again. If an update brings exactly the user's
+  value, the receiver may count the field as no longer changed. An app that lets its user propose
+  changes merges per field for that type.
+</p>
+
+<h3>A deletion that meets changes</h3>
+<p>
+  When the sender deletes a record that the receiver's user has changed, the receiver either
+  deletes it or keeps it with its user's changes; it may ask its user
+  (<a href="../spec/records.html#section-6-4">section 6.4</a>). A record that the user has not
+  changed is always deleted. A record kept against a deletion stays the sender's record under the
+  same id, and a later update is merged into it.
+</p>
+<p>
+  While the user has not decided, the receiver reports that it kept the record, and reports again
+  when the user takes the deletion after all
+  (<a href="../spec/protocol.html#section-7-3">protocol, section 7.3</a>).
+</p>
+
+<h3>A record the user deleted</h3>
+<p>
+  A record that the receiver's user deleted stays deleted: an update does not bring it back
+  unless the user agrees, and the receiver may offer to take it again
+  (<a href="../spec/records.html#section-6-3">section 6.3</a>).
+</p>
+
+<h2>What the sender learns</h2>
+<p>
+  The receiver reports an outcome for each record message
+  (<a href="../spec/records.html#section-7">section 7</a>):
+</p>
+<table>
+  <thead>
+    <tr><th>Outcome</th><th>Meaning</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>APPLIED</code></td><td>The receiver took the record, or deleted it, as the message says</td></tr>
+    <tr><td><code>MERGED</code></td><td>It took the record except the fields its user had changed, which it names</td></tr>
+    <tr><td><code>KEPT</code></td><td>It took nothing, because its user's change covers the whole record</td></tr>
+    <tr><td><code>DUPLICATE</code></td><td>It had this version already</td></tr>
+    <tr><td><code>STALE</code></td><td>It had a higher version already</td></tr>
+  </tbody>
+</table>
+<p>
+  The sender may show its user that a receiver kept changes of its own. A record withdrawn from a
+  share has one more outcome, <code>WITHDRAWN</code> (<a href="shares.html">Share records with
+  other users</a>). A file has no way back, so its reader reports nothing.
+</p>
+
+<h2>The vet appointment</h2>
+<p>
+  A sender sends an appointment to a receiver that merges per field
+  (<a href="../spec/records.html#section-9">section 9</a>):
+</p>
+<table>
+  <thead>
+    <tr><th>Step</th><th>What happens</th><th>Message</th><th>Outcome</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1</td><td>The sender creates the appointment "Vet" at 10:00, without a location</td><td><code>DATA</code>, 1</td><td><code>APPLIED</code></td></tr>
+    <tr><td>2</td><td>The receiver's user sets the location to "Dr. Weber, Hauptstr. 5"</td><td>none</td><td></td></tr>
+    <tr><td>3</td><td>The sender moves the start to 10:30, then adds a note, and sends</td><td><code>DATA</code>, 3</td><td><code>MERGED</code>, kept the location</td></tr>
+    <tr><td>4</td><td>The relay delivers that message again</td><td><code>DATA</code>, 3</td><td><code>DUPLICATE</code></td></tr>
+    <tr><td>5</td><td>The receiver's user opens an old file with the first message</td><td><code>DATA</code>, 1</td><td><code>STALE</code>, not reported</td></tr>
+    <tr><td>6</td><td>The sender's user cancels the appointment</td><td><code>DELETE</code>, 4</td><td><code>APPLIED</code></td></tr>
+    <tr><td>7</td><td>The sender's user undoes the cancellation</td><td><code>DATA</code>, 5</td><td><code>APPLIED</code></td></tr>
+  </tbody>
+</table>
+<p>
+  This receiver deletes in step 6 although its user had set the location, so the location is gone
+  when the record comes back in step 7. A receiver that keeps changed records against a deletion
+  reports <code>KEPT</code> in step 6 and <code>MERGED</code> in step 7, with the location.
+</p>
+
+<div class="callout">
+  <p class="eyebrow">On several devices</p>
+  <p>
+    A receiver that runs on several devices of one owner is one receiver: its devices make every
+    choice of this page alike, and a user's change or decision on one device reaches the others
+    (<a href="../spec/records.html#section-6">section 6</a>;
+    <a href="../spec/sync.html#section-22-3">sync, section 22.3</a>; <a href="devices.html">Run on
+    several devices</a>).
+  </p>
+</div>

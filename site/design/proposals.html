@@ -1,0 +1,107 @@
+<!-- page: title="Proposals" track="design" order=8 summary="How the receiver of a shared record suggests a change to its owner, and what the owner's app and the proposing app each decide." -->
+<p class="lede">
+  A receiver's changes to a record stay with the receiver. When its user wants the owner to change
+  the record, such as to move an appointment, the receiver can send a proposal. The owner's user
+  takes it or refuses it; a proposal that is taken comes back as an ordinary update.
+</p>
+
+<h2>What a proposal is</h2>
+<p>Three things set a proposal apart from a change (<a href="../spec/shares.html#section-12-1">shares, section 12.1</a>):</p>
+<ul>
+  <li><strong>Changed fields only.</strong> A proposal carries new values for some top-level fields of one record. It can neither delete a record nor create one.</li>
+  <li><strong>Nothing without the owner's user.</strong> The owner's app shows the proposal and applies nothing of it unless its user takes it. Then it becomes the owner's own change, which reaches every receiver of the record, the proposer included.</li>
+  <li><strong>The answer is a status.</strong> The owner's device replies whether its user took the proposal. The reply changes no record.</li>
+</ul>
+
+<h2>Who may propose</h2>
+<p>A receiver may propose a change of a record when (<a href="../spec/shares.html#section-12-2">section 12.2</a>):</p>
+<ul>
+  <li>the owner shares the record with it. Apps that the owner's app holds as apps of its own user count as receivers of every record of the type;</li>
+  <li>the owner's manifest takes proposals for the record's type: its entry in <code>sends</code> for that type has <code>proposals</code> set to <code>true</code> (<a href="../spec/manifest.html#section-3-7">manifest, section 3.7</a>).</li>
+</ul>
+<p>
+  Taking proposals is a decision per type, and it covers every receiver with which the owner
+  shares a record of that type. The owner's own devices are no receivers; they change the records
+  directly.
+</p>
+
+<h2>The owner's app</h2>
+<h3>Showing and answering</h3>
+<p>The owner's app answers only by its user's decision (<a href="../spec/shares.html#section-15-1">section 15.1</a>):</p>
+<ul>
+  <li>The app shows each open proposal: who proposes, the record, and each proposed value beside the record's current value. It should gather the open proposals in one place rather than interrupt its user for each.</li>
+  <li>It answers <code>ACCEPTED</code> when its user takes the proposal whole, every value as proposed, and <code>DECLINED</code> when the user refuses it. It never answers on its own, and no timer ends an open proposal.</li>
+  <li>An app that lets its user take only some of the values, or other values, answers <code>DECLINED</code> and makes what the user takes an ordinary change of the record, which reaches the proposer as an update.</li>
+  <li>A device that cannot show every proposed value, such as one of a field its version of the type lacks, cannot accept the proposal; its user can still refuse it, or take it on a device that can show every value.</li>
+</ul>
+
+<h3>What the app keeps</h3>
+<p>
+  The app keeps each answer, as records of a type in its own namespace, as it keeps its shares, so
+  that every device of the owner holds it. It keeps an answer as long as the record is shared with
+  the proposer, and at least 15 days. It also keeps the schemas of the records it sent to each
+  receiver, so that every device can read a proposal written against them
+  (<a href="../spec/shares.html#section-15-1">section 15.1</a>).
+</p>
+
+<h3>A record that changed, or left</h3>
+<ul>
+  <li>A proposal names the version the proposer held. If the record has changed since, the app still shows the proposal, and should tell its user. Taking it sets the proposed values over whatever the record holds then (<a href="../spec/shares.html#section-15-3">section 15.3</a>).</li>
+  <li>A proposal for a record that is deleted, withdrawn from the proposer or no longer shared with it is not taken. An open proposal whose record is deleted, or leaves the share, is dropped without a reply (<a href="../spec/shares.html#section-15-4">section 15.4</a>).</li>
+</ul>
+
+<h3>Unwanted proposals</h3>
+<p>
+  Every proposal costs the owner's user attention
+  (<a href="../spec/shares.html#section-18-4">section 18.4</a>). An app may let its user stop
+  proposals from one receiver, for one record, one type or all records, and keeps that stop as
+  records of its own type. To take no more proposals for a type at all, it sends a manifest in
+  which <code>proposals</code> is <code>false</code> for that type. The specification also bounds
+  how many open proposals of one proposer a device takes: 16 for one record and 256 in all
+  (<a href="../spec/shares.html#section-18-3">section 18.3</a>).
+</p>
+
+<h2>The proposing app</h2>
+<ul>
+  <li><strong>Merge per field.</strong> An app that lets its user propose changes to records of a type merges per field for that type (<a href="../spec/shares.html#section-17-2">section 17.2</a>; <a href="records.html">Updates, deletions and the receiver's changes</a>).</li>
+  <li><strong>The proposed value is the user's change.</strong> It shows in the record at once and stands, before the answer and after a refusal, until the user discards it. An update from the owner does not end it by itself.</li>
+  <li><strong>Only for a record that is there.</strong> The app proposes only for a record whose last message from the owner is an update, not for one the owner deleted or withdrew, and not for one its own user deleted (<a href="../spec/shares.html#section-13-1">section 13.1</a>).</li>
+  <li><strong>Repeated until answered.</strong> A proposal without a reply is sent again: at the start of each later live connection, and through a relay every 14 days (<a href="../spec/shares.html#section-16-2">section 16.2</a>). No message takes a proposal back.</li>
+  <li><strong>The answer.</strong> The app may show its user the reply. <code>ACCEPTED</code> says an update is coming; <code>DECLINED</code> says none is coming for this proposal (<a href="../spec/shares.html#section-14-2">section 14.2</a>).</li>
+</ul>
+<p>
+  A proposal needs a way back for its reply, so no file carries one
+  (<a href="../spec/shares.html#section-18-2">section 18.2</a>). An app that proposes through a
+  relay also takes messages through it.
+</p>
+
+<h2>The vet appointment, proposed</h2>
+<p>
+  cat-a-log shares the vet appointment with a second user's app, and its manifest takes proposals
+  for Appointments (<a href="../spec/shares.html#section-11-3">section 11.3</a>):
+</p>
+<table>
+  <thead>
+    <tr><th>Step</th><th>What happens</th><th>Message</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1</td><td>cat-a-log shares the appointment, version 3, start 10:30</td><td><code>DATA</code></td></tr>
+    <tr><td>2</td><td>The second user moves the start to 11:00 and proposes it; their app shows 11:00 at once</td><td><code>PROPOSAL</code></td></tr>
+    <tr><td>3</td><td>cat-a-log shows its user 11:00 beside 10:30; the record is unchanged</td><td>none</td></tr>
+    <tr><td>4</td><td>cat-a-log's user takes the proposal; the start becomes 11:00 in version 4</td><td><code>PROPOSAL_REPLY</code>, <code>ACCEPTED</code></td></tr>
+    <tr><td>5</td><td>cat-a-log sends the update to every receiver of the appointment</td><td><code>DATA</code>, version 4</td></tr>
+  </tbody>
+</table>
+<p>
+  Had cat-a-log's user refused, the reply would have said <code>DECLINED</code>, no update would
+  have followed, and the second user's app would have gone on showing 11:00 as its user's change.
+</p>
+
+<div class="callout">
+  <p class="eyebrow">Note</p>
+  <p>
+    A proposal binds no one. The owner's user may refuse it, leave it open, or take only part of
+    it, and the proposed values reach no other receiver unless the owner takes them, and then as
+    the owner's change (<a href="../spec/shares.html#section-18-4">section 18.4</a>).
+  </p>
+</div>

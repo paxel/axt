@@ -1,0 +1,117 @@
+<!-- page: title="Run on several devices" track="design" order=6 summary="How the installations of one owner become one device set, how a device is added, removed or replaced, and how the owner's changes on several devices come together." -->
+<p class="lede">
+  An owner who runs your app on a phone and a tablet has two installations. Together they are one
+  device set: every device changes every record, and other apps see one sender.
+</p>
+
+<h2>One owner, one sender</h2>
+<p>
+  Each installation has its own signing key, its own encryption key, its own mailbox and its own
+  manifest. Together they are one <a href="../spec/glossary.html#term-sender">sender</a>
+  (<a href="../spec/keys.html#section-5-1">keys, section 5.1</a>):
+</p>
+<ul>
+  <li>No key stands above the devices. A set is its first key and the keys added to it and removed from it.</li>
+  <li>Every device may add a new device and remove any other; no device removes itself, so a set is never empty.</li>
+  <li>An installation belongs to one set. One whose set has, or has had, another device never joins another set.</li>
+  <li>Another app keeps one copy of each record of the set, whichever device sent it, and a record one device sent is updated or deleted by another (<a href="../spec/keys.html#section-5-6">section 5.6</a>).</li>
+</ul>
+
+<h2>Adding a device</h2>
+<p>The two devices meet in person (<a href="../spec/keys.html#section-5-2">section 5.2</a>):</p>
+<ol>
+  <li>On a device of the set, the user asks to add a device. It shows a QR code marked as a join code.</li>
+  <li>On the new installation, the user asks to join and scans the code.</li>
+  <li>The device of the set asks its user whether to add the new one, and shows the new installation's short fingerprint, which the user should compare with the one the new installation shows.</li>
+  <li>When the user confirms, the new installation is a device of the set.</li>
+</ol>
+<p>
+  Both users confirm: the one by scanning, the other by answering. A request to join is binding:
+  an installation that sent one must reckon with being added at any time, and one whose user no
+  longer wants the join takes a new signing key, which makes it a new sender. That costs a new
+  installation nothing, which is why a join belongs at the start of an installation's life.
+</p>
+<p>
+  Other apps learn of the new device without asking their users; they may show a notice, such as
+  that cat-a-log now also runs on another device (<a href="../spec/keys.html#section-5-5">section
+  5.5</a>). The new device gets the records of the set, and everything the set knows of other
+  apps, from its siblings, first from the device that added it in the connection in which it joined (<a href="../spec/sync.html#section-12-3">sync, sections
+  12.3</a> and <a href="../spec/sync.html#section-23-3">23.3</a>).
+</p>
+
+<h2>Removing a device, and a lost one</h2>
+<ul>
+  <li>A device removes another device of the set; the removed key never signs for the set again. The records it sent stay records of the sender (<a href="../spec/keys.html#section-5-3">section 5.3</a>).</li>
+  <li>A lost or stolen device can sign for the set until it is removed, and can even remove the other devices. An owner should therefore remove a lost device at once, from a remaining one (<a href="../spec/keys.html#section-5-9">section 5.9</a>).</li>
+  <li>After such a removal, each remaining device should show its user the senders it knows only through the removed device, so that the owner can forget those they do not recognise.</li>
+  <li>If no device remains and the key was not restored, nothing can sign for the sender any more. A new installation is a new sender; its records are new records at every receiver.</li>
+</ul>
+
+<h2>Moving to a new phone</h2>
+<p>A move is an addition followed by a removal (<a href="../spec/keys.html#section-5-7">section 5.7</a>):</p>
+<ol>
+  <li>The old phone adds the new one.</li>
+  <li>The records of the set, and what the set knows of other apps, reach the new phone from the old one. How the rest of the app's data moves is up to the app.</li>
+  <li>The new phone removes the old one, which then signs nothing more.</li>
+</ol>
+<p>
+  Between the steps both phones are devices of the set, so the owner need not hurry. The owner
+  should take the last step only when the old phone shows that the new one has received everything.
+  An app may also carry the signing key itself to a new installation, such as in an encrypted
+  backup; the new installation is then the same device (<a href="../spec/keys.html#section-5-8">section
+  5.8</a>).
+</p>
+
+<h2>Changes on several devices</h2>
+<p>
+  Every device changes and deletes every record of the set, also while the devices are apart. When
+  they meet, the changes come together field by field
+  (<a href="../spec/sync.html#section-3">sync, sections 3</a> and
+  <a href="../spec/sync.html#section-4">4</a>):
+</p>
+<ul>
+  <li>Each change carries a <a href="../spec/glossary.html#term-stamp">stamp</a> from a clock that never runs backwards. Per top-level field, the change with the higher stamp wins; a nested record, an array or a map is one value.</li>
+  <li>Two devices that change different fields of a record keep both changes. Two that change the same field keep the later one.</li>
+  <li>A deletion and a change of the record on another device are decided the same way: the later one wins, so a change made after a deletion brings the record back.</li>
+  <li>Between the devices only the changed fields travel, after the first transfer of a record, which is whole. Each device sends another what that one has not acknowledged (<a href="../spec/keys.html#section-5-6">keys, section 5.6</a>; <a href="../spec/sync.html#section-10">sync, section 10</a>).</li>
+</ul>
+
+<div class="callout">
+  <p class="eyebrow">What one step is</p>
+  <p>
+    A change of several fields that the user makes in one step, such as saving a form, is one
+    change with one stamp for its fields. The app decides what one step is; two steps are two
+    changes (<a href="../spec/sync.html#section-3-5">sync, section 3.5</a>).
+  </p>
+</div>
+
+<p>
+  Sync between the devices carries every type, also the types of your app's own namespace that no
+  other app knows (<a href="../spec/sync.html#section-7-2">sync, section 7.2</a>). An app can
+  therefore keep its own settings for exchange, such as its shares, as records of a type of its
+  own, and every device holds the same (<a href="shares.html">Share records with other users</a>).
+</p>
+<p>
+  Toward other apps, each device sends a record whole, under a version of its own, as
+  <a href="records.html">Updates, deletions and the receiver's changes</a> describes
+  (<a href="../spec/sync.html#section-5-1">sync, section 5.1</a>). When the devices run different
+  versions of a type, see <a href="versions.html">Evolve a type</a>.
+</p>
+
+<h2>Records from other apps</h2>
+<p>
+  Another app has to reach only one device of the set
+  (<a href="../spec/sync.html#section-17-2">sync, section 17.2</a>):
+</p>
+<ul>
+  <li>The device that gets a message from another app answers it, and passes it on to its siblings as the signed message it is. They take it as if they had received it and send the other app nothing.</li>
+  <li>What the owner changes in a received record on one device reaches the other devices, kept apart from what the sender sent. Every device shows the record that the two give together (<a href="../spec/sync.html#section-21-1">sections 21</a> and <a href="../spec/sync.html#section-22-1">22</a>).</li>
+  <li>The devices are one receiver and make the receiver's choices alike: per field or the whole record, whether to delete, keep or ask when a deletion meets the owner's changes (<a href="../spec/sync.html#section-22-3">section 22.3</a>). A user's answer on one device is a change like any other and reaches the others.</li>
+  <li>The devices of a set should take the same types from other apps. Where they do not, nothing breaks: a record of a type one device does not take is still kept and passed on (<a href="../spec/sync.html#section-17-2">section 17.2</a>).</li>
+</ul>
+<p>
+  The example of <a href="../spec/sync.html#section-22-4">sync, section 22.4</a>, plays the vet
+  appointment of <a href="records.html">the records page</a> on a phone and a tablet: the sender
+  sends to the phone, the owner sets the location on the tablet, and both devices show the same
+  record after every step.
+</p>

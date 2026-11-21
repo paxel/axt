@@ -1,0 +1,163 @@
+<!-- page: title="Write the manifest" track="design" order=4 summary="What an app says in its manifest: the types it takes and in which versions, one purpose sentence for each, any other type, and what it sends." -->
+<p class="lede">
+  When two apps connect, each sends its manifest: the types it takes, in which versions, and one
+  sentence for each on what it does with the records. The other app offers only what fits, and
+  shows its user your sentence before the user chooses what to send.
+</p>
+
+<h2>What you decide</h2>
+<p>
+  The manifest is one <a href="../spec/axt.Manifest.html"><code>axt.Manifest</code></a>
+  (<a href="../spec/manifest.html#section-3">manifest, section 3</a>). These fields are the app's
+  own statement:
+</p>
+<table>
+  <thead>
+    <tr><th>Field</th><th>What it says</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>app_name</code></td><td>The name the app gives itself, such as <code>Old Brain Fix</code>, shown to the other app's user</td></tr>
+    <tr><td><code>app_url</code></td><td>An https page about the app, or <code>null</code></td></tr>
+    <tr><td><code>takes</code></td><td>The types the app takes, each by full name, with a range of versions and a purpose sentence</td></tr>
+    <tr><td><code>any_type</code></td><td>Whether the app takes every other type, with a purpose sentence of its own</td></tr>
+    <tr><td><code>sends</code></td><td>The types the app may send, for display, and whether it takes proposals for each; or <code>null</code></td></tr>
+  </tbody>
+</table>
+<p>
+  The other fields, the revision, the envelope formats, the encryption key and the relay, are about
+  how messages reach the app rather than what it takes
+  (<a href="../spec/manifest.html#section-3-2">sections 3.2</a>,
+  <a href="../spec/manifest.html#section-3-8">3.8 to 3.10</a>). Every device of an owner has a manifest of its own
+  (<a href="../spec/manifest.html#section-1">section 1</a>).
+</p>
+
+<h2>The types you take</h2>
+<p>Each entry of <code>takes</code> names one type (<a href="../spec/manifest.html#section-3-3">section 3.3</a>):</p>
+<ul>
+  <li><strong>By full name, exactly.</strong> Never through aliases, a similar name or similar fields. If your app takes another app's type through an alias of its own schema or a converter, that type's full name is an entry of its own. <code>axt.example.v1.Note</code> and <code>axt.example.v2.Note</code> are two entries.</li>
+  <li><strong>A range of versions.</strong> <code>min_version</code> and <code>max_version</code> state which versions you want, not which you can decode: every version within a major version resolves against every other. Set <code>min_version</code> above 1 only when you need a field that earlier versions lack, and leave <code>max_version</code> <code>null</code>.</li>
+  <li><strong>A purpose sentence</strong> for each entry (below).</li>
+</ul>
+<p>
+  A manifest names each full name at most once in <code>takes</code>, and holds at most 256
+  entries (<a href="../spec/manifest.html#section-4">section 4</a>). An app that takes no type
+  still sends a manifest, with an empty <code>takes</code>
+  (<a href="../spec/manifest.html#section-5-1">section 5.1</a>).
+</p>
+
+<h2>Any other type</h2>
+<p>
+  With <code>any_type</code>, your app takes every type whose full name is not in
+  <code>takes</code>, in every version, and shows records of a type it does not know from their
+  schema and its attributes (<a href="../spec/manifest.html#section-3-5">section 3.5</a>;
+  <a href="metadata.html">Describe the fields</a>). It covers only names that <code>takes</code>
+  does not name: a type in <code>takes</code> in a version outside its range does not fit, even
+  with <code>any_type</code>, since the entry left those versions out on purpose.
+</p>
+<p>A type with full name N in version V fits a manifest (<a href="../spec/manifest.html#section-5-2">section 5.2</a>):</p>
+<ol>
+  <li>if <code>takes</code> has an entry for N, when V is within its range; its sentence is the entry's;</li>
+  <li>otherwise, if <code>any_type</code> is not <code>null</code>; its sentence is that of <code>any_type</code>;</li>
+  <li>otherwise not.</li>
+</ol>
+
+<h2>Purpose sentences</h2>
+<p>
+  The purpose sentence is one sentence in English on what your app does with the records. It
+  should name the type and what the app makes of it, so that it reads on its own, such as
+  "An Appointment becomes a Reminder." or "Any other type becomes a searchable Note."
+  (<a href="../spec/manifest.html#section-3-6">section 3.6</a>).
+</p>
+<ul>
+  <li>It is one line of plain text, not empty, at most 512 bytes. No markup is interpreted in it (<a href="../spec/manifest.html#section-4">section 4</a>).</li>
+  <li><code>purpose_translations</code> gives the sentence in other languages, keyed by language tag, such as <code>de</code>, never <code>en</code>. The English sentence is always there, so every app has one to show.</li>
+  <li>The other app picks the sentence in its user's language, and the English one when none matches: a user who reads <code>de-AT</code> gets the <code>de</code> sentence, and one who reads <code>fr-CH</code> and <code>fr</code> gets the English one if there is no <code>fr</code>.</li>
+</ul>
+<p>
+  The sentence is what the sending user reads before choosing what to send
+  (<a href="../spec/manifest.html#section-5-3">section 5.3</a>), so it says what happens to their
+  records in words a user understands.
+</p>
+
+<h2>What you send</h2>
+<p>
+  <code>sends</code> lists the types your app may send, each with the versions it writes, or is
+  <code>null</code> when the app does not say (<a href="../spec/manifest.html#section-3-7">section
+  3.7</a>). It is for display: the other app may show its user what your app can send, and it
+  limits nothing you offer. The one exception is <code>proposals</code>: <code>true</code> on an
+  entry says that your app takes proposals of changes to its records of that type
+  (<a href="proposals.html">Proposals</a>).
+</p>
+
+<h2>A fit is not an acceptance</h2>
+<p>
+  A sender offers only types that fit the receiver's manifest, and may offer fewer, such as only
+  those its user chose. The receiver still confirms or declines each offer
+  (<a href="../spec/manifest.html#section-5-4">section 5.4</a>): it declines a type that does not
+  fit its current manifest, may decline any type with <code>NOT_WANTED</code>, and may keep its
+  user's answer for a sender and a type so as not to ask again
+  (<a href="../spec/protocol.html#section-5-2">protocol, section 5.2</a>).
+</p>
+
+<h2>When the manifest changes</h2>
+<p>
+  The manifest changes when what the app takes changes: an update adds a type, the user turns one
+  off, the app adds a language (<a href="../spec/manifest.html#section-6">section 6</a>). Each
+  change gets a higher revision.
+</p>
+<ul>
+  <li>A type that no longer fits is no longer offered, updates and deletions included. The records sent before stay at the receiver.</li>
+  <li>When it fits again and is accepted, the sender should send the current state of each record of the type it sent before.</li>
+  <li>A changed purpose sentence is shown the next time the sender's user chooses what to send.</li>
+</ul>
+<p>
+  A file has no connection. Its writer puts in only types that fit the manifest it keeps of the
+  file's reader, if it keeps one; its reader applies no record whose type does not fit its own
+  manifest (<a href="../spec/manifest.html#section-7">section 7</a>).
+</p>
+
+<h2>The example</h2>
+<p>
+  cat-a-log takes Pets and says what it sends; Old Brain Fix takes Appointments, Tasks and Notes by
+  name and any other type (<a href="../spec/manifest.html#section-10-1">section 10.1</a>). Old
+  Brain Fix's entries:
+</p>
+<pre><code class="language-json">"takes": [
+  {"type": "axt.example.v1.Appointment", "min_version": 1, "max_version": null,
+   "purpose": "An Appointment becomes a Reminder.",
+   "purpose_translations": {"de": "Ein Termin wird zu einer Erinnerung."}},
+  {"type": "axt.example.v1.Task", "min_version": 1, "max_version": null,
+   "purpose": "A Task becomes a Note with a Reminder.",
+   "purpose_translations": {"de": "Eine Aufgabe wird zu einer Notiz mit Erinnerung."}},
+  {"type": "axt.example.v1.Note", "min_version": 1, "max_version": null,
+   "purpose": "A Note becomes a Note.",
+   "purpose_translations": {"de": "Eine Notiz wird zu einer Notiz."}}
+],
+"any_type": {
+  "purpose": "Any other type becomes a searchable Note.",
+  "purpose_translations": {"de": "Jeder andere Typ wird zu einer durchsuchbaren Notiz."}
+}</code></pre>
+<p>When cat-a-log offers to Old Brain Fix, a user who reads <code>de-AT</code> sees (<a href="../spec/manifest.html#section-10-2">section 10.2</a>):</p>
+<table>
+  <thead>
+    <tr><th>Type</th><th>Fits by</th><th>Sentence shown</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>axt.example.v1.Pet</code></td><td><code>any_type</code></td><td>Jeder andere Typ wird zu einer durchsuchbaren Notiz.</td></tr>
+    <tr><td><code>axt.example.v1.Appointment</code></td><td>the entry in <code>takes</code></td><td>Ein Termin wird zu einer Erinnerung.</td></tr>
+    <tr><td><code>axt.example.v1.Measurement</code></td><td><code>any_type</code></td><td>Jeder andere Typ wird zu einer durchsuchbaren Notiz.</td></tr>
+    <tr><td><code>axt.example.v1.Document</code></td><td><code>any_type</code></td><td>Jeder andere Typ wird zu einer durchsuchbaren Notiz.</td></tr>
+  </tbody>
+</table>
+<p>
+  The other way round, a Note does not fit cat-a-log: it names no Note and takes no other type, so
+  Old Brain Fix does not offer one.
+</p>
+
+<div class="callout">
+  <p class="eyebrow">Note</p>
+  <p>
+    The app name and the sentences are what one installation says about itself. The key
+    identifies the app; the name does not (<a href="../spec/manifest.html#section-2">section 2</a>).
+  </p>
+</div>

@@ -1,0 +1,132 @@
+<!-- page: title="Describe the fields" track="design" order=3 summary="The attributes a schema carries so that an app which knows a type only from its schema can show and check each field: labels, help, emoji, order, groups, inputs, formats and limits." -->
+<p class="lede">
+  An app that gets a type it has never seen still has the schema. The attributes in it tell that
+  app how to show each field, in its user's language, and which values are valid. They are worth
+  writing for every type you send.
+</p>
+
+<h2>Hints and checks</h2>
+<p>
+  An attribute is a member of the schema's JSON whose name begins with <code>axt.</code>
+  (<a href="../spec/metadata.html#section-1">metadata, section 1</a>). There are two kinds:
+</p>
+<ul>
+  <li>A <strong>hint</strong> says how to show a type, a field or a symbol: a label, a help text, an emoji, an order. A value cannot break a hint.</li>
+  <li>A <strong>check</strong> is a rule a value can break: <code>axt.format</code>, <code>axt.pattern</code>, <code>axt.min_length</code>, <code>axt.max_length</code>, <code>axt.min</code> and <code>axt.max</code>.</li>
+</ul>
+<p>
+  Every attribute is optional. The attributes of a field sit on the field, not on its type
+  (<a href="../spec/metadata.html#section-3-1">section 3.1</a>). They travel with the schema, in
+  the offer and in the file header, and no attribute changes the schema's fingerprint
+  (<a href="../spec/metadata.html#section-3-4">section 3.4</a>). The table of
+  <a href="../spec/metadata.html#section-2">section 2</a> lists every attribute with its limits.
+</p>
+
+<h2>Labels, help and emoji</h2>
+<ul>
+  <li><strong><code>axt.label</code></strong> is the name a receiver shows for the type, a nested type or a field, in English, such as <code>Postal code</code>. <strong><code>axt.help</code></strong> is one or two sentences on what the value is or how to enter it, such as <code>Five digits.</code> Both are one line of plain text; a label is at most 256 bytes, a help text at most 1,024 (<a href="../spec/metadata.html#section-4-1">section 4.1</a>).</li>
+  <li>The label and the help text are written for the user. The <code>doc</code> is written for the developer and stays the definition of what the field means.</li>
+  <li><strong><code>axt.label_translations</code></strong> and <strong><code>axt.help_translations</code></strong> give the same texts in other languages, keyed by language tag, such as <code>de</code> or <code>pt-BR</code>, never <code>en</code>. A translation needs its English text. A receiver picks the language from its user's list of languages and falls back to English (<a href="../spec/metadata.html#section-4-2">section 4.2</a>).</li>
+  <li><strong><code>axt.emoji</code></strong> is one emoji a receiver may show next to the label, such as <code>📞</code> for a phone number. It should be one emoji that Unicode recommends for general interchange, and is never shown in place of the label (<a href="../spec/metadata.html#section-4-3">section 4.3</a>).</li>
+  <li><strong><code>axt.symbols</code></strong> on an enum gives each symbol a label, help, emoji and their translations, since Avro gives symbols no attributes of their own (<a href="../spec/metadata.html#section-4-4">section 4.4</a>).</li>
+</ul>
+<p>
+  Without a label, a receiver shows the field's name with underscores read as spaces
+  (<a href="../spec/types.html#section-6">types, section 6</a>). Every example type carries a label
+  and an emoji on its record, its nested records and its fields
+  (<a href="../spec/types.html#section-5-9">types, section 5.9</a>).
+</p>
+
+<h2>Order and groups</h2>
+<ul>
+  <li><strong><code>axt.order</code></strong> on a field puts it before the fields without one, the lowest first. Fields without it keep the order of the schema. The order is for display only; the encoding keeps the order of the schema, and its range lets a type put a new field before those it already has (<a href="../spec/metadata.html#section-5-1">section 5.1</a>).</li>
+  <li><strong><code>axt.group</code></strong> on a field names a group, such as <code>contact</code>; fields with the same key are shown together. <strong><code>axt.groups</code></strong> on the record gives each group its label, emoji and translations once (<a href="../spec/metadata.html#section-5-2">section 5.2</a>).</li>
+</ul>
+
+<h2>Inputs</h2>
+<p>For a receiver that lets its user enter or change a value (<a href="../spec/metadata.html#section-5-3">section 5.3</a>, <a href="../spec/metadata.html#section-5-4">5.4</a>):</p>
+<table>
+  <thead>
+    <tr><th>Attribute</th><th>What it says</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>axt.placeholder</code></td><td>The text an empty input shows, such as <code>+49301234567</code>. It is not translated, so it should be a form any reader understands</td></tr>
+    <tr><td><code>axt.example</code></td><td>An example value as text. On a field of strings it meets the field's checks</td></tr>
+    <tr><td><code>axt.multiline</code></td><td>The value may hold several lines</td></tr>
+    <tr><td><code>axt.preferred_length</code></td><td>How many code points an input should have room for, such as 5 for a postal code. It is not a limit</td></tr>
+    <tr><td><code>axt.sensitive</code></td><td>The value is a secret or personal data that others near the screen should not see, such as an account number</td></tr>
+    <tr><td><code>axt.advanced</code></td><td>Most users need not see or fill in the field</td></tr>
+  </tbody>
+</table>
+<p>
+  <code>axt.sensitive</code> only changes how the value is shown. It does not protect the value
+  beyond what every message has: every message is signed, and sealed through a relay
+  (<a href="../spec/metadata.html#section-8">section 8</a>).
+</p>
+
+<h2>Checks</h2>
+<ul>
+  <li><strong><code>axt.format</code></strong> names the form of a text: <code>plain</code>, <code>markdown</code>, <code>email</code>, <code>phone</code> (E.164, such as <code>+49301234567</code>), <code>url</code>, <code>uri</code>, <code>colour</code>, <code>iban</code>, <code>bic</code>, <code>country</code>, <code>language</code>, <code>currency</code>, <code>media-type</code> or <code>ucum</code>. A receiver shows and offers inputs as the format suggests. Formats are checked by their syntax only, never against a registry (<a href="../spec/metadata.html#section-6-3">section 6.3</a>).</li>
+  <li><strong><code>axt.pattern</code></strong> is a regular expression in the I-Regexp form of RFC 9485 that the whole value matches, such as <code>[0-9]{5}</code>. I-Regexp has no anchors and no <code>\d</code> (<a href="../spec/metadata.html#section-6-4">section 6.4</a>).</li>
+  <li><strong><code>axt.min_length</code></strong> and <strong><code>axt.max_length</code></strong> bound a text in code points, or bytes in bytes. <strong><code>axt.min</code></strong> and <strong><code>axt.max</code></strong> bound a number, in the field's unit (<a href="../spec/metadata.html#section-6-2">section 6.2</a>).</li>
+</ul>
+<p>Three rules decide what a check covers (<a href="../spec/metadata.html#section-6-1">section 6.1</a>):</p>
+<ul>
+  <li><code>null</code> keeps every check.</li>
+  <li>The empty string keeps every format and every pattern. A field that needs a value says so with <code>axt.min_length</code> 1.</li>
+  <li>On an array, a check applies to each item, not to the array. The number of items is not checked.</li>
+</ul>
+<p>
+  Dates, times and ids have no formats: they are the time types and the logical type
+  <code>uuid</code>.
+</p>
+
+<h2>What a check binds</h2>
+<p>A check binds your app as a sender; it only lets the receiver refuse (<a href="../spec/metadata.html#section-7-1">section 7.1</a>):</p>
+<ul>
+  <li>Your app never sends a record with a value that breaks a check of the schema it writes the record with.</li>
+  <li>A receiver may check the values against your schema and may reject a record that breaks one with <code>VALUE_INVALID</code>, naming the field, such as <code>address.postal_code</code>, so that your user can correct it.</li>
+  <li>A receiver that takes such a record anyway keeps and shows the value as it came. It never changes the value to meet the check, such as by removing the spaces of a phone number.</li>
+</ul>
+<p>
+  That is why adding or narrowing a check is not a compatible change, while widening or removing
+  one is, and why labels and translations can change in any version
+  (<a href="../spec/types.html#section-3-3">types, section 3.3</a>; <a href="versions.html">Evolve a type</a>).
+</p>
+
+<h2>Attributes of your own</h2>
+<p>
+  Names beginning with <code>axt.</code> are reserved for the specification, and a schema uses no
+  other <code>axt.</code> name and no format the specification does not define
+  (<a href="../spec/metadata.html#section-3-3">metadata, section 3.3</a>). Attributes of your own
+  begin with your namespace, such as <code>org.example.catalog.colour</code>
+  (<a href="../spec/types.html#section-6">types, section 6</a>). A receiver ignores attributes it
+  does not know, and ignores an attribute that breaks its rules, but never declines a type for one.
+</p>
+
+<h2>An example</h2>
+<p>
+  The illustration <code>com.example.Vet</code> of
+  <a href="../spec/metadata.html#section-9">metadata, section 9</a>, carries nearly every
+  attribute. Three of its fields:
+</p>
+<pre><code class="language-json">{"name":"phone","type":"string","default":"","doc":"…","axt.label":"Phone","axt.label_translations":{"de":"Telefon"},"axt.emoji":"📞","axt.format":"phone","axt.placeholder":"+49301234567","axt.example":"+49301234567","axt.group":"contact","axt.order":3},
+{"name":"visit_minutes","type":"int","default":15,"doc":"…","axt.label":"Length of a visit","axt.label_translations":{"de":"Dauer eines Besuchs"},"axt.emoji":"⏱️","axt.unit":"min","axt.min":5,"axt.max":240},
+{"name":"iban","type":"string","default":"","doc":"…","axt.label":"IBAN","axt.emoji":"🏦","axt.format":"iban","axt.sensitive":true,"axt.advanced":true,"axt.group":"billing","axt.example":"DE89370400440532013000"}</code></pre>
+<p>
+  A receiver shows the type as <code>🏥 Vet practice</code> to a user who reads English and as
+  <code>🏥 Tierarztpraxis</code> to one who reads <code>de-AT</code>. The phone number is stored as
+  <code>+49301234567</code>; a receiver should show it grouped, such as <code>+49 30 1234567</code>,
+  but never stores the form it shows. A receiver that checks may reject a record whose number
+  holds spaces, naming the field <code>phone</code>
+  (<a href="../spec/metadata.html#section-6-3">section 6.3</a>).
+</p>
+
+<div class="callout">
+  <p class="eyebrow">Note</p>
+  <p>
+    A label is the sender's word. A receiver that acts on a field because of its label, rather
+    than because it knows the type, acts on what the sender says
+    (<a href="../spec/metadata.html#section-8">metadata, section 8</a>).
+  </p>
+</div>
