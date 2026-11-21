@@ -1,0 +1,154 @@
+<!-- page: title="Write the adapter" track="library" order=3 summary="The small program through which the conformance runner drives a library: one JSON request per line in, one JSON answer per line out, and the forms of its answers." -->
+<p class="lede">
+  The runner does not call a library directly. It talks to an adapter: a small program, written
+  for one library, that performs each operation with that library and answers in JSON
+  (<a href="../spec/conformance.html#section-6">conformance.md, section 6</a>).
+</p>
+
+<h2>The protocol</h2>
+<p>
+  The runner starts the adapter and talks to it over its standard input and output. Each request
+  and each answer is one line of JSON in UTF-8. The adapter writes nothing else to its standard
+  output, and it answers each request before it reads the next.
+</p>
+<ol>
+  <li>
+    The first request is <code>hello</code>. The adapter answers with the name of its library and
+    the categories the library implements.
+  </li>
+  <li>
+    For each vector of those categories, the runner sends the vector's id, its operation and its
+    input. It never sends the expected result.
+  </li>
+  <li>The adapter answers with the same id and a result.</li>
+  <li>When the runner closes the adapter's standard input, the adapter ends.</li>
+</ol>
+<p>The first exchange, with the format of the vector files in <code>input</code>:</p>
+<pre><code class="language-text">{"id": "hello", "op": "hello", "input": {"format": 1}}
+{"id": "hello", "output": {"name": ..., "categories": [...]}}</code></pre>
+<p>
+  The categories it names decide which vectors run, and which do not
+  (<a href="what-to-implement.html">What a library implements</a>).
+</p>
+
+<h2>A request and its answer</h2>
+<p>
+  This is a vector of the <code>encoding</code> category, as the runner sends it, and the answer it
+  expects. The operation <code>fingerprint</code> asks for the Parsing Canonical Form and the
+  fingerprint of a schema (<a href="../spec/conformance.html#section-5-1">conformance.md, section
+  5.1</a>):
+</p>
+<pre><code class="language-text">{"id": "encoding/fingerprint/the-published-avro-fingerprint-of-int", "op": "fingerprint", "input": {"schema": "\"int\""}}
+{"id": "encoding/fingerprint/the-published-avro-fingerprint-of-int", "output": {"accept": {"canonical_form": "\"int\"", "fingerprint": "8f5c393f1ad57572"}}}</code></pre>
+<p>A vector of the <code>keys</code> category that expects a rejection:</p>
+<pre><code class="language-text">{"id": "keys/check_encryption_key/reject-u-0", "op": "check_encryption_key", "input": {"encryption_key": "0000000000000000000000000000000000000000000000000000000000000000"}}
+{"id": "keys/check_encryption_key/reject-u-0", "output": {"reject": {"error": "ENCRYPTION_KEY_INVALID"}}}</code></pre>
+<p>
+  The vector ids have the form <code>&lt;category&gt;/&lt;operation&gt;/&lt;name&gt;</code>
+  (<a href="../spec/conformance.html#section-3-1">section 3.1</a>). Every operation, with its
+  input and its result, is defined in <a href="../spec/conformance.html#section-5">section 5</a>.
+</p>
+
+<h2>The forms of a result</h2>
+<p>
+  The <code>output</code> of an answer has one of three forms
+  (<a href="../spec/conformance.html#section-4">conformance.md, section 4</a>):
+</p>
+<table>
+  <thead>
+    <tr><th>Form</th><th>Meaning</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>{"accept": value}</code></td><td>The operation succeeds with the value its operation defines, or <code>{}</code> where there is nothing to return</td></tr>
+    <tr><td><code>{"reject": {"error": code}}</code></td><td>The operation fails with the error code; for <code>VALUE_INVALID</code> the member <code>field</code> names the field path as well</td></tr>
+    <tr><td><code>{"steps": [...]}</code></td><td>The results of the steps of a session, one for each step</td></tr>
+  </tbody>
+</table>
+<p>
+  An adapter that cannot perform an operation answers <code>{"id": ..., "unsupported": true}</code>.
+  One that fails for a fault of its own answers <code>{"id": ..., "failure": text}</code>. Both fail
+  the vector, and an unsupported vector in a category the library implements fails the whole
+  category.
+</p>
+
+<h3>Error codes</h3>
+<p>
+  The codes are those of <a href="../spec/protocol.html#section-8-2">protocol.md, section 8.2</a>,
+  and the reasons <code>DOES_NOT_RESOLVE</code> and <code>DOES_NOT_FIT</code> of a
+  <code>DECLINE</code>. Where the specification names a rejection but no code, the suite defines
+  one, such as <code>KEY_INVALID</code>, <code>NOT_OPENED</code> or <code>FILE_REJECTED</code>
+  (<a href="../spec/conformance.html#section-4-2">conformance.md, section 4.2</a>). All of them are
+  listed on <a href="../spec/errors.html">Error codes</a>.
+</p>
+
+<h2>Values in requests and answers</h2>
+<h3>Bytes</h3>
+<p>
+  Bytes come in one of two forms (<a href="../spec/conformance.html#section-3-2">conformance.md,
+  section 3.2</a>):
+</p>
+<ul>
+  <li>a string of lower-case hexadecimal digits, two for each byte, such as <code>"c301"</code>;</li>
+  <li>
+    an object with <code>deflate</code>, the bytes compressed with raw DEFLATE in hexadecimal,
+    <code>length</code>, the length they inflate to, and <code>sha256</code>, their SHA-256. The
+    vector files use it for values above 65,536 bytes.
+  </li>
+</ul>
+<p>
+  An adapter accepts both forms in its input, and may answer in either. Raw DEFLATE is the codec
+  <code>deflate</code> of an AXT file, so a library has it at hand.
+</p>
+
+<h3>Decoded values</h3>
+<p>
+  A decoded Avro value is written in JSON by the table of
+  <a href="../spec/conformance.html#section-3-3">section 3.3</a>: integers as numbers,
+  <code>bytes</code> and <code>fixed</code> as hexadecimal, an enum as its symbol, a record as an
+  object with one member for each field of the schema it was read with, a union as the value of
+  its branch, and a logical type as the value of its underlying type.
+</p>
+
+<h2>What the runner compares</h2>
+<p>
+  The runner compares an answer with the expected result as JSON values
+  (<a href="../spec/conformance.html#section-4-1">conformance.md, section 4.1</a>):
+</p>
+<ul>
+  <li>A member <code>note</code>, anywhere, is for people and is not compared.</li>
+  <li>
+    An expected <code>{"one_of": [...]}</code> is met by any of its values. The vectors use it where
+    the specification leaves a choice.
+  </li>
+  <li>
+    A message the library writes, such as an <code>ACCEPT</code> in a session or a sealed message,
+    is decoded and compared by its meaning, since the specification does not fix its bytes. A
+    sealed message is opened with the expected private key and checked for its length and the
+    message inside it (<a href="../spec/conformance.html#section-5-5">section 5.5</a>).
+  </li>
+  <li>Objects compare without regard to the order of their members.</li>
+</ul>
+
+<h2>No keys and no state of its own</h2>
+<p>
+  An adapter does what an app would do with its library, with the keys and values in the request.
+  It holds no key of its own and keeps no state from one vector to the next.
+</p>
+<p>
+  A session is one vector whose input is a list of steps, played in order against one fresh state
+  of the library (<a href="../spec/conformance.html#section-1">conformance.md, section 1</a>). For
+  a <code>session</code> of <code>protocol</code>, the adapter creates the app afresh, with the
+  key, manifest and reader schemas the input gives
+  (<a href="../spec/conformance.html#section-5-6">section 5.6</a>); an <code>apply</code> of
+  <code>records</code> starts from an empty state
+  (<a href="../spec/conformance.html#section-5-3">section 5.3</a>).
+</p>
+
+<h2>A model to read</h2>
+<p>
+  The <a href="https://github.com/paxel/axt/blob/summer/conformance/reference/adapter.py">reference
+  adapter</a> answers every operation of every category and passes every vector. It is built on
+  the scripts that produce the specification's examples. It shows that the vectors are consistent;
+  it is not a library and is not meant for apps
+  (<a href="../spec/conformance.html#section-7-2">conformance.md, section 7.2</a>).
+</p>

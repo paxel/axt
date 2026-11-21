@@ -1,0 +1,77 @@
+<!-- page: title="The library's repository and versions" track="library" order=6 summary="Where an AXT library lives, how it is versioned apart from AXT, how it states the AXT version it conforms to, and how it comes to be listed." -->
+<p class="lede">
+  The specification's repository holds no library. Each library has a repository, a version and a
+  release cycle of its own, and is tied to AXT by the release whose suite it passes
+  (<a href="https://github.com/paxel/axt/blob/summer/docs/adr/0002-libraries-in-their-own-repositories.md">ADR 2</a>).
+</p>
+
+<h2>Before starting</h2>
+<p>
+  Before starting a library, open an issue in
+  <a href="https://github.com/paxel/axt/issues">paxel/axt</a> that names the language and who
+  maintains the library
+  (<a href="https://github.com/paxel/axt/blob/summer/CONTRIBUTING.md">CONTRIBUTING.md</a>).
+</p>
+
+<h2>The repository</h2>
+<ul>
+  <li>The library lives in a repository of its own, <code>paxel/axt-&lt;language&gt;</code>.</li>
+  <li>It has its own gates and its own tags.</li>
+  <li>It is published to its language's registry.</li>
+  <li>
+    Its code is licensed under Apache-2.0 OR MIT
+    (<a href="https://github.com/paxel/axt/blob/summer/CONTRIBUTING.md">CONTRIBUTING.md</a>).
+  </li>
+</ul>
+
+<h2>Two versions</h2>
+<p>A library has two versions, and they are not the same:</p>
+<table>
+  <thead>
+    <tr><th>Version</th><th>What it is</th><th>Where it is stated</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>The library's own</td><td>SemVer, set by the library</td><td>Its tags and its registry</td></tr>
+    <tr><td>The AXT version it conforms to</td><td>A release of AXT, such as 0.1.0, whose suite it passes</td><td>Its README and package metadata, proven by the pin in its CI</td></tr>
+  </tbody>
+</table>
+<p>
+  The CI pins the AXT release and the SHA-256 of its archive, checks the release's attestation and
+  runs the suite from it (<a href="ci.html">Run the suite in CI</a>). Moving the library to a new
+  AXT version is a deliberate change of that pin.
+</p>
+<p>
+  Below 1.0, a later version of AXT may still change things in incompatible ways; each change is
+  listed in the <a href="https://github.com/paxel/axt/blob/summer/CHANGELOG.md">changelog</a>.
+</p>
+
+<h2>The list of libraries</h2>
+<p>
+  The <a href="https://github.com/paxel/axt#libraries">README of the specification</a> lists the
+  libraries, with the language, the repository, the package and the AXT version each conforms to.
+  The bar for a library is the conformance suite; it keeps passing it with every change to the
+  library or the specification
+  (<a href="https://github.com/paxel/axt/blob/summer/CONTRIBUTING.md">CONTRIBUTING.md</a>).
+</p>
+<table>
+  <thead>
+    <tr><th>Language</th><th>Repository</th><th>Package</th><th>Conforms to</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Dart</td><td><a href="https://github.com/paxel/axt-dart">paxel/axt-dart</a></td><td><code>axt_protocol</code> on pub.dev</td><td>in progress</td></tr>
+  </tbody>
+</table>
+<p>
+  The Dart library comes first, for cat-a-log. The libraries of other languages follow once its API
+  has been proven there.
+</p>
+
+<h2>Changes to the suite</h2>
+<p>
+  The suite is part of the standard. A change to it that a conforming library no longer passes is
+  a change to the specification and needs a compatibility note. Changes are agreed in an issue
+  before a pull request
+  (<a href="https://github.com/paxel/axt/blob/summer/CONTRIBUTING.md">CONTRIBUTING.md</a>). A vector
+  that a library finds to contradict the normative text is reported as an issue
+  (<a href="../spec/conformance.html#section-2-3">conformance.md, section 2.3</a>).
+</p>

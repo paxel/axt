@@ -1,0 +1,87 @@
+<!-- page: title="Run the suite" track="library" order=4 summary="Run the conformance runner against a library's adapter while the library is being written: the command, its options, what it reports, and the reference adapter to compare with." -->
+<p class="lede">
+  The runner sends every vector of the categories an adapter names to that adapter and compares
+  the answers. While a library is being written, it is run by hand, a category at a time.
+</p>
+
+<h2>What it needs</h2>
+<p>
+  The runner is <a href="https://github.com/paxel/axt/blob/summer/conformance/run.py">conformance/run.py</a>.
+  It needs Python 3.11 or later, fastavro to decode the messages an adapter writes, and the
+  package cryptography to open what an adapter seals
+  (<a href="../spec/conformance.html#section-7-1">conformance.md, section 7.1</a>). It reads the
+  vector files from the directory <code>vectors/</code> at the top of the same tree.
+</p>
+<p>
+  A release archive holds the runner, the vectors and the <code>uv.lock</code> that pins what they
+  need, as does a clone of the repository. With <a href="https://docs.astral.sh/uv/">uv</a>,
+  <code>uv sync</code> in that directory installs it.
+</p>
+
+<h2>The command</h2>
+<p>
+  The adapter's command comes after <code>--</code>
+  (<a href="https://github.com/paxel/axt/blob/summer/conformance/README.md">conformance/README.md</a>):
+</p>
+<pre><code class="language-text">python3 conformance/run.py -- &lt;the adapter's command&gt;</code></pre>
+<p>With the packages that uv installed:</p>
+<pre><code class="language-text">uv run python conformance/run.py -- &lt;the adapter's command&gt;</code></pre>
+
+<h3>Options</h3>
+<table>
+  <thead>
+    <tr><th>Option</th><th>Effect</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>--category NAME</code></td><td>Runs only this category; it can be given more than once</td></tr>
+    <tr><td><code>--vectors DIR</code></td><td>Reads the vector files from another directory</td></tr>
+    <tr><td><code>--verbose</code></td><td>Names every vector, not only those that fail</td></tr>
+  </tbody>
+</table>
+<p>One category, with every vector named:</p>
+<pre><code class="language-text">uv run python conformance/run.py --category time --verbose -- &lt;adapter command&gt;</code></pre>
+<p>
+  There is no filter finer than a category. To work on one part, the adapter can name only the
+  categories that are done so far, and <code>--category</code> narrows the run further.
+</p>
+
+<h2>What it reports</h2>
+<p>
+  The runner first checks every vector file against the JSON Schema
+  <a href="https://github.com/paxel/axt/blob/summer/vectors/vectors.schema.json">vectors.schema.json</a>.
+  It then starts the adapter and sends the vectors of the categories it names, file by file and in
+  the order of each file (<a href="../spec/conformance.html#section-7-1">conformance.md, section
+  7.1</a>). It reports:
+</p>
+<ul>
+  <li>each vector that fails, by its id, with what differs;</li>
+  <li>for each category, how many of its vectors passed;</li>
+  <li>the categories the adapter does not name, as not run.</li>
+</ul>
+<p>
+  It exits with 0 only when every vector it ran passed. A vector fails when its answer differs
+  from the expected result, and also when the adapter answers it as unsupported or with a failure
+  of its own (<a href="../spec/conformance.html#section-6">section 6</a>).
+</p>
+<p>
+  To see why a vector fails, look it up by its id in
+  <code>vectors/&lt;category&gt;/&lt;category&gt;.json</code>. Its <code>description</code> says
+  what it tests, its <code>refs</code> name the sections of the specification, and a
+  <code>note</code> in its expected result may say why a negative vector fails
+  (<a href="../spec/conformance.html#section-3-1">conformance.md, sections 3.1</a> and
+  <a href="../spec/conformance.html#section-4-1">4.1</a>).
+</p>
+
+<h2>The reference adapter</h2>
+<p>
+  The reference adapter passes every vector. Running it shows that the suite itself works on the
+  machine at hand:
+</p>
+<pre><code class="language-text">uv run python conformance/run.py -- python conformance/reference/adapter.py</code></pre>
+<p>
+  The scripts behind it, in
+  <a href="https://github.com/paxel/axt/tree/summer/conformance/tools">conformance/tools/</a>, also
+  need avro and PyNaCl, and a time zone database that Python's <code>zoneinfo</code> finds;
+  <code>uv sync</code> installs the packages
+  (<a href="https://github.com/paxel/axt/blob/summer/conformance/README.md">conformance/README.md</a>).
+</p>

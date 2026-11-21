@@ -1,0 +1,238 @@
+<!-- page: title="The parts in build order" track="library" order=2 summary="The parts of an AXT library in an order in which each builds on the ones before it, with the specification sections and the vector categories that test each part." -->
+<p class="lede">
+  An AXT library is built in layers. Each part below rests on the ones before it, and each has
+  vector categories that test it. The eight parts take the categories every library implements
+  first, then the transports and sync, which depend on what the library offers.
+</p>
+
+<h2>The order at a glance</h2>
+<table>
+  <thead>
+    <tr><th>Part</th><th>Specification</th><th>Categories</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1. Avro, fingerprints and the types</td><td><a href="../spec/envelope.html#section-1">envelope.md</a> 1 and 5 to 8; <a href="../spec/types.html">types.md</a>; <a href="../spec/time.html">time.md</a>; <a href="../spec/metadata.html">metadata.md</a></td><td><code>encoding</code>, <code>types</code>, <code>time</code>; <code>metadata</code> if offered</td></tr>
+    <tr><td>2. The envelope and signatures</td><td><a href="../spec/envelope.html#section-2">envelope.md</a> 2 to 4; <a href="../spec/keys.html#section-2">keys.md</a> 2</td><td><code>encoding</code>, <code>keys</code></td></tr>
+    <tr><td>3. Records</td><td><a href="../spec/records.html">records.md</a></td><td><code>records</code></td></tr>
+    <tr><td>4. The manifest and the protocol</td><td><a href="../spec/manifest.html">manifest.md</a>; <a href="../spec/protocol.html">protocol.md</a></td><td><code>manifest</code>, <code>protocol</code></td></tr>
+    <tr><td>5. Trust, sealing and device sets</td><td><a href="../spec/keys.html#section-3">keys.md</a> 3 to 5</td><td><code>keys</code></td></tr>
+    <tr><td>6. Shares</td><td><a href="../spec/shares.html">shares.md</a></td><td><code>shares</code></td></tr>
+    <tr><td>7. Transports</td><td><a href="../spec/transports.html">transports.md</a></td><td><code>file</code>, <code>qr</code>, <code>local</code>, <code>relay</code>, for each transport offered</td></tr>
+    <tr><td>8. Sync</td><td><a href="../spec/sync.html">sync.md</a></td><td><code>sync</code>, if offered</td></tr>
+  </tbody>
+</table>
+<p>
+  Which categories a library implements is on <a href="what-to-implement.html">What a library
+  implements</a>. The operations of each category, with their inputs and results, are in
+  <a href="../spec/conformance.html#section-5">conformance.md, section 5</a>.
+</p>
+
+<div class="callout">
+  <p class="eyebrow">Note</p>
+  <p>
+    A category passes only as a whole, and some categories reach into later parts. The
+    <code>protocol</code> sessions include additions and removals of devices
+    (<a href="../spec/keys.html#section-5-5">keys.md, section 5.5</a>), <code>WITHDRAW</code>
+    messages (<a href="../spec/shares.html#section-4-1">shares.md, section 4.1</a>), and
+    <code>CHANGE</code>, <code>RESYNC</code> and <code>FORWARD</code> messages of another app that
+    the app rejects (<a href="../spec/sync.html#section-7-1">sync.md, section 7.1</a>). The
+    <code>encoding</code> category decodes the bodies of every schema of the specification. Each
+    vector lists the sections it tests in its member <code>refs</code>, so a library can tell which
+    failures belong to a part it has not built yet.
+  </p>
+</div>
+
+<h2>1. Avro, fingerprints and the types</h2>
+<p>
+  AXT encodes everything with Apache Avro 1.12: the binary encoding, the single-object encoding,
+  the object container file, the Parsing Canonical Form, CRC-64-AVRO and schema resolution
+  (<a href="../spec/envelope.html#section-1">envelope.md, section 1</a>). Where envelope.md says
+  nothing else, the Avro specification holds.
+</p>
+<ul>
+  <li>
+    <strong>Fingerprints.</strong> A fingerprint is the CRC-64-AVRO of the schema's Parsing
+    Canonical Form, written as 8 bytes in little-endian order. The canonical form drops
+    <code>logicalType</code>, so a <code>uuid</code> string is written as <code>"string"</code>.
+    At least one Avro library writes it otherwise and computes another fingerprint; the vectors
+    catch that (<a href="../spec/envelope.html#section-5">section 5</a>).
+  </li>
+  <li>
+    <strong>Schema resolution.</strong> A record is read with the writer schema and resolved
+    against the reader schema (<a href="../spec/envelope.html#section-6">section 6</a>).
+  </li>
+  <li>
+    <strong>Strings, ids and times.</strong> Strings are well-formed UTF-8, ids are
+    <code>uuid</code> strings compared as 128-bit values, and times are the records of time.md,
+    not Avro's logical types for times (<a href="../spec/envelope.html#section-7">section 7</a>).
+  </li>
+  <li>
+    <strong>Limits.</strong> A message is at most 16 MiB, and a decoder checks a declared length
+    against the input that is left before it allocates for it
+    (<a href="../spec/envelope.html#section-8">section 8</a>). A receiver decodes records up to a data depth of 32 and rejects a deeper one
+    (<a href="../spec/types.html#section-5-7">types.md, section 5.7</a>).
+  </li>
+  <li>
+    <strong>The time types.</strong> <code>axt.Date</code>, <code>axt.Time</code>,
+    <code>axt.DateTime</code> and <code>axt.Duration</code>, their validity, zone rules that differ
+    and adding a duration (<a href="../spec/time.html">time.md</a>).
+  </li>
+  <li>
+    <strong>Metadata.</strong> The attributes of a schema, for a library that offers them
+    (<a href="../spec/metadata.html">metadata.md</a>).
+  </li>
+</ul>
+<p>
+  Tested by: <code>encoding</code> (<code>fingerprint</code>), <code>types</code>
+  (<code>fingerprint</code>, <code>decode_record</code>), <code>time</code>
+  (<code>fingerprint</code>, <code>decode_record</code>, <code>resolve_date_time</code>,
+  <code>add_duration</code>) and <code>metadata</code> (<code>describe</code>,
+  <code>check_record</code>). The example types are listed on
+  <a href="../spec/example-types.html">Example types</a>.
+</p>
+
+<h2>2. The envelope and signatures</h2>
+<p>
+  Every message is one <a href="../spec/axt.Envelope.html"><code>axt.Envelope</code></a>: its
+  format, its kind, the sender's key, the record it is about, the body and the signature
+  (<a href="../spec/envelope.html#section-2">envelope.md, section 2</a>). The body is a
+  single-object encoding of the kind's schema; the schemas are on
+  <a href="../spec/schemas.html">Schemas</a>. A live message and a file are encoded as
+  <a href="../spec/envelope.html#section-3">sections 3</a> and
+  <a href="../spec/envelope.html#section-4">4</a> say.
+</p>
+<p>
+  Every message is signed with the sending device's Ed25519 key
+  (<a href="../spec/keys.html#section-2-1">keys.md, sections 2.1</a> and
+  <a href="../spec/keys.html#section-2-2">2.2</a>). Verification is strict: the specification
+  fixes which keys and signatures verify, so that every library gives the same answer
+  (<a href="../spec/keys.html#section-2-3">section 2.3</a>). With an Ed25519 library that checks
+  less, the library adds steps 1 to 3 of that section before it calls it.
+</p>
+<p>
+  Tested by: <code>encoding</code> (<code>decode_message</code>, <code>decode_body</code>,
+  <code>encode_message</code>) and <code>keys</code> (<code>public_key</code>, <code>sign</code>,
+  <code>verify</code>, <code>check_signing_key</code>, <code>verify_message</code>).
+</p>
+
+<h2>3. Records</h2>
+<p>
+  Every record has a stable id and a version. A receiver applies record messages by the version
+  rule, keeps tombstones of deletions, keeps what its own user changed, and reports an outcome for
+  each record (<a href="../spec/records.html#section-5">records.md, sections 5</a> to
+  <a href="../spec/records.html#section-7">7</a>).
+</p>
+<p>
+  Tested by: <code>records</code> (<code>apply</code>), a session of one receiver and one sender.
+  A library that implements <code>records</code> offers its apps each of the policies the vectors
+  use: changes kept per field or for the whole record, and a deletion that deletes or keeps a
+  record with local changes (<a href="../spec/conformance.html#section-5-3">conformance.md,
+  section 5.3</a>).
+</p>
+
+<h2>4. The manifest and the protocol</h2>
+<p>
+  The manifest states which types an app takes and what it does with them. A library checks its
+  validity and limits, decides which types fit it, and chooses the purpose sentence in the user's
+  language (<a href="../spec/manifest.html#section-3-6">manifest.md, sections 3.6</a>,
+  <a href="../spec/manifest.html#section-4">4</a> and
+  <a href="../spec/manifest.html#section-5-2">5.2</a>).
+</p>
+<p>
+  The protocol is the exchange itself: the first messages and the choice of the envelope format,
+  the offer, the answers, the record messages, the acknowledgement and the errors
+  (<a href="../spec/protocol.html">protocol.md</a>). Section 14 sums up the live connection as a
+  state machine (<a href="../spec/protocol.html#section-14">protocol.md, section 14</a>). The error codes are on
+  <a href="../spec/errors.html">Error codes</a>.
+</p>
+<p>
+  Tested by: <code>manifest</code> (<code>check_manifest</code>, <code>fit</code>) and
+  <code>protocol</code> (<code>choose_format</code>, <code>contact_key</code>,
+  <code>resend_after_removal</code>, <code>session</code>). A <code>session</code> plays one app in
+  one live connection.
+</p>
+
+<h2>5. Trust, sealing and device sets</h2>
+<p>
+  The rest of keys.md:
+</p>
+<ul>
+  <li>
+    <strong>Trust.</strong> The short fingerprint, first contact, known senders and forgetting a
+    sender (<a href="../spec/keys.html#section-3">keys.md, section 3</a>).
+  </li>
+  <li>
+    <strong>Encryption for the relay.</strong> HPKE with the parameters of section 4.1, the
+    encryption key and its check, sealing, padding and opening
+    (<a href="../spec/keys.html#section-4">section 4</a>).
+  </li>
+  <li>
+    <strong>Device sets.</strong> The devices of one owner, each with a key of its own, that count
+    as one sender: adding and removing a device, the chain, and receiving additions and removals
+    (<a href="../spec/keys.html#section-5">section 5</a>).
+  </li>
+</ul>
+<p>
+  Tested by: <code>keys</code> (<code>short_fingerprint</code>, <code>check_encryption_key</code>,
+  <code>padded_length</code>, <code>seal</code>, <code>open</code>, <code>device_add</code>,
+  <code>device_join</code>, <code>join_chain</code>, <code>device_sets</code>). Sealing and
+  opening are in the category every library implements, whether or not it supports the relay.
+</p>
+
+<h2>6. Shares</h2>
+<p>
+  A sender sends an app of another user only the records its user shared with it
+  (<a href="../spec/shares.html#section-2-2">shares.md, section 2.2</a>). It takes one back with a
+  <code>WITHDRAW</code>, which the receiver applies among its other record messages
+  (<a href="../spec/shares.html#section-3">sections 3</a> to
+  <a href="../spec/shares.html#section-6">6</a>). The receiver's user can propose a change with a
+  <code>PROPOSAL</code>, which the owner takes or refuses with a <code>PROPOSAL_REPLY</code>
+  (<a href="../spec/shares.html#section-12">sections 12</a> to
+  <a href="../spec/shares.html#section-16">16</a>).
+</p>
+<p>
+  Tested by: <code>shares</code> (<code>receive</code>, <code>take_version</code>,
+  <code>owed</code>, <code>pass_withdrawal</code>, <code>join_receivers</code>,
+  <code>offer_types</code>, <code>acked</code>, <code>owner</code>, <code>proposer</code>). That a
+  sender sends nothing beyond its shares cannot be seen by a receiver, so no vector tests it
+  (<a href="../spec/conformance.html#section-8">conformance.md, section 8</a>).
+</p>
+
+<h2>7. Transports</h2>
+<p>
+  A library supports the transports its apps need (<a href="../spec/transports.html#section-1">transports.md,
+  section 1</a>), and implements the categories of each:
+</p>
+<table>
+  <thead>
+    <tr><th>Transport</th><th>Specification</th><th>Categories and operations</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>File</td><td><a href="../spec/transports.html#section-2">transports.md, section 2</a></td><td><code>file</code>: <code>read_file</code></td></tr>
+    <tr><td>Local network</td><td><a href="../spec/transports.html#section-3">sections 3</a> and <a href="../spec/transports.html#section-4">4</a></td><td><code>qr</code>: <code>parse_qr</code>, <code>qr_text</code>; <code>local</code>: <code>hello_frame</code>, <code>connection</code></td></tr>
+    <tr><td>Relay</td><td><a href="../spec/transports.html#section-5">section 5</a></td><td><code>relay</code>: <code>mailbox_id</code>, <code>request</code>, <code>reaction</code>, <code>listing</code>; <code>qr</code> if the library shows or scans QR codes for it</td></tr>
+  </tbody>
+</table>
+<p>
+  The TLS handshake, discovery by DNS-SD and the timers are not in the vectors; a library tests
+  them itself (<a href="../spec/conformance.html#section-8">conformance.md, section 8</a>).
+</p>
+
+<h2>8. Sync</h2>
+<p>
+  For a library that offers its apps more than one device for an owner: the stamps, the state of a
+  record and the merge (<a href="../spec/sync.html#section-2">sync.md, sections 2</a> to
+  <a href="../spec/sync.html#section-6">6</a>), the <code>CHANGE</code> and <code>RESYNC</code>
+  messages between the devices of a set (<a href="../spec/sync.html#section-7">sections 7</a> to
+  <a href="../spec/sync.html#section-16">16</a>), and what the set does with what it got from other
+  apps, with <code>FORWARD</code> and the owner's changes of received records
+  (<a href="../spec/sync.html#section-17">sections 17</a> to
+  <a href="../spec/sync.html#section-24">24</a>).
+</p>
+<p>
+  Tested by: <code>sync</code> (<code>next_stamp</code>, <code>change</code>, <code>merge</code>,
+  <code>deleted</code>, <code>begin_stamping</code>, <code>stale</code>,
+  <code>pass_version</code>, <code>shown</code>, <code>withdrawal_stamp</code>,
+  <code>siblings</code>). A <code>siblings</code> session plays one device with its siblings; most
+  of the category's vectors are such sessions.
+</p>

@@ -1,0 +1,113 @@
+<!-- page: title="What a library implements" track="library" order=1 summary="The categories every AXT library implements, the ones that depend on what it offers its apps, and what it means for a library to conform to a version of AXT." -->
+<p class="lede">
+  Conformance is counted in categories. Each category tests one part of the specification, and a
+  library conforms when it passes every vector of every category it implements. This page says
+  which categories those are.
+</p>
+
+<h2>The categories</h2>
+<p>
+  The vectors are grouped into fifteen categories, one vector file each
+  (<a href="../spec/conformance.html#section-2-1">conformance.md, section 2.1</a>). Eight of them
+  every library implements. The others depend on what the library offers the apps that use it
+  (<a href="../spec/conformance.html#section-2-2">section 2.2</a>).
+</p>
+<table>
+  <thead>
+    <tr><th>Category</th><th>Implemented by</th><th>Tests</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>encoding</code></td><td>Every library</td><td>Canonical forms and fingerprints, the envelope, the bodies of the specification's schemas</td></tr>
+    <tr><td><code>types</code></td><td>Every library</td><td>The example types, schema resolution, the data depth limit</td></tr>
+    <tr><td><code>time</code></td><td>Every library</td><td>The time types, their validity, other zone rules, adding a duration</td></tr>
+    <tr><td><code>records</code></td><td>Every library</td><td>A receiver applying record messages: versions, tombstones, its user's own changes, the outcomes</td></tr>
+    <tr><td><code>manifest</code></td><td>Every library</td><td>The validity of a manifest, which types fit it, the language of the purpose sentence</td></tr>
+    <tr><td><code>keys</code></td><td>Every library</td><td>Signing keys, strict verification, short fingerprints, device sets, padding, sealing and opening</td></tr>
+    <tr><td><code>protocol</code></td><td>Every library</td><td>One app in a live connection</td></tr>
+    <tr><td><code>shares</code></td><td>Every library</td><td>Withdrawals at a receiver, what a sender owes, proposals at their owner and their proposer</td></tr>
+    <tr><td><code>metadata</code></td><td>A library that offers the attributes of a schema</td><td>What a receiver shows of a type and its fields, and which values break a check</td></tr>
+    <tr><td><code>file</code></td><td>A library that supports files</td><td>Reading an AXT file</td></tr>
+    <tr><td><code>local</code> and <code>qr</code></td><td>A library that supports the local network</td><td>The frames and the <code>HELLO</code>; the QR payload and its text</td></tr>
+    <tr><td><code>relay</code></td><td>A library that supports the relay</td><td>The relay as an app uses it; <code>qr</code> as well if the library shows or scans QR codes for it</td></tr>
+    <tr><td><code>sync</code></td><td>A library that offers several devices for one owner</td><td>Stamps, the merge, the messages between the devices of a set</td></tr>
+    <tr><td><code>relay-server</code></td><td>Relays, not libraries</td><td>The interface of a relay</td></tr>
+  </tbody>
+</table>
+
+<h3>Why these eight</h3>
+<p>
+  Every transport carries messages, so every library encodes, signs and verifies them. Every app
+  that receives records applies them, and the withdrawals among them. Every app that sends records
+  to an app of another user sends only what its shares name
+  (<a href="../spec/shares.html#section-2-2">shares.md, section 2.2</a>). That is why
+  <code>shares</code> is asked of every library, as <code>records</code> is.
+</p>
+
+<h3>The ones that depend on the library</h3>
+<ul>
+  <li>
+    <strong>Metadata.</strong> A receiver need not show or check the attributes of a schema
+    (<a href="../spec/metadata.html#section-4">metadata.md, sections 4 to 7</a>). A library that
+    offers them, such as the label of a field in the user's language, implements
+    <code>metadata</code>.
+  </li>
+  <li>
+    <strong>Transports.</strong> AXT does not require an app to support every transport
+    (<a href="../spec/transports.html#section-1">transports.md, section 1</a>), so it does not
+    require it of a library. A library implements the categories of the transports it supports.
+  </li>
+  <li>
+    <strong>Sync.</strong> An installation that is a set of its own may count the versions of its
+    records instead of stamping them (<a href="../spec/sync.html#section-2-4">sync.md, section
+    2.4</a>). A library that offers its apps more than one device for an owner, with the stamps,
+    the merge and the messages between the devices, implements <code>sync</code>.
+  </li>
+</ul>
+
+<h2>A category passes as a whole</h2>
+<p>
+  Within a category a library implements, every vector counts. A vector that the adapter answers
+  as unsupported fails, and with it the category. There is no partial pass of a category.
+</p>
+<p>
+  The library states which categories it implements. Its adapter names them in its first answer to
+  the runner (<a href="adapter.html">Write the adapter</a>), and the runner sends only the vectors
+  of those categories. It names the others as not run and still exits with success when every
+  vector it ran passed (<a href="../spec/conformance.html#section-7-1">conformance.md, section
+  7.1</a>). A green run therefore proves conformance only when the adapter names at least the eight
+  categories above.
+</p>
+
+<h2>Conforming to a version</h2>
+<p>
+  A library conforms to one version of AXT. That it conforms to AXT 0.1.0 means that it passes at
+  least the eight categories every library implements, with the vectors of 0.1.0
+  (<a href="../spec/conformance.html#section-2-2">conformance.md, section 2.2</a>). Each vector
+  file names the version of the specification it is for in its member <code>specification</code>
+  (<a href="../spec/conformance.html#section-3-1">section 3.1</a>). The vectors of 0.1.0 and how
+  many each category holds are listed in <a href="../spec/conformance.html#section-7-4">section
+  7.4</a>.
+</p>
+<p>
+  The library states the version in its README and package metadata, and its CI proves it by
+  running the suite of that release (<a href="ci.html">Run the suite in CI</a>).
+</p>
+
+<h2>When a vector and the text differ</h2>
+<p>
+  The normative text of the specification governs; the vectors make it testable. They are made
+  with the same code as the examples of the other documents, and where an example and a vector
+  differ, the vector holds. A vector that contradicts the normative text is a fault in the
+  vectors. It is reported as an issue and corrected in a later release of the vectors, and a
+  library that follows the text in that point still conforms
+  (<a href="../spec/conformance.html#section-2-3">conformance.md, section 2.3</a>).
+</p>
+
+<h2>What the vectors leave to the library</h2>
+<p>
+  Some rules cannot be tested with bytes and an expected result. A library covers them with tests
+  of its own. Among them are the TLS handshake and discovery on the local network, the timers of
+  liveness and of the protocol, what an app shows its user and asks it, the state a receiver keeps
+  across connections apart from the keys of its known senders, and a file above 256 MiB. The full list is in
+  <a href="../spec/conformance.html#section-8">conformance.md, section 8</a>.
+</p>

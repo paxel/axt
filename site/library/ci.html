@@ -1,0 +1,68 @@
+<!-- page: title="Run the suite in CI" track="library" order=5 summary="Prove a library's conformance in its own CI: pin an AXT release and the SHA-256 of its archive, verify the archive, and run that release's suite against the library's adapter." -->
+<p class="lede">
+  A library lives in a repository of its own, so its CI does not run the suite from a clone of
+  the specification's repository. It runs the suite of the AXT release it conforms to, from that
+  release's archive. The pin is what proves the version the library states.
+</p>
+
+<h2>The release archive</h2>
+<p>
+  Each AXT release publishes an archive of its tagged tree, such as <code>axt-0.1.0.tar.gz</code>
+  of <a href="https://github.com/paxel/axt/releases/tag/v0.1.0">v0.1.0</a>. It holds the
+  specification, the types, the vectors, the conformance suite and the reference relay, under one
+  directory, <code>axt-0.1.0/</code>. The release also carries a build provenance attestation of
+  the archive.
+</p>
+
+<h2>The steps</h2>
+<p>
+  The steps are those of
+  <a href="https://github.com/paxel/axt/blob/summer/conformance/README.md">conformance/README.md</a>,
+  section "Running the suite in a library's repository":
+</p>
+<ol>
+  <li>
+    <strong>Pin.</strong> The library pins the release and the SHA-256 of its archive. Moving to a
+    new AXT version is a deliberate change of the pin.
+  </li>
+  <li>
+    <strong>Verify.</strong> The CI downloads the archive, checks its SHA-256 against the pin and
+    checks the release's build provenance attestation:
+    <pre><code class="language-text">gh attestation verify axt-0.1.0.tar.gz --repo paxel/axt</code></pre>
+    Then it extracts the archive.
+  </li>
+  <li>
+    <strong>Run.</strong> In the extracted directory, it installs what the runner needs from the
+    archive's <code>uv.lock</code> and runs the suite against the library's adapter:
+    <pre><code class="language-text">uv sync
+uv run python conformance/run.py -- &lt;the library's adapter&gt;</code></pre>
+  </li>
+</ol>
+<p>
+  The runner exits with 0 only when every vector it ran passed, so a failing vector fails the job
+  (<a href="../spec/conformance.html#section-7-1">conformance.md, section 7.1</a>).
+</p>
+
+<div class="callout">
+  <p class="eyebrow">Note</p>
+  <p>
+    The runner runs only the categories the adapter names, and names the others as not run. A green
+    job proves conformance only when the adapter names at least the eight categories every library
+    implements (<a href="what-to-implement.html">What a library implements</a>).
+  </p>
+</div>
+
+<h2>Stating the version</h2>
+<p>
+  The library's README and package metadata state the AXT version it conforms to; the pin proves
+  it (<a href="https://github.com/paxel/axt/blob/summer/conformance/README.md">conformance/README.md</a>).
+  When the pin moves to a new release, the stated version moves with it.
+</p>
+
+<h2>Keys in the vectors</h2>
+<p>
+  Every key, secret and certificate in the vectors is a test value of
+  <a href="../spec/keys.html#section-7-1">keys.md, section 7.1</a>. They are for tests only and
+  are never used outside tests (<a href="../spec/conformance.html#section-7-3">conformance.md,
+  section 7.3</a>).
+</p>

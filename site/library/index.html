@@ -1,9 +1,64 @@
 <!-- page: title="Implement a library" track="library" order=0 summary="The Implement a library track: the parts of AXT in the order a library builds them, and the conformance suite it runs." -->
 <p class="lede">
-  For the author of an AXT library: the parts of the standard in the order to build them, and how
-  the library proves itself against the conformance suite.
+  For the author of an AXT library, in any language: the parts of the standard in the order to
+  build them, and how the library proves itself against the conformance suite.
 </p>
 
+<h2>Build the library</h2>
+<ul class="cards">
+  <li>
+    <a class="card" href="what-to-implement.html">
+      <p class="eyebrow">Scope</p>
+      <p class="card-title">What a library implements</p>
+      <p>The eight categories every library implements, the ones that depend on what it offers, and what conforming to a version means.</p>
+    </a>
+  </li>
+  <li>
+    <a class="card" href="build-order.html">
+      <p class="eyebrow">Plan</p>
+      <p class="card-title">The parts in build order</p>
+      <p>From Avro and fingerprints to shares, transports and sync, with the vector categories that test each part.</p>
+    </a>
+  </li>
+</ul>
+
+<h2>Prove conformance</h2>
+<ul class="cards">
+  <li>
+    <a class="card" href="adapter.html">
+      <p class="eyebrow">Adapter</p>
+      <p class="card-title">Write the adapter</p>
+      <p>The small program through which the runner drives the library: JSON lines in and out.</p>
+    </a>
+  </li>
+  <li>
+    <a class="card" href="run-suite.html">
+      <p class="eyebrow">Runner</p>
+      <p class="card-title">Run the suite</p>
+      <p>The runner's command and options, what it reports, and the reference adapter.</p>
+    </a>
+  </li>
+  <li>
+    <a class="card" href="ci.html">
+      <p class="eyebrow">CI</p>
+      <p class="card-title">Run the suite in CI</p>
+      <p>Pin an AXT release, verify its archive, and run its suite against the library's adapter.</p>
+    </a>
+  </li>
+</ul>
+
+<h2>Publish it</h2>
+<ul class="cards">
+  <li>
+    <a class="card" href="repository.html">
+      <p class="eyebrow">Conventions</p>
+      <p class="card-title">The library's repository and versions</p>
+      <p>A repository of its own, its own SemVer, and the AXT version it conforms to.</p>
+    </a>
+  </li>
+</ul>
+
 <p>
-  The rules behind each page are in the <a href="../spec/index.html">Specification</a>.
+  The rules behind each page are in the <a href="../spec/index.html">Specification</a>. The vectors
+  and the suite are defined in <a href="../spec/conformance.html">conformance.md</a>.
 </p>
