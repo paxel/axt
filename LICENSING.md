@@ -10,7 +10,6 @@ AXT uses two licensing schemes: one for the standard itself and one for code.
 | `conformance/` | The conformance suite, and the scripts that produce the vectors and the examples | Apache License 2.0 or MIT, at your option | `Apache-2.0 OR MIT` |
 | `tools/` | The repository's own checks, such as the changelog check | Apache License 2.0 or MIT, at your option | `Apache-2.0 OR MIT` |
 | `relay/`       | The reference relay                                                              | Apache License 2.0 or MIT, at your option | `Apache-2.0 OR MIT` |
-| `libs/`        | The libraries                                                                    | Apache License 2.0 or MIT, at your option | `Apache-2.0 OR MIT` |
 
 The licence texts:
 

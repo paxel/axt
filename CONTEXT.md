@@ -60,7 +60,7 @@ The vocabulary of this repository. The specification in [spec/](spec/README.md) 
 
 **Mailbox**: the place at a relay that holds sealed messages for one installation, its owner.
 
-**Library**: an implementation of AXT that apps use, one per language under [libs/](libs/README.md).
+**Library**: an implementation of AXT that apps use, one per language, each in a repository of its own (README.md, section Libraries).
 
 **Vector**: one test: an operation, its input and the result the specification expects. A **category** groups the vectors of one part of the specification.
 

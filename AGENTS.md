@@ -20,7 +20,7 @@ Single-context: `CONTEXT.md` and `docs/adr/` at the repo root. See `docs/agents/
 
 ## What this repository is
 
-AXT (Avro eXchange Transfer) is a draft open standard, 0.1.0 in progress, for exchanging typed records between small apps. The repository is specification first: the documents in `spec/` are the product, and all code is Python that checks the specification, produces its test vectors or serves as a reference. There is no build step. The repository is a Python stack of the [paxel/gates](https://github.com/paxel/gates) standard: `pyproject.toml` and `uv.lock` pin what the scripts need, and CI runs the standard's gates. `libs/` holds no library yet; a library for a language goes into `libs/<language>/` and must pass the whole conformance suite.
+AXT (Avro eXchange Transfer) is a draft open standard, 0.1.0 released, for exchanging typed records between small apps. The repository is specification first: the documents in `spec/` are the product, and all code is Python that checks the specification, produces its test vectors or serves as a reference. There is no build step. The repository is a Python stack of the [paxel/gates](https://github.com/paxel/gates) standard: `pyproject.toml` and `uv.lock` pin what the scripts need, and CI runs the standard's gates. Libraries live in repositories of their own (`axt-<language>`, listed in README.md); a library runs the conformance suite of the AXT release it conforms to, as conformance/README.md describes.
 
 ## Commands
 

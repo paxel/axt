@@ -24,9 +24,9 @@ The rules for the types are in [spec/types.md](spec/types.md).
 
 ## Libraries
 
-A library for a new language goes into `libs/<language>/`. Before starting one, open an issue naming the language and who maintains the library.
+A library lives in a repository of its own, `axt-<language>`, with its own gates, versions and tags, and is published to its language's registry. Before starting one, open an issue here naming the language and who maintains the library.
 
-The bar for a library is the [conformance suite](conformance/README.md): a library is accepted as an AXT library when it passes the whole suite, and it keeps passing it with every change to the library or the specification. A library that passes only part of the suite is not listed as conforming. Library code is licensed under Apache-2.0 OR MIT, see [LICENSING.md](LICENSING.md).
+The bar for a library is the [conformance suite](conformance/README.md): a library is accepted as an AXT library when it passes the whole suite, and it keeps passing it with every change to the library or the specification. A library that passes only part of the suite is not listed as conforming. A library has its own SemVer and states the AXT version it conforms to in its README and package metadata; its CI proves it by running the suite of that AXT release ([conformance/README.md](conformance/README.md)). Library code is licensed under Apache-2.0 OR MIT, see [LICENSING.md](LICENSING.md).
 
 ## The reference relay and the conformance suite
 

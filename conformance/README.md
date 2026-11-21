@@ -18,6 +18,16 @@ The reference adapter passes every vector:
 python3 conformance/run.py -- python3 conformance/reference/adapter.py
 ```
 
+## Running the suite in a library's repository
+
+A library lives in a repository of its own and runs the suite of the AXT release it conforms to, from that release's archive:
+
+1. It pins the release and the SHA-256 of its archive, such as `axt-0.1.0.tar.gz` of [v0.1.0](https://github.com/paxel/axt/releases/tag/v0.1.0); a new AXT version is a deliberate change of the pin.
+2. Its CI downloads the archive, checks the SHA-256 and the release's build provenance attestation (`gh attestation verify axt-0.1.0.tar.gz --repo paxel/axt`), and extracts it.
+3. It installs what the runner needs from the archive's `uv.lock` (`uv sync`) and runs `uv run python conformance/run.py -- <the library's adapter>` there.
+
+The library's README and package metadata state the AXT version it conforms to; the pin proves it.
+
 ## Layout
 
 | Path                                                         | Content                                                                                                                                   |

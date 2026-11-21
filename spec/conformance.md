@@ -8,7 +8,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 ## 1. Terms
 
-- **Library**: an implementation of AXT that apps use, such as one of [libs/](../libs/README.md).
+- **Library**: an implementation of AXT that apps use, such as one of those that [README.md](../README.md) lists.
 - **Vector**: one test: an operation, its input, and the result the specification expects (section 3).
 - **Category**: a group of vectors that tests one part of the specification (section 2.1). Each category has one vector file.
 - **Operation**: what a vector asks the library to do, such as decoding a message or reading a file (section 5). Each operation belongs to one category.
