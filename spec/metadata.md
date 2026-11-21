@@ -4,6 +4,8 @@ Status: released in 0.1.0, changed in 0.2.0. A change to this document is a new 
 
 This document defines the attributes that a schema carries so that a receiver which learns a type only from its schema can show and check each field: labels, help texts and emoji in English and other languages, the order and groups of fields, hints for inputs, formats, patterns and limits. It also says what a sender and a receiver do with a value that breaks a check, and how a receiver names that value.
 
+The bricks of [fields.md](fields.md) describe the same fields as Avro records rather than as attributes; they are defined by [types/axt/Field.avsc](../types/axt/Field.avsc), and the column "Brick" of section 2 names the member of a brick that holds what each attribute holds.
+
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in BCP 14 ([RFC 2119](https://www.rfc-editor.org/rfc/rfc2119), [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174)) when, and only when, they appear in all capitals, as shown here.
 
 ## 1. Terms
@@ -19,33 +21,33 @@ Sender, receiver and type have the meaning of [records.md](records.md), section 
 
 ## 2. The attributes
 
-| Attribute                | JSON value                     | On                        | Kind  | Section                      |
-| ------------------------ | ------------------------------ | ------------------------- | ----- | ---------------------------- |
-| `axt.version`            | integer                        | the type's record         | hint  | [types.md](types.md), 3.2    |
-| `axt.title`              | string, a field name           | the type's record         | hint  | [types.md](types.md), 6      |
-| `axt.label`              | string                         | record, field             | hint  | 4.1                          |
-| `axt.label_translations` | object: language tag to string | record, field             | hint  | 4.2                          |
-| `axt.help`               | string                         | record, field             | hint  | 4.1                          |
-| `axt.help_translations`  | object: language tag to string | record, field             | hint  | 4.2                          |
-| `axt.emoji`              | string                         | record, field             | hint  | 4.3                          |
-| `axt.symbols`            | object: symbol to entry        | enum                      | hint  | 4.4                          |
-| `axt.groups`             | object: group key to entry     | record                    | hint  | 5.2                          |
-| `axt.order`              | integer                        | field                     | hint  | 5.1                          |
-| `axt.group`              | string, a group key            | field                     | hint  | 5.2                          |
-| `axt.placeholder`        | string                         | field                     | hint  | 5.3                          |
-| `axt.example`            | string                         | field                     | hint  | 5.3                          |
-| `axt.multiline`          | boolean                        | field of strings          | hint  | 5.3                          |
-| `axt.preferred_length`   | integer                        | field of strings          | hint  | 5.3                          |
-| `axt.sensitive`          | boolean                        | field                     | hint  | 5.4                          |
-| `axt.advanced`           | boolean                        | field                     | hint  | 5.4                          |
-| `axt.unit`               | string, a UCUM code            | field of numbers          | hint  | [types.md](types.md), 6; 6.2 |
-| `axt.anchor`             | string, `local` or `instant`   | field of `axt.DateTime`   | hint  | [time.md](time.md), 6.4      |
-| `axt.format`             | string, a format name          | field of strings          | check | 6.3                          |
-| `axt.pattern`            | string, an I-Regexp            | field of strings          | check | 6.4                          |
-| `axt.min_length`         | integer                        | field of strings or bytes | check | 6.2                          |
-| `axt.max_length`         | integer                        | field of strings or bytes | check | 6.2                          |
-| `axt.min`                | number                         | field of numbers          | check | 6.2                          |
-| `axt.max`                | number                         | field of numbers          | check | 6.2                          |
+| Attribute                | JSON value                     | On                        | Kind  | Section                      | Brick                                        |
+| ------------------------ | ------------------------------ | ------------------------- | ----- | ---------------------------- | -------------------------------------------- |
+| `axt.version`            | integer                        | the type's record         | hint  | [types.md](types.md), 3.2    | —                                            |
+| `axt.title`              | string, a field name           | the type's record         | hint  | [types.md](types.md), 6      | —                                            |
+| `axt.label`              | string                         | record, field             | hint  | 4.1                          | `texts.label`                                |
+| `axt.label_translations` | object: language tag to string | record, field             | hint  | 4.2                          | `texts.label_translations`                   |
+| `axt.help`               | string                         | record, field             | hint  | 4.1                          | `texts.help`                                 |
+| `axt.help_translations`  | object: language tag to string | record, field             | hint  | 4.2                          | `texts.help_translations`                    |
+| `axt.emoji`              | string                         | record, field             | hint  | 4.3                          | `texts.emoji`                                |
+| `axt.symbols`            | object: symbol to entry        | enum                      | hint  | 4.4                          | `symbols` of `axt.EnumField`                 |
+| `axt.groups`             | object: group key to entry     | record                    | hint  | 5.2                          | `groups` of `axt.ObjectField`                |
+| `axt.order`              | integer                        | field                     | hint  | 5.1                          | `order`                                      |
+| `axt.group`              | string, a group key            | field                     | hint  | 5.2                          | `group`                                      |
+| `axt.placeholder`        | string                         | field                     | hint  | 5.3                          | `placeholder`                                |
+| `axt.example`            | string                         | field                     | hint  | 5.3                          | `example`                                    |
+| `axt.multiline`          | boolean                        | field of strings          | hint  | 5.3                          | `multiline` of `axt.StringField`             |
+| `axt.preferred_length`   | integer                        | field of strings          | hint  | 5.3                          | `preferred_length` of `axt.StringField`      |
+| `axt.sensitive`          | boolean                        | field                     | hint  | 5.4                          | `sensitive`                                  |
+| `axt.advanced`           | boolean                        | field                     | hint  | 5.4                          | `advanced`                                   |
+| `axt.unit`               | string, a UCUM code            | field of numbers          | hint  | [types.md](types.md), 6; 6.2 | `unit` of the bricks of numbers              |
+| `axt.anchor`             | string, `local` or `instant`   | field of `axt.DateTime`   | hint  | [time.md](time.md), 6.4      | `anchor` of `axt.DateTimeField`              |
+| `axt.format`             | string, a format name          | field of strings          | check | 6.3                          | a semantic brick, [fields.md](fields.md), 5  |
+| `axt.pattern`            | string, an I-Regexp            | field of strings          | check | 6.4                          | `pattern` of `axt.StringField`               |
+| `axt.min_length`         | integer                        | field of strings or bytes | check | 6.2                          | `min_length` of the bricks of text and bytes |
+| `axt.max_length`         | integer                        | field of strings or bytes | check | 6.2                          | `max_length` of the bricks of text and bytes |
+| `axt.min`                | number                         | field of numbers          | check | 6.2                          | `min` of the bricks of numbers               |
+| `axt.max`                | number                         | field of numbers          | check | 6.2                          | `max` of the bricks of numbers               |
 
 "Record" is the type's own record or a record nested in it; "field of strings" is a field whose value type (section 3.2) is `string`, and so on. Every attribute is optional. When an attribute is absent, a receiver behaves as the section of the attribute says, mostly as it would for a schema without attributes ([types.md](types.md), section 6).
 
@@ -202,7 +204,7 @@ The limits are in the field's unit: a field with `axt.unit` `min` and `axt.max` 
 
 ### 6.3 Formats
 
-`axt.format` names the form of a field of strings. A receiver MAY check it, and SHOULD show and offer inputs for the value as the format suggests. The formats and what a non-empty value of each requires:
+`axt.format` names the form of a field of strings. A receiver MAY check it, and SHOULD show and offer inputs for the value as the format suggests. Each format but `plain` is also a semantic brick of [fields.md](fields.md), section 5, with the format built in. The formats and what a non-empty value of each requires:
 
 | Format       | The value                                                                                                                                                                                                                                                              | A receiver shows it                               |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |

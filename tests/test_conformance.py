@@ -21,6 +21,7 @@ EXAMPLE_SCRIPTS = [
     "example_types",
     "time_examples",
     "metadata_examples",
+    "fields_examples",
     "keys_examples",
     "manifest_examples",
     "protocol_examples",
