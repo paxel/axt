@@ -1,6 +1,6 @@
 {
  "format": 1,
- "specification": "0.1.0",
+ "specification": "0.2.0",
  "category": "shares",
  "description": "A receiver applying the withdrawals of one sender among its other record messages, and what a sender does: the version of a withdrawal, what it owes a receiver, what it does with an outcome (spec/shares.md).",
  "vectors": [

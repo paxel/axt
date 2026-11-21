@@ -1,6 +1,6 @@
 {
  "format": 1,
- "specification": "0.1.0",
+ "specification": "0.2.0",
  "category": "manifest",
  "description": "The validity and limits of a manifest, and which types fit it, with the language of the purpose sentence shown (spec/manifest.md).",
  "vectors": [

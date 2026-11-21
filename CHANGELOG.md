@@ -15,6 +15,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - The Implement a library track: what a library implements and in what order, the adapter, the suite and the library's repository. ([axt-1034](https://github.com/paxel/axt/issues/42))
 - The Run a relay track: running the reference relay behind a proxy, its logs and limits, and a relay of one's own. ([axt-1035](https://github.com/paxel/axt/issues/43))
 
+### Changed
+
+- The test vectors are those of specification 0.2.0. ([axt-1036](https://github.com/paxel/axt/issues/44))
+
 ---
 
 Historical changes have been moved to [OLDER_CHANGES.md](OLDER_CHANGES.md).

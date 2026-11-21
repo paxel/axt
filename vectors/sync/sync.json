@@ -1,6 +1,6 @@
 {
  "format": 1,
- "specification": "0.1.0",
+ "specification": "0.2.0",
  "category": "sync",
  "description": "The devices of one owner: the next stamp, what a change stamps, the merge of two states of a record per field and for the removal, when a record is deleted, the record message of a state, beginning to stamp, what a device does after STALE, what a device shows of a record received from another app, and one device with its siblings: the CHANGE, RESYNC and FORWARD messages it processes and sends, for the records of the set and for what the set got from other apps (spec/sync.md).",
  "vectors": [

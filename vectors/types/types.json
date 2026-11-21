@@ -1,6 +1,6 @@
 {
  "format": 1,
- "specification": "0.1.0",
+ "specification": "0.2.0",
  "category": "types",
  "description": "The example types: fingerprints, the bytes and meaning of a record of each, and schema resolution with defaults, unknown symbols, aliases and the data depth limit (spec/types.md).",
  "vectors": [

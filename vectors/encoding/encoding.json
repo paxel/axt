@@ -1,6 +1,6 @@
 {
  "format": 1,
- "specification": "0.1.0",
+ "specification": "0.2.0",
  "category": "encoding",
  "description": "Fingerprints and canonical forms, and the envelope of every message in a live connection (spec/envelope.md).",
  "vectors": [

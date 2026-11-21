@@ -1,6 +1,6 @@
 {
  "format": 1,
- "specification": "0.1.0",
+ "specification": "0.2.0",
  "category": "file",
  "description": "Reading an AXT file: what it holds, in which order, and what rejects the whole file or only one record (spec/transports.md, section 2; spec/envelope.md, section 4; spec/keys.md, section 2.5).",
  "vectors": [

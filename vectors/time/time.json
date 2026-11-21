@@ -1,6 +1,6 @@
 {
  "format": 1,
- "specification": "0.1.0",
+ "specification": "0.2.0",
  "category": "time",
  "description": "The time types: fingerprints, the bytes and meaning of their values, the values that are not valid, a type that holds several of them, other zone rules, and the addition of a duration (spec/time.md).",
  "vectors": [

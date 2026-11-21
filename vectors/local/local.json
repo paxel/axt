@@ -1,6 +1,6 @@
 {
  "format": 1,
- "specification": "0.1.0",
+ "specification": "0.2.0",
  "category": "local",
  "description": "Frames and HELLO of a connection on the local network (spec/transports.md, section 4).",
  "vectors": [

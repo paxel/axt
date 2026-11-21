@@ -1,6 +1,6 @@
 {
  "format": 1,
- "specification": "0.1.0",
+ "specification": "0.2.0",
  "category": "relay",
  "description": "The relay as an app uses it: mailbox ids, requests, what an app does with each response, and the list of messages (spec/transports.md, section 5).",
  "vectors": [

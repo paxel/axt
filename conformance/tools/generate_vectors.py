@@ -39,7 +39,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 VECTORS = REPO / "vectors"
 FILE_FORMAT = 1  # the version of the vector file format of spec/conformance.md, section 3
-SPEC_VERSION = "0.1.0"
+SPEC_VERSION = "0.2.0"
 INLINE_LIMIT = 65536  # bytes up to which a value is written as hex; above it, as raw DEFLATE
 
 

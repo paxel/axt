@@ -1,6 +1,6 @@
 {
  "format": 1,
- "specification": "0.1.0",
+ "specification": "0.2.0",
  "category": "metadata",
  "description": "The attributes of a schema that tell a receiver how to show and check a field: labels, help and emoji in a language, the order and groups of fields, formats, patterns and limits, and the field a check names (spec/metadata.md).",
  "vectors": [
