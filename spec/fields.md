@@ -2,7 +2,7 @@
 
 Status: new in 0.2.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md).
 
-This document defines the bricks of AXT: typed fields that describe one field of a type, its name, the texts a receiver shows for it and the checks its values keep, as Avro records. A type is described by bricks put together, as an address is made of a street, a postal code and a country, and a person of a name, an address and other fields. The schema of the bricks, [types/axt/Field.avsc](../types/axt/Field.avsc), is normative for what each brick holds; this document says what a brick means and what its checks do to a value.
+This document defines the bricks of AXT: typed fields that describe one field of a type, its name, the texts a receiver shows for it and the checks its values keep, as Avro records. A type is described by bricks put together, as an address is made of a street, a postal code and a country, and a person of a name, an address and other fields. The description is the source of the type: the type's Avro schema is derived from it by the rule of section 9, and offers and files carry it (section 10). The schema of the bricks, [types/axt/Field.avsc](../types/axt/Field.avsc), is normative for what each brick holds; this document says what a brick means, what its checks do to a value and how the schema is derived.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in BCP 14 ([RFC 2119](https://www.rfc-editor.org/rfc/rfc2119), [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174)) when, and only when, they appear in all capitals, as shown here.
 
@@ -12,7 +12,8 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 - **Brick**: one branch of the union `kind`, such as `axt.StringField` or `axt.EmailField`. It names the kind of the field's values and holds the checks and hints of that kind.
 - **Value brick**: a brick of a kind of value: text, a number, a boolean, bytes, an enum, a list, a map, an object, or a time type (section 4).
 - **Semantic brick**: a brick of text of one form, such as an email address, whose check of that form is built in (section 5).
-- **Description**: a typed field whose brick is an `axt.ObjectField`, at the root of a type: the type's fields, each a typed field, and so on down to the value bricks.
+- **Description**: a typed field whose brick is an `axt.ObjectField`, at the root of a type: the type's full name, version and fields, each a typed field, and so on down to the value bricks (section 9.1).
+- **Derived schema**: the Avro schema of a type, derived from its description by the rule of section 9.2; its fingerprint is the type's fingerprint ([envelope.md](envelope.md), section 5).
 - **Value**: what a record holds for a field. A record carries plain values only; the description says how to show and check them and travels with the type, not with each record.
 - **Check**: a member of a brick, or `required` of the common part, that a value can break (section 7). Every other member is a hint: it says how to show the field or offer an input for it.
 
@@ -20,7 +21,7 @@ Sender, receiver and type have the meaning of [records.md](records.md), section 
 
 ## 2. The bricks
 
-[types/axt/Field.avsc](../types/axt/Field.avsc) defines `axt.Field` and, in place, every brick and every record a brick holds, so that the file is parsed on its own. Its CRC-64-AVRO is `0x4ed0f338fe0961c6`.
+[types/axt/Field.avsc](../types/axt/Field.avsc) defines `axt.Field` and, in place, every brick and every record a brick holds, so that the file is parsed on its own. Its CRC-64-AVRO is `0x527242bb71c90163`.
 
 | Brick                | Values                                    | Section |
 | -------------------- | ----------------------------------------- | ------- |
@@ -124,6 +125,7 @@ These hints of the common part, and the members `placeholder` and `example` of t
 `axt.ObjectField` is a composite field: its value is made of the values of its `fields`, each a typed field, in the order of their encoding. An object has at least one field.
 
 - `name` is the name of the object, an Avro name in UpperCamelCase such as `VetAddress`. At the root of a description it is the full name of the type, with its namespace ([types.md](types.md), section 2).
+- `version` and `title` are those of the type, at the root (section 9.1).
 - `groups` gives the texts of each group of the object's fields; a group without a label is shown by its key. A key is a group key of [metadata.md](metadata.md), section 5.2, of at most 64 bytes, each key is given once, and each is used by at least one field of the object.
 - A field of a nested object is named by the path of the object, a `.`, and its name, such as `address.postal_code`.
 
@@ -155,7 +157,7 @@ Every semantic brick also has the checks `min_length` and `max_length` and the h
 
 ## 6. A valid description
 
-A description is valid when every typed field in it keeps the rules of sections 3 to 5: its name, doc, texts and hints, the limits of each check, and the defaults and examples that keep the field's checks. A default or an example is judged by the checks only when the checks themselves keep their rules. A sender MUST NOT send a description that is not valid.
+A description is valid when every typed field in it keeps the rules of sections 3 to 5, and the description keeps those of its root and its limits (section 9.1): its name, doc, texts and hints, the limits of each check, and the defaults and examples that keep the field's checks. A default or an example is judged by the checks only when the checks themselves keep their rules. A sender MUST NOT send a description that is not valid.
 
 A problem of a description is named by the field path of the member that breaks a rule, in the description as a datum of `axt.Field`: `kind.fields[1].kind.symbols` is the symbols of the enum of the second field of the type. A union adds nothing to the path ([metadata.md](metadata.md), section 7.2).
 
@@ -169,13 +171,13 @@ A value keeps every check of its typed field at once. The checks are `required` 
 
 ## 8. Example
 
-`com.example.Vet` is an illustration only, not an example type. Its description has 14 fields, among them a phone, an email address and a website in the group `contact`, an enum `VetKind`, an object `VetAddress`, a number of minutes between 5 and 240, an IBAN that is sensitive and advanced, a date, notes in CommonMark, a list of tags and a map of fees. Encoded as a datum of `axt.Field`, it has 2,035 bytes. Its field `address`, with the branch of each `kind` written as an object whose one member is named by the brick, as in Avro's JSON encoding:
+`com.example.Vet` is an illustration only, not an example type. Its description has 14 fields, among them a phone, an email address and a website in the group `contact`, an enum `VetKind`, an object `VetAddress`, a number of minutes between 5 and 240, an IBAN that is sensitive and advanced, a date, notes in CommonMark, a list of tags and a map of fees. Encoded as a datum of `axt.Field`, it has 2,044 bytes; the schema derived from it has 2,990 bytes and the CRC-64-AVRO `0xd5e22eb4892daf4f`. Its field `address`, with the branch of each `kind` written as an object whose one member is named by the brick, as in Avro's JSON encoding:
 
 ```json
 {"name":"address","doc":"The address of the practice.","texts":{"label":"Address","label_translations":{"de":"Anschrift"},"help":"","help_translations":{},"emoji":"📮"},"required":false,"order":null,"group":"","sensitive":false,"advanced":false,"kind":{"axt.ObjectField":{"name":"VetAddress","fields":[
  {"name":"street","doc":"The street and house number.","texts":{"label":"Street","label_translations":{"de":"Straße"},"help":"","help_translations":{},"emoji":"🛣️"},"required":false,"order":null,"group":"","sensitive":false,"advanced":false,"kind":{"axt.StringField":{"default":null,"min_length":null,"max_length":100,"pattern":null,"multiline":false,"preferred_length":null,"placeholder":"","example":""}}},
  {"name":"postal_code","doc":"The postal code of five digits; empty when not known.","texts":{"label":"Postal code","label_translations":{"de":"Postleitzahl"},"help":"","help_translations":{},"emoji":"📮"},"required":false,"order":null,"group":"","sensitive":false,"advanced":false,"kind":{"axt.StringField":{"default":null,"min_length":null,"max_length":null,"pattern":"[0-9]{5}","multiline":false,"preferred_length":5,"placeholder":"10115","example":""}}},
- {"name":"country","doc":"The country.","texts":{"label":"Country","label_translations":{"de":"Land"},"help":"","help_translations":{},"emoji":"🏳️"},"required":false,"order":0,"group":"","sensitive":false,"advanced":false,"kind":{"axt.CountryField":{"default":"DE","min_length":null,"max_length":null,"preferred_length":null,"placeholder":"","example":""}}}],"groups":[]}}}
+ {"name":"country","doc":"The country.","texts":{"label":"Country","label_translations":{"de":"Land"},"help":"","help_translations":{},"emoji":"🏳️"},"required":false,"order":0,"group":"","sensitive":false,"advanced":false,"kind":{"axt.CountryField":{"default":"DE","min_length":null,"max_length":null,"preferred_length":null,"placeholder":"","example":""}}}],"groups":[],"version":null,"title":""}}}
 ```
 
 A receiver that checks finds, among the 23 values of the type the script checks:
@@ -198,16 +200,83 @@ A receiver that checks finds, among the 23 values of the type the script checks:
 The values were produced with [conformance/tools/fields_examples.py](../conformance/tools/fields_examples.py), which loads the rules of the formats, patterns and texts from [conformance/tools/metadata_rules.py](../conformance/tools/metadata_rules.py). The script:
 
 - checks [types/axt/Field.avsc](../types/axt/Field.avsc) by the rules of [types.md](types.md), sections 5.1 and 5.2, and its fingerprint, with fastavro 1.13.1 and the Python `avro` 1.12.2 package;
-- checks that the description of `com.example.Vet` is valid, and 36 descriptions that each break one rule, each with the path of its problem;
+- checks that the description of `com.example.Vet` is valid, and 45 descriptions that each break one rule, each with the path of its problem, and the limits of section 9.1;
+- describes each example type of version 1 and checks that the schema derived from its description has the canonical form of its `.avsc` file, and that the derivation is the same when it is done again;
 - checks the 23 values of the table and the others, a value of each semantic brick that has its format and one that does not, and values of the bricks the type does not use;
 - encodes each description with fastavro and decodes it again with both libraries.
 
 The test vectors of [conformance.md](conformance.md) take precedence over these values.
 
+## 9. Deriving the schema
+
+### 9.1 The root and the limits
+
+A description describes one type. In addition to the rules of sections 3 to 6, a description keeps these:
+
+- **The root.** Its brick is `axt.ObjectField`. Its `name` is the full name of the type, with a namespace ([types.md](types.md), section 2), its `version` the version of the type within its major version, at least 1 ([types.md](types.md), section 3.2), and its `title`, if not empty, the name of one of its fields whose brick is `axt.StringField` or a semantic brick: the field whose value a receiver MAY show as the name of a record, as `axt.title` of [types.md](types.md), section 6, says. The root's `doc` and `texts` are those of the type. Its own `name` is not used. It is not `required`, and has no `order`, no `group`, and neither `sensitive` nor `advanced`.
+- **Nested objects and enums.** Their names have no namespace; they take the namespace of the root. No two of the objects and enums of a description, the root among them, have the same full name, and none has the name of a time type. A nested object has the `version` `null`; its `title`, if not empty, names one of its own fields of text, which a receiver MAY show as the name of each of its values.
+- **Depth.** Typed fields nest at most 64 deep: the root is at depth 1, and a field of an object, the items of a list and the values of a map are one deeper than the typed field that holds them. The derived schema nests at most 64 deep as JSON, as every schema does ([envelope.md](envelope.md), section 8).
+- **Numbers.** A default of `axt.DoubleField` is finite, and a default of `axt.LongField` is at most 2^53 in magnitude, so that the text of section 9.3 writes it exactly.
+- **Size.** A description in its Avro encoding, and the text of its derived schema (section 9.3), each have at most 256 KiB, the limit of a schema ([envelope.md](envelope.md), section 8).
+
+A type is a tree of typed fields, so no type is recursive ([types.md](types.md), section 5.7).
+
+### 9.2 The rule
+
+The derived schema of a valid description is an Avro 1.12 schema of a record, written as JSON:
+
+- **The record.** The root gives the object `{"type": "record", "name": N, "namespace": S, "doc": D, "axt.version": V, "fields": F}`, where S and N are the namespace and the last part of the root's full name, D is the root's `doc`, V its `version`, and F its fields.
+- **The fields.** Each typed field of an object gives one field of its record, in the order of the object: `{"name": n, "type": T, "default": d, "doc": c}` with the typed field's `name` and `doc`, its type T, and its default d where it has one.
+- **The type.** T is the type of the brick, as the table below gives it, or `["null", T]` when the field may hold no value: when its brick is neither `axt.ListField` nor `axt.MapField`, it is not `required`, and its brick gives no default, a `default` of `null` or no member `default` at all, as `axt.ObjectField` and the time bricks have.
+- **The default.** A list has the default `[]` and a map `{}`. A field whose brick gives a default has that default, a default of bytes written as the string whose code points are its bytes, as Avro writes it. A field of the type `["null", T]` has the default `null`. A `required` field whose brick gives no default has none.
+- **Items and values.** The items of a list and the values of a map have the type of their typed field by the same rule, and no default.
+
+| Brick                                                                      | Type of the brick                                                                                                                    |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `axt.StringField` and the semantic bricks                                  | `"string"`                                                                                                                           |
+| `axt.IntField`, `axt.LongField`, `axt.DoubleField`                         | `"int"`, `"long"`, `"double"`                                                                                                        |
+| `axt.BooleanField`, `axt.BytesField`                                       | `"boolean"`, `"bytes"`                                                                                                               |
+| `axt.EnumField`                                                            | `{"type": "enum", "name": its name, "doc": the field's doc, "symbols": its symbols in their order, "default": its fallback}`         |
+| `axt.ListField`                                                            | `{"type": "array", "items": the type of its items}`                                                                                  |
+| `axt.MapField`                                                             | `{"type": "map", "values": the type of its values}`                                                                                  |
+| `axt.ObjectField`                                                          | `{"type": "record", "name": its name, "doc": the field's doc, "fields": its fields}`                                                 |
+| `axt.DateField`, `axt.TimeField`, `axt.DateTimeField`, `axt.DurationField` | The published schema of `axt.Date`, `axt.Time`, `axt.DateTime` or `axt.Duration` at its first occurrence, and its full name after it |
+
+The first occurrence is the first in the order of the JSON, the fields of each record in their order and depth first, and a time type that a published schema defines inside itself, such as `axt.Time` in a schema that holds `axt.DateTime` first, has its first occurrence there ([time.md](time.md), section 3.1). The derived schema carries no attribute other than `axt.version`: what a receiver shows of a type and checks of its values is in the description, which travels with it.
+
+The rule gives the forms that [types.md](types.md), section 5, requires of a type: a value that may be absent is `["null", T]` with the default `null`, a text that may be empty is a `string` whose brick gives the default `""`, and a list is an array with the default `[]`. The description of each example type of version 1 derives a schema with the Parsing Canonical Form of its file under [types/axt/example/v1/](../types/axt/example/v1/), and so its fingerprint.
+
+### 9.3 The text
+
+Where a derived schema travels as text, it is the JSON of section 9.2 in the canonical form of [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785), the JSON Canonicalization Scheme: the members of each object sorted by their names in UTF-16 code units, no white space, and every string and number written as ECMAScript writes it. Every app derives the same text from a description, so the text can be compared and hashed, as [sync.md](sync.md) does for the schema of a `FORWARD`. The fingerprint of a type is that of the Parsing Canonical Form of its derived schema ([envelope.md](envelope.md), section 5).
+
+## 10. Descriptions in offers and files
+
+### 10.1 Offers
+
+An `OFFER` carries each type as its description ([protocol.md](protocol.md), section 4.1). The writer schema of the type's records under the offer is the schema derived from that description, and the type's full name, version and fingerprint are those of the description and its derived schema.
+
+- A sender MUST offer only valid descriptions.
+- An offer with a description whose root is not an `axt.ObjectField` names no type: the offer is not valid ([protocol.md](protocol.md), section 4.2).
+- A receiver MUST decline a type whose description is not valid with `DESCRIPTION_INVALID` ([protocol.md](protocol.md), section 5.2), as it declines a type whose schema does not resolve. The offer stays valid, and its other types are answered as they would be without it.
+- A receiver that keeps the writer schema of a type, to read its records and to show them, keeps the description it got with it. A device that passes an offer of a schema on to the other devices of its set offers the description it got, unchanged ([sync.md](sync.md), section 7.2).
+- The data depth limit of 32 ([types.md](types.md), section 5.7) is that of records. A description nests deeper in the body of an `OFFER`: a receiver MUST decode the body of an `OFFER` up to a data depth of 256, which every description within the limits of section 9.1 keeps.
+
+### 10.2 Files
+
+A file carries its types in its header ([envelope.md](envelope.md), section 4.1): `axt.schemas` is a JSON array with one object for each type, with the members `description`, the description in the form of section 10.3, and `schema`, the schema derived from it as JSON. A reader that does not know the bricks still finds each writer schema in `schema`.
+
+A reader MUST reject a file, as a whole, whose `axt.schemas` holds an entry without these two members, a description that is not valid, or a schema whose Parsing Canonical Form is not that of the schema derived from its description. It reads the records with the derived schema.
+
+### 10.3 The JSON form of a description
+
+Where a description is written as JSON, in a file and in the test vectors, it is the datum of `axt.Field` in the form of [conformance.md](conformance.md), section 3.3: bytes as lower-case hexadecimal, and the branch of each union `kind` as an object with one member, named by the full name of the brick, whose value is the brick, such as `{"axt.EmailField": {…}}`, as in the JSON encoding of Avro. The bricks with the same members, such as `axt.EmailField` and `axt.PhoneField`, differ only in their names, so the name is always written.
+
 ## References
 
 - [Apache Avro 1.12 specification](https://avro.apache.org/docs/1.12.0/specification/)
 - [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) and [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174): key words for requirement levels
+- [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785): the JSON Canonicalization Scheme
 - [RFC 9485](https://www.rfc-editor.org/rfc/rfc9485): I-Regexp, an interoperable regular expression format
 - [CommonMark](https://spec.commonmark.org/)
 - [UCUM](https://ucum.org/): the Unified Code for Units of Measure

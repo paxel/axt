@@ -95,6 +95,12 @@ if _spec is None or _spec.loader is None:
     raise ImportError("cannot load time_examples.py")
 tm = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(tm)
+# The descriptions of the offered types and the schemas derived from them (spec/fields.md, section 9).
+_spec = importlib.util.spec_from_file_location("fields_examples", HERE / "fields_examples.py")
+if _spec is None or _spec.loader is None:
+    raise ImportError("cannot load fields_examples.py")
+fe = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(fe)
 
 PROTOCOL = ["Offer", "Accept", "Decline", "Ack", "Error"]
 DEVICES = ["DeviceJoin", "DeviceAdd", "DeviceRemove"]
@@ -164,6 +170,11 @@ for n in PROTOCOL + SYNC + SHARES:
         len(texts[n].encode("utf-8")) <= rules.MAX_SCHEMA_BYTES
         and rules.json_depth(s) <= rules.MAX_JSON_DEPTH
     )
+    if n == "Offer":
+        # axt.Field, defined in place in axt.OfferType, is recursive; fields_examples.py checks it, and the
+        # rest of axt.Offer is checked as if a description were a string (spec/fields.md, section 10.1).
+        s = copy.deepcopy(s)
+        s["fields"][2]["type"]["items"]["fields"][0]["type"] = "string"
     depths[n] = rules.check_type(s, where, s, set(), [])
     assert depths[n] <= rules.MAX_DATA_DEPTH
     assert s["fields"][0]["name"] == "to" and s["fields"][0]["type"]["size"] == 32, (
@@ -286,10 +297,31 @@ def to_parts(who: bytes) -> list[tuple[Any, ...]]:
     return [(who, f"to: fixed(32), {NAMES[who]}'s test key")]
 
 
+def offered(t: dict[str, Any]) -> dict[str, Any]:
+    """The description of an offered type: given, or that of a schema text of the model (fields.md, 9)."""
+    if "description" in t:
+        return cast(dict[str, Any], t["description"])
+    return cast(dict[str, Any], fe.describe_schema(json.loads(t["schema"])))
+
+
 def offer_type_parts(name: str, t: dict[str, Any]) -> list[tuple[Any, ...]]:
-    return string_parts(f"{name}.schema", t["schema"], short=t.get("short")) + [
-        (zigzag(t["count"]), f"{name}.count: long {t['count']}")
+    d = offered(t)
+    data = fe.binary(d)
+    b = fe.kind_of(d)[1]
+    what = f"{b['name']} version {b['version']}" if "version" in b else "a root that is not an object"
+    return [
+        (data, f"{name}.description: axt.Field of {what} ({len(data)} bytes)", True),
+        (zigzag(t["count"]), f"{name}.count: long {t['count']}"),
     ]
+
+
+def read_body(data: bytes, schema: Any) -> Any:
+    """A body read with fastavro, the branch of each brick named (spec/conformance.md, section 3.3)."""
+    return fe.named(
+        fastavro.schemaless_reader(
+            io.BytesIO(data), schema, schema, return_record_name=True, return_record_name_override=True
+        )
+    )
 
 
 REASON = jsons["Decline"]["fields"][2]["type"]["items"]["fields"][1]["type"]
@@ -382,7 +414,7 @@ def plain(value: Any) -> Any:
 def wire(name: str, d: dict[str, Any]) -> dict[str, Any]:
     """The datum as fastavro and avro take it (without the display hints of the parts)."""
     if name == "Offer":
-        return dict(d, types=[{"schema": t["schema"], "count": t["count"]} for t in d["types"]])
+        return dict(d, types=[{"description": offered(t), "count": t["count"]} for t in d["types"]])
     return d
 
 
@@ -391,12 +423,14 @@ def make_body(name: str, d: dict[str, Any], check: bool = True) -> tuple[list[tu
     body = b"".join(p[0] for p in parts)
     if check:
         datum = wire(name, d)
-        assert body[10:] == library_binary(parsed[name], datum), (
+        assert body[10:] == library_binary(parsed[name], fe.avro_form(datum)), (
             f"{name}: the body differs from fastavro's encoding"
         )
-        assert plain(fastavro.schemaless_reader(io.BytesIO(body[10:]), parsed[name], parsed[name])) == datum
+        assert plain(read_body(body[10:], parsed[name])) == datum
         back = avro.io.DatumReader(apache[name]).read(avro.io.BinaryDecoder(io.BytesIO(body[10:])))
-        assert plain(back) == datum, f"{name}: avro decodes another datum"
+        assert plain(back) == fe.without_names(datum), f"{name}: avro decodes another datum"
+        if name == "Offer":
+            return parts, body  # avro takes a brick by its fields, and bricks with the same fields share them
         out = io.BytesIO()
         avro.io.DatumWriter(apache[name]).write(back, avro.io.BinaryEncoder(out))
         assert out.getvalue() == body[10:], f"{name}: avro encodes the datum to other bytes"
@@ -627,16 +661,21 @@ class App:
         )[1]
 
     def offer(
-        self, offer_id: str, types: list[tuple[str, int, str | None]], check: bool = True
+        self, offer_id: str, types: list[tuple[Any, int, str | None]], check: bool = True
     ) -> tuple[list[tuple[Any, ...]], bytes]:
         assert self.peer_manifest is not None, "no OFFER before the other app's valid MANIFEST"
         entries = []
-        for text, count, short in types:
+        texts: dict[str, str] = {}
+        for given, count, short in types:
+            # A schema text of the model, whose description it offers, or a description as it is.
+            text = fe.derived_text(given) if isinstance(given, dict) else given
             schema = json.loads(text)
             assert me.fit(self.peer_manifest, full_name(schema), me.schema_version(schema)) is not None
-            entries.append({"schema": text, "count": count, "short": short})
+            entry = {"description": given} if isinstance(given, dict) else {"schema": text}
+            entries.append({**entry, "count": count, "short": short})
             self.latest[full_name(schema)] = offer_id
-        self.offers[offer_id] = {full_name(json.loads(t)): t for t, _, _ in types}
+            texts[full_name(schema)] = text
+        self.offers[offer_id] = texts
         d = {"to": self.peer, "offer_id": offer_id, "types": entries}
         return make_message("OFFER", self.seed, None, make_body("Offer", d, check)[0], check)
 
@@ -765,7 +804,13 @@ class App:
             raise Rejected("INVALID_MESSAGE", f"the body is not an axt.{name}", record)
         buf = io.BytesIO(body[10:])
         try:
-            d = plain(fastavro.schemaless_reader(buf, raw[name], raw[name]))
+            d = plain(
+                fe.named(
+                    fastavro.schemaless_reader(
+                        buf, raw[name], raw[name], return_record_name=True, return_record_name_override=True
+                    )
+                )
+            )
         except Exception:
             raise Rejected("INVALID_MESSAGE", f"the body is not an axt.{name}", record) from None
         if buf.tell() != len(body) - 10:
@@ -834,34 +879,31 @@ class App:
         names: set[str]
         fps: set[int]
         entries, names, fps = [], set(), set()
+        invalid: list[str] = []
         for t in d["types"]:
-            text = t["schema"]
-            if len(text.encode("utf-8")) > rules.MAX_SCHEMA_BYTES:
-                raise Rejected("TOO_LARGE", "a schema above 256 KiB")
-            try:
-                schema = json.loads(text)
-            except ValueError:
-                raise Rejected("OFFER_INVALID", "a schema that is not JSON") from None
-            if rules.json_depth(schema) > rules.MAX_JSON_DEPTH:
-                raise Rejected("TOO_LARGE", "a schema nested above 64")
-            try:
-                fastavro.parse_schema(schema, _write_hint=False)
-                avro.schema.parse(text)
-            except Exception:
-                raise Rejected("OFFER_INVALID", "not an Avro schema") from None
-            if not isinstance(schema, dict) or schema.get("type") != "record":
-                raise Rejected("OFFER_INVALID", "not a record schema")
             if t["count"] < 0:
                 raise Rejected("OFFER_INVALID", "a count below 0")
-            name, fp = full_name(schema), canonical_fp(text)
-            if name in names or fp in fps:
-                raise Rejected("OFFER_INVALID", "a full name or a fingerprint twice")
+            brick, b = fe.kind_of(t["description"])
+            if brick != "axt.ObjectField":
+                raise Rejected("OFFER_INVALID", "a description whose root is not an object")
+            name = b["name"]
+            if name in names:
+                raise Rejected("OFFER_INVALID", "a full name twice")
             names.add(name)
+            if fe.description_problems(t["description"]):
+                invalid.append(name)  # declined, as a schema that does not resolve is (spec/fields.md, 10.1)
+                continue
+            schema = fe.derive(t["description"])
+            text = fe.derived_text(t["description"])
+            fp = canonical_fp(text)
+            if fp in fps:
+                raise Rejected("OFFER_INVALID", "a fingerprint twice")
             fps.add(fp)
             entries.append((name, fp, schema, text))
         accept: list[str]
         decline: list[dict[str, str]]
         accept, decline = [], []
+        decline += [{"type": name, "reason": "DESCRIPTION_INVALID"} for name in invalid]
         for name, fp, schema, text in entries:
             self.current[name] = {"offer_id": d["offer_id"], "fp": fp, "schema": text, "accepted": False}
             reader = self.readers.get(name)
@@ -1564,15 +1606,25 @@ expect(
     "ERROR TYPE_CHANGED",
 )
 
-# The data depth limit, with a recursive app type that Old Brain Fix takes as any type.
+# The data depth limit, with an app type of lists in lists that Old Brain Fix takes as any type. A type is
+# described by a tree of typed fields and is not recursive (spec/types.md, section 5.7).
+OUTLINE_ARRAYS = 33  # a record of 33 arrays inside each other has the data depth 34
+_nested: Any = "string"
+for _ in range(OUTLINE_ARRAYS):
+    _nested = {"type": "array", "items": _nested}
 OUTLINE = {
     "type": "record",
     "name": "Outline",
     "namespace": "org.example.outline",
-    "doc": "An outline item.",
+    "doc": "An outline as lists in lists.",
+    "axt.version": 1,
     "fields": [
-        {"name": "text", "type": "string", "doc": "The item's text."},
-        {"name": "children", "type": {"type": "array", "items": "Outline"}, "doc": "The items below it."},
+        {
+            "name": "items",
+            "type": _nested,
+            "default": [],
+            "doc": "The items, each a list of the items below it.",
+        }
     ],
 }
 OUTLINE_TEXT = json.dumps(OUTLINE, separators=(",", ":"))
@@ -1589,10 +1641,11 @@ obf_app.receive(outline_offer)
 
 
 def outline(levels: int) -> dict[str, Any]:
-    item: dict[str, Any] = {"text": "x", "children": []}
-    for _ in range(levels - 1):
-        item = {"text": "x", "children": [item]}
-    return item
+    """A record of the data depth 2 * levels: the record and 2 * levels - 1 lists inside each other."""
+    inside: list[Any] = []
+    for _ in range(2 * levels - 2):
+        inside = [inside]
+    return {"items": inside}
 
 
 expect(
@@ -1674,17 +1727,25 @@ expect(
     code_of(obf_app.receive(bad([{"schema": PET_TEXT, "count": 0}], oid="offer-1"))),
     "ERROR OFFER_INVALID",
 )
-big_doc = json.dumps(dict(json.loads(PET_TEXT), doc="x" * rules.MAX_SCHEMA_BYTES), separators=(",", ":"))
-expect(
-    "an offer with a schema above 256 KiB",
-    code_of(obf_app.receive(bad([{"schema": big_doc, "count": 0}]))),
-    "ERROR TOO_LARGE",
+# A description whose root is an enum, not an object: it names no type (spec/fields.md, section 10.1).
+NOT_AN_OBJECT = fe.field(
+    "e",
+    "An enum.",
+    fe.brick(
+        "EnumField",
+        name="E",
+        symbols=[fe.complete("axt.EnumSymbol", {"symbol": "A", "texts": fe.texts()})],
+        fallback="A",
+    ),
+    fe.texts(),
 )
 expect(
-    "an offer with a schema that is not a record",
-    code_of(obf_app.receive(bad([{"schema": '{"type":"enum","name":"E","symbols":["A"]}', "count": 0}]))),
+    "an offer with a description whose root is not an object",
+    code_of(obf_app.receive(bad([{"description": NOT_AN_OBJECT, "count": 0}]))),
     "ERROR OFFER_INVALID",
 )
+BIG_OFFER_ID = "6c7d8e9f-0a1b-4c2d-8e3f-4a5b6c7d8e9f"
+big_doc = dict(offered({"schema": PET_TEXT}), doc="x" * rules.MAX_SCHEMA_BYTES)
 narrow_reader = dict(
     APPOINTMENT_READER,
     fields=APPOINTMENT_READER["fields"]
@@ -1711,6 +1772,13 @@ def reason(app: App, message: bytes) -> Any:
             parsed["Decline"],
         )
     )["types"][0]["reason"]
+
+
+expect(
+    "a type whose description is above 256 KiB is declined",
+    reason(obf_app, bad([{"description": big_doc, "count": 0}], oid=BIG_OFFER_ID)),
+    "DESCRIPTION_INVALID",
+)
 
 
 expect(
@@ -2008,10 +2076,17 @@ DATA = {
 library_findings: set[str] = set()
 defaults_resolved: dict[str, int] = {}
 for n in PROTOCOL:
-    rules.DATA[n] = DATA[n]
-    _, checked = rules.check_defaults(n, jsons[n], parsed[n])
-    top_enums = sum(isinstance(f["type"], dict) and f["type"]["type"] == "enum" for f in jsons[n]["fields"])
-    assert checked - top_enums == me.count_defaults(jsons[n]), f"{n}: not every default was used"
+    one, datum = jsons[n], DATA[n]
+    if n == "Offer":
+        # The defaults of axt.Field are those of fields_examples.py; axt.Offer's own are used here, with each
+        # description as a string in the place of its datum.
+        one = copy.deepcopy(jsons[n])
+        one["fields"][2]["type"]["items"]["fields"][0]["type"] = "string"
+        datum = dict(datum, types=[dict(t, description="a description") for t in datum["types"]])
+    rules.DATA[n] = datum
+    _, checked = rules.check_defaults(n, one, fastavro.parse_schema(one))
+    top_enums = sum(isinstance(f["type"], dict) and f["type"]["type"] == "enum" for f in one["fields"])
+    assert checked - top_enums == me.count_defaults(one), f"{n}: not every default was used"
     defaults_resolved[n] = checked - top_enums
 library_findings |= rules.findings
 

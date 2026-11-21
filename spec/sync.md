@@ -514,8 +514,9 @@ In a live connection, a `CHANGE` or a `RESYNC` that arrives before the other dev
 Two siblings exchange as two apps do: each sends its chain and its `MANIFEST`, a device offers schemas in an `OFFER`, the sibling answers with `ACCEPT`, the device sends `CHANGE` messages in the place of record messages, and the sibling acknowledges them in an `ACK`. Sibling sync carries every type, so these rules differ from [protocol.md](protocol.md), sections 4 to 6:
 
 - **The manifest.** A device sends its `MANIFEST` to a sibling as to any app ([protocol.md](protocol.md), sections 3.1 and 15.1). Of a sibling's manifest a device uses `formats`, `encryption_key` and `relay`. Its `takes`, `any_type` and `sends` do not apply between siblings: no type is held back because it does not fit them, and the rules of [manifest.md](manifest.md), sections 5.2 to 5.4, and of [protocol.md](protocol.md), section 4.2, on offering only what fits do not apply.
-- **What is offered.** A device offers to a sibling, in an `OFFER` of [protocol.md](protocol.md), section 4, the writer schema of every field state that a `CHANGE` it is about to send names in `schema` (section 8.1): its own writer schemas, and the schemas it kept with field states it took from other siblings (section 7.3). It offers schemas of every type: example types, types of an app's own namespace, and types that the sibling does not know. Each schema is one entry of `types`. An offer holds no full name twice ([protocol.md](protocol.md), section 4.2), so two schemas of one type, two versions of it, travel in two offers. `count` is the number of `CHANGE` messages the device is about to send that name the schema, or `0`.
-- **Every type is accepted.** A device MUST answer every type of a valid offer from a sibling in an `ACCEPT`, without asking its user, and SHOULD do so within 5 seconds. It MUST NOT decline a type that a sibling offers, with no reason: not with `NOT_WANTED`; not with `DOES_NOT_FIT`, whatever its manifest says; and not with `DOES_NOT_RESOLVE`, also when it has no schema of the type, when the offered schema does not resolve against its own, and when the schema defines a time type other than as published or another named type in the namespace `axt`. The three rules of [protocol.md](protocol.md), section 5.2, that make a receiver decline do not apply to an offer of a sibling; section 8.5 says what a device does with values it cannot read. The validity rules of [protocol.md](protocol.md), section 4.2, hold for an offer between siblings as they stand, all of them: the `offer_id` is a UUID in text form, neither nil nor max; `types` has 1 to 256 entries; each `schema` is within the schema limits and is an Avro schema of a record; no full name and no fingerprint appears twice in one offer; each `count` is at least 0. An offer that is not valid is rejected as that section says, with `OFFER_INVALID` or `TOO_LARGE`. Only its rule on offering what fits the manifest does not apply.
+- **What is offered.** A device offers to a sibling, in an `OFFER` of [protocol.md](protocol.md), section 4, the writer schema of every field state that a `CHANGE` it is about to send names in `schema` (section 8.1): its own writer schemas, and the schemas it kept with field states it took from other siblings (section 7.3), each as the description it holds for it ([fields.md](fields.md), section 10.1). It offers schemas of every type: example types, types of an app's own namespace, and types that the sibling does not know. Each schema is one entry of `types`. An offer holds no full name twice ([protocol.md](protocol.md), section 4.2), so two schemas of one type, two versions of it, travel in two offers. `count` is the number of `CHANGE` messages the device is about to send that name the schema, or `0`.
+- **Every type is accepted.** A device MUST answer every type of a valid offer from a sibling whose description is valid in an `ACCEPT`, without asking its user, and SHOULD do so within 5 seconds. It MUST NOT decline a type that a sibling offers, with no reason: not with `NOT_WANTED`; not with `DOES_NOT_FIT`, whatever its manifest says; and not with `DOES_NOT_RESOLVE`, also when it has no schema of the type, when the offered schema does not resolve against its own, and when the schema defines a time type other than as published or another named type in the namespace `axt`. The three rules of [protocol.md](protocol.md), section 5.2, that make a receiver decline do not apply to an offer of a sibling; section 8.5 says what a device does with values it cannot read. The validity rules of [protocol.md](protocol.md), section 4.2, hold for an offer between siblings as they stand, all of them: the `offer_id` is a UUID in text form, neither nil nor max; `types` has 1 to 256 entries; each `schema` is within the schema limits and is an Avro schema of a record; no full name and no fingerprint appears twice in one offer; each `count` is at least 0. An offer that is not valid is rejected as that section says, with `OFFER_INVALID` or `TOO_LARGE`. Only its rule on offering what fits the manifest does not apply.
+- **A description that is not valid.** A device MUST decline a type of a sibling's offer whose description is not valid with `DESCRIPTION_INVALID`, as every receiver does ([fields.md](fields.md), section 10.1): no schema is derived from it, so the device could not read a value written with it.
 - **A decline all the same.** A device that gets a `DECLINE` from a sibling takes it as [protocol.md](protocol.md), section 5.3, says: it sends no `CHANGE` that names the declined schema under that offer. It MAY offer the schema again in a later live connection, and through the relay once the holding time has passed.
 - **An offer is replaced by fingerprint.** Between siblings, a later offer ends an earlier offer of the same device in the same channel only for a schema with the same fingerprint, not for another schema of the same full name: a record can hold field states written with several versions of its type, and a `CHANGE` can name several of them. Where [protocol.md](protocol.md), sections 4.3 and 5.3, speak of the current offer of a type and of the latest offer of a type, the devices of one set read "of a schema, by its fingerprint": a device keeps, for each sibling and channel, the current offer of each fingerprint, and takes the answer to its latest offer of each fingerprint. An offer between siblings never ends because a type does not fit a manifest. It ends, as in [protocol.md](protocol.md), section 4.3, with the live connection it was made in and when the key that signed it or the key in its `to` is removed.
 - **Through a relay**, an accepted offer covers every `CHANGE` that names its schema until the offer ends, also one for a change made after the offer. A device makes no new offer for each change; the rule of [protocol.md](protocol.md), section 4.3, that a record that changes after the offer is offered again does not apply between siblings.
@@ -525,7 +526,7 @@ A device MUST NOT send a `CHANGE` to a sibling unless, for every fingerprint tha
 
 ### 7.3 The schemas a device keeps
 
-A device **holds** a schema when it has its full JSON text. It holds:
+A device **holds** a schema when it has its full JSON text, and, for a schema that an offer brought, the description it came with ([fields.md](fields.md), section 10.1). It holds:
 
 - its own writer schemas of the types of the records of its set;
 - every schema that an offer of a sibling carried, for as long as that offer has not ended ([envelope.md](envelope.md), section 3);
@@ -534,7 +535,7 @@ A device **holds** a schema when it has its full JSON text. It holds:
 
 A device looks a schema up by its fingerprint among all schemas it holds, whichever sibling offered it and in whichever channel: the devices of a set are one sender ([keys.md](keys.md), section 2.4). Two texts with one fingerprint count as the same schema: a device that holds a text for a fingerprint keeps it when an offer brings another text with that fingerprint.
 
-Before a device sends a field state that it took from one sibling on to another, it offers that sibling the schema the field state names, from the text it kept (section 7.2). So a schema reaches every device that a value written with it reaches.
+Before a device sends a field state that it took from one sibling on to another, it offers that sibling the schema the field state names, as the description it kept (section 7.2). So a schema reaches every device that a value written with it reaches.
 
 ## 8. The `CHANGE` message
 
@@ -1391,7 +1392,7 @@ Had the tablet's message carried only `start` and `location`, with `whole` `fals
 
 The examples of sections 16.5 to 16.7 are the steps 1 and 2 of section 22.4. They do not continue sections 16.2 to 16.4: the phone and the tablet of section 16.1 are here the two devices of a set that takes a record from another app, and each has given or seen stamps as section 22.4 says, the phone up to 195 and the tablet up to 190. The other app is Old Brain Fix, which signs with the test key `Old Brain Fix, Ed25519` of [protocol.md](protocol.md), section 17.1, whose public key is `da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7`. **These keys are for tests only and MUST NOT be used outside tests.** The phone knows Old Brain Fix by that one key, so it keeps no addition and no removal of it. It keeps the `MANIFEST` that Old Brain Fix sent in the connection, the message of [manifest.md](manifest.md), section 10.3, and has forwarded it to the tablet before the forward of this section, since a manifest goes before a record message (section 20.3). That forward is not shown: by it the tablet took the key of Old Brain Fix as the first key of a new known sender, without a question to its user (section 19.2), and keeps the manifest of that key.
 
-Old Brain Fix sends the appointment of [records.md](records.md), section 9, step 1, to the phone, in a live connection and under an offer of `axt.example.v1.Appointment` that the phone accepted. The offer carried the schema [Appointment.1.avsc](../types/axt/example/v1/Appointment.1.avsc) as the text of [protocol.md](protocol.md), section 17.1: JSON without whitespace, 6,389 bytes. The record has the id `3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80`. The set's own record of section 16.1 has the same id; the two are different records, since their senders differ (section 17.1), and the examples of sections 16.5 to 16.7 are about the received one only.
+Old Brain Fix sends the appointment of [records.md](records.md), section 9, step 1, to the phone, in a live connection and under an offer of `axt.example.v1.Appointment` that the phone accepted. The offer carried the description of [Appointment.1.avsc](../types/axt/example/v1/Appointment.1.avsc) of [protocol.md](protocol.md), section 17.3; the phone holds the schema derived from it as its text ([fields.md](fields.md), section 9.3): 4,542 bytes. The record has the id `3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80`. The set's own record of section 16.1 has the same id; the two are different records, since their senders differ (section 17.1), and the examples of sections 16.5 to 16.7 are about the received one only.
 
 The `DATA` of Old Brain Fix:
 
@@ -1416,10 +1417,10 @@ The `DATA`: 200 bytes, SHA-256 `d0bdcdf95c04da5b42af9d404c6a2b7d3157013d15758cb5
 | `record.version`    | 1                                                                                                                                                         |
 | `to`                | the tablet's key                                                                                                                                          |
 | `message`           | the `DATA` above, byte for byte: 200 bytes                                                                                                                |
-| `schema`            | the text of Appointment.1.avsc as Old Brain Fix offered it: 6,389 bytes                                                                                   |
-| `signature`         | the phone's signature: `0d0eaa832c7107217707c63e5c9cb052e282d85eccbb6dc5051d86fb89d881dc371f1e8781c49d8ca04e2055357d96f25b3c1e84818235f03322fa25a33f0603` |
+| `schema`            | the text of the schema derived from the description that Old Brain Fix offered: 4,542 bytes                                                               |
+| `signature`         | the phone's signature: `26e268de899237810affdfa9947b1c226a7730b9223f30429ca7bd336c2990b661ea68aceace2e5417077d250159ecc7a4a81abca56ee8e18f668e4a7a7e4c09` |
 
-The `FORWARD`: 6,785 bytes, SHA-256 `489fade7a3899293bd44f2d664aa2888b2de126797fbbb144fa9589f52c1b84a`. Its bytes, with offsets in hexadecimal; the text of the schema is shown shortened:
+The `FORWARD`: 4,938 bytes, SHA-256 `59e193a7b223ab56641df8b9586dcb7b108762a3653b48008df89a875c47e94f`. Its bytes, with offsets in hexadecimal; the text of the schema is shown shortened:
 
 ```text
 0000  c3 01                    single-object marker
@@ -1438,7 +1439,7 @@ The `FORWARD`: 6,785 bytes, SHA-256 `489fade7a3899293bd44f2d664aa2888b2de126797f
       32 63 33 64 34 65 35 66
       36 30 37 31
 0052  02                       record.version: long 1
-0053  d8 67                    body: bytes length 6636
+0053  ea 4a                    body: bytes length 4789
 0055  c3 01                    body: single-object marker
 0057  ad 3b 05 6b bf 6a 47 57  body: fingerprint of axt.Forward, format 1
 005f  ee 08 ea a3 d8 aa 50 73  body: to: fixed(32), the tablet's test key
@@ -1485,17 +1486,17 @@ The `FORWARD`: 6,785 bytes, SHA-256 `489fade7a3899293bd44f2d664aa2888b2de126797f
       12 9d 12 b4 e1 7f c6 74
       c7 f0 45 de a3 08 48 02
 0149  02                       body: schema: union index 1, string
-014a  ea 63                    body: schema: string length 6389
-014c  7b 22 74 79 ... 5d 7d    body: Appointment.1.avsc without whitespace (6389 bytes of UTF-8 JSON)
-1a41  0d 0e aa 83 2c 71 07 21  signature: fixed(64)
-      77 07 c6 3e 5c 9c b0 52
-      e2 82 d8 5e cc bb 6d c5
-      05 1d 86 fb 89 d8 81 dc
-      37 1f 1e 87 81 c4 9d 8c
-      a0 4e 20 55 35 7d 96 f2
-      5b 3c 1e 84 81 82 35 f0
-      33 22 fa 25 a3 3f 06 03
-1a81  end
+014a  fc 46                    body: schema: string length 4542
+014c  7b 22 61 78 ... 22 7d    body: the schema derived from the description of Appointment.1.avsc (4542 bytes of UTF-8 JSON)
+130a  26 e2 68 de 89 92 37 81  signature: fixed(64)
+      0a ff df a9 94 7b 1c 22
+      6a 77 30 b9 22 3f 30 42
+      9c a7 bd 33 6c 29 90 b6
+      61 ea 68 ac ea ce 2e 54
+      17 07 7d 25 01 59 ec c7
+      a4 a8 1a bc a5 6e e8 e1
+      8f 66 8e 4a 7a 7e 4c 09
+134a  end
 ```
 
 The tablet processes it by section 18.3. The inner message is a valid `DATA` of envelope format 1 (steps 7 to 9); the fingerprint of the schema text is the one its body names (step 11); its signature verifies with the key of Old Brain Fix (step 12), which is no key of the tablet's set and no refused key (steps 13 and 14). That key is a current key of a sender the tablet knows, from the forwarded `MANIFEST`. The tablet holds no record under the id from that sender: it takes the record into the sender's layer with the receiver's version 1, keeps the message and the schema text, and shows the appointment (section 19.5). It sends Old Brain Fix nothing. The same bytes are now a kept message of the tablet, so that message is delivered to the phone on the tablet and is not forwarded back (section 20.2).
@@ -1655,11 +1656,11 @@ A `FORWARD` message carries one message of another app from a device to one sibl
 - Its `record` MUST be present. It names the forward, not a record. A **forward** is one kept message for one sibling. `record.id` is the id of the forward: a UUID of version 4 or version 7 that the device generates for it as it generates the id of a record ([records.md](records.md), section 2), neither the nil UUID nor the max UUID. A device MUST NOT use the id of a record or of a request (section 11.1) as the id of a forward, and MUST NOT use the id of a forward for a second forward, also not for the same kept message to another sibling; a repeat of a forward (section 20.3) is the same message, with the same id. `record.version` is 1.
 - Its body MUST be one `axt.Forward` in single-object encoding, with the schema [types/axt/Forward.avsc](../types/axt/Forward.avsc) and, in envelope format 1, the fingerprint of section 15.
 
-| Field     | Avro type                            | Content                                                                                                               |
-| --------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `to`      | `fixed` of 32 bytes, `axt.ForwardTo` | The device key of the sibling the message is for ([protocol.md](protocol.md), section 9.1)                            |
-| `message` | `bytes`                              | One complete message of another app, as the device received it                                                        |
-| `schema`  | `null` or `string`                   | For a forwarded `DATA`, the writer schema of its body as its full JSON text; `null` for every other forwarded message |
+| Field     | Avro type                            | Content                                                                                                                                           |
+| --------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `to`      | `fixed` of 32 bytes, `axt.ForwardTo` | The device key of the sibling the message is for ([protocol.md](protocol.md), section 9.1)                                                        |
+| `message` | `bytes`                              | One complete message of another app, as the device received it                                                                                    |
+| `schema`  | `null` or `string`                   | For a forwarded `DATA`, the text of the writer schema of its body ([fields.md](fields.md), section 9.3); `null` for every other forwarded message |
 
 - **`message`** is a live message ([envelope.md](envelope.md), section 3): the two bytes `C3 01`, the eight bytes of the fingerprint of its envelope format, and the envelope in binary encoding, signature included. For a message that the device got in a live connection it is the bytes of that message, and for one from a relay the bytes after opening and removing the padding ([keys.md](keys.md), section 4.5). For a message that the device read in a file it is `C3 01`, the fingerprint of the envelope format of the file, and the bytes of the datum as the data block holds them; the signed bytes are the same in all three ([keys.md](keys.md), section 2.2). A device MUST NOT decode a message and encode it again in order to forward it.
 - **Which messages.** The forwarded message is a `MANIFEST`, a `DATA`, a `DELETE`, a `WITHDRAW`, a `PROPOSAL`, a `DEVICE_ADD` or a `DEVICE_REMOVE` of another app (section 19.6). A device forwards the messages it keeps by section 20.1, and no others.
@@ -1675,7 +1676,7 @@ The body of a `FORWARD` is valid when:
 - that envelope carries `record` where its kind requires one and none where its kind has none ([protocol.md](protocol.md), section 2);
 - its body is what its kind requires: for a `DELETE` empty; for a `DATA` a complete single-object encoding, which here means at least 10 bytes that begin with `C3 01` ([envelope.md](envelope.md), section 2.3); for every other kind a complete single-object encoding whose fingerprint is that of the kind's schema in that format;
 - `schema` is `null` for every kind but `DATA`, and a string for a `DATA`;
-- for a `DATA`, `schema` is a JSON text ([RFC 8259](https://www.rfc-editor.org/rfc/rfc8259)) that is an Avro 1.12 schema of a record, and its fingerprint ([envelope.md](envelope.md), section 5) is the fingerprint that the body of the `DATA` names.
+- for a `DATA`, `schema` is a JSON text ([RFC 8259](https://www.rfc-editor.org/rfc/rfc8259)) that is an Avro 1.12 schema of a record, and its fingerprint ([envelope.md](envelope.md), section 5) is the fingerprint that the body of the `DATA` names. A device that forwards a `DATA` writes in `schema` the text of the schema derived from the description of its type, as [fields.md](fields.md), section 9.3, fixes it, so that every device of a set forwards the same text.
 
 Two failures have a code of their own: a `message` whose fingerprint is not that of an envelope format the device supports (`FORMAT_UNSUPPORTED`), and a `schema` above the schema limits of [envelope.md](envelope.md), section 8, which are 256 KiB of JSON text nested to a depth of at most 64 (`TOO_LARGE`). Section 18.3 gives the order.
 

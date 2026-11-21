@@ -16,6 +16,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - The Run a relay track: running the reference relay behind a proxy, its logs and limits, and a relay of one's own. ([axt-1035](https://github.com/paxel/axt/issues/43))
 - Relations on version 2 of every example type, with the published type `axt.Relation`, and their cases in the `types` vectors. ([axt-1037](https://github.com/paxel/axt/issues/45))
 - Typed fields as Avro bricks, `axt.Field` with one brick per value kind and per format, each with its checks. ([axt-1043](https://github.com/paxel/axt/issues/51))
+- Offers and files carry each type as a description of bricks, from which its schema is derived; the new vector category `bricks` tests it. ([axt-1044](https://github.com/paxel/axt/issues/52))
 
 ### Changed
 

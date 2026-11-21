@@ -7,8 +7,8 @@
 
 <h2>The categories</h2>
 <p>
-  The vectors are grouped into fifteen categories, one vector file each
-  (<a href="../spec/conformance.html#section-2-1">conformance.md, section 2.1</a>). Eight of them
+  The vectors are grouped into sixteen categories, one vector file each
+  (<a href="../spec/conformance.html#section-2-1">conformance.md, section 2.1</a>). Nine of them
   every library implements. The others depend on what the library offers the apps that use it
   (<a href="../spec/conformance.html#section-2-2">section 2.2</a>).
 </p>
@@ -25,6 +25,7 @@
     <tr><td><code>keys</code></td><td>Every library</td><td>Signing keys, strict verification, short fingerprints, device sets, padding, sealing and opening</td></tr>
     <tr><td><code>protocol</code></td><td>Every library</td><td>One app in a live connection</td></tr>
     <tr><td><code>shares</code></td><td>Every library</td><td>Withdrawals at a receiver, what a sender owes, proposals at their owner and their proposer</td></tr>
+    <tr><td><code>bricks</code></td><td>Every library</td><td>Descriptions of types: the schema derived from each, and the descriptions that are not valid</td></tr>
     <tr><td><code>metadata</code></td><td>A library that offers the attributes of a schema</td><td>What a receiver shows of a type and its fields, and which values break a check</td></tr>
     <tr><td><code>file</code></td><td>A library that supports files</td><td>Reading an AXT file</td></tr>
     <tr><td><code>local</code> and <code>qr</code></td><td>A library that supports the local network</td><td>The frames and the <code>HELLO</code>; the QR payload and its text</td></tr>
@@ -34,13 +35,16 @@
   </tbody>
 </table>
 
-<h3>Why these eight</h3>
+<h3>Why these nine</h3>
 <p>
   Every transport carries messages, so every library encodes, signs and verifies them. Every app
   that receives records applies them, and the withdrawals among them. Every app that sends records
   to an app of another user sends only what its shares name
   (<a href="../spec/shares.html#section-2-2">shares.md, section 2.2</a>). That is why
-  <code>shares</code> is asked of every library, as <code>records</code> is.
+  <code>shares</code> is asked of every library, as <code>records</code> is. Every offer and every
+  file carries its types as descriptions, from which each app derives the schema
+  (<a href="../spec/fields.html#section-9">fields.md, section 9</a>), so <code>bricks</code> is asked of every
+  library as well.
 </p>
 
 <h3>The ones that depend on the library</h3>
@@ -74,7 +78,7 @@
   the runner (<a href="adapter.html">Write the adapter</a>), and the runner sends only the vectors
   of those categories. It names the others as not run and still exits with success when every
   vector it ran passed (<a href="../spec/conformance.html#section-7-1">conformance.md, section
-  7.1</a>). A green run therefore proves conformance only when the adapter names at least the eight
+  7.1</a>). A green run therefore proves conformance only when the adapter names at least the nine
   categories above.
 </p>
 
@@ -82,7 +86,8 @@
 <p>
   A library conforms to one version of AXT. That it conforms to AXT 0.1.0 means that it passes at
   least the eight categories every library implements, with the vectors of 0.1.0
-  (<a href="../spec/conformance.html#section-2-2">conformance.md, section 2.2</a>). Each vector
+  (<a href="../spec/conformance.html#section-2-2">conformance.md, section 2.2</a>); that it conforms to
+  AXT 0.2.0, that it passes at least the nine of 0.2.0 with its vectors. Each vector
   file names the version of the specification it is for in its member <code>specification</code>
   (<a href="../spec/conformance.html#section-3-1">section 3.1</a>). The vectors of 0.1.0 and how
   many each category holds are listed in <a href="../spec/conformance.html#section-7-4">section

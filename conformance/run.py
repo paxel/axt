@@ -46,6 +46,7 @@ CATEGORIES = [
     "relay-server",
     "sync",
     "shares",
+    "bricks",
 ]
 HEX = re.compile(r"^(?:[0-9a-f]{2})*$")
 
@@ -322,9 +323,9 @@ def schema(name: str) -> Any:
 
 ENVELOPE_FP = bytes.fromhex("16306f71b9ce9ea8")
 BODY_FPS = {
-    "Offer": "7d687acaca635441",
+    "Offer": "9bae980d159c410d",
     "Accept": "ab823d91c34f246b",
-    "Decline": "c092548411bdd222",
+    "Decline": "5349baf3608f0770",
     "Ack": "5ce076801909dd38",
     "Error": "83f3bc3dd1b3a57c",
 }
@@ -332,6 +333,31 @@ BODY_OF = {"OFFER": "Offer", "ACCEPT": "Accept", "DECLINE": "Decline", "ACK": "A
 # Between the devices of one set (spec/sync.md, section 15).
 SYNC_FPS = {"Change": "c188f8c5af4d094d", "Resync": "f1fd59d5d92b76e8", "Forward": "ad3b056bbf6a4757"}
 SYNC_OF = {"CHANGE": "Change", "RESYNC": "Resync", "FORWARD": "Forward"}
+
+
+def described(v: Any) -> Any:
+    """A body with the branch of each brick of a description as an object of one member, named by the
+    brick, and the bytes of a description as hexadecimal (spec/conformance.md, section 3.3)."""
+    if isinstance(v, tuple):
+        return {v[0]: described_json(v[1])}
+    if isinstance(v, dict):
+        return {k: described(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [described(x) for x in v]
+    return v
+
+
+def described_json(v: Any) -> Any:
+    """A brick in the JSON form of section 3.3."""
+    if isinstance(v, bytes):
+        return v.hex()
+    if isinstance(v, tuple):
+        return {v[0]: described_json(v[1])}
+    if isinstance(v, dict):
+        return {k: described_json(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [described_json(x) for x in v]
+    return v
 
 
 def written(hexed: Any, own: bytes, bodies: dict[str, str], fps: dict[str, str]) -> tuple[Any, Any]:
@@ -359,7 +385,11 @@ def written(hexed: Any, own: bytes, bodies: dict[str, str], fps: dict[str, str])
     ):
         raise ValueError(f"a reply of kind {env['kind']} that is not a valid reply")
     buf = io.BytesIO(env["body"][10:])
-    body: Any = fastavro.schemaless_reader(buf, schema(name), schema(name))
+    body: Any = described(
+        fastavro.schemaless_reader(
+            buf, schema(name), schema(name), return_record_name=True, return_record_name_override=True
+        )
+    )
     if buf.tell() != len(env["body"]) - 10:
         raise ValueError("a reply body with bytes left over")
     return env, body
@@ -453,9 +483,12 @@ def said(hexed: Any, own: bytes) -> list[dict[str, Any]]:
         }
         return [{**base, **error}]
     if kind == "OFFER":
-        return [{**base, "offer_id": d["offer_id"], "schemas": [t["schema"] for t in d["types"]]}]
+        return [{**base, "offer_id": d["offer_id"], "descriptions": [t["description"] for t in d["types"]]}]
     if kind == "ACCEPT":
         return [{**base, "offer_id": d["offer_id"], "types": sorted(d["types"])}]
+    if kind == "DECLINE":
+        reasons = sorted((t["type"], t["reason"]) for t in d["types"])
+        return [{**base, "offer_id": d["offer_id"], "types": [{"type": n, "reason": r} for n, r in reasons]}]
     if kind == "RESYNC":
         return [{**base, "record": {"id": rec["id"], "version": str(rec["version"])}}]
     if kind == "PROPOSAL_REPLY":

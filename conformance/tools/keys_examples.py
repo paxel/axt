@@ -1478,7 +1478,14 @@ def main() -> None:
 
     # --- example 2: the message in a file -------------------------------------
 
-    schemas_value = json.dumps([memo_schema], separators=(",", ":")).encode()
+    # Each type of the file as its description and the schema derived from it (spec/fields.md, 10.2).
+    fe_spec = importlib.util.spec_from_file_location("fields_examples", HERE / "fields_examples.py")
+    assert fe_spec is not None and fe_spec.loader is not None
+    fe = importlib.util.module_from_spec(fe_spec)
+    fe_spec.loader.exec_module(fe)
+    schemas_value = json.dumps(
+        fe.file_entries([memo_schema]), separators=(",", ":"), ensure_ascii=False
+    ).encode()
     header_signed = FILE_HEADER_PREFIX + old["pub"] + hashlib.sha256(schemas_value).digest()
     header_sig = all_sign(old["seed"], header_signed)
     file_buf = io.BytesIO()

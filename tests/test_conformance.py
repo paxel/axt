@@ -45,7 +45,7 @@ def last_line(text: str) -> str:
 def test_the_reference_adapter_passes_every_vector() -> None:
     done = run(RUNNER, "--", sys.executable, REPO / "conformance" / "reference" / "adapter.py")
     assert done.returncode == 0, done.stdout[-2000:] + done.stderr[-2000:]
-    assert " vectors passed in 15 categories" in last_line(done.stdout)
+    assert " vectors passed in 16 categories" in last_line(done.stdout)
 
 
 def test_the_reference_relay_passes_the_relay_server_vectors() -> None:
@@ -57,6 +57,11 @@ def test_the_reference_relay_passes_the_relay_server_vectors() -> None:
 def test_the_committed_vectors_are_the_generators_output() -> None:
     done = run(TOOLS / "generate_vectors.py", "--check")
     assert done.returncode == 0, done.stdout[-2000:] + done.stderr[-2000:]
+
+
+def test_the_brick_schemas_are_the_generators_output() -> None:
+    done = run(TOOLS / "field_schema.py", "--check")
+    assert done.returncode == 0, done.stdout + done.stderr
 
 
 @pytest.mark.parametrize("name", EXAMPLE_SCRIPTS)

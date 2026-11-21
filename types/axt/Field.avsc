@@ -2,7 +2,7 @@
   "type": "record",
   "name": "Field",
   "namespace": "axt",
-  "doc": "A typed field: a brick that describes one field of a type, its name, texts and checks, at the level of the schema. A type is described by an object field at its root. Defined in spec/fields.md.",
+  "doc": "A typed field: a brick that describes one field of a type, its name, texts and checks, at the level of the schema. A type is described by an object field at its root, from which its Avro schema is derived. Defined in spec/fields.md.",
   "fields": [
     {
       "name": "name",
@@ -34,7 +34,7 @@
               "values": "string"
             },
             "default": {},
-            "doc": "The label in other languages, by language tag; empty when the label is not translated (spec/fields.md, section 3.2)."
+            "doc": "The label in other languages, by language tag; empty when it is not translated (spec/fields.md, section 3.2)."
           },
           {
             "name": "help",
@@ -49,7 +49,7 @@
               "values": "string"
             },
             "default": {},
-            "doc": "The help text in other languages, by language tag; empty when the help text is not translated (spec/fields.md, section 3.2)."
+            "doc": "The help in other languages, by language tag; empty when it is not translated (spec/fields.md, section 3.2)."
           },
           {
             "name": "emoji",
@@ -489,6 +489,21 @@
               },
               "default": [],
               "doc": "The groups that fields of the object name; empty when it has none (spec/fields.md, section 4.6)."
+            },
+            {
+              "name": "version",
+              "type": [
+                "null",
+                "int"
+              ],
+              "default": null,
+              "doc": "At the root of a description, the version of the type within its major version, from 1 (spec/types.md, section 3.2); null in a nested object (spec/fields.md, section 9.1)."
+            },
+            {
+              "name": "title",
+              "type": "string",
+              "default": "",
+              "doc": "The name of a field of the object whose value is the title of a value, such as display_name; the empty string for none (spec/fields.md, section 9.1)."
             }
           ]
         },

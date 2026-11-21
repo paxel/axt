@@ -50,12 +50,24 @@ _spec.loader.exec_module(mr)
 
 FIELD_TEXT = (REPO / "types" / "axt" / "Field.avsc").read_text(encoding="utf-8")
 FIELD_SCHEMA: dict[str, Any] = json.loads(FIELD_TEXT)
-FINGERPRINT = "0x4ed0f338fe0961c6"  # CRC-64-AVRO of axt.Field, shown in spec/fields.md, section 2
+FINGERPRINT = "0x527242bb71c90163"  # CRC-64-AVRO of axt.Field, shown in spec/fields.md, section 2
 
 SNAKE = re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*")
 CAMEL = re.compile(r"[A-Z][A-Za-z0-9]*")
 UPPER = re.compile(r"[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*")
 MAX_GROUP_KEY = 64
+MAX_EXACT = 2**53  # the largest magnitude of a default of a number that JSON writes exactly (section 9.1)
+MAX_TYPED_DEPTH = 64  # spec/fields.md, section 9.1
+MAX_JSON_DEPTH = 64  # of a schema, spec/envelope.md, section 8
+MAX_DESCRIPTION = (
+    262144  # bytes of the encoding of a description, as of a schema (spec/envelope.md, section 8)
+)
+TIME_NAMES = ("Date", "Time", "DateTime", "Duration")
+TIME_SCHEMAS: dict[str, Any] = {
+    f"axt.{n}": json.loads((REPO / "types" / "axt" / f"{n}.avsc").read_text(encoding="utf-8"))
+    for n in TIME_NAMES
+}
+TIME_BRICKS = {f"axt.{n}Field": f"axt.{n}" for n in TIME_NAMES}
 
 
 def named_records(schema: Any, out: dict[str, Any]) -> dict[str, Any]:
@@ -205,6 +217,14 @@ def brick_problems(f: dict[str, Any], where: str, out: list[tuple[str, str]]) ->
             out.append((mr.path_join(at, "min"), "larger than max"))
         if b["unit"] != "" and not mr.FORMATS["ucum"](b["unit"]):
             out.append((mr.path_join(at, "unit"), "not a UCUM code"))
+        default = b["default"]
+        if default is not None and not (
+            math.isfinite(default) and (name != "axt.LongField" or abs(default) <= MAX_EXACT)
+        ):
+            # JSON has no NaN and no infinity; RFC 8785 writes an integer above 2^53 rounded (9.3).
+            out.append(
+                (mr.path_join(at, "default"), "not a finite number, or a long above 2^53 in magnitude")
+            )
     if "placeholder" in b:
         input_problems(b, at, out)
     # An example and a default are judged by the field's checks only when the checks keep their rules.
@@ -300,10 +320,76 @@ def field_problems(f: dict[str, Any], where: str, out: list[tuple[str, str]]) ->
 
 
 def description_problems(f: dict[str, Any]) -> list[tuple[str, str]]:
-    """The rules of spec/fields.md, sections 3 to 6, that a description breaks; the root's path is empty."""
+    """The rules of spec/fields.md, sections 3 to 6 and 9.1, that a description breaks; the root is ""."""
     out: list[tuple[str, str]] = []
+    if typed_depth(f) > MAX_TYPED_DEPTH:
+        return [
+            ("", f"typed fields nested deeper than {MAX_TYPED_DEPTH}")
+        ]  # section 9.1, before any other rule
     field_problems(f, "", out)
+    root_problems(f, out)
+    if not out:
+        schema = derive(f)
+        if json_depth(schema) > MAX_JSON_DEPTH:
+            out.append(("", f"a derived schema nested deeper than {MAX_JSON_DEPTH}"))
+        if len(binary(f)) > MAX_DESCRIPTION or len(derived_text(f).encode()) > MAX_DESCRIPTION:
+            out.append(("", "a description or its derived schema of more than 256 KiB"))
     return out
+
+
+def typed_depth(f: dict[str, Any]) -> int:
+    """The depth of the typed fields: the root at 1, a field of an object, an item or a value one deeper."""
+    name, b = kind_of(f)
+    inner = b["fields"] if name == "axt.ObjectField" else [b[m] for m in ("items", "values") if m in b]
+    return 1 + max((typed_depth(x) for x in inner), default=0)
+
+
+def root_problems(f: dict[str, Any], out: list[tuple[str, str]]) -> None:
+    """Section 9.1: the root is an object with a full name, a version and a title; names are unique."""
+    name, b = kind_of(f)
+    clean = not out  # a title is judged only by fields that keep their rules
+    if f["required"] or f["order"] is not None or f["group"] != "" or f["sensitive"] or f["advanced"]:
+        out.append(("", "a root with required, an order, a group, sensitive or advanced"))
+    if name != "axt.ObjectField":
+        out.append(("kind", "the root is not an object"))
+        return
+    if "." not in b["name"]:
+        out.append(("kind.name", "the root's name has no namespace"))
+    if b["version"] is None or b["version"] < 1:
+        out.append(("kind.version", "the root has no version of at least 1"))
+    seen: set[str] = set()
+    for where, full, version, title, subs in named_types(f, "", mr.path_join("", "kind")):
+        if where != "kind" and "." in full.split("#")[1]:
+            out.append((mr.path_join(where, "name"), "a nested name with a namespace"))
+        key = full.replace("#", ".")
+        if key in seen or key in TIME_SCHEMAS:
+            out.append((mr.path_join(where, "name"), "a full name that another object or enum has"))
+        seen.add(key)
+        if where != "kind" and version is not None:
+            out.append((mr.path_join(where, "version"), "a version in a nested object"))
+        if clean and title and not any(x["name"] == title and kind_of(x)[0] in STRINGS for x in subs):
+            out.append((mr.path_join(where, "title"), "not the name of a field of text of the object"))
+
+
+def named_types(f: dict[str, Any], namespace: str, at: str) -> list[tuple[str, str, Any, str, list[Any]]]:
+    """Each object and enum of the description, in the order of the encoding: (path, namespace#name,
+    version, title, fields); the namespace is that of the root."""
+    name, b = kind_of(f)
+    found: list[tuple[str, str, Any, str, list[Any]]] = []
+    if name == "axt.ObjectField":
+        space = namespace or b["name"].rpartition(".")[0]
+        short = b["name"].rpartition(".")[2] if not namespace else b["name"]
+        found.append((at, f"{space}#{short}", b["version"], b["title"], b["fields"]))
+        for i, sub in enumerate(b["fields"]):
+            found += named_types(
+                sub, space, mr.path_join(mr.path_join(mr.path_join(at, "fields"), i), "kind")
+            )
+    elif name == "axt.EnumField":
+        found.append((at, f"{namespace}#{b['name']}", None, "", []))
+    elif name in {"axt.ListField", "axt.MapField"}:
+        member = "items" if name == "axt.ListField" else "values"
+        found += named_types(b[member], namespace, mr.path_join(mr.path_join(at, member), "kind"))
+    return found
 
 
 # --- checking a value (spec/fields.md, section 7) -----------------------------------------------
@@ -367,6 +453,460 @@ def breaches(f: dict[str, Any], value: Any) -> list[tuple[str, str]]:
     return out
 
 
+# --- the derived schema (spec/fields.md, section 9) ---------------------------------------------
+
+
+def json_depth(value: Any, depth: int = 1) -> int:
+    """The nesting of a JSON value as spec/envelope.md, section 8, counts it: in an object, a scalar is 2."""
+    if isinstance(value, dict):
+        return max([depth] + [json_depth(v, depth + 1) for v in value.values()])
+    if isinstance(value, list):
+        return max([depth] + [json_depth(v, depth + 1) for v in value])
+    return depth
+
+
+EMPTY: dict[str, Any] = {"axt.ListField": [], "axt.MapField": {}}
+
+
+def nullable(f: dict[str, Any]) -> bool:
+    """Section 9.2: a field of no value is null when it is not required and its brick gives no default."""
+    name, b = kind_of(f)
+    if name in EMPTY:
+        return False
+    return not f["required"] and b.get("default") is None
+
+
+def avro_default(f: dict[str, Any]) -> tuple[bool, Any]:
+    """Whether the derived field has a default, and its JSON value (section 9.2)."""
+    name, b = kind_of(f)
+    if name in EMPTY:
+        return True, copy.deepcopy(EMPTY[name])
+    if b.get("default") is not None:
+        value = b["default"]
+        return True, value.decode("latin-1") if isinstance(value, bytes) else value
+    return (True, None) if nullable(f) else (False, None)
+
+
+def avro_type(f: dict[str, Any], defined: list[str], namespace: str) -> Any:
+    name, b = kind_of(f)
+    t: Any
+    if name in STRINGS:
+        t = "string"
+    elif name in {"axt.IntField", "axt.LongField", "axt.DoubleField", "axt.BooleanField", "axt.BytesField"}:
+        t = name[4:-5].lower()
+    elif name in TIME_BRICKS:
+        full = TIME_BRICKS[name]
+        t = full if full in defined else copy.deepcopy(TIME_SCHEMAS[full])
+        if full not in defined:
+            defined.append(full)
+            defined.extend(f"axt.{n}" for n in inner_time_names(t))
+    elif name == "axt.EnumField":
+        symbols = [x["symbol"] for x in b["symbols"]]
+        t = {"type": "enum", "name": b["name"], "doc": f["doc"], "symbols": symbols, "default": b["fallback"]}
+    elif name == "axt.ListField":
+        t = {"type": "array", "items": avro_type(b["items"], defined, namespace)}
+    elif name == "axt.MapField":
+        t = {"type": "map", "values": avro_type(b["values"], defined, namespace)}
+    else:
+        t = {
+            "type": "record",
+            "name": b["name"],
+            "doc": f["doc"],
+            "fields": avro_fields(b, defined, namespace),
+        }
+    return ["null", t] if nullable(f) else t
+
+
+def inner_time_names(t: Any) -> list[str]:
+    """The time types that a published time schema defines inside itself, such as axt.Time in axt.DateTime."""
+    found: list[str] = []
+    for x in t.get("fields", []):
+        for branch in x["type"] if isinstance(x["type"], list) else [x["type"]]:
+            if isinstance(branch, dict) and branch.get("type") == "record" and branch["name"] in TIME_NAMES:
+                found += [branch["name"], *inner_time_names(branch)]
+    return found
+
+
+def avro_fields(b: dict[str, Any], defined: list[str], namespace: str) -> list[dict[str, Any]]:
+    out = []
+    for f in b["fields"]:
+        entry: dict[str, Any] = {"name": f["name"], "type": avro_type(f, defined, namespace)}
+        has, value = avro_default(f)
+        if has:
+            entry["default"] = value
+        entry["doc"] = f["doc"]
+        out.append(entry)
+    return out
+
+
+def derive(f: dict[str, Any]) -> dict[str, Any]:
+    """The Avro schema of a valid description (section 9.2), as a JSON value."""
+    _, b = kind_of(f)
+    namespace, _, short = b["name"].rpartition(".")
+    head: dict[str, Any] = {"type": "record", "name": short, "namespace": namespace, "doc": f["doc"]}
+    head["axt.version"] = b["version"]
+    head["fields"] = avro_fields(b, [], namespace)
+    return head
+
+
+def es_number(x: float | int) -> str:
+    """A number as ECMAScript writes it, the form of RFC 8785, section 3.2.2.3."""
+    if isinstance(x, bool) or not isinstance(x, float):
+        return str(int(x))
+    if not math.isfinite(x):
+        raise ValueError("no JSON number")
+    if x == 0:
+        return "0"
+    shortest = repr(abs(x))  # the shortest digits that read back to x
+    mantissa, _, e = shortest.partition("e")
+    whole, _, frac = mantissa.partition(".")
+    frac = "" if frac == "0" else frac
+    point = len(whole.lstrip("0") or "0") + (int(e) if e else 0)
+    if whole.strip("0") == "":
+        lead = len(frac) - len(frac.lstrip("0"))
+        digits, point = frac.lstrip("0"), -lead + (int(e) if e else 0)
+    else:
+        digits = (whole.lstrip("0") + frac).rstrip("0") or "0"
+    k, n = len(digits), point
+    sign = "-" if x < 0 else ""
+    if k <= n <= 21:
+        return sign + digits + "0" * (n - k)
+    if 0 < n <= 21:
+        return sign + digits[:n] + "." + digits[n:]
+    if -6 < n <= 0:
+        return sign + "0." + "0" * -n + digits
+    e_text = f"{'+' if n - 1 >= 0 else '-'}{abs(n - 1)}"
+    return sign + digits[0] + ("." + digits[1:] if k > 1 else "") + "e" + e_text
+
+
+def jcs(value: Any) -> str:
+    """The JSON Canonicalization Scheme of RFC 8785: members sorted by their UTF-16 code units, no white
+    space, the strings and numbers as ECMAScript writes them."""
+    if isinstance(value, dict):
+        items = sorted(value.items(), key=lambda kv: kv[0].encode("utf-16-be"))
+        return "{" + ",".join(json.dumps(k, ensure_ascii=False) + ":" + jcs(v) for k, v in items) + "}"
+    if isinstance(value, list):
+        return "[" + ",".join(jcs(v) for v in value) + "]"
+    if isinstance(value, str) or value is None or isinstance(value, bool):
+        return json.dumps(value, ensure_ascii=False)
+    return es_number(value)
+
+
+def derived_text(f: dict[str, Any]) -> str:
+    """The derived schema as text: its JSON in the canonical form of RFC 8785 (section 9.3)."""
+    return jcs(derive(f))
+
+
+# The descriptions that the models of the other scripts hold for a derived text: a model keeps schema texts,
+# and a device offers the description it got or made for a text, never one made again from the text.
+REGISTRY: dict[str, dict[str, Any]] = {}
+
+
+def register(f: dict[str, Any]) -> str:
+    """The derived text of a valid description, which the registry then holds it for."""
+    text = derived_text(f)
+    REGISTRY.setdefault(text, f)
+    return text
+
+
+def source(text: str) -> str:
+    """The derived text of a schema of a model, such as an example type: its description is the one that
+    describe_schema makes, which keeps the schema's attributes as the bricks hold them."""
+    return register(describe_schema(json.loads(text)))
+
+
+def description_of(text: str) -> dict[str, Any]:
+    """The description the registry holds for a derived text."""
+    return REGISTRY[text]
+
+
+def canonical(schema: Any) -> tuple[str, bytes]:
+    """The Parsing Canonical Form and the CRC-64-AVRO, as its 8 bytes in little-endian order."""
+    pcf = to_parsing_canonical_form(schema)
+    return pcf, bytes.fromhex(fingerprint(pcf, "CRC-64-AVRO"))
+
+
+def type_of(f: dict[str, Any]) -> tuple[str, int]:
+    """The full name and the version of the type a description describes."""
+    _, b = kind_of(f)
+    return b["name"], b["version"]
+
+
+# --- a schema with the attributes of spec/metadata.md as a description ----------------------------
+
+
+class NotDescribable(ValueError):
+    """A schema that no description derives, such as a recursive one or one with another union."""
+
+
+TEXT_ATTRIBUTES = {
+    "axt.label": "label",
+    "axt.label_translations": "label_translations",
+    "axt.help": "help",
+    "axt.help_translations": "help_translations",
+    "axt.emoji": "emoji",
+}
+COMMON_ATTRIBUTES = {
+    "axt.order": "order",
+    "axt.group": "group",
+    "axt.sensitive": "sensitive",
+    "axt.advanced": "advanced",
+}
+BRICK_ATTRIBUTES = {
+    "axt.pattern": "pattern",
+    "axt.multiline": "multiline",
+    "axt.preferred_length": "preferred_length",
+    "axt.placeholder": "placeholder",
+    "axt.example": "example",
+    "axt.min_length": "min_length",
+    "axt.max_length": "max_length",
+    "axt.min": "min",
+    "axt.max": "max",
+    "axt.unit": "unit",
+}
+FORMAT_BRICKS = {fmt: b for b, fmt in SEMANTIC.items()} | {"plain": "axt.StringField"}
+
+
+def texts_of(node: dict[str, Any]) -> dict[str, Any]:
+    return complete("axt.FieldTexts", {v: node[k] for k, v in TEXT_ATTRIBUTES.items() if k in node})
+
+
+def kind_from(t: Any, attrs: dict[str, Any], default: Any, names: dict[str, Any]) -> dict[str, Any]:
+    """The brick of a field of type t (null taken away) with the field's attributes and default."""
+    members: dict[str, Any] = {k2: attrs[k] for k, k2 in BRICK_ATTRIBUTES.items() if k in attrs}
+    if isinstance(t, str) and t in names:
+        t = names[t]
+    if isinstance(t, dict) and t.get("type") == "record" and f"axt.{t['name']}" in TIME_SCHEMAS:
+        which = f"axt.{t['name']}Field"
+        if which == "axt.DateTimeField" and attrs.get("axt.anchor") == "instant":
+            members["anchor"] = "INSTANT"
+        return {which: complete(which, members)}
+    if isinstance(t, str) and t in TIME_SCHEMAS:
+        return kind_from(TIME_SCHEMAS[t], attrs, default, names)
+    if isinstance(t, dict) and "logicalType" in t:
+        raise NotDescribable(f"a logical type {t['logicalType']}")
+    if t == "string":
+        which = FORMAT_BRICKS[attrs.get("axt.format", "plain")]
+    elif isinstance(t, str) and t in {"int", "long", "double", "boolean", "bytes"}:
+        which = f"axt.{str(t).capitalize()}Field"
+    elif isinstance(t, dict) and t["type"] == "enum":
+        which = "axt.EnumField"
+        entries = t.get("axt.symbols", {})
+        symbols = [
+            complete("axt.EnumSymbol", {"symbol": x, "texts": texts_of(prefix(entries.get(x, {})))})
+            for x in t["symbols"]
+        ]
+        members |= {"name": t["name"], "symbols": symbols, "fallback": t["default"]}
+    elif isinstance(t, dict) and t["type"] in {"array", "map"}:
+        raise NotDescribable("a list or a map is described by describe_field")
+    elif isinstance(t, dict) and t["type"] == "record":
+        names[t["name"]] = t
+        groups = [
+            complete("axt.FieldGroup", {"key": k, "texts": texts_of(prefix(v))})
+            for k, v in t.get("axt.groups", {}).items()
+        ]
+        fields = [describe_field(x, names) for x in t["fields"]]
+        members |= {"name": t["name"], "fields": fields, "groups": groups, "title": t.get("axt.title", "")}
+        which = "axt.ObjectField"
+    else:
+        raise NotDescribable(f"the type {json.dumps(t)[:60]}")
+    if default is not None:
+        members["default"] = default.encode("latin-1") if t == "bytes" else default
+    return {which: complete(which, members)}
+
+
+def prefix(entry: dict[str, Any]) -> dict[str, Any]:
+    """An entry of axt.symbols or axt.groups with the names of the attributes."""
+    return {f"axt.{k}": v for k, v in entry.items()}
+
+
+def describe_field(x: dict[str, Any], names: dict[str, Any]) -> dict[str, Any]:
+    """A field of a schema with the attributes of spec/metadata.md as a typed field."""
+    t, attrs = x["type"], {k: v for k, v in x.items() if k.startswith("axt.")}
+    common = {v: attrs[k] for k, v in COMMON_ATTRIBUTES.items() if k in attrs}
+    if isinstance(t, list):
+        if len(t) != 2 or t[0] != "null" or "default" not in x or x["default"] is not None:
+            raise NotDescribable(f"the union of {x['name']}")
+        kind = kind_from(t[1], attrs, None, names)
+        required = False
+    elif isinstance(t, dict) and t["type"] in {"array", "map"}:
+        if x.get("default") != EMPTY["axt.ListField" if t["type"] == "array" else "axt.MapField"]:
+            raise NotDescribable(f"a list or map without an empty default in {x['name']}")
+        inner = t["items"] if t["type"] == "array" else t["values"]
+        item = describe_item(x["name"], x["doc"], inner, attrs, names)
+        member = "items" if t["type"] == "array" else "values"
+        which = "axt.ListField" if t["type"] == "array" else "axt.MapField"
+        kind, required = {which: complete(which, {member: item})}, False
+        attrs = {}
+    else:
+        kind = kind_from(t, attrs, x.get("default"), names)
+        required = "default" not in x
+    f = field(x["name"], x["doc"], kind, texts_of(attrs), required=required, **common)
+    if isinstance(t, list) != nullable(f):
+        raise NotDescribable(f"{x['name']} does not derive back to its type")
+    return f
+
+
+def describe_item(
+    name: str, doc: str, t: Any, attrs: dict[str, Any], names: dict[str, Any]
+) -> dict[str, Any]:
+    """The typed field of the items of an array or the values of a map."""
+    optional = isinstance(t, list)
+    inner = t[1] if optional else t
+    if isinstance(inner, dict) and inner.get("type") in {"array", "map"}:
+        x: dict[str, Any] = {
+            "name": name,
+            "type": inner,
+            "default": [] if inner["type"] == "array" else {},
+            "doc": doc,
+        }
+        return describe_field(x, names)
+    record = (
+        isinstance(inner, dict)
+        and inner.get("type") == "record"
+        and f"axt.{inner['name']}" not in TIME_SCHEMAS
+    )
+    empty = {"string": "", "bytes": ""}.get(inner) if isinstance(inner, str) else None
+    kind = kind_from(inner, attrs, None if optional else empty, names)
+    texts = texts_of(inner) if record else texts_of({})
+    required = not optional and empty is None
+    return field(name, inner["doc"] if record else doc, kind, texts, required=required)
+
+
+def describe_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """The description whose derived schema has the canonical form of the schema; raises NotDescribable."""
+    if not isinstance(schema, dict) or schema.get("type") != "record":
+        raise NotDescribable("not a record")
+    names: dict[str, Any] = {}
+    kind = kind_from(schema, {}, None, names)
+    b = kind["axt.ObjectField"]
+    b["name"] = f"{schema['namespace']}.{schema['name']}" if "namespace" in schema else schema["name"]
+    b["version"] = schema.get("axt.version", 1)
+    root = field(
+        re.sub(r"(?<!^)(?=[A-Z])", "_", schema["name"]).lower(), schema["doc"], kind, texts_of(schema)
+    )
+    if canonical(derive(root))[0] != canonical(schema)[0]:
+        raise NotDescribable("the derived schema has another canonical form")
+    return root
+
+
+# --- the types of a file (spec/fields.md, section 10.2) -----------------------------------------
+
+
+def file_entries(schemas: list[Any]) -> list[dict[str, Any]]:
+    """The value of axt.schemas for the writer schemas of a model: for each, its description and the schema
+    derived from it."""
+    out = []
+    for schema in schemas:
+        d = description_of(source(json.dumps(schema)))
+        out.append({"description": json_form(d), "schema": derive(d)})
+    return out
+
+
+def file_schemas(value: bytes) -> list[str]:
+    """The derived schema texts of the types of a file, from the value of axt.schemas; ValueError for one
+    that is not a list of entries, each a valid description and the schema derived from it."""
+    entries = json.loads(value)
+    if not isinstance(entries, list):
+        raise ValueError("axt.schemas is not a JSON array")
+    texts = []
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != {"description", "schema"}:
+            raise ValueError("an entry of axt.schemas without a description and a schema")
+        d = from_json_form(entry["description"])
+        try:
+            binary(d)  # a datum of axt.Field
+        except Exception:
+            raise ValueError("a description that is no datum of axt.Field") from None
+        if description_problems(d):
+            raise ValueError("a description that is not valid")
+        if canonical(entry["schema"])[0] != canonical(derive(d))[0]:
+            raise ValueError("a schema that is not the one derived from its description")
+        texts.append(register(d))
+    return texts
+
+
+# --- the encoding of a description --------------------------------------------------------------
+
+
+def avro_form(value: Any) -> Any:
+    """A value with each description's kind as fastavro's tuple of branch name and record."""
+    if isinstance(value, dict) and "kind" in value and "texts" in value:
+        name, b = kind_of(value)
+        return {**value, "kind": (name, {k: avro_form(v) for k, v in b.items()})}
+    if isinstance(value, dict):
+        return {k: avro_form(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [avro_form(x) for x in value]
+    return value
+
+
+def named(value: Any) -> Any:
+    """A value that fastavro read with return_record_name, with each tuple as an object of one member."""
+    if isinstance(value, tuple):
+        return {value[0]: named(value[1])}
+    if isinstance(value, dict):
+        return {k: named(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [named(x) for x in value]
+    return value
+
+
+def without_names(value: Any) -> Any:
+    """A value with each kind as the record of its branch alone, as the Apache avro package reads it."""
+    if isinstance(value, dict) and "kind" in value and "texts" in value:
+        _, b = kind_of(value)
+        return {**value, "kind": {k: without_names(v) for k, v in b.items()}}
+    if isinstance(value, dict):
+        return {k: without_names(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [without_names(x) for x in value]
+    return value
+
+
+def read(data: bytes, schema: Any) -> Any:
+    """A datum read with fastavro, with the branch of each kind named (spec/conformance.md, section 3.3)."""
+    buf = io.BytesIO(data)
+    value = fastavro.schemaless_reader(
+        buf, schema, schema, return_record_name=True, return_record_name_override=True
+    )
+    if buf.tell() != len(data):
+        raise ValueError("bytes left over")
+    return named(value)
+
+
+def binary(f: dict[str, Any]) -> bytes:
+    """The Avro binary encoding of a description as a datum of axt.Field."""
+    buffer = io.BytesIO()
+    fastavro.schemaless_writer(buffer, PARSED, avro_form(f))
+    return buffer.getvalue()
+
+
+def json_form(value: Any) -> Any:
+    """A description in the JSON form of spec/conformance.md, section 3.3: bytes as hexadecimal."""
+    if isinstance(value, bytes):
+        return value.hex()
+    if isinstance(value, dict):
+        return {k: json_form(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [json_form(x) for x in value]
+    return value
+
+
+def from_json_form(value: Any) -> Any:
+    """The inverse of json_form: the default of a bytes brick back to bytes."""
+    if isinstance(value, dict) and "axt.BytesField" in value and isinstance(value["axt.BytesField"], dict):
+        b = dict(value["axt.BytesField"])
+        if isinstance(b["default"], str):
+            b["default"] = bytes.fromhex(b["default"])
+        return {"axt.BytesField": b}
+    if isinstance(value, dict):
+        return {k: from_json_form(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [from_json_form(x) for x in value]
+    return value
+
+
 # --- the schema and the encoding ----------------------------------------------------------------
 
 
@@ -394,49 +934,17 @@ def check_schema() -> str:
 PARSED = fastavro.parse_schema(FIELD_SCHEMA)
 
 
-def to_fastavro(f: Any) -> Any:
-    """The description with each kind as fastavro's tuple of branch name and record."""
-    if isinstance(f, dict) and "kind" in f and "texts" in f:
-        name, b = kind_of(f)
-        b = {k: to_fastavro(v) for k, v in b.items()}
-        return {**f, "kind": (name, b)}
-    if isinstance(f, list):
-        return [to_fastavro(x) for x in f]
-    return f
-
-
-def from_fastavro(f: Any, names: bool) -> Any:
-    """A decoded description back in the form of this module; without names for the avro package's result."""
-    if isinstance(f, dict) and "kind" in f and "texts" in f:
-        kind = f["kind"]
-        name, b = kind if names else (None, kind)
-        b = {k: from_fastavro(v, names) for k, v in b.items()}
-        return {**f, "kind": {name: b} if names else b}
-    if isinstance(f, list):
-        return [from_fastavro(x, names) for x in f]
-    return f
-
-
-def without_names(f: Any) -> Any:
-    if isinstance(f, dict) and "kind" in f and "texts" in f:
-        _, b = kind_of(f)
-        return {**f, "kind": {k: without_names(v) for k, v in b.items()}}
-    if isinstance(f, list):
-        return [without_names(x) for x in f]
-    return f
+def same(a: Any, b: Any) -> bool:
+    """Equal as values, NaN equal to NaN."""
+    return json.dumps(a, sort_keys=True, default=repr) == json.dumps(b, sort_keys=True, default=repr)
 
 
 def round_trip(description: dict[str, Any]) -> int:
     """Encode with fastavro and decode with fastavro and the avro package; returns the size in bytes."""
-    buffer = io.BytesIO()
-    fastavro.schemaless_writer(buffer, PARSED, to_fastavro(description))
-    data = buffer.getvalue()
-    read = fastavro.schemaless_reader(
-        io.BytesIO(data), PARSED, return_record_name=True, return_record_name_override=True
-    )
-    assert from_fastavro(read, names=True) == description, "fastavro does not read the description back"
+    data = binary(description)
+    assert same(read(data, PARSED), description), "fastavro does not read the description back"
     apache = avro.io.DatumReader(avro.schema.parse(FIELD_TEXT)).read(avro.io.BinaryDecoder(io.BytesIO(data)))
-    assert from_fastavro(apache, names=False) == without_names(description), "avro does not read it back"
+    assert same(apache, without_names(description)), "avro does not read it back"
     return len(data)
 
 
@@ -607,7 +1115,7 @@ def vet() -> dict[str, Any]:
     return field(
         "vet",
         "A veterinary practice; an illustration of spec/fields.md, not an example type.",
-        brick("ObjectField", name="com.example.Vet", fields=fields, groups=groups),
+        brick("ObjectField", name="com.example.Vet", fields=fields, groups=groups, version=1, title="name"),
         texts(
             "Vet practice",
             "Tierarztpraxis",
@@ -804,6 +1312,7 @@ DESCRIPTION_CASES: list[tuple[str, list[Any], Any, str]] = [
     ),
     ("a min above max", [*F, VISIT, "kind", "min"], 241, "kind.fields[6].kind.min"),
     ("a min that is infinite", [*F, FEE, "kind", "min"], -math.inf, "kind.fields[7].kind.min"),
+    ("a default that is NaN", [*F, FEE, "kind", "default"], math.nan, "kind.fields[7].kind.default"),
     ("a unit with a space", [*F, VISIT, "kind", "unit"], "m in", "kind.fields[6].kind.unit"),
     ("an enum name in lower case", [*F, KIND, "kind", "name"], "vetKind", "kind.fields[1].kind.name"),
     ("an enum without symbols", [*F, KIND, "kind", "symbols"], [], "kind.fields[1].kind.symbols"),
@@ -839,6 +1348,19 @@ DESCRIPTION_CASES: list[tuple[str, list[Any], Any, str]] = [
     ("an object name with a space", [*F, ADDRESS, "kind", "name"], "Vet Address", "kind.fields[5].kind.name"),
     ("an object without fields", [*F, ADDRESS, "kind", "fields"], [], "kind.fields[5].kind.fields"),
     ("a field name twice", [*POSTAL, "name"], "street", "kind.fields[5].kind.fields[1].name"),
+    ("a root without a version", ["kind", "version"], None, "kind.version"),
+    ("a root without a namespace", ["kind", "name"], "Vet", "kind.name"),
+    ("a root that is required", ["required"], True, ""),
+    ("a version in a nested object", [*F, ADDRESS, "kind", "version"], 1, "kind.fields[5].kind.version"),
+    (
+        "a nested name with a namespace",
+        [*F, ADDRESS, "kind", "name"],
+        "com.example.VetAddress",
+        "kind.fields[5].kind.name",
+    ),
+    ("an enum named as an object", [*F, KIND, "kind", "name"], "VetAddress", "kind.fields[5].kind.name"),
+    ("a title that is not a field of text", ["kind", "title"], "visit_minutes", "kind.title"),
+    ("a root that is not an object", ["kind"], brick("StringField"), "kind"),
 ]
 
 
@@ -852,7 +1374,7 @@ def formats_description() -> dict[str, Any]:
     return field(
         "formats",
         "One field of each semantic brick.",
-        brick("ObjectField", name="Formats", fields=fields),
+        brick("ObjectField", name="com.example.Formats", fields=fields, version=1),
         texts(),
     )
 
@@ -886,7 +1408,8 @@ def kinds_description() -> dict[str, Any]:
         "One field of the other bricks.",
         brick(
             "ObjectField",
-            name="Kinds",
+            name="com.example.Kinds",
+            version=1,
             fields=[
                 r("photo", brick("BytesField", min_length=1, max_length=4)),
                 r("photos", brick("ListField", items=item)),
@@ -931,6 +1454,72 @@ KINDS_CASES: list[tuple[dict[str, Any], list[tuple[str, str]]]] = [
 ]
 
 
+def numbers_description() -> dict[str, Any]:
+    """Defaults that the canonical form of RFC 8785 writes in its own way: numbers, bytes and texts."""
+
+    def d(name: str, kind: dict[str, Any], doc: str) -> dict[str, Any]:
+        return field(name, doc, kind, texts())
+
+    fields = [
+        d("tenth", brick("DoubleField", default=0.1), "A tenth."),
+        d("large", brick("DoubleField", default=1e21), "A large number, written with an exponent."),
+        d(
+            "below",
+            brick("DoubleField", default=1e21 - 2**17),
+            "The largest number below it, written in full.",
+        ),
+        d("small", brick("DoubleField", default=1e-7), "A small number, written with an exponent."),
+        d(
+            "whole",
+            brick("DoubleField", default=-2.0),
+            "A whole number of double precision, written without a point.",
+        ),
+        d("long", brick("LongField", default=2**53), "A long."),
+        d("raw", brick("BytesField", default=bytes([0, 0x7F, 0x80, 0xFF])), "Bytes, written as code points."),
+        d(
+            "text",
+            brick("StringField", default='"\\\t\u0001\u007fé\u2028😀'),
+            'A text with "quotes", a tab\tand é.',
+        ),
+    ]
+    return field(
+        "numbers",
+        "Defaults.",
+        brick("ObjectField", name="com.example.Numbers", fields=fields, version=3),
+        texts(),
+    )
+
+
+def vector_descriptions() -> tuple[list[tuple[str, dict[str, Any]]], list[tuple[str, dict[str, Any], str]]]:
+    """The descriptions of the vectors of the category bricks: valid ones, and invalid ones with the path of
+    their problem."""
+    valid = [
+        ("com.example.Vet of spec/fields.md, section 8", vet()),
+        ("one field of each semantic brick", formats_description()),
+        ("one field of each other brick, each required", kinds_description()),
+        ("defaults of numbers, bytes and texts", numbers_description()),
+    ]
+    for path in sorted((REPO / "types" / "axt" / "example" / "v1").glob("*.1.avsc")):
+        schema = json.loads(path.read_text(encoding="utf-8"))
+        valid.append((f"the description of {path.name}", describe_schema(schema)))
+    invalid = [(what, mutate(path, new), where) for what, path, new, where in DESCRIPTION_CASES]
+    deep = field("v", "Lists in lists.", brick("LongField"), texts())
+    for _ in range(MAX_TYPED_DEPTH - 1):
+        deep = field("v", "Lists in lists.", brick("ListField", items=deep), texts())
+    root = brick("ObjectField", name="com.example.Deep", fields=[deep], version=1)
+    invalid.append(("typed fields nested 65 deep", field("deep", "Deep.", root, texts()), ""))
+    shallower = copy.deepcopy(root)
+    shallower["axt.ObjectField"]["fields"] = [kind_of(deep)[1]["items"]]
+    invalid.append(("a derived schema nested deeper than 64", field("deep", "Deep.", shallower, texts()), ""))
+    invalid.append(("a description above 256 KiB", dict(vet(), doc="x" * MAX_DESCRIPTION), ""))
+    beyond = numbers_description()
+    kind_of(kind_of(beyond)[1]["fields"][5])[1]["default"] = 2**63 - 1
+    invalid.append(("a default of a long above 2^53", beyond, "kind.fields[5].kind.default"))
+    for what, d, where in invalid:
+        assert [w for w, _ in description_problems(d)] == [where], what
+    return valid, invalid
+
+
 def main() -> None:
     fp = check_schema()
     assert fp == FINGERPRINT, fp
@@ -966,6 +1555,37 @@ def main() -> None:
     for changes, expected in KINDS_CASES:
         assert breaches(kinds, {**KINDS_VALUE, **changes}) == expected, (changes, expected)
     print(f"{len(FORMAT_VALUES)} semantic bricks and {len(KINDS_CASES)} values of the other bricks checked")
+
+    deep = field("v", "Lists in lists.", brick("LongField"), texts())
+    for _ in range(MAX_TYPED_DEPTH - 1):
+        deep = field("v", "Lists in lists.", brick("ListField", items=deep), texts())
+    at_limit = field(
+        "deep", "Deep.", brick("ObjectField", name="com.example.Deep", fields=[deep], version=1), texts()
+    )
+    assert typed_depth(at_limit) == MAX_TYPED_DEPTH + 1
+    assert description_problems(at_limit) == [("", "typed fields nested deeper than 64")]
+    kind_of(at_limit)[1]["fields"] = [kind_of(deep)[1]["items"]]
+    assert typed_depth(at_limit) == MAX_TYPED_DEPTH
+    assert [w for w, _ in description_problems(at_limit)] == [""]  # the derived schema nests deeper than 64
+
+    for avsc in sorted((REPO / "types" / "axt" / "example" / "v1").glob("*.1.avsc")):
+        schema = json.loads(avsc.read_text(encoding="utf-8"))
+        d = describe_schema(schema)
+        assert description_problems(d) == [], (avsc.name, description_problems(d))
+        assert canonical(derive(d)) == canonical(schema), avsc.name
+        assert derive(describe_schema(derive(d))) == derive(d), avsc.name
+        print(
+            f"{type_of(d)[0]} version {type_of(d)[1]}: a description of {round_trip(d)} bytes "
+            f"derives {avsc.name}"
+        )
+    vet_schema = derive(description)
+    assert describe_schema(vet_schema) is not None and canonical(
+        derive(describe_schema(vet_schema))
+    ) == canonical(vet_schema)
+    print(
+        f"com.example.Vet derives a schema of {len(derived_text(description).encode())} bytes, "
+        f"fingerprint 0x{canonical(vet_schema)[1][::-1].hex()}"
+    )
 
     root = kind_of(description)[1]["fields"][ADDRESS]
     print("The field address of com.example.Vet:")

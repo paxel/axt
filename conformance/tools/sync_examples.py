@@ -111,6 +111,13 @@ if _spec is None or _spec.loader is None:
 me = importlib.util.module_from_spec(_spec)
 with contextlib.redirect_stdout(io.StringIO()):
     _spec.loader.exec_module(me)  # runs its checks
+# The descriptions of the offered types (spec/fields.md, section 10): an OFFER carries descriptions, and the
+# device keeps the text of the schema derived from each, with the description it got or made for it.
+_spec = importlib.util.spec_from_file_location("fields_examples", HERE / "fields_examples.py")
+if _spec is None or _spec.loader is None:
+    raise ImportError("fields_examples.py cannot be loaded")
+fe = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(fe)
 
 MAX = 2**63 - 1  # the largest long (section 2.3)
 MIN = -(2**63)
@@ -200,11 +207,15 @@ def schema_fingerprint(text: str) -> bytes:
 
 # Version 1 of the appointment is the example type. Version 2 exists for these cases only: it adds a
 # field `room`, as a later version of a type may (spec/types.md, section 3.3).
-APPOINTMENT_1 = (REPO / "types" / "axt" / "example" / "v1" / "Appointment.1.avsc").read_text(encoding="utf-8")
-_later = json.loads(APPOINTMENT_1)
+# Each is the text of the schema derived from its description (spec/fields.md, section 9.3).
+APPOINTMENT_FILE = (REPO / "types" / "axt" / "example" / "v1" / "Appointment.1.avsc").read_text(
+    encoding="utf-8"
+)
+APPOINTMENT_1 = fe.source(APPOINTMENT_FILE)
+_later = json.loads(APPOINTMENT_FILE)
 _later["axt.version"] = 2
 _later["fields"].append({"name": "room", "type": "string", "default": "", "doc": "The room."})
-APPOINTMENT_2 = json.dumps(_later)
+APPOINTMENT_2 = fe.source(json.dumps(_later))
 SCHEMA_1, SCHEMA_2 = schema_fingerprint(APPOINTMENT_1), schema_fingerprint(APPOINTMENT_2)
 SCHEMA_VERSIONS = {SCHEMA_1: 1, SCHEMA_2: 2}  # the axt.version of the schema a fingerprint names
 
@@ -2823,7 +2834,17 @@ CHANGE_OUTCOMES = ("APPLIED", "DUPLICATE", "STALE")
 
 
 def body_of(name: str, datum: dict[str, Any]) -> bytes:
-    """A body of the specification in single-object encoding (spec/envelope.md, section 2.3)."""
+    """A body of the specification in single-object encoding (spec/envelope.md, section 2.3). The types of
+    an offer may name the text of a schema the device holds: its description is offered."""
+    if name == "Offer":
+        types = [
+            {
+                "description": t["description"] if "description" in t else fe.description_of(t["schema"]),
+                "count": t["count"],
+            }
+            for t in datum["types"]
+        ]
+        datum = fe.avro_form(dict(datum, types=types))
     out = io.BytesIO()
     fastavro.schemaless_writer(out, SPEC[name], datum)
     return MARKER + SPEC_FP[name] + out.getvalue()
@@ -2849,7 +2870,11 @@ def read_all(name: str, data: bytes) -> Any:
     """One datum of a schema of the specification, with no bytes left over; ValueError otherwise."""
     buf = io.BytesIO(data)
     try:
-        datum = fastavro.schemaless_reader(buf, SPEC[name], SPEC[name])
+        datum = fe.named(
+            fastavro.schemaless_reader(
+                buf, SPEC[name], SPEC[name], return_record_name=True, return_record_name_override=True
+            )
+        )
     except Exception as e:
         raise ValueError(f"not an axt.{name}: {type(e).__name__}") from None
     if buf.tell() != len(data):
@@ -4690,23 +4715,45 @@ class SetDevice:
         names, texts = list[str](), dict[bytes, str]()
         if uuid_key(d["offer_id"]) is None or not 1 <= len(d["types"]) <= MAX_OFFER_TYPES:
             raise Reject("OFFER_INVALID", "the id of the offer, or the number of its types")
+        declined: list[str] = []
         for t in d["types"]:
-            if len(t["schema"].encode()) > tm.rules.MAX_SCHEMA_BYTES:
-                raise Reject("TOO_LARGE", "a schema above 256 KiB")
-            try:
-                schema = json.loads(t["schema"])
-                if tm.rules.json_depth(schema) > tm.rules.MAX_JSON_DEPTH:
-                    raise Reject("TOO_LARGE", "a schema nested deeper than 64")
-                name = full_name(schema)
-                fastavro.parse_schema(schema, _write_hint=False)
-            except (ValueError, RecursionError, fastavro.schema.SchemaParseException):
-                name = None
-            if name is None:
-                raise Reject("OFFER_INVALID", "a schema that is no Avro schema of a record")
             if t["count"] < 0:
                 raise Reject("OFFER_INVALID", "a count below 0")
-            names.append(name)
-            texts[schema_fingerprint(t["schema"])] = t["schema"]
+            brick, b = fe.kind_of(t["description"])
+            if brick != "axt.ObjectField":
+                raise Reject("OFFER_INVALID", "a description whose root is not an object")
+            if fe.description_problems(t["description"]):
+                declined.append(b["name"])  # spec/fields.md, section 10.1
+                continue
+            text = fe.register(t["description"])
+            names.append(b["name"])
+            texts[schema_fingerprint(text)] = text
+        if declined:
+            if len(set(declined + names)) != len(declined + names) or len(texts) != len(names):
+                raise Reject("OFFER_INVALID", "a full name or a fingerprint twice")
+            self.what = "declined"
+            reasons = [{"type": n, "reason": "DESCRIPTION_INVALID"} for n in declined]
+            out = [
+                message(
+                    self.seed,
+                    "DECLINE",
+                    None,
+                    body_of("Decline", {"to": sender, "offer_id": d["offer_id"], "types": reasons}),
+                )
+            ]
+            if names:
+                out.insert(
+                    0,
+                    message(
+                        self.seed,
+                        "ACCEPT",
+                        None,
+                        body_of("Accept", {"to": sender, "offer_id": d["offer_id"], "types": names}),
+                    ),
+                )
+            for fp, text in texts.items():
+                self.offered[sender][fp] = self.schema(fp) or text
+            return out
         if len(set(names)) != len(names) or len(texts) != len(names):
             raise Reject("OFFER_INVALID", "a full name or a fingerprint twice")
         for fp, text in texts.items():
@@ -5830,7 +5877,7 @@ def device_of_json(v: dict[str, Any], bytes_in: Callable[[Any], bytes] = bytes.f
     device = SetDevice(
         bytes.fromhex(v["seed"]),
         [bytes.fromhex(k) for k in v["siblings"]],
-        v["schemas"],
+        [fe.register(fe.from_json_form(d)) for d in v["descriptions"]],
         int(v["highest"]),
         [bytes.fromhex(k) for k in v["removed"]],
         [bytes.fromhex(k) for k in v["others"]],
@@ -6038,9 +6085,18 @@ def meaning(m: bytes) -> list[dict[str, Any]]:
             }
         ]
     if kind == "OFFER":
-        return [{**base, "offer_id": d["offer_id"], "schemas": [t["schema"] for t in d["types"]]}]
+        return [
+            {
+                **base,
+                "offer_id": d["offer_id"],
+                "descriptions": [fe.json_form(t["description"]) for t in d["types"]],
+            }
+        ]
     if kind == "ACCEPT":
         return [{**base, "offer_id": d["offer_id"], "types": sorted(d["types"])}]
+    if kind == "DECLINE":
+        reasons = sorted((t["type"], t["reason"]) for t in d["types"])
+        return [{**base, "offer_id": d["offer_id"], "types": [{"type": n, "reason": r} for n, r in reasons]}]
     if kind == "PROPOSAL_REPLY":
         record = {"id": rec["id"], "version": str(rec["version"])}
         return [{**base, "record": record, "proposal_id": d["proposal_id"], "answer": d["answer"]}]
@@ -6072,8 +6128,8 @@ OBF_SEED = test_secret("Old Brain Fix, Ed25519")
 KEY_OBF = bytes(keys.public_key(OBF_SEED))
 FORWARD_ID = "c4a1e2b3-6d7f-4809-9a1b-2c3d4e5f6071"  # the forward of section 16.5
 MANIFEST_FORWARD_ID = "b3a0d1c2-5e6f-4708-8192-a3b4c5d6e7f8"  # the forward before it, which is not shown
-# Appointment.1.avsc as Old Brain Fix offered it: JSON without whitespace (spec/protocol.md, section 17.1).
-APPOINTMENT_OFFERED = json.dumps(json.loads(APPOINTMENT_1), separators=(",", ":"), ensure_ascii=False)
+# The schema of the description of Appointment.1.avsc that Old Brain Fix offered (spec/protocol.md, 17.3).
+APPOINTMENT_OFFERED = APPOINTMENT_1
 RECORD_ID = "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80"  # spec/records.md, section 9
 REQUEST_ID = "7c1d9e42-5a3b-4f6c-8d2e-1b0a9c8f7e6d"  # the request of section 16.3
 APPOINTMENT_TYPE = "axt.example.v1.Appointment"
@@ -6631,7 +6687,7 @@ def check_received(out: list[str]) -> None:
     built field by field and played through the model of a device."""
     z = keys.zigzag
     assert KEY_OBF.hex() == "da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7"
-    assert len(APPOINTMENT_OFFERED.encode()) == 6389 and schema_fingerprint(APPOINTMENT_OFFERED) == SCHEMA_1
+    assert schema_fingerprint(APPOINTMENT_OFFERED) == SCHEMA_1
     phone = SetDevice(
         PHONE_SEED,
         [TABLET],
@@ -6692,7 +6748,13 @@ def check_received(out: list[str]) -> None:
     body += [(z(len(data)), f"message: bytes length {len(data)}")]
     body += [(part, f"message: {note}") for part, note in data_parts]
     body += [(z(1), "schema: union index 1, string"), (z(len(text)), f"schema: string length {len(text)}")]
-    body += [(text, f"Appointment.1.avsc without whitespace ({len(text)} bytes of UTF-8 JSON)")]
+    body += [
+        (
+            text,
+            f"the schema derived from the description of Appointment.1.avsc ({len(text)} bytes of UTF-8 "
+            "JSON)",
+        )
+    ]
     assert b"".join(p[0] for p in body) == body_of("Forward", d), "the body differs from fastavro"
     assert apache_body("Forward", body_of("Forward", d)) == d
     parts, m = message_parts(PHONE_SEED, "FORWARD", (FORWARD_ID, 1), body)
@@ -6803,15 +6865,16 @@ TABLET_REQUEST = "0000000a-a5c0-4000-8000-00000000000a"  # of a request of the t
 TABLET_REQUEST_2 = "0000000b-a5c0-4000-8000-00000000000b"
 OTHER_ID = "7b1e6c2a-4d3f-4a8b-9c5d-0e1f2a3b4c5d"  # a second record
 APPOINTMENT_2_JSON: dict[str, Any] = json.loads(APPOINTMENT_2)
-PET_1 = (REPO / "types" / "axt" / "example" / "v1" / "Pet.1.avsc").read_text(encoding="utf-8")
+PET_1 = fe.source((REPO / "types" / "axt" / "example" / "v1" / "Pet.1.avsc").read_text(encoding="utf-8"))
 PET_TYPE = "axt.example.v1.Pet"
 SCHEMA_PET = schema_fingerprint(PET_1)
 # A version of the appointment whose title is a number: a schema that does not resolve against version 1.
-_other = json.loads(APPOINTMENT_1)
+_other = json.loads(APPOINTMENT_FILE)
 _other["axt.version"] = 3
 _other["fields"][0]["type"] = "long"
 _other["fields"][0]["default"] = 0
-APPOINTMENT_3 = json.dumps(_other)
+_other["axt.title"] = "location"  # its title names a field of text (spec/fields.md, section 9.1)
+APPOINTMENT_3 = fe.source(json.dumps(_other))
 APPOINTMENT_3_JSON: dict[str, Any] = json.loads(APPOINTMENT_3)
 SCHEMA_3 = schema_fingerprint(APPOINTMENT_3)
 SCHEMA_NONE = bytes.fromhex("0102030405060708")  # the fingerprint of no schema
@@ -6885,7 +6948,7 @@ def device_json(
         "removed": [KEY[s].hex() for s in removed],
         "others": [KEY[s].hex() for s in others],
         "gone": [KEY[s].hex() for s in gone],
-        "schemas": list(schemas),
+        "descriptions": [fe.json_form(fe.description_of(t)) for t in schemas],
         "offer_ids": OFFER_IDS,
         "request_ids": REQUEST_IDS,
         "relay": [KEY[s].hex() for s in relay],
@@ -7007,8 +7070,13 @@ def error_message(
     return message(SEEDS[sender], "ERROR", None, body_of("Error", d))
 
 
-def offer_message(sender: str, offer_id: str, texts: list[str], to: str = "phone", count: int = 0) -> bytes:
-    d = {"to": KEY[to], "offer_id": offer_id, "types": [{"schema": t, "count": count} for t in texts]}
+def offer_message(sender: str, offer_id: str, texts: list[Any], to: str = "phone", count: int = 0) -> bytes:
+    """An OFFER of the schemas of texts the device holds, or of descriptions given as they are."""
+    types = [
+        {"schema": t, "count": count} if isinstance(t, str) else {"description": t, "count": count}
+        for t in texts
+    ]
+    d = {"to": KEY[to], "offer_id": offer_id, "types": types}
     return message(SEEDS[sender], "OFFER", None, body_of("Offer", d))
 
 
@@ -7134,11 +7202,14 @@ def brief(answer: dict[str, Any]) -> list[str]:
             more = "".join(f", {k} {m[k]}" for k in ("fingerprint", "field") if m[k] is not None)
             out.append(f"ERROR to {to}: {m['code']}{more}")
         elif m["kind"] == "OFFER":
-            schemas = [json.loads(t) for t in m["schemas"]]
-            names = ", ".join(f"{full_name(s)} version {s['axt.version']}" for s in schemas)
+            types = [fe.type_of(fe.from_json_form(d)) for d in m["descriptions"]]
+            names = ", ".join(f"{name} version {version}" for name, version in types)
             out.append(f"OFFER {m['offer_id'][:8]} to {to}: {names}")
         elif m["kind"] == "ACCEPT":
             out.append(f"ACCEPT {m['offer_id'][:8]} to {to}: {', '.join(m['types'])}")
+        elif m["kind"] == "DECLINE":
+            reasons = ", ".join(f"{t['type']} {t['reason']}" for t in m["types"])
+            out.append(f"DECLINE {m['offer_id'][:8]} to {to}: {reasons}")
         elif m["kind"] == "PROPOSAL_REPLY":
             version = m["record"]["version"]
             out.append(f"PROPOSAL_REPLY {m['proposal_id'][:8]} to {to}, version {version}: {m['answer']}")
@@ -7586,9 +7657,9 @@ def sessions() -> list[Session]:
         "namespace": "com.example",
         "doc": "A type for the data depth limit, in the vectors only.",
         "axt.version": 1,
-        "fields": [{"name": "v", "type": nested, "doc": "Arrays inside arrays."}],
+        "fields": [{"name": "v", "type": nested, "default": [], "doc": "Arrays inside arrays."}],
     }
-    deep_text = json.dumps(deep_json)
+    deep_text = fe.source(json.dumps(deep_json))
     for arrays, what in [(31, "32 is within the limit"), (32, "33 is rejected")]:
         inside: Any = []
         for _ in range(arrays - 1):
@@ -7803,10 +7874,17 @@ def sessions() -> list[Session]:
     )
     s.receive(offer_message("tablet", OFFER_IDS[5], [APPOINTMENT_1, APPOINTMENT_2]))
     s = new(
-        "an offer of a sibling with a schema that is no record is rejected",
+        "an offer of a sibling with a description whose root is no object is rejected",
         ["sync.md 7.2", "protocol.md 4.2"],
     )
-    s.receive(offer_message("tablet", OFFER_IDS[5], ['"string"']))
+    s.receive(
+        offer_message("tablet", OFFER_IDS[5], [fe.field("v", "A text.", fe.brick("StringField"), fe.texts())])
+    )
+    s = new(
+        "a type of a sibling's offer whose description is not valid is declined",
+        ["sync.md 7.2", "protocol.md 5.2", "fields.md 10.1"],
+    )
+    s.receive(offer_message("tablet", OFFER_IDS[5], [PET_1, dict(fe.description_of(APPOINTMENT_1), doc=" ")]))
     s = new(
         "an offer of a sibling for another device is ignored", ["sync.md 7.2", "protocol.md 9.1"], base(two)
     )
@@ -8454,9 +8532,17 @@ def sessions() -> list[Session]:
     s.step({"reconnect": LAPTOP.hex()})
 
     # --- the validity of an offer between siblings (section 7.2) ---
-    many = [json.dumps({"type": "record", "name": f"com.example.T{n}", "fields": []}) for n in range(257)]
-    large = json.loads(PET_1)
-    large["doc"] = "x" * 262144
+    one = fe.field("text", "A text.", fe.brick("StringField"), fe.texts())
+    many = [
+        fe.field(
+            "t",
+            "A type.",
+            fe.brick("ObjectField", name=f"com.example.T{n}", fields=[one], version=1),
+            fe.texts(),
+        )
+        for n in range(257)
+    ]
+    large = dict(fe.description_of(PET_1), doc="x" * 262144)
     offers: list[tuple[str, bytes, str]] = [
         (
             "the nil UUID as its id",
@@ -8465,10 +8551,31 @@ def sessions() -> list[Session]:
         ),
         ("no type", offer_message("tablet", OFFER_IDS[5], []), ""),
         ("257 types", offer_message("tablet", OFFER_IDS[5], many), ""),
-        ("a schema that is no JSON text", offer_message("tablet", OFFER_IDS[5], ["{"]), ""),
+        (
+            "a description whose root is a list",
+            offer_message(
+                "tablet",
+                OFFER_IDS[5],
+                [
+                    fe.field(
+                        "l",
+                        "A list.",
+                        fe.brick(
+                            "ListField", items=fe.field("l", "A text.", fe.brick("StringField"), fe.texts())
+                        ),
+                        fe.texts(),
+                    )
+                ],
+            ),
+            "",
+        ),
         ("a count of -1", offer_message("tablet", OFFER_IDS[5], [PET_1], count=-1), ""),
-        ("a schema above 256 KiB", offer_message("tablet", OFFER_IDS[5], [json.dumps(large)]), "TOO_LARGE"),
     ]
+    s = new(
+        "a type of a sibling's offer with a description above 256 KiB is declined",
+        ["sync.md 7.2", "fields.md 9.1"],
+    )
+    s.receive(offer_message("tablet", OFFER_IDS[5], [large]))
     for label, m, _ in offers:
         s = new(f"an offer of a sibling with {label} is rejected", ["sync.md 7.2", "protocol.md 4.2"])
         s.receive(m)
@@ -9308,7 +9415,7 @@ def received_sessions() -> list[Session]:
         ("step 10: a schema nested to a depth of 64", nested_schema(64)),
         (
             "step 11: the schema with the whitespace of its file, which has the same fingerprint",
-            APPOINTMENT_1,
+            APPOINTMENT_FILE,
         ),
     ]
     for label, schema in within:
@@ -12407,12 +12514,6 @@ SAID: dict[str, list[list[str]]] = {
             "ERROR to tablet: OFFER_INVALID",
         ],
     ],
-    "an offer of a sibling with a schema that is no record is rejected": [
-        [
-            "outcome: None",
-            "ERROR to tablet: OFFER_INVALID",
-        ],
-    ],
     "an offer of a sibling for another device is ignored": [
         [
             "outcome: None",
@@ -12421,8 +12522,8 @@ SAID: dict[str, list[list[str]]] = {
     "a device sends no CHANGE that names a schema a sibling declined": [
         [
             "made: True",
-            "CHANGE to tablet, version 111, state 111, in part: location@110p",
             "OFFER 00000001 to laptop: axt.example.v1.Appointment version 1",
+            "CHANGE to tablet, version 111, state 111, in part: location@110p",
         ],
         [
             "outcome: None",
@@ -13539,8 +13640,8 @@ SAID: dict[str, list[list[str]]] = {
     "a second RESYNC with another id starts the answer anew, and both are acknowledged at its end": [
         [
             "outcome: None",
-            "CHANGE to tablet, version 128, state 128, whole: all seven@100p",
             "OFFER 00000001 to tablet: axt.example.v1.Appointment version 2",
+            "CHANGE to tablet, version 128, state 128, whole: all seven@100p",
         ],
         [],
         [
@@ -14166,22 +14267,10 @@ SAID: dict[str, list[list[str]]] = {
             "ERROR to tablet: OFFER_INVALID",
         ],
     ],
-    "an offer of a sibling with a schema that is no JSON text is rejected": [
-        [
-            "outcome: None",
-            "ERROR to tablet: OFFER_INVALID",
-        ],
-    ],
     "an offer of a sibling with a count of -1 is rejected": [
         [
             "outcome: None",
             "ERROR to tablet: OFFER_INVALID",
-        ],
-    ],
-    "an offer of a sibling with a schema above 256 KiB is rejected": [
-        [
-            "outcome: None",
-            "ERROR to tablet: TOO_LARGE",
         ],
     ],
     "an offer of a sibling with 256 types is valid": [
@@ -16976,9 +17065,9 @@ SAID: dict[str, list[list[str]]] = {
     ],
     "a device that joins gets every kept message, and after the offer every owner's layer whole": [
         [
+            "OFFER 00000001 to laptop: axt.example.v1.Appointment version 1",
             "FORWARD 00000002 to laptop, #1: DATA version 1, with the schema as offered",
             "FORWARD 00000001 to laptop, #0: MANIFEST revision 1",
-            "OFFER 00000001 to laptop: axt.example.v1.Appointment version 1",
         ],
         [
             "outcome: None",
@@ -16996,8 +17085,8 @@ SAID: dict[str, list[list[str]]] = {
         ],
     ],
     (
-        "a restored device forwards nothing and sends no layer before its request is "
-        "acknowledged; a field never stamped of a layer gets the stamp -1"
+        "a restored device forwards nothing and sends no layer before its request is acknowledged; a field "
+        "never stamped of a layer gets the stamp -1"
     ): [
         [
             "RESYNC 00000001 to tablet",
@@ -17019,8 +17108,8 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             "outcome: None",
-            "FORWARD 00000001 to tablet, #0: MANIFEST revision 1",
             "OFFER 00000001 to tablet: axt.example.v1.Appointment version 1",
+            "FORWARD 00000001 to tablet, #0: MANIFEST revision 1",
         ],
         [
             "outcome: None",
@@ -18231,13 +18320,13 @@ SAID: dict[str, list[list[str]]] = {
     ],
     "a DATA beside a tombstone travels to a new device, before the DELETE": [
         [
+            "OFFER 00000001 to laptop: axt.example.v1.Appointment version 1",
             (
-                "FORWARD 00000002 to laptop, #1: DATA version 3, start changed, notes 'Bring the "
-                "vaccination card', with the schema as offered"
+                "FORWARD 00000002 to laptop, #1: DATA version 3, start changed, notes 'Bring the vaccination "
+                "card', with the schema as offered"
             ),
             "FORWARD 00000003 to laptop, #2: DELETE version 4",
             "FORWARD 00000001 to laptop, #0: MANIFEST revision 1",
-            "OFFER 00000001 to laptop: axt.example.v1.Appointment version 1",
         ],
     ],
     "a DATA for a record that the owner deleted stays deleted: KEPT; an older one is STALE": [
@@ -19099,6 +19188,31 @@ SAID: dict[str, list[list[str]]] = {
     "a forwarded PROPOSAL beyond the limit of 16 open proposals for one record is kept all the same": [
         ["outcome: APPLIED"],
         ["ACK of 0000000a to tablet: version 1 APPLIED, receiver 1"],
+    ],
+    "an offer of a sibling with a description whose root is no object is rejected": [
+        [
+            "outcome: None",
+            "ERROR to tablet: OFFER_INVALID",
+        ],
+    ],
+    "a type of a sibling's offer whose description is not valid is declined": [
+        [
+            "outcome: None",
+            "ACCEPT 00000006 to tablet: axt.example.v1.Pet",
+            "DECLINE 00000006 to tablet: axt.example.v1.Appointment DESCRIPTION_INVALID",
+        ],
+    ],
+    "a type of a sibling's offer with a description above 256 KiB is declined": [
+        [
+            "outcome: None",
+            "DECLINE 00000006 to tablet: axt.example.v1.Pet DESCRIPTION_INVALID",
+        ],
+    ],
+    "an offer of a sibling with a description whose root is a list is rejected": [
+        [
+            "outcome: None",
+            "ERROR to tablet: OFFER_INVALID",
+        ],
     ],
 }
 

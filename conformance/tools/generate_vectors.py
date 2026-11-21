@@ -881,6 +881,19 @@ def meaning(t: Any, value: Any, names: dict[str, Any] | None = None) -> Any:
         if value is None:
             return None
         branches = [b for b in t if b != "null"]
+
+        def full_of(b: Any) -> str:
+            n = b if isinstance(b, str) else b["name"]
+            return n if "." in n else f"{names.get('', '')}.{n}"
+
+        if (
+            isinstance(value, dict)
+            and len(value) == 1
+            and next(iter(value)) in {full_of(b) for b in branches}
+        ):
+            # The bricks of a description, read with their names: the branch is the member's name.
+            ((name, inner),) = value.items()
+            return {name: meaning(next(b for b in branches if full_of(b) == name), inner, names)}
         if len(branches) > 1:
             # The targets of axt.Relation, the only other union of the vectors: the branch is the record
             # whose fields the value has (spec/conformance.md, section 3.3).
@@ -1030,9 +1043,9 @@ def encoding_category() -> Category:
         "DeviceJoin": 0xDFF876FAB5FECF2F,
         "DeviceAdd": 0xC60D1EF44B7B3131,
         "DeviceRemove": 0xD0F57582AAB2AADC,
-        "Offer": 0x415463CACA7A687D,
+        "Offer": 0x0D419C150D98AE9B,
         "Accept": 0x6B244FC3913D82AB,
-        "Decline": 0x22D2BD11845492C0,
+        "Decline": 0x70078F60F3BA4953,
         "Ack": 0x38DD09198076E05C,
         "Error": 0x7CA5B3D13DBCF383,
         "QrPayload": 0xDDBCA858F745D131,
@@ -1042,6 +1055,7 @@ def encoding_category() -> Category:
         "Withdraw": se.WITHDRAW_FP,
         "Proposal": 0x2512222A12D90279,
         "ProposalReply": 0x64610CE36E75F8C6,
+        "Field": 0x527242BB71C90163,
     }
     sections = {
         "Envelope": "envelope.md 10.1",
@@ -1056,6 +1070,7 @@ def encoding_category() -> Category:
         "Withdraw": "shares.md 10",
         "Proposal": "shares.md 10",
         "ProposalReply": "shares.md 10",
+        "Field": "fields.md 2",
     }
     for name, want in published.items():
         text = (REPO / "types" / "axt" / f"{name}.avsc").read_text(encoding="utf-8")
@@ -1115,7 +1130,10 @@ def encoding_category() -> Category:
     # The messages of Old Brain Fix that the FORWARD of section 16.5 and the one before it carry are
     # those that the other documents show.
     assert sy.EXAMPLE_OTHERS["the MANIFEST of Old Brain Fix"] == pe.m2
-    assert sy.APPOINTMENT_OFFERED == pe.APPOINTMENT_TEXT and sy.KEY_OBF == OBF
+    assert (
+        sy.APPOINTMENT_OFFERED == pe.fe.derived_text(pe.offered({"schema": pe.APPOINTMENT_TEXT}))
+        and sy.KEY_OBF == OBF
+    )
     assert [pe.fp8(pe.fingerprints[n][1]) for n in pe.SYNC] == [sy.SPEC_FP[n] for n in pe.SYNC]
     goods += [(label, sy.EXAMPLE_MESSAGES[label], refs) for label, refs in sync_messages]
     for label, m, refs in goods:
@@ -1210,9 +1228,7 @@ def encoding_category() -> Category:
             continue
         name = pe.BODY_SCHEMA[d["kind"]]
         body = d["body"]
-        value = meaning(
-            pe.jsons[name], fastavro.schemaless_reader(io.BytesIO(body[10:]), pe.raw[name], pe.raw[name])
-        )
+        value = meaning(pe.jsons[name], pe.read_body(body[10:], pe.raw[name]))
         c.add(
             "decode_body",
             f"the body of {label}",
@@ -1242,7 +1258,9 @@ def encoding_category() -> Category:
     forward: bytes = sy.EXAMPLE_MESSAGES["the FORWARD of sync.md, section 16.5"]
     forward_body = cast(bytes, sy.read_all("Envelope", forward[10:])["body"])
     schema_at = len(forward_body) - len(sy.APPOINTMENT_OFFERED.encode()) - 3  # the union index of schema
-    assert forward_body[schema_at : schema_at + 3] == keys.zigzag(1) + keys.zigzag(6389)
+    assert forward_body[schema_at : schema_at + 3] == keys.zigzag(1) + keys.zigzag(
+        len(sy.APPOINTMENT_OFFERED.encode())
+    )
     without_schema = sy.body_of("Forward", {"to": sy.TABLET, "message": pe.m2, "schema": None})
     c.add(
         "decode_body",
@@ -1622,14 +1640,14 @@ def types_category() -> Category:
         single_object(wtext, dict(rules.DATA["Pet"], colour="tabby")),
     )
 
-    # The data depth limit, with a recursive app type read with its writer schema alone (spec/types.md,
-    # section 5.7).
+    # The data depth limit, with an app type of lists in lists read with its writer schema alone
+    # (spec/types.md, section 5.7).
     for levels, ok in [(16, True), (17, False)]:
         datum = pe.outline(levels)
         depth = pe.data_depth(datum)
         data = single_object(pe.OUTLINE_TEXT, datum)
         record_vector(
-            f"a recursive app type at data depth {depth}",
+            f"an app type of lists in lists at data depth {depth}",
             ["types.md 5.7"],
             pe.OUTLINE_TEXT,
             None,
@@ -2293,7 +2311,7 @@ def manifest_category() -> Category:
 def decode_reply(m: bytes) -> tuple[Any, Any]:
     d: Any = fastavro.schemaless_reader(io.BytesIO(m[10:]), pe.raw["Envelope"], pe.raw["Envelope"])
     name = pe.BODY_SCHEMA[d["kind"]]
-    return d["kind"], fastavro.schemaless_reader(io.BytesIO(d["body"][10:]), pe.raw[name], pe.raw[name])
+    return d["kind"], pe.read_body(d["body"][10:], pe.raw[name])
 
 
 def normalize_replies(replies: Any) -> tuple[dict[str, Any], list[dict[str, Any]]]:
@@ -2416,18 +2434,12 @@ def run_session(
         elif kind == "offer":
             _, offer_id, types = step
             app.offer(offer_id, [(t, n, None) for t, n in types])
-            inputs.append(
-                {"offer": {"offer_id": offer_id, "types": [{"schema": t, "count": n} for t, n in types]}}
-            )
-            expected.append(
-                {
-                    "offer": {
-                        "to": H(app.peer),
-                        "offer_id": offer_id,
-                        "types": [{"schema": t, "count": n} for t, n in types],
-                    }
-                }
-            )
+            # The app offers the description of each type (spec/fields.md, section 10.1).
+            offered = [
+                {"description": pe.fe.json_form(pe.offered({"schema": t})), "count": n} for t, n in types
+            ]
+            inputs.append({"offer": {"offer_id": offer_id, "types": offered}})
+            expected.append({"offer": {"to": H(app.peer), "offer_id": offer_id, "types": offered}})
         elif kind == "close":
             app.close()
             inputs.append({"close": True})
@@ -2641,9 +2653,11 @@ def protocol_category() -> Category:
         r(bad_offer([]), "ERROR OFFER_INVALID"),
         r(bad_offer([{"schema": pe.PET_TEXT, "count": 0}] * 2), "ERROR OFFER_INVALID"),
         r(bad_offer([{"schema": pe.PET_TEXT, "count": 0}], oid="offer-1"), "ERROR OFFER_INVALID"),
+        r(bad_offer([{"description": pe.NOT_AN_OBJECT, "count": 0}]), "ERROR OFFER_INVALID"),
         r(
-            bad_offer([{"schema": '{"type":"enum","name":"E","symbols":["A"]}', "count": 0}]),
-            "ERROR OFFER_INVALID",
+            bad_offer([{"description": pe.big_doc, "count": 0}], oid=pe.BIG_OFFER_ID),
+            "answers",
+            answers={pe.BIG_OFFER_ID: {"axt.example.v1.Pet": "DESCRIPTION_INVALID"}},
         ),
         (
             "flush",
@@ -2691,12 +2705,6 @@ def protocol_category() -> Category:
         ("a format field that is not the envelope's format", pe.fmt2, "ERROR INVALID_MESSAGE", ambiguous),
         ("a message above 16 MiB", oversized, "ERROR TOO_LARGE", {}),
         ("a DELETE with a body", pe.del_body, "ERROR INVALID_MESSAGE", ambiguous),
-        (
-            "an offer with a schema above 256 KiB",
-            bad_offer([{"schema": pe.big_doc, "count": 0}]),
-            "ERROR TOO_LARGE",
-            {},
-        ),
     ]:
         run_session(
             c,
@@ -5954,6 +5962,7 @@ def container(
     meta: dict[str, bytes | None] | None = None,
     blocks: list[tuple[int, bytes]] | None = None,
     sync: bytes = SYNC,
+    entries_as_given: list[Any] | None = None,
 ) -> bytes:
     """An AXT file: the live messages without their single-object header, in one block (spec/envelope.md, section 4).
 
@@ -5964,7 +5973,9 @@ def container(
     entries: dict[str, bytes] = {}
     value: bytes | None = None
     if schemas is not None:
-        value = json.dumps(schemas, separators=(",", ":"), ensure_ascii=False).encode()
+        # Each type as its description and the schema derived from it (spec/fields.md, section 10.2).
+        given = pe.fe.file_entries(schemas) if entries_as_given is None else entries_as_given
+        value = json.dumps(given, separators=(",", ":"), ensure_ascii=False).encode()
         entries["axt.schemas"] = value
     signed_bytes = keys.FILE_HEADER_PREFIX + sender + hashlib.sha256(value or b"").digest()
     entries["axt.sender"] = sender.hex().encode()
@@ -6401,6 +6412,30 @@ def file_category() -> Category:
             ["envelope.md 4.3"],
         ),
         ("a DATA in a file without axt.schemas", container([MEMO_MSG], None), ["envelope.md 4.3"]),
+        (
+            "an entry of axt.schemas whose schema is not the one derived from its description",
+            container(
+                [MEMO_MSG],
+                [env.MEMO_SCHEMA],
+                entries_as_given=[
+                    {"description": e["description"], "schema": schema(NT)}
+                    for e in pe.fe.file_entries([env.MEMO_SCHEMA])
+                ],
+            ),
+            ["envelope.md 4.1", "fields.md 10.2"],
+        ),
+        (
+            "an entry of axt.schemas whose description is not valid",
+            container(
+                [MEMO_MSG],
+                [env.MEMO_SCHEMA],
+                entries_as_given=[
+                    {"description": dict(e["description"], doc=""), "schema": e["schema"]}
+                    for e in pe.fe.file_entries([env.MEMO_SCHEMA])
+                ],
+            ),
+            ["envelope.md 4.1", "fields.md 10.2"],
+        ),
         ("a datum whose format is 2", container([fmt2], [env.MEMO_SCHEMA]), ["keys.md 2.2"]),
         ("a DATA without record", container([no_record], [env.MEMO_SCHEMA]), ["protocol.md 2"]),
         ("a MANIFEST whose body has another fingerprint", container([man_fp], None), ["protocol.md 2"]),
@@ -6937,6 +6972,38 @@ def sync_category() -> Category:
 
 # --- output ---------------------------------------------------------------------
 
+
+def bricks_category() -> Category:
+    c = Category(
+        "bricks",
+        "Descriptions of types made of typed fields: the schema derived from each, its canonical form and "
+        "fingerprint, and the descriptions that are not valid (spec/fields.md).",
+    )
+    fe = pe.fe
+    valid, invalid = fe.vector_descriptions()
+    for label, d in valid:
+        text = fe.derived_text(d)
+        pcf, fp = me.fingerprint(text)
+        assert pcf == fe.canonical(fe.derive(d))[0]
+        c.add(
+            "derive",
+            f"{label} derives its schema",
+            ["fields.md 9.2", "fields.md 9.3", "envelope.md 5"],
+            {"description": B(fe.binary(d))},
+            accept({"schema": text, "canonical_form": pcf, "fingerprint": H(pe.fp8(fp))}),
+        )
+    for label, d, where in invalid:
+        problem = next(p for w, p in fe.description_problems(d) if w == where)
+        c.add(
+            "derive",
+            f"a description with {label} is not valid",
+            ["fields.md 6", "fields.md 9.1"],
+            {"description": B(fe.binary(d))},
+            reject("DESCRIPTION_INVALID", f"{where or 'the root'}: {problem}"),
+        )
+    return c
+
+
 CATEGORIES = [
     encoding_category,
     types_category,
@@ -6953,6 +7020,7 @@ CATEGORIES = [
     relay_server_category,
     sync_category,
     shares_category,
+    bricks_category,
 ]
 
 
@@ -6998,8 +7066,9 @@ def same_values(v: Any) -> Any:
 # The vectors of each category by operation, and of them the rejected ones, as the table of
 # spec/conformance.md, section 7.4, counts them.
 COUNTS = {
+    "bricks": ({"derive": 61}, {"derive": 49}),
     "encoding": (
-        {"fingerprint": 24, "decode_message": 40, "decode_body": 56, "encode_message": 8},
+        {"fingerprint": 25, "decode_message": 40, "decode_body": 56, "encode_message": 8},
         {"decode_message": 17, "decode_body": 37},
     ),
     # 0.1.0 and the relations of 0.2.0 (spec/conformance.md, section 7.5): 9 + 65 vectors, 18 rejected.
@@ -7039,8 +7108,8 @@ COUNTS = {
             "open": 8,
         },
     ),
-    "protocol": ({"choose_format": 3, "contact_key": 5, "resend_after_removal": 2, "session": 48}, {}),
-    "file": ({"read_file": 66}, {"read_file": 44}),
+    "protocol": ({"choose_format": 3, "contact_key": 5, "resend_after_removal": 2, "session": 47}, {}),
+    "file": ({"read_file": 68}, {"read_file": 46}),
     "qr": ({"parse_qr": 28, "qr_text": 4}, {"parse_qr": 21}),
     "local": ({"hello_frame": 2, "connection": 20}, {}),
     "relay": ({"mailbox_id": 2, "request": 7, "reaction": 28, "listing": 3}, {}),
@@ -7055,7 +7124,7 @@ COUNTS = {
             "stale": 10,
             "pass_version": 5,
             "shown": 23,
-            "siblings": 475,
+            "siblings": 476,
             "withdrawal_stamp": 4,
         },
         {},

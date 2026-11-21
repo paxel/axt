@@ -99,15 +99,15 @@ The receiver applies a `DEVICE_ADD` and a `DEVICE_REMOVE` by [keys.md](keys.md),
 
 An `OFFER` message carries `record` `null` and one `axt.Offer` as its body ([types/axt/Offer.avsc](../types/axt/Offer.avsc)):
 
-| Field            | Avro type                     | Content                                                                                            |
-| ---------------- | ----------------------------- | -------------------------------------------------------------------------------------------------- |
-| `to`             | `fixed` of 32, `axt.OfferTo`  | The Ed25519 public key of the receiver, the key of the device the offer goes to (section 9.1)      |
-| `offer_id`       | `string`, logical type `uuid` | The id of the offer                                                                                |
-| `types`          | array of `axt.OfferType`      | The types offered                                                                                  |
-| `types[].schema` | `string`                      | The writer schema of the type, as its full JSON text                                               |
-| `types[].count`  | `long`                        | The number of record messages of the type the sender is about to send under the offer, for display |
+| Field                 | Avro type                     | Content                                                                                            |
+| --------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------- |
+| `to`                  | `fixed` of 32, `axt.OfferTo`  | The Ed25519 public key of the receiver, the key of the device the offer goes to (section 9.1)      |
+| `offer_id`            | `string`, logical type `uuid` | The id of the offer                                                                                |
+| `types`               | array of `axt.OfferType`      | The types offered                                                                                  |
+| `types[].description` | `axt.Field`                   | The description of the type, from which its writer schema is derived ([fields.md](fields.md))      |
+| `types[].count`       | `long`                        | The number of record messages of the type the sender is about to send under the offer, for display |
 
-- `schema` is the schema's full JSON text, with its `doc` attributes, `axt.version` and every other attribute, as the sender writes it. The offer's signature covers it, as [keys.md](keys.md), section 2.4, requires. The type's full name, version ([manifest.md](manifest.md), section 3.4) and fingerprint ([envelope.md](envelope.md), section 5) are those of this schema; the offer does not repeat them.
+- `description` is the type's description, a typed field whose brick is an object ([fields.md](fields.md), section 9.1). The writer schema of the type's records under the offer is the schema derived from it ([fields.md](fields.md), section 9.2). The offer's signature covers it, as [keys.md](keys.md), section 2.4, requires. The type's full name, version ([manifest.md](manifest.md), section 3.4) and fingerprint ([envelope.md](envelope.md), section 5) are those of the description and its derived schema; the offer does not repeat them.
 - `offer_id` is a version 4 or version 7 UUID of [RFC 9562](https://www.rfc-editor.org/rfc/rfc9562) in lower-case text form, which the sender generates for the offer. A sender MUST NOT use an id for a second offer, to the same or another receiver. One offer id always stands for the same offer.
 - `count` lets the receiver show its user what is coming, such as "cat-a-log wants to send 1 Appointment". It is `0` when the sender does not say. It does not limit what the sender sends under the offer, and a receiver MUST NOT reject record messages because they exceed it.
 
@@ -119,14 +119,13 @@ An offer is valid when:
 
 - `offer_id` is a UUID in text form and neither the nil UUID nor the max UUID;
 - `types` has 1 to 256 entries;
-- each `schema` is within the schema limits of [envelope.md](envelope.md), section 8: 256 KiB of JSON text, nested to a depth of at most 64;
-- each `schema` is a JSON text ([RFC 8259](https://www.rfc-editor.org/rfc/rfc8259)) that is an Avro 1.12 schema of a record;
-- no full name and no fingerprint appears twice in `types` ([envelope.md](envelope.md), section 5);
+- the root of each `description` is an object, which names a type ([fields.md](fields.md), section 10.1);
+- no full name appears twice in `types`, and no fingerprint of a derived schema ([envelope.md](envelope.md), section 5);
 - each `count` is at least 0.
 
-A receiver MUST reject an offer that is not valid, and MUST NOT accept any of its types. It reports a schema above the schema limits with `TOO_LARGE`, as [envelope.md](envelope.md), section 8, requires, and every other breach with `OFFER_INVALID` (section 8). An offer whose `to` is not the receiver's key is not for the receiver: it ignores it without a report (section 9.1).
+A receiver MUST reject an offer that is not valid, and MUST NOT accept any of its types. It reports every breach with `OFFER_INVALID` (section 8). An offer whose `to` is not the receiver's key is not for the receiver: it ignores it without a report (section 9.1).
 
-A type that does not fit the receiver's manifest, or whose schema does not resolve against the receiver's, does not make an offer invalid; the receiver declines the type (section 5.2).
+A type that does not fit the receiver's manifest, whose schema does not resolve against the receiver's, or whose description is not valid, such as one above the limits of a description ([fields.md](fields.md), section 9.1), does not make an offer invalid; the receiver declines the type (section 5.2).
 
 A sender MUST offer only types that fit the receiver's manifest ([manifest.md](manifest.md), section 5.3): the manifest of the device whose key is the offer's `to`. A set of types whose schemas do not fit into one message of 16 MiB is offered in several offers.
 
@@ -163,11 +162,12 @@ An `ACCEPT` or `DECLINE` message carries `record` `null` and one `axt.Accept` or
 | `types[].type`   | `DECLINE` | `string`                      | The full name of a type not taken            |
 | `types[].reason` | `DECLINE` | enum `axt.DeclineReason`      | Why it is not taken                          |
 
-| Reason             | Meaning                                                                                                                      |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| `NOT_WANTED`       | The receiver, or its user, chose not to take the type                                                                        |
-| `DOES_NOT_FIT`     | The type, in the offered version, does not fit the receiver's current manifest ([manifest.md](manifest.md), section 5.2)     |
-| `DOES_NOT_RESOLVE` | The offered schema does not resolve against the receiver's reader schema of the type ([envelope.md](envelope.md), section 6) |
+| Reason                | Meaning                                                                                                                      |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `NOT_WANTED`          | The receiver, or its user, chose not to take the type                                                                        |
+| `DOES_NOT_FIT`        | The type, in the offered version, does not fit the receiver's current manifest ([manifest.md](manifest.md), section 5.2)     |
+| `DOES_NOT_RESOLVE`    | The offered schema does not resolve against the receiver's reader schema of the type ([envelope.md](envelope.md), section 6) |
+| `DESCRIPTION_INVALID` | The offered description is not valid, so no schema is derived from it ([fields.md](fields.md), section 10.1)                 |
 
 `types` has 1 to 256 entries in both messages. Each entry MUST name a type of the offer, and no type appears twice in one message.
 
@@ -178,6 +178,7 @@ A receiver answers each type of a valid offer once, either in an `ACCEPT` or in 
 - A receiver MUST decline a type that does not fit its current manifest, with `DOES_NOT_FIT`. It judges by the manifest it has when it answers, not by the one it sent ([manifest.md](manifest.md), section 5.4).
 - A receiver that has a reader schema of the type MUST decline it with `DOES_NOT_RESOLVE` when the offered schema does not resolve against it ([envelope.md](envelope.md), section 6). A receiver that takes the type as any type and has no reader schema of it reads its records with the writer schema alone.
 - A receiver MUST decline a type whose schema defines a time type or `axt.Relation` other than as published, or another named type in the namespace `axt` than these and the nested types of `axt.Relation`, with `DOES_NOT_RESOLVE` ([time.md](time.md), section 3.1; [types.md](types.md), section 8.6).
+- A receiver MUST decline a type whose description is not valid with `DESCRIPTION_INVALID` ([fields.md](fields.md), section 10.1).
 - A receiver MAY decline any type with `NOT_WANTED`.
 - A receiver MUST NOT accept a type that it has declined for the same offer, and MUST NOT answer a type of an offer differently a second time.
 
@@ -192,7 +193,7 @@ The sender of an offer takes an answer when its `to` is its own key, the key tha
 
 Between the devices of one set, "its latest offer of that type" is its latest offer of a schema with that fingerprint: two schemas of one type can be on offer at once ([sync.md](sync.md), section 7.2).
 
-After an `ACCEPT` of a type, the sender may send the type's record messages (section 6.1). After a `DECLINE`, it sends none, and SHOULD NOT offer the type to that receiver again until the cause has changed. For `NOT_WANTED`, that means its user asks to offer it again. For `DOES_NOT_FIT`, the receiver's manifest has a higher revision. For `DOES_NOT_RESOLVE`, the sender has another schema of the type.
+After an `ACCEPT` of a type, the sender may send the type's record messages (section 6.1). After a `DECLINE`, it sends none, and SHOULD NOT offer the type to that receiver again until the cause has changed. For `NOT_WANTED`, that means its user asks to offer it again. For `DOES_NOT_FIT`, the receiver's manifest has a higher revision. For `DOES_NOT_RESOLVE`, the sender has another schema of the type. For `DESCRIPTION_INVALID`, it has a valid description of the type.
 
 ### 5.4 Two kinds
 
@@ -530,10 +531,10 @@ The schemas are [types/axt/Offer.avsc](../types/axt/Offer.avsc), [types/axt/Acce
 
 Each enum has a default symbol, as [types.md](types.md), section 5.4, requires; within one envelope format every symbol is known, and the default only takes effect in schema resolution with a schema of another format. The defaults are those that make a sender do nothing: `NOT_WANTED`, `DUPLICATE` and `INVALID_MESSAGE`.
 
-Their Parsing Canonical Forms:
+Their Parsing Canonical Forms, with the fields of `axt.Field`, which `axt.Offer` defines in place as [types/axt/Field.avsc](../types/axt/Field.avsc) does, shown as `[…]`:
 
 ```json
-{"name":"axt.Offer","type":"record","fields":[{"name":"to","type":{"name":"axt.OfferTo","type":"fixed","size":32}},{"name":"offer_id","type":"string"},{"name":"types","type":{"type":"array","items":{"name":"axt.OfferType","type":"record","fields":[{"name":"schema","type":"string"},{"name":"count","type":"long"}]}}}]}
+{"name":"axt.Offer","type":"record","fields":[{"name":"to","type":{"name":"axt.OfferTo","type":"fixed","size":32}},{"name":"offer_id","type":"string"},{"name":"types","type":{"type":"array","items":{"name":"axt.OfferType","type":"record","fields":[{"name":"description","type":{"name":"axt.Field","type":"record","fields":[…]}},{"name":"count","type":"long"}]}}}]}
 ```
 
 ```json
@@ -541,7 +542,7 @@ Their Parsing Canonical Forms:
 ```
 
 ```json
-{"name":"axt.Decline","type":"record","fields":[{"name":"to","type":{"name":"axt.DeclineTo","type":"fixed","size":32}},{"name":"offer_id","type":"string"},{"name":"types","type":{"type":"array","items":{"name":"axt.DeclineType","type":"record","fields":[{"name":"type","type":"string"},{"name":"reason","type":{"name":"axt.DeclineReason","type":"enum","symbols":["NOT_WANTED","DOES_NOT_FIT","DOES_NOT_RESOLVE"]}}]}}}]}
+{"name":"axt.Decline","type":"record","fields":[{"name":"to","type":{"name":"axt.DeclineTo","type":"fixed","size":32}},{"name":"offer_id","type":"string"},{"name":"types","type":{"type":"array","items":{"name":"axt.DeclineType","type":"record","fields":[{"name":"type","type":"string"},{"name":"reason","type":{"name":"axt.DeclineReason","type":"enum","symbols":["NOT_WANTED","DOES_NOT_FIT","DOES_NOT_RESOLVE","DESCRIPTION_INVALID"]}}]}}}]}
 ```
 
 ```json
@@ -554,9 +555,9 @@ Their Parsing Canonical Forms:
 
 | Schema        | Envelope format | CRC-64-AVRO          | As bytes                  |
 | ------------- | --------------- | -------------------- | ------------------------- |
-| `axt.Offer`   | 1               | `0x415463caca7a687d` | `7d 68 7a ca ca 63 54 41` |
+| `axt.Offer`   | 1               | `0x0d419c150d98ae9b` | `9b ae 98 0d 15 9c 41 0d` |
 | `axt.Accept`  | 1               | `0x6b244fc3913d82ab` | `ab 82 3d 91 c3 4f 24 6b` |
-| `axt.Decline` | 1               | `0x22d2bd11845492c0` | `c0 92 54 84 11 bd d2 22` |
+| `axt.Decline` | 1               | `0x70078f60f3ba4953` | `53 49 ba f3 60 8f 07 70` |
 | `axt.Ack`     | 1               | `0x38dd09198076e05c` | `5c e0 76 80 19 09 dd 38` |
 | `axt.Error`   | 1               | `0x7ca5b3d13dbcf383` | `83 f3 bc 3d d1 b3 a5 7c` |
 
@@ -567,7 +568,7 @@ The fingerprints and the example of section 17 were produced with [conformance/t
 - uses every default of the schemas once in schema resolution, with both libraries, and for each enum a symbol the reader does not know, which fastavro reads as the default; the `avro` package 1.12.2 raises an error instead ([types.md](types.md), section 7.3);
 - builds every message of section 17 field by field, compares it with fastavro's encoding, decodes it with fastavro and with `avro`, and checks that `avro` encodes each body to the same bytes;
 - signs each message with the Ed25519 implementation of [conformance/tools/keys_examples.py](../conformance/tools/keys_examples.py), with PyNaCl 1.6.2 and with cryptography 50.0.2, which give the same signatures, and verifies them with all three by the strict rule of [keys.md](keys.md), section 2.3;
-- runs a model of both apps over the exchange and over 71 further cases: repeats, messages addressed to another key, the first answer standing, outcomes decided later and acknowledgements of a resend in either order, an error never answered with an error, the additions and removals of devices before and after the `MANIFEST`, among them a rejected one whose error is held until the `MANIFEST`, a `DEVICE_JOIN` in a connection that no join code opened, and one case for each error code that a record message, an offer, a manifest or an envelope can cause, among them a recursive app type at data depth 32, which is taken, and at 34, which is rejected, and a type that holds a time value that is not valid, which is rejected with `VALUE_INVALID` and the field `end`.
+- runs a model of both apps over the exchange and over 71 further cases: repeats, messages addressed to another key, the first answer standing, outcomes decided later and acknowledgements of a resend in either order, an error never answered with an error, the additions and removals of devices before and after the `MANIFEST`, among them a rejected one whose error is held until the `MANIFEST`, a `DEVICE_JOIN` in a connection that no join code opened, and one case for each error code that a record message, an offer, a manifest or an envelope can cause, among them an app type of lists in lists at data depth 32, which is taken, and at 34, which is rejected, and a type that holds a time value that is not valid, which is rejected with `VALUE_INVALID` and the field `end`.
 
 The test vectors of [conformance.md](conformance.md) take precedence over these values.
 
@@ -585,13 +586,13 @@ The keys are the test keys of [keys.md](keys.md), section 7.1: cat-a-log signs w
 |                          | public key        | `da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7` |
 |                          | short fingerprint | `01399 72263 65477 52894 90179`                                    |
 
-| Value                | Content                                                                                                                                                                                                                                                                                                                                                                                                  |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `offer_id`           | `6f1c2b9e-3d4a-4e5f-8a7b-1c2d3e4f5a6b`                                                                                                                                                                                                                                                                                                                                                                   |
-| The Appointment's id | `a2d4f6b8-1c3e-4a5b-9d7f-0e2c4a6b8d1f`, version 1                                                                                                                                                                                                                                                                                                                                                        |
-| The Pet's id         | `5e8a1f3c-7b2d-4c6e-a9f0-3d5b7c9e1a2f`, version 1                                                                                                                                                                                                                                                                                                                                                        |
-| The offered schemas  | [Pet.1.avsc](../types/axt/example/v1/Pet.1.avsc) and [Appointment.1.avsc](../types/axt/example/v1/Appointment.1.avsc), each written as JSON without whitespace, with every attribute and in the order of the file: 4,629 bytes (SHA-256 `019020a619b235bff0a2b006325c47e8792397a4849d014544b5f47bc842a745`) and 6,389 bytes (SHA-256 `d90e32b250cc1cd4bb58b35921261deb18fb03d6e6411fc6248126d54eea84b7`) |
-| The Appointment      | `title` "Vet: vaccination", `start` 2026-11-24 10:00 and `end` 10:30 in `Europe/Berlin` with the offset 3600, `location` "Tierarztpraxis, Hauptstraße 1", `notes` "Bring the vaccination certificate.", `reminders` `-P1D` and `-PT1H`                                                                                                                                                                   |
+| Value                | Content                                                                                                                                                                                                                                                                                |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `offer_id`           | `6f1c2b9e-3d4a-4e5f-8a7b-1c2d3e4f5a6b`                                                                                                                                                                                                                                                 |
+| The Appointment's id | `a2d4f6b8-1c3e-4a5b-9d7f-0e2c4a6b8d1f`, version 1                                                                                                                                                                                                                                      |
+| The Pet's id         | `5e8a1f3c-7b2d-4c6e-a9f0-3d5b7c9e1a2f`, version 1                                                                                                                                                                                                                                      |
+| The offered schemas  | [Pet.1.avsc](../types/axt/example/v1/Pet.1.avsc) and [Appointment.1.avsc](../types/axt/example/v1/Appointment.1.avsc), each offered as its description, which derives the schema of its file ([fields.md](fields.md), section 9): 1,994 and 2,591 bytes in the encoding of `axt.Field` |
+| The Appointment      | `title` "Vet: vaccination", `start` 2026-11-24 10:00 and `end` 10:30 in `Europe/Berlin` with the offset 3600, `location` "Tierarztpraxis, Hauptstraße 1", `notes` "Bring the vaccination certificate.", `reminders` `-P1D` and `-PT1H`                                                 |
 
 | Step | Message, from → to                    | What happens                                                                                                                                                                                  |
 | ---- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -667,9 +668,9 @@ Old Brain Fix's MANIFEST: 549 bytes, SHA-256 `3af8b09e06d556e993c33d1bf00f744645
 
 ### 17.3 The offer
 
-The two schema texts are shown shortened; the script prints their SHA-256.
+The two descriptions are shown shortened; [conformance/tools/protocol_examples.py](../conformance/tools/protocol_examples.py) makes them from Pet.1.avsc and Appointment.1.avsc, whose schemas they derive ([fields.md](fields.md), section 9).
 
-cat-a-log's OFFER: 11,217 bytes, SHA-256 `27b45d6eda52375cd8cff954ae0a27c9f90cf1ed2e21c9833cbaaf3340b1dc26`.
+cat-a-log's OFFER: 4,779 bytes, SHA-256 `192124a1671103ebfa084cc7ad1754831efa330a967c279fc17d6c97b925ccdc`.
 
 ```text
 0000  c3 01                    single-object marker
@@ -681,36 +682,34 @@ cat-a-log's OFFER: 11,217 bytes, SHA-256 `27b45d6eda52375cd8cff954ae0a27c9f90cf1
       4b f6 bd 69 af f1 47 1c
       ce 64 10 d5 3c 26 ec 4a
 002c  00                       record: union index 0, null
-002d  c2 ad 01                 body: bytes length 11105
-0030  c3 01                    body: single-object marker
-0032  7d 68 7a ca ca 63 54 41  body: fingerprint of axt.Offer, format 1
-003a  da 9e 54 c9 aa 2d b4 32  body: to: fixed(32), Old Brain Fix's test key
+002d  f8 48                    body: bytes length 4668
+002f  c3 01                    body: single-object marker
+0031  9b ae 98 0d 15 9c 41 0d  body: fingerprint of axt.Offer, format 1
+0039  da 9e 54 c9 aa 2d b4 32  body: to: fixed(32), Old Brain Fix's test key
       44 df 99 88 9d 91 38 c1
       ca 71 75 d4 ca 09 08 16
       8f 63 53 0e 4a 7d ed b7
-005a  48                       body: offer_id: string length 36
-005b  36 66 31 63 32 62 39 65  body: "6f1c2b9e-3d4a-4e5f-8a7b-1c2d3e4f5a6b"
+0059  48                       body: offer_id: string length 36
+005a  36 66 31 63 32 62 39 65  body: "6f1c2b9e-3d4a-4e5f-8a7b-1c2d3e4f5a6b"
       2d 33 64 34 61 2d 34 65
       35 66 2d 38 61 37 62 2d
       31 63 32 64 33 65 34 66
       35 61 36 62
-007f  04                       body: types: array block of 2 items
-0080  aa 48                    body: types[0].schema: string length 4629
-0082  7b 22 74 79 ... 5d 7d    body: Pet.1.avsc without whitespace (4629 bytes of UTF-8 JSON)
-1297  02                       body: types[0].count: long 1
-1298  ea 63                    body: types[1].schema: string length 6389
-129a  7b 22 74 79 ... 5d 7d    body: Appointment.1.avsc without whitespace (6389 bytes of UTF-8 JSON)
-2b8f  02                       body: types[1].count: long 1
-2b90  00                       body: types: end of the array
-2b91  fe f0 94 80 c3 7e ce 7d  signature: fixed(64)
-      ba 76 61 77 85 e6 37 3e
-      10 eb e0 d7 bd 08 7a 33
-      85 e4 31 93 88 2a e6 82
-      b0 d3 df 4f 97 52 3e d8
-      04 11 07 dd bb 91 93 68
-      ad 96 db 1c ef 18 ec c6
-      00 54 d0 2c 25 f1 19 0a
-2bd1  end
+007e  04                       body: types: array block of 2 items
+007f  06 70 65 74 ... 6d 65    body: types[0].description: axt.Field of axt.example.v1.Pet version 1 (1994 bytes)
+0849  02                       body: types[0].count: long 1
+084a  16 61 70 70 ... 6c 65    body: types[1].description: axt.Field of axt.example.v1.Appointment version 1 (2591 bytes)
+1269  02                       body: types[1].count: long 1
+126a  00                       body: types: end of the array
+126b  ac 3d d6 9a e4 7a cd ae  signature: fixed(64)
+      b0 99 aa 3d e9 5a ce 24
+      27 b9 b7 f5 b1 8b c1 b9
+      c6 f2 b9 c7 19 c2 89 c9
+      26 6a 76 92 50 bd ca bc
+      ca a0 74 e6 f9 8e ff e2
+      10 23 04 2f 1b 0c b1 04
+      b5 22 ba b7 42 e3 ec 0f
+12ab  end
 ```
 
 ### 17.4 The answers
@@ -758,7 +757,7 @@ Old Brain Fix's ACCEPT: 219 bytes, SHA-256 `655b9a4d2df481925f99d36a1e6442f11285
 00db  end
 ```
 
-Old Brain Fix's DECLINE: 212 bytes, SHA-256 `adbe5b06e8b1e75dc49814feae16579a40c591b7891174f446230b3eb3d54630`.
+Old Brain Fix's DECLINE: 212 bytes, SHA-256 `b022ec43aa9d0ed5766195ef2c8ffa12938b15e8a7ced0349f3e30f88bc64079`.
 
 ```text
 0000  c3 01                    single-object marker
@@ -772,7 +771,7 @@ Old Brain Fix's DECLINE: 212 bytes, SHA-256 `adbe5b06e8b1e75dc49814feae16579a40c
 002c  00                       record: union index 0, null
 002d  ca 01                    body: bytes length 101
 002f  c3 01                    body: single-object marker
-0031  c0 92 54 84 11 bd d2 22  body: fingerprint of axt.Decline, format 1
+0031  53 49 ba f3 60 8f 07 70  body: fingerprint of axt.Decline, format 1
 0039  1b 84 a6 00 f3 50 3e 22  body: to: fixed(32), cat-a-log's test key
       bb cc 99 e6 32 02 a7 19
       4b f6 bd 69 af f1 47 1c
@@ -790,14 +789,14 @@ Old Brain Fix's DECLINE: 212 bytes, SHA-256 `adbe5b06e8b1e75dc49814feae16579a40c
       65 74
 0092  00                       body: types[0].reason: enum index 0, NOT_WANTED
 0093  00                       body: types: end of the array
-0094  5e 48 b1 18 ae 49 3c 5d  signature: fixed(64)
-      8d a4 11 fa 97 c1 a3 e8
-      d8 60 3c ea 84 f5 6e 14
-      35 15 b3 b5 d4 db 0c c9
-      45 44 0b 71 7c eb 93 37
-      b2 d6 81 9f 66 6e aa 9f
-      c1 44 64 a2 14 5b 0c dc
-      42 ac b2 1f 93 58 40 04
+0094  de 70 66 49 99 f0 1e 85  signature: fixed(64)
+      b8 dd 40 3a d2 fd ec d2
+      bf 23 5d 84 87 b9 bb 19
+      d9 cf bd c1 27 07 41 74
+      f7 5f f3 7b 09 a5 8f 3c
+      e1 dd 2b bb b1 94 3e 6e
+      8d 27 0d 31 1b b0 5f 1e
+      6e 1b f6 87 7f db 7a 02
 00d4  end
 ```
 

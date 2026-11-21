@@ -30,7 +30,8 @@
     "relay",
     "relay-server",
     "sync",
-    "shares"
+    "shares",
+    "bricks"
    ]
   },
   "description": {"type": "string"},
@@ -323,6 +324,20 @@
       "properties": {
        "input": {
         "required": ["state", "writer_fields", "writer_version", "versions"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "derive"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["description"]
        }
       }
      }
@@ -1259,6 +1274,26 @@
        "properties": {
         "op": {
          "enum": ["acked", "join_receivers", "offer_types", "owed", "owner", "pass_withdrawal", "proposer", "receive", "take_version"]
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "if": {
+    "properties": {
+     "category": {"const": "bricks"}
+    }
+   },
+   "then": {
+    "properties": {
+     "vectors": {
+      "items": {
+       "properties": {
+        "op": {
+         "enum": ["derive"]
         }
        }
       }

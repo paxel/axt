@@ -56,6 +56,12 @@ if _spec is None or _spec.loader is None:
     raise ImportError(f"cannot load {HERE / 'keys_examples.py'}")
 keys = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(keys)
+# Each type of a file is its description and the schema derived from it (spec/fields.md, section 10.2).
+_spec = importlib.util.spec_from_file_location("fields_examples", HERE / "fields_examples.py")
+if _spec is None or _spec.loader is None:
+    raise ImportError(f"cannot load {HERE / 'fields_examples.py'}")
+fe = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(fe)
 
 # The Memo defines axt.DateTime in place, as its published schema (spec/time.md, section 3.1).
 DATE_TIME_SCHEMA = json.loads((REPO / "types" / "axt" / "DateTime.avsc").read_text(encoding="utf-8"))
@@ -287,7 +293,7 @@ assert memo_back["written"] == WRITTEN
 # string hash seed, so the writer gets the schema as read from
 # Envelope.avsc, in the file's own order, and the file's bytes are the same
 # in every run.
-schemas_value = json.dumps([MEMO_SCHEMA], separators=(",", ":"))
+schemas_value = json.dumps(fe.file_entries([MEMO_SCHEMA]), separators=(",", ":"), ensure_ascii=False)
 # The header signature of spec/keys.md, section 2.5.
 HEADER_SIGNATURE = keys.sign(
     SEED, keys.FILE_HEADER_PREFIX + SENDER + hashlib.sha256(schemas_value.encode()).digest()
@@ -307,14 +313,14 @@ fastavro.writer(
 )
 axt_file = file_buf.getvalue()
 assert (
-    hashlib.sha256(axt_file).hexdigest() == "37074c1f86d048a02e906441adc37f41599d1c9776fb2ae594a3f068f257a94c"
+    hashlib.sha256(axt_file).hexdigest() == "8fa310e90b630c4e847d96b0781d9802833241e72a11c123f4df9dd55d40d3f8"
 ), "not the file of spec/keys.md, section 7.3"
 
 # Read back with fastavro.
 file_buf.seek(0)
 fa_reader = fastavro.reader(file_buf)
 assert fa_reader.metadata["avro.codec"] == "null"
-assert json.loads(fa_reader.metadata["axt.schemas"])[0]["name"] == "Memo"
+assert json.loads(fa_reader.metadata["axt.schemas"])[0]["schema"]["name"] == "Memo"
 fa_records: list[Any] = list(fa_reader)
 assert len(fa_records) == 1 and fa_records[0]["body"] == body
 
@@ -326,7 +332,7 @@ assert header_schema == json.dumps(json.loads(envelope_json)), (
 )
 assert apache_fingerprint(header_schema) == envelope_fp.to_bytes(8, "little")
 for entry in json.loads(cast(bytes, apache_reader.get_meta("axt.schemas")).decode()):
-    assert apache_fingerprint(json.dumps(entry)) == memo_fp.to_bytes(8, "little")
+    assert apache_fingerprint(json.dumps(entry["schema"])) == memo_fp.to_bytes(8, "little")
 apache_records: list[Any] = list(apache_reader)
 assert len(apache_records) == 1 and apache_records[0]["body"] == body
 assert apache_records[0]["signature"] == SIGNATURE
@@ -454,7 +460,8 @@ def file_layout(data: bytes) -> list[tuple[int, bytes, str, bool]]:
         take(
             length,
             {
-                "axt.schemas": f'[{{"type":"record","name":"Memo", ...}}]  ({length} bytes of UTF-8 JSON)',
+                "axt.schemas": '[{"description":{"name":"memo", ...}, "schema": ...}]  '
+                f"({length} bytes of UTF-8 JSON)",
                 "axt.sender": f'"{value[:6]}...{value[-6:]}"  '
                 f"({length} hexadecimal digits, cat-a-log's test key)",
                 "axt.signature": f'"{value[:6]}...{value[-6:]}"  '

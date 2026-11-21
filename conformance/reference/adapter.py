@@ -76,6 +76,7 @@ CATEGORIES = [
     "relay-server",
     "sync",
     "shares",
+    "bricks",
 ]
 OUT_INLINE = 1 << 20  # bytes above which an answer carries raw DEFLATE rather than hex
 
@@ -160,6 +161,25 @@ def named(t: dict[str, Any], names: dict[str, Any], namespace: str) -> str:
     return ns
 
 
+def branch_name(b: Any, namespace: str) -> str:
+    """The full name of a named branch of a union, or "" for another."""
+    if isinstance(b, dict):
+        if b.get("type") not in ("record", "enum", "fixed"):
+            return ""
+        name = b["name"]
+        ns = name.rpartition(".")[0] if "." in name else b.get("namespace", namespace)
+        return name if "." in name else (f"{ns}.{name}" if ns else name)
+    if b in PRIMITIVES:
+        return ""
+    return b if "." in b else (f"{namespace}.{b}" if namespace else b)
+
+
+# The data depth up to which a body is read: 32 for a record (spec/types.md, section 5.7), more for the
+# body of an OFFER, whose descriptions nest deeper (spec/fields.md, section 10.1).
+DEPTH_LIMIT = [MAX_DATA_DEPTH]
+MAX_OFFER_DEPTH = 256
+
+
 def read(t: Any, r: Reader, names: dict[str, Any], namespace: str = "", depth: int = 0) -> Any:
     """Decode one value of the schema t, strictly; return its meaning as JSON (spec/conformance.md,
     section 3.3)."""
@@ -199,12 +219,16 @@ def read(t: Any, r: Reader, names: dict[str, Any], namespace: str = "", depth: i
         i = r.long()
         if not 0 <= i < len(t):
             raise Undecodable("a union index out of range")
-        return read(t[i], r, names, namespace, depth)
+        value = read(t[i], r, names, namespace, depth)
+        if isinstance(t[0], (dict, str)) and branch_name(t[0], namespace) == "axt.StringField":
+            # The union kind of axt.Field: the branch is named (spec/conformance.md, section 3.3).
+            return {branch_name(t[i], namespace): value}
+        return value
     kind = t["type"]
     if kind in ("record", "enum", "fixed"):
         namespace = named(t, names, namespace)
     if kind == "record":
-        if depth + 1 > MAX_DATA_DEPTH:
+        if depth + 1 > DEPTH_LIMIT[0]:
             raise Undecodable("a data depth above 32")
         return {f["name"]: read(f["type"], r, names, namespace, depth + 1) for f in t["fields"]}
     if kind == "enum":
@@ -215,7 +239,7 @@ def read(t: Any, r: Reader, names: dict[str, Any], namespace: str = "", depth: i
     if kind == "fixed":
         return r.take(t["size"]).hex()
     if kind in ("array", "map"):
-        if depth + 1 > MAX_DATA_DEPTH:
+        if depth + 1 > DEPTH_LIMIT[0]:
             raise Undecodable("a data depth above 32")
         out: Any = [] if kind == "array" else {}
         while True:
@@ -342,10 +366,32 @@ def op_decode_body(i: Any) -> dict[str, Any]:
     body = b_in(i["body"])
     if body[:10] != b"\xc3\x01" + pe.fp8(pe.fingerprints[name][1]):
         return no("INVALID_MESSAGE", f"not an axt.{name}")
+    DEPTH_LIMIT[0] = MAX_OFFER_DEPTH if name == "Offer" else MAX_DATA_DEPTH
     try:
         return ok({"value": decode_all(plain_schema(pe.texts[name]), body[10:])})
     except Undecodable as e:
         return no("INVALID_MESSAGE", str(e))
+    finally:
+        DEPTH_LIMIT[0] = MAX_DATA_DEPTH
+
+
+# --- bricks (spec/fields.md) -----------------------------------------------------------------------
+
+
+def op_derive(i: Any) -> dict[str, Any]:
+    """The schema derived from a description, its canonical form and its fingerprint (sections 9.2, 9.3)."""
+    fe = pe.fe
+    try:
+        d = fe.read(b_in(i["description"]), fe.PARSED)
+    except Exception as e:
+        return no("UNDECODABLE", f"not a datum of axt.Field: {type(e).__name__}")
+    problems = fe.description_problems(d)
+    if problems:
+        where, problem = problems[0]
+        return no("DESCRIPTION_INVALID", f"{where or 'the root'}: {problem}")
+    text = fe.derived_text(d)
+    pcf, fp = me.fingerprint(text)
+    return ok({"schema": text, "canonical_form": pcf, "fingerprint": pe.fp8(fp).hex()})
 
 
 def op_fingerprint(i: Any) -> dict[str, Any]:
@@ -598,7 +644,9 @@ def op_session(i: Any) -> dict[str, Any]:
         elif "offer" in step:
             o = step["offer"]
             _, m = app.offer(
-                o["offer_id"], [(t["schema"], t["count"], None) for t in o["types"]], check=False
+                o["offer_id"],
+                [(pe.fe.from_json_form(t["description"]), t["count"], None) for t in o["types"]],
+                check=False,
             )
             out.append({"message": b_out(m)})
         elif "close" in step:
@@ -748,8 +796,7 @@ def read_file(data: bytes, reader: Any) -> dict[str, Any]:
     schemas: dict[int, str] = {}
     if "axt.schemas" in meta:
         try:
-            for t in json.loads(meta["axt.schemas"]):
-                text = json.dumps(t, separators=(",", ":"), ensure_ascii=False)
+            for text in pe.fe.file_schemas(meta["axt.schemas"]):
                 fp = pe.canonical_fp(text)
                 if fp in schemas:
                     raise FileRejected("two schemas with one fingerprint in axt.schemas")
@@ -757,7 +804,7 @@ def read_file(data: bytes, reader: Any) -> dict[str, Any]:
         except FileRejected:
             raise
         except Exception:
-            raise FileRejected("axt.schemas is not a JSON array of schemas") from None
+            raise FileRejected("axt.schemas is not a JSON array of descriptions and their schemas") from None
     messages: list[tuple[str, Any, bytes]]
     chain: list[tuple[str, bytes, bytes, None]]
     manifests: list[bytes]
@@ -1395,6 +1442,7 @@ OPS: dict[str, Callable[[Any], dict[str, Any]]] = {
     ),
     "session": op_session,
     "fingerprint": op_fingerprint,
+    "derive": op_derive,
     "decode_message": op_decode_message,
     "encode_message": op_encode_message,
     "decode_record": op_decode_record,
@@ -1436,6 +1484,13 @@ OPS: dict[str, Callable[[Any], dict[str, Any]]] = {
 }
 
 
+def forget_descriptions() -> None:
+    """Each vector stands alone: the models keep no description that an earlier vector gave them, and know
+    only those of their input (spec/fields.md, section 10.1)."""
+    for module in {id(m.fe): m.fe for m in (pe, sy, se) if hasattr(m, "fe")}.values():
+        module.REGISTRY.clear()
+
+
 def main() -> None:
     for line in sys.stdin:
         request = json.loads(line)
@@ -1452,6 +1507,7 @@ def main() -> None:
             answer = {"id": rid, "unsupported": True}
         else:
             try:
+                forget_descriptions()
                 answer = {"id": rid, "output": OPS[op](i)}
             except Exception as e:  # a fault of this adapter, reported as such
                 answer = {"id": rid, "failure": f"{type(e).__name__}: {e}"}

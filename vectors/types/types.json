@@ -1748,108 +1748,92 @@
    }
   },
   {
-   "id": "types/decode_record/a-recursive-app-type-at-data-depth-32",
+   "id": "types/decode_record/an-app-type-of-lists-in-lists-at-data-depth-32",
    "op": "decode_record",
-   "description": "a recursive app type at data depth 32",
+   "description": "an app type of lists in lists at data depth 32",
    "refs": ["types.md 5.7"],
    "input": {
-    "writer_schema": "{\"type\":\"record\",\"name\":\"Outline\",\"namespace\":\"org.example.outline\",\"doc\":\"An outline item.\",\"fields\":[{\"name\":\"text\",\"type\":\"string\",\"doc\":\"The item's text.\"},{\"name\":\"children\",\"type\":{\"type\":\"array\",\"items\":\"Outline\"},\"doc\":\"The items below it.\"}]}",
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Outline\",\"namespace\":\"org.example.outline\",\"doc\":\"An outline as lists in lists.\",\"axt.version\":1,\"fields\":[{\"name\":\"items\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":\"string\"}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}},\"default\":[],\"doc\":\"The items, each a list of the items below it.\"}]}",
     "reader_schema": null,
-    "body": "c301d9177632fe38e3f9027802027802027802027802027802027802027802027802027802027802027802027802027802027802027802027800000000000000000000000000000000"
+    "body": "c301b14761980f070c1b02020202020202020202020202020202020202020202020202020202020200000000000000000000000000000000000000000000000000000000000000"
    },
    "expected": {
     "accept": {
      "value": {
-      "text": "x",
-      "children": [
-       {
-        "text": "x",
-        "children": [
-         {
-          "text": "x",
-          "children": [
-           {
-            "text": "x",
-            "children": [
-             {
-              "text": "x",
-              "children": [
-               {
-                "text": "x",
-                "children": [
-                 {
-                  "text": "x",
-                  "children": [
-                   {
-                    "text": "x",
-                    "children": [
-                     {
-                      "text": "x",
-                      "children": [
-                       {
-                        "text": "x",
-                        "children": [
-                         {
-                          "text": "x",
-                          "children": [
-                           {
-                            "text": "x",
-                            "children": [
-                             {
-                              "text": "x",
-                              "children": [
-                               {
-                                "text": "x",
-                                "children": [
-                                 {
-                                  "text": "x",
-                                  "children": [
-                                   {
-                                    "text": "x",
-                                    "children": []
-                                   }
+      "items": [
+       [
+        [
+         [
+          [
+           [
+            [
+             [
+              [
+               [
+                [
+                 [
+                  [
+                   [
+                    [
+                     [
+                      [
+                       [
+                        [
+                         [
+                          [
+                           [
+                            [
+                             [
+                              [
+                               [
+                                [
+                                 [
+                                  [
+                                   [
+                                    []
+                                   ]
                                   ]
-                                 }
+                                 ]
                                 ]
-                               }
+                               ]
                               ]
-                             }
+                             ]
                             ]
-                           }
+                           ]
                           ]
-                         }
+                         ]
                         ]
-                       }
+                       ]
                       ]
-                     }
+                     ]
                     ]
-                   }
+                   ]
                   ]
-                 }
+                 ]
                 ]
-               }
+               ]
               ]
-             }
+             ]
             ]
-           }
+           ]
           ]
-         }
+         ]
         ]
-       }
+       ]
       ]
      }
     }
    }
   },
   {
-   "id": "types/decode_record/a-recursive-app-type-at-data-depth-34",
+   "id": "types/decode_record/an-app-type-of-lists-in-lists-at-data-depth-34",
    "op": "decode_record",
-   "description": "a recursive app type at data depth 34",
+   "description": "an app type of lists in lists at data depth 34",
    "refs": ["types.md 5.7"],
    "input": {
-    "writer_schema": "{\"type\":\"record\",\"name\":\"Outline\",\"namespace\":\"org.example.outline\",\"doc\":\"An outline item.\",\"fields\":[{\"name\":\"text\",\"type\":\"string\",\"doc\":\"The item's text.\"},{\"name\":\"children\",\"type\":{\"type\":\"array\",\"items\":\"Outline\"},\"doc\":\"The items below it.\"}]}",
+    "writer_schema": "{\"type\":\"record\",\"name\":\"Outline\",\"namespace\":\"org.example.outline\",\"doc\":\"An outline as lists in lists.\",\"axt.version\":1,\"fields\":[{\"name\":\"items\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":\"string\"}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}},\"default\":[],\"doc\":\"The items, each a list of the items below it.\"}]}",
     "reader_schema": null,
-    "body": "c301d9177632fe38e3f902780202780202780202780202780202780202780202780202780202780202780202780202780202780202780202780202780000000000000000000000000000000000"
+    "body": "c301b14761980f070c1b0202020202020202020202020202020202020202020202020202020202020202000000000000000000000000000000000000000000000000000000000000000000"
    },
    "expected": {
     "reject": {"error": "UNDECODABLE", "note": "data depth 34 above 32"}
