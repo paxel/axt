@@ -1,3 +1,5 @@
+<img src="docs/logo/axt-symbol.svg" alt="The AXT axe" width="56" height="88" align="right">
+
 # AXT: Avro eXchange Transfer
 
 [![CI](https://github.com/paxel/axt/actions/workflows/ci.yml/badge.svg?branch=summer)](https://github.com/paxel/axt/actions/workflows/ci.yml)
