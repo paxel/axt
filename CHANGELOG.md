@@ -14,6 +14,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - The Design an app track: types and their versions, field metadata, the manifest, records, devices, shares and proposals. ([axt-1033](https://github.com/paxel/axt/issues/41))
 - The Implement a library track: what a library implements and in what order, the adapter, the suite and the library's repository. ([axt-1034](https://github.com/paxel/axt/issues/42))
 - The Run a relay track: running the reference relay behind a proxy, its logs and limits, and a relay of one's own. ([axt-1035](https://github.com/paxel/axt/issues/43))
+- Relations on version 2 of every example type, with the published type `axt.Relation`, and their cases in the `types` vectors. ([axt-1037](https://github.com/paxel/axt/issues/45))
 
 ### Changed
 

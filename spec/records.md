@@ -1,6 +1,6 @@
 # Records
 
-Status: released in 0.1.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md).
+Status: released in 0.1.0, changed in 0.2.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md).
 
 This document defines the stable id and the version every record carries, how a sender sends updates and deletions, how a receiver applies them while keeping what its own user changed, the outcomes a receiver reports for each record, and how one record refers to another.
 
@@ -180,7 +180,7 @@ A reference is a field whose value is the id of another record of the same sende
 - The deletion of a record does not change the records that refer to it. If their meaning changes with it, the sender sends new versions of them.
 - A reference is a field like any other when the receiver merges (section 6.1).
 
-The example types of version 1 carry no references; Measurement names what was measured as text in `subject` ([types.md](types.md), section 7.1).
+The example types of version 1 carry no references; Measurement names what was measured as text in `subject` ([types.md](types.md), section 7.1). Version 2 of each example type links to other records with relations ([types.md](types.md), section 8).
 
 ## 9. Example
 

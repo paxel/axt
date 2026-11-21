@@ -244,6 +244,13 @@ def decode_all(t: Any, data: bytes) -> Any:
     return value
 
 
+def record_of(t: Any, names: dict[str, Any], namespace: str) -> Any:
+    """A record of a union, given in place or by its name."""
+    if isinstance(t, str):
+        return names.get(t) or names[f"{namespace}.{t}"]
+    return t
+
+
 def json_of(t: Any, value: Any, names: dict[str, Any] | None = None, namespace: str = "") -> Any:
     """The meaning of a value as fastavro decodes it with logical types removed."""
     names = {} if names is None else names
@@ -256,7 +263,14 @@ def json_of(t: Any, value: Any, names: dict[str, Any] | None = None, namespace: 
     if isinstance(t, list):
         if value is None:
             return None
-        (branch,) = [b for b in t if b != "null"]
+        branches = [b for b in t if b != "null"]
+        if len(branches) > 1:  # the targets of axt.Relation: the record whose fields the value has
+            branches = [
+                b
+                for b in branches
+                if {f["name"] for f in record_of(b, names, namespace)["fields"]} == set(value)
+            ]
+        (branch,) = branches
         return json_of(branch, value, names, namespace)
     kind = t["type"]
     if kind in ("record", "enum", "fixed"):

@@ -1,8 +1,8 @@
 # Example types
 
-Status: released in 0.1.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md). Section 3 applies to the example types.
+Status: released in 0.1.0, changed in 0.2.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md). Section 3 applies to the example types.
 
-This document defines the example types that apps can use without agreeing first, the names and versions of types, what it means to replace an example type, the rules every example type follows, and the hints a receiver may use to show a record whose type it does not know.
+This document defines the example types that apps can use without agreeing first, the names and versions of types, what it means to replace an example type, the rules every example type follows, the hints a receiver may use to show a record whose type it does not know, and the relations with which a record links to other records and to things outside AXT.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in BCP 14 ([RFC 2119](https://www.rfc-editor.org/rfc/rfc2119), [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174)) when, and only when, they appear in all capitals, as shown here.
 
@@ -19,12 +19,12 @@ Avro terms such as "Parsing Canonical Form", "CRC-64-AVRO", "schema resolution" 
 
 The namespace `axt` and every namespace that begins with `axt.` are reserved for the AXT repository:
 
-| Namespace        | Content                                                                                              | Defined in                                     |
-| ---------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `axt`            | The schemas of the specification, such as `axt.Envelope`, and the time types, such as `axt.DateTime` | [envelope.md](envelope.md), [time.md](time.md) |
-| `axt.example.vN` | The example types in their major version N, such as `axt.example.v1`                                 | this document                                  |
+| Namespace        | Content                                                                                                              | Defined in                                                    |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `axt`            | The schemas of the specification, such as `axt.Envelope`, the time types, such as `axt.DateTime`, and `axt.Relation` | [envelope.md](envelope.md), [time.md](time.md), this document |
+| `axt.example.vN` | The example types in their major version N, such as `axt.example.v1`                                                 | this document                                                 |
 
-An app MUST NOT define a type, or any named type inside one, in a reserved namespace, except a time type that it defines in place as [time.md](time.md), section 3.1, requires. An app type SHOULD use a namespace in reverse domain name order of a domain the app's maker controls, such as `org.example.catalog`, so that two apps do not pick the same full name by accident.
+An app MUST NOT define a type, or any named type inside one, in a reserved namespace, except a time type or `axt.Relation` with its nested types, which it defines in place as section 5.2 and [time.md](time.md), section 3.1, require. An app type SHOULD use a namespace in reverse domain name order of a domain the app's maker controls, such as `org.example.catalog`, so that two apps do not pick the same full name by accident.
 
 The schema files mirror the namespace in their path, and their file name is the type's name and its `axt.version`: version 1 of `axt.example.v1.Note` is [types/axt/example/v1/Note.1.avsc](../types/axt/example/v1/Note.1.avsc).
 
@@ -101,16 +101,16 @@ A field name consists of lower-case ASCII letters, digits and single underscores
 
 An example type MUST define each of its nested named types in place, where it is used, and MUST NOT refer to a named type by its name. The name of a nested type MUST begin with the name of the type it belongs to, such as `PersonPhone` in `Person`, and it has the namespace of that type. Every schema file can then be parsed on its own, and an app that parses all example types into one set of names finds each name defined once.
 
-The time types are the exception: a type holds them under their own full names, such as `axt.DateTime`, defined in place at their first occurrence and referred to by full name after it, as [time.md](time.md), section 3.1, requires. An app that parses all example types into one set of names finds each time type defined in several of them, each time with the same canonical form, and handles that as [time.md](time.md), section 3.1, says.
+The published types are the exception: the time types, such as `axt.DateTime`, and `axt.Relation` (section 8). A type holds them under their own full names, defined in place at their first occurrence and referred to by full name after it, as [time.md](time.md), section 3.1, requires. A published type defined in place is its published schema with every named type that an earlier occurrence in the same schema already defined replaced by its full name. An `axt.Relation` in a type that holds an `axt.DateTime` before it therefore has `"axt.DateTime"` in its field `start`, while in a type without one it defines `axt.DateTime` there, as its published schema does; both read as the published schema. An app that parses all example types into one set of names finds each published type defined in several of them, each time with the same canonical form, and handles that as [time.md](time.md), section 3.1, says.
 
 ### 5.3 Optional values
 
-A field whose value may be absent MUST have the type `["null", T]`, with `null` first, and the default `null`. An example type MUST NOT use any other union. A text that may be empty is a `string` with the default `""`; a list is an `array` with the default `[]`.
+A field whose value may be absent MUST have the type `["null", T]`, with `null` first, and the default `null`. An example type MUST NOT use any other union, except the two targets of `axt.Relation` (section 8.3). A text that may be empty is a `string` with the default `""`; a list is an `array` with the default `[]`.
 
 ### 5.4 Defaults
 
 - Every field added after the first version of a major version MUST have a default; without one, a receiver with the new version cannot read records of the old one.
-- A field may be removed within a major version only if it had a default in every earlier version (section 3.3). Example types therefore give every field a default, except the few without which a record of the type has no meaning: `start` of Appointment, and `value` and `measured_at` of Measurement. These cannot be removed within the major version.
+- A field may be removed within a major version only if it had a default in every earlier version (section 3.3). Example types therefore give every field a default, except the few without which a record of the type has no meaning: `start` of Appointment, and `value` and `measured_at` of Measurement. These cannot be removed within the major version. In the same way `axt.Relation` gives no default to its `id` and `target`, to the `id` of a record target and to the `uri` of an outside target (section 8).
 - Every enum MUST have a default symbol, the Avro `default` attribute of the enum, so that a symbol added in a later version resolves for a receiver that does not know it. Where reading an unknown symbol as one of the known ones would change a value, as with a unit, the enum has the symbol `UNKNOWN` and that is its default. A receiver reads an unknown symbol as the enum's default, as schema resolution requires ([envelope.md](envelope.md), section 6); not every Avro library does so (section 7.3).
 
 ### 5.5 Times and logical types
@@ -137,14 +137,14 @@ These rules hold for every example type that has the fields named:
 
 The data depth of a value counts the records, arrays and maps it is nested in: the record itself is at depth 1, an array in one of its fields at depth 2, and a record inside that array at depth 3.
 
-- An example type MUST NOT be recursive, that is, it MUST NOT contain itself or one of its nested types inside itself. The deepest example type, Person, reaches depth 3.
+- An example type MUST NOT be recursive, that is, it MUST NOT contain itself or one of its nested types inside itself. The deepest example type of version 1, Person, reaches depth 3; every type of version 2 reaches depth 4, with the target, the times and the attributes of a relation (section 8).
 - An app type MAY be recursive. A sender MUST NOT send a record whose data depth exceeds 32. A receiver MUST decode records up to depth 32 and MUST stop decoding and reject a record that goes deeper, with the error `UNDECODABLE` ([protocol.md](protocol.md), section 8.2). A recursive schema has no limit of its own, so without this rule a small message could exhaust a decoder's stack.
 
 The schema itself also stays within the size and nesting limits of [envelope.md](envelope.md), section 8.
 
 ### 5.8 Ids and versions of records
 
-A type MUST NOT carry the id or the version of its records in fields of its own: the envelope carries both ([envelope.md](envelope.md), section 2; [records.md](records.md)). How one record refers to another, such as a Measurement to the Pet it was taken of, is defined in [records.md](records.md), section 8: a reference is a `uuid` string that holds the id of another record of the same sender. The example types of version 1 carry no references.
+A type MUST NOT carry the id or the version of its records in fields of its own: the envelope carries both ([envelope.md](envelope.md), section 2; [records.md](records.md)). How one record refers to another, such as a Measurement to the Pet it was taken of, is defined in [records.md](records.md), section 8: a reference is a `uuid` string that holds the id of another record of the same sender. The example types carry no references; version 2 of each links to other records with relations (section 8).
 
 ### 5.9 Metadata
 
@@ -190,6 +190,8 @@ The schemas are in [types/axt/example/v1/](../types/axt/example/v1/). They are n
 | `Measurement` | `quantity`     | `quantity`, `value`, `unit` (UCUM), `measured_at` (`axt.DateTime`, instant), `subject`, `notes`                                                                                  |
 | `Document`    | `title`        | `title`, `file_name`, `media_type`, `content` (bytes), `dated` (`axt.Date`), `notes`                                                                                             |
 
+Version 2 of each type has the fields of version 1 and, as its last field, `relations` (sections 7.4 and 8).
+
 A Person's `birthday` may leave out the year, as address books often hold birthdays without one; a Pet's `birthday` and a Document's `dated` may give only a month or a year ([time.md](time.md), section 4). Car's `year` is a number rather than an `axt.Date`: a model year names a version of the model, not a date on the calendar.
 
 ### 7.2 Why these types
@@ -205,21 +207,30 @@ Note, Task, Appointment, Person and Car are the example types named when the sco
 | Type                         | Version | Schema                                                           | CRC-64-AVRO          | As bytes                  |
 | ---------------------------- | ------- | ---------------------------------------------------------------- | -------------------- | ------------------------- |
 | `axt.example.v1.Appointment` | 1       | [Appointment.1.avsc](../types/axt/example/v1/Appointment.1.avsc) | `0x1af207f82b6430cd` | `cd 30 64 2b f8 07 f2 1a` |
+| `axt.example.v1.Appointment` | 2       | [Appointment.2.avsc](../types/axt/example/v1/Appointment.2.avsc) | `0x49416306becfe686` | `86 e6 cf be 06 63 41 49` |
 | `axt.example.v1.Car`         | 1       | [Car.1.avsc](../types/axt/example/v1/Car.1.avsc)                 | `0x7277e2001e503f8b` | `8b 3f 50 1e 00 e2 77 72` |
+| `axt.example.v1.Car`         | 2       | [Car.2.avsc](../types/axt/example/v1/Car.2.avsc)                 | `0xa8eaa96101d47106` | `06 71 d4 01 61 a9 ea a8` |
 | `axt.example.v1.Document`    | 1       | [Document.1.avsc](../types/axt/example/v1/Document.1.avsc)       | `0xd610000b15046bac` | `ac 6b 04 15 0b 00 10 d6` |
+| `axt.example.v1.Document`    | 2       | [Document.2.avsc](../types/axt/example/v1/Document.2.avsc)       | `0x69594b59d2ce6dca` | `ca 6d ce d2 59 4b 59 69` |
 | `axt.example.v1.Measurement` | 1       | [Measurement.1.avsc](../types/axt/example/v1/Measurement.1.avsc) | `0x00f7713c4975c427` | `27 c4 75 49 3c 71 f7 00` |
+| `axt.example.v1.Measurement` | 2       | [Measurement.2.avsc](../types/axt/example/v1/Measurement.2.avsc) | `0xa4713c50ea54b494` | `94 b4 54 ea 50 3c 71 a4` |
 | `axt.example.v1.Note`        | 1       | [Note.1.avsc](../types/axt/example/v1/Note.1.avsc)               | `0x0d3e5d90bdbc4ee0` | `e0 4e bc bd 90 5d 3e 0d` |
+| `axt.example.v1.Note`        | 2       | [Note.2.avsc](../types/axt/example/v1/Note.2.avsc)               | `0xad64ede05937d517` | `17 d5 37 59 e0 ed 64 ad` |
 | `axt.example.v1.Person`      | 1       | [Person.1.avsc](../types/axt/example/v1/Person.1.avsc)           | `0x749561a5af95d9f6` | `f6 d9 95 af a5 61 95 74` |
+| `axt.example.v1.Person`      | 2       | [Person.2.avsc](../types/axt/example/v1/Person.2.avsc)           | `0x05eacdcbb91f9865` | `65 98 1f b9 cb cd ea 05` |
 | `axt.example.v1.Pet`         | 1       | [Pet.1.avsc](../types/axt/example/v1/Pet.1.avsc)                 | `0x6b792c0235531071` | `71 10 53 35 02 2c 79 6b` |
+| `axt.example.v1.Pet`         | 2       | [Pet.2.avsc](../types/axt/example/v1/Pet.2.avsc)                 | `0xf4c8934cfd75ff20` | `20 ff 75 fd 4c 93 c8 f4` |
 | `axt.example.v1.Task`        | 1       | [Task.1.avsc](../types/axt/example/v1/Task.1.avsc)               | `0xa83870208718dd20` | `20 dd 18 87 20 70 38 a8` |
+| `axt.example.v1.Task`        | 2       | [Task.2.avsc](../types/axt/example/v1/Task.2.avsc)               | `0x7d271ca0ac137ed9` | `d9 7e 13 ac a0 1c 27 7d` |
+| `axt.Relation`               | –       | [Relation.avsc](../types/axt/Relation.avsc)                      | `0x190bf11052cf9f10` | `10 9f cf 52 10 f1 0b 19` |
 
 The fingerprints were computed with [conformance/tools/example_types.py](../conformance/tools/example_types.py). For every schema, the script:
 
-- checks the rules of section 5 that a program can check, among them the rules of every attribute it carries, with the code of [conformance/tools/metadata_rules.py](../conformance/tools/metadata_rules.py), the attributes that section 5.9 requires, and each time type defined in place as its published schema and referred to by its full name after it ([time.md](time.md), section 3.1);
+- checks the rules of section 5 that a program can check, among them the rules of every attribute it carries, with the code of [conformance/tools/metadata_rules.py](../conformance/tools/metadata_rules.py), the attributes that section 5.9 requires, and each time type and `axt.Relation` defined in place as its published schema with the named types defined before it by their full names, and referred to by its full name after it (section 5.2; [time.md](time.md), section 3.1); and checks the published schema of `axt.Relation` by the same rules, and that version 2 of each type is its version 1 with `relations` added;
 - checks that the example datum keeps the rules of the time types and every check of its schema, and that each of its zoned times has the offset of its zone at its instant by the zone rules of Python's `zoneinfo`;
-- checks 10 further records that keep every rule, among them an all-day Appointment, a Task due at a floating time and an Appointment whose offset is not that of its zone at the instant, which a receiver does not reject for it ([time.md](time.md), section 6.2); and 17 records with a value that breaks a rule, such as a phone number with spaces, a country name in place of its code, a VIN with the letter O, a Car of the year 1800, a start whose instant does not match its wall clock and a reminder with parts of both signs, each with the field path and the rule of the first such value in the order of the encoding ([metadata.md](metadata.md), section 7.2);
+- checks 10 further records that keep every rule, among them an all-day Appointment, a Task due at a floating time and an Appointment whose offset is not that of its zone at the instant, which a receiver does not reject for it ([time.md](time.md), section 6.2); and 17 records with a value that breaks a rule, such as a phone number with spaces, a country name in place of its code, a VIN with the letter O, a Car of the year 1800, a start whose instant does not match its wall clock and a reminder with parts of both signs, each with the field path and the rule of the first such value in the order of the encoding ([metadata.md](metadata.md), section 7.2); and of version 2, 6 further records with relations, among them 256 relations, one at every limit of its lengths and a kind it does not know, and 18 records with a relation or a value that breaks a rule, among them 257 relations, two relations with one id, a kind without a namespace and a start that is not valid inside a relation;
 - computes the Parsing Canonical Form and the CRC-64-AVRO fingerprint, and compares them with those of the Python libraries fastavro 1.13.1 and `avro` 1.12.2;
-- encodes one example datum with fastavro, decodes it back, and checks that `avro` decodes the same bytes and encodes them to the same bytes again;
+- encodes one example datum with fastavro, decodes it back, and checks that `avro` decodes the same bytes and encodes them to the same bytes again; the datum of version 2 holds relations with both kinds of target, and both libraries write each target in its own branch;
 - uses every default once in schema resolution, with both libraries: it writes a datum with the schema without its defaulted fields, and one with the schema whose nested records lack their defaulted fields, and reads both with the full schema;
 - writes, for every enum, a symbol the schema does not have and checks that the full schema reads it as the enum's default symbol. fastavro does so; the `avro` package 1.12.2 raises a schema resolution error instead, against the Avro specification, so a receiver built on it does not get the compatibility of section 3.3 for enum symbols.
 
@@ -227,10 +238,83 @@ One further difference from the Avro specification showed: fastavro 1.13.1 retur
 
 The test vectors of [conformance.md](conformance.md) take precedence over these values.
 
+### 7.4 Version 2
+
+Version 2 of each example type, such as [Pet.2.avsc](../types/axt/example/v1/Pet.2.avsc), is its version 1 with one field added at the end: `relations`, an array of `axt.Relation` with the default `[]` (section 8), with a label, a help text and an emoji in English and German like every other field. Its full name stays that of version 1, and the files of version 1 stay as they were published.
+
+Adding a field with a default is change 1 of section 3.3, and the two versions resolve in both directions under Avro 1.12 schema resolution:
+
+- **Version 1 written, version 2 read.** The writer has no field `relations`; the reader fills it with its default, an empty array. Every other field reads as before.
+- **Version 2 written, version 1 read.** The reader has no field `relations`; schema resolution skips it, and the receiver gets the record without its relations. Every other field reads as before.
+- **Fingerprints.** The canonical forms of the two versions differ, so their fingerprints tell them apart (section 3.4).
+- **Receivers of AXT 0.1.0.** [time.md](time.md), section 3.1, of 0.1.0 has a receiver decline a type that defines a named type in the namespace `axt` other than a time type, with `DOES_NOT_RESOLVE`. A receiver of 0.1.0 therefore declines version 2 of every example type, although its schema resolves, and still takes version 1; a sender can offer it version 1, whose records carry no relations.
+
+## 8. Relations
+
+A relation links the record that holds it to another record or to a thing outside AXT, such as an appointment to the pets it is for, with information about the link. Version 2 of every example type holds its relations in its field `relations`, an array of the published type `axt.Relation`, [types/axt/Relation.avsc](../types/axt/Relation.avsc). An app type MAY hold relations in the same way, in a field of an array of `axt.Relation`.
+
+### 8.1 The relation record
+
+| Field        | Avro type                                                 | Value                                                                                                                    |
+| ------------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `id`         | `string` with `uuid`                                      | The id of the relation, unique among the relations of the record and kept for as long as the relation exists             |
+| `kind`       | `string`, default `axt.related`                           | What kind of link it is (section 8.2)                                                                                    |
+| `target`     | `axt.RelationRecordTarget` or `axt.RelationOutsideTarget` | What the relation points at: a record or a thing outside AXT (section 8.3)                                               |
+| `note`       | `string`, default `""`                                    | Plain text about the link (section 5.6); empty when there is none                                                        |
+| `start`      | `["null", axt.DateTime]`, default `null`                  | When the link begins; `null` when it has no beginning or it is not known                                                 |
+| `end`        | `["null", axt.DateTime]`, default `null`                  | The first moment after the link, as the end of section 5.6; `null` when it has no end or it is not known                 |
+| `attributes` | `map` of `string`, default `{}`                           | Further values that the kind needs beyond the other fields, by names that the kind gives them; empty when there are none |
+
+A sender creates the id of a relation as the id of a record ([records.md](records.md), section 2): a UUID of version 4 or 7, generated when the relation is created and never used for another relation of the record. The relations of a record are part of its value, in the order its user gave them.
+
+### 8.2 Kinds
+
+- **Names.** A kind is named like a type: a full name of Avro with a namespace, such as `org.example.catalog.vet`. An app introduces the kinds it needs in its own namespace (section 2), and gives each kind its meaning, the meaning of `start` and `end` for it, and the names and values of its attributes. The namespace `axt` and every namespace that begins with `axt.` are reserved for this specification.
+- **`axt.related`.** AXT defines one kind: `axt.related`, which says only that the two are related, and how is left to the user, such as in the note. It is the default of `kind`, and it has no attributes.
+- **Kinds a receiver does not know.** A receiver MUST NOT reject a record or a relation because it does not know its kind, also not a kind in the namespace `axt`, which a later version of this specification may define. It keeps the relation as it received it, and SHOULD show it generically: by its kind's name, its target, its note, its times and its attributes, as it shows a field it does not know (section 6).
+
+### 8.3 Targets
+
+The field `target` is a union of two records. They are the only union of an example type other than `["null", T]` (section 5.3), and each has a field without a default that the other lacks, so that a value of one is never a value of the other:
+
+- **A record**, `axt.RelationRecordTarget`: `id`, the id of the target record; `sender`, an Ed25519 public key ([keys.md](keys.md)) of the target record's sender, or `null` for a record of the sender of the record that holds the relation; `type`, the full name of the target record's type, which holds its major version, such as `axt.example.v1.Pet`, or empty when it is not known; and `text`, a display text, such as the target's title.
+- **A thing outside AXT**, `axt.RelationOutsideTarget`: `uri`, a URI of [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986) of any scheme, with the format `uri` of [metadata.md](metadata.md), section 6.3; and `text`, a display text, such as the thing's name.
+
+A receiver SHOULD show the display text of a record target while it does not hold the target record, and that of an outside target in place of its URI. It shows and opens a URI as [metadata.md](metadata.md), section 6.3, says of the format `uri`.
+
+### 8.4 Rules and limits
+
+A relation is valid when:
+
+1. its `id` is a UUID in text form, neither the nil UUID nor the max UUID ([records.md](records.md), section 2), and no earlier relation in the same array has the same id, compared as 128-bit values;
+2. its `kind` is a full name of Avro with a namespace, of at most 256 bytes;
+3. the `id` of a record target is a UUID in text form, neither the nil UUID nor the max UUID, and its `type` is empty or a full name of Avro of at most 256 bytes;
+4. the `uri` of an outside target has 1 to 2,048 bytes;
+5. the display text `text` of a target has at most 256 bytes, and the `note` at most 4,096 bytes;
+6. it has at most 32 `attributes`, each name of 1 to 256 bytes and each value of at most 1,024 bytes;
+7. its `start` and its `end` are valid time values ([time.md](time.md), section 8).
+
+An array of `axt.Relation` holds at most 256 relations. Lengths are in bytes of UTF-8; a full name of Avro consists of names of an ASCII letter or `_` followed by ASCII letters, digits and `_`, separated by `.`.
+
+A sender MUST NOT send a record with more than 256 relations in an array or with a relation that is not valid. A receiver MUST reject such a record with the error `VALUE_INVALID`, whose `field` names the first value that breaks a rule in the order of the encoding ([metadata.md](metadata.md), section 7.2): an array of more than 256 relations by its own path, such as `relations`; the second of two relations with one id by its id, such as `relations[1].id`; attributes beyond a limit by the map, such as `relations[0].attributes`; and every other value by its path, such as `relations[0].kind`. As with a time value, these are rules that every receiver checks, not checks of attributes ([metadata.md](metadata.md), section 7.1).
+
+The limits keep what a receiver stores and shows for the links of one record within the bounds of a list on a phone: a long text about a link belongs into a record of its own, to which the relation points. The rule on ids lets a receiver tell the relations of a record apart.
+
+### 8.5 Relations and references
+
+The references of [records.md](records.md), section 8, stay: a field whose value is the id of another record of the same sender. A type uses a relation for a link, unless the link is the type's own meaning, without which a record of the type is not understood, such as the pet that every record of an app type for a pet's weight is taken of; such a link MAY be a reference. Every other link, such as the pets an appointment is for, the vet of a pet or the appointment an invoice belongs to, is a relation, and a record can hold any number of them, of any kind. The example types use relations only.
+
+### 8.6 Defined in place
+
+A type that holds `axt.Relation` defines it in place at its first occurrence, as section 5.2 says of every published type: as its published schema, with every named type that an earlier occurrence in the same schema already defined replaced by its full name, and by its full name `"axt.Relation"` after it. Its nested types, `axt.RelationRecordTarget`, `axt.RelationRecordTargetSender` and `axt.RelationOutsideTarget`, keep the names and the namespace `axt` of the published schema. Version 2 of Note, Task, Appointment and Measurement holds an `axt.DateTime` before its relations, so its `axt.Relation` has `"axt.DateTime"` in `start`; version 2 of Person, Car, Pet and Document holds none, so its `axt.Relation` defines `axt.DateTime` in `start`, as the published schema does.
+
+A receiver MUST decline a type whose schema defines `axt.Relation` or one of its nested types otherwise, with `DOES_NOT_RESOLVE` ([protocol.md](protocol.md), section 5.2), as [time.md](time.md), section 3.1, has it decline a time type that is not defined as published.
+
 ## References
 
 - [Apache Avro 1.12 specification](https://avro.apache.org/docs/1.12.0/specification/)
 - [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) and [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174): key words for requirement levels
+- [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986): URIs, for the target of a relation
 - [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545): iCalendar, for `DTEND` and `RRULE`
 - [RFC 6838](https://www.rfc-editor.org/rfc/rfc6838): media types, for Document's `media_type`
 - [IANA time zone database](https://www.iana.org/time-zones)

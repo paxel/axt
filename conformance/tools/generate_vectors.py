@@ -881,7 +881,15 @@ def meaning(t: Any, value: Any, names: dict[str, Any] | None = None) -> Any:
         if value is None:
             return None
         branches = [b for b in t if b != "null"]
-        assert len(branches) == 1, "the vectors use only unions of null and one type"
+        if len(branches) > 1:
+            # The targets of axt.Relation, the only other union of the vectors: the branch is the record
+            # whose fields the value has (spec/conformance.md, section 3.3).
+            branches = [
+                b
+                for b in branches
+                if {f["name"] for f in (names[b] if isinstance(b, str) else b)["fields"]} == set(value)
+            ]
+        assert len(branches) == 1, "the vectors use only unions of null and one type, and the targets"
         return meaning(branches[0], value, names)
     kind = t["type"]
     if kind in ("record", "enum", "fixed"):
@@ -1369,6 +1377,18 @@ TYPE_FPS = {
     "Pet": 0x6B792C0235531071,
     "Task": 0xA83870208718DD20,
 }
+# Version 2 of each example type, with relations, and axt.Relation (spec/types.md, sections 7.3 and 8).
+TYPE_FPS_2 = {
+    "Appointment": 0x49416306BECFE686,
+    "Car": 0xA8EAA96101D47106,
+    "Document": 0x69594B59D2CE6DCA,
+    "Measurement": 0xA4713C50EA54B494,
+    "Note": 0xAD64EDE05937D517,
+    "Person": 0x05EACDCBB91F9865,
+    "Pet": 0xF4C8934CFD75FF20,
+    "Task": 0x7D271CA0AC137ED9,
+}
+RELATION_FP = 0x190BF11052CF9F10
 
 
 def types_category() -> Category:
@@ -1616,7 +1636,132 @@ def types_category() -> Category:
             data,
             None if ok else reject("UNDECODABLE", f"data depth {depth} above 32"),
         )
+    relation_vectors(c, texts, record_vector)
     return c
+
+
+def relation_vectors(c: Category, texts: dict[str, str], record_vector: Callable[..., None]) -> None:
+    """Version 2 of the example types, with relations (spec/types.md, sections 7.4 and 8): fingerprints,
+    a record of each, its defaults, both versions read with the other, and the records of example_types.py
+    with relations, those that break a rule of section 8.4 rejected."""
+    assert rules.OTHER_SENDER == pe.CAT, "not the test key of spec/keys.md, section 7.1"
+    text = (REPO / "types" / "axt" / "Relation.avsc").read_text(encoding="utf-8")
+    pcf, fp = me.fingerprint(text)
+    assert fp == RELATION_FP, "axt.Relation"
+    c.add(
+        "fingerprint",
+        "axt.Relation",
+        ["types.md 7.3", "types.md 8.1"],
+        {"schema": text},
+        accept({"canonical_form": pcf, "fingerprint": H(pe.fp8(fp))}),
+    )
+    texts2 = {}
+    for name, want in TYPE_FPS_2.items():
+        path = EXAMPLES / f"{name}.2.avsc"
+        text = path.read_text(encoding="utf-8")
+        texts2[name] = pe.compact(path)
+        pcf, fp = me.fingerprint(text)
+        assert fp == want and pe.canonical_fp(texts2[name]) == want, name
+        c.add(
+            "fingerprint",
+            f"axt.example.v1.{name}, version 2",
+            ["types.md 3.4", "types.md 7.3", "types.md 7.4"],
+            {"schema": text},
+            accept({"canonical_form": pcf, "fingerprint": H(pe.fp8(fp))}),
+        )
+
+    def compact(schema: Any) -> str:
+        return json.dumps(schema, separators=(",", ":"), ensure_ascii=False)
+
+    for name in TYPE_FPS_2:
+        schema, datum, datum1 = json.loads(texts2[name]), rules.DATA[f"{name}.2"], rules.DATA[name]
+        body = single_object(texts2[name], datum)
+        record_vector(
+            f"a record of axt.example.v1.{name}, version 2, with relations",
+            ["types.md 7.4", "types.md 8.1", "types.md 8.3"],
+            texts2[name],
+            None,
+            body,
+        )
+        reduced = compact(rules.without_defaults(schema))
+        record_vector(
+            f"axt.example.v1.{name}, version 2, written without its fields that have a default",
+            ["types.md 5.4", "envelope.md 6"],
+            reduced,
+            texts2[name],
+            single_object(reduced, rules.project(schema, datum)),
+        )
+        nested = rules.nested_arrays(schema)
+        ndatum = dict(datum, **{f["name"]: datum[f["name"]][:1] for f in nested})
+        reduced = compact(rules.without_defaults(schema, nested_only=True))
+        record_vector(
+            f"axt.example.v1.{name}, version 2, written without the defaulted fields of its relations",
+            ["types.md 5.4", "types.md 8.1", "envelope.md 6"],
+            reduced,
+            texts2[name],
+            single_object(reduced, rules.project(schema, ndatum, nested_only=True)),
+        )
+        # Both directions of schema resolution (spec/types.md, sections 3.3 and 7.4).
+        old = single_object(texts[name], datum1)
+        got = decode_meaning(texts[name], texts2[name], old[10:])
+        assert got["relations"] == [] and {
+            k: v for k, v in got.items() if k != "relations"
+        } == decode_meaning(texts[name], None, old[10:])
+        record_vector(
+            f"axt.example.v1.{name}, version 1, read with version 2: no relations",
+            ["types.md 3.3", "types.md 7.4", "envelope.md 6"],
+            texts[name],
+            texts2[name],
+            old,
+        )
+        got = decode_meaning(texts2[name], texts[name], body[10:])
+        assert got == decode_meaning(texts[name], None, old[10:])
+        record_vector(
+            f"axt.example.v1.{name}, version 2, read with version 1: the relations ignored",
+            ["types.md 3.3", "types.md 7.4", "envelope.md 6"],
+            texts2[name],
+            texts[name],
+            body,
+        )
+
+    # The further records with relations and those that break a rule (example_types.py). decode_record rejects
+    # a relation that breaks a rule of spec/types.md, section 8.4, as a time value that is not valid; a value
+    # that only breaks a check of an attribute is taken (spec/conformance.md, section 5.2).
+    assert (len(rules.RELATION_VALID), len(rules.RELATION_BREACHES)) == (6, 18)
+    for label, key, datum in rules.RELATION_VALID:
+        name = key.split(".")[0]
+        record_vector(
+            f"axt.example.v1.{name}, version 2: {label}",
+            ["types.md 8"],
+            texts2[name],
+            None,
+            single_object(texts2[name], datum),
+        )
+    for label, key, datum, _path, _rule in rules.RELATION_BREACHES:
+        name = key.split(".")[0]
+        found = tm.value_breaches(json.loads(texts2[name]), datum)
+        expected = reject("VALUE_INVALID", found[0][2], field=found[0][0]) if found else None
+        record_vector(
+            f"{'reject' if found else 'take'} axt.example.v1.{name}, version 2: {label}",
+            ["types.md 8.4", "metadata.md 7.2"] if found else ["metadata.md 7.1", "conformance.md 5.13"],
+            texts2[name],
+            None,
+            single_object(texts2[name], datum),
+            expected,
+        )
+    # A target whose union index is that of no branch.
+    pet, relation = rules.DATA["Pet.2"], rules.RELATIONS["Pet"][0]
+    body = single_object(texts2["Pet"], pet)
+    head = b"".join(keys.zigzag(len(x.encode())) + x.encode() for x in (relation["id"], relation["kind"]))
+    assert body.count(head + b"\x00") == 1
+    record_vector(
+        "reject axt.example.v1.Pet, version 2, with a relation whose target has the union index 2",
+        ["envelope.md 1", "types.md 8.3"],
+        texts2["Pet"],
+        None,
+        body.replace(head + b"\x00", head + keys.zigzag(2)),
+        reject("UNDECODABLE"),
+    )
 
 
 # --- time (spec/time.md) -----------------------------------------------------------------
@@ -6857,7 +7002,8 @@ COUNTS = {
         {"fingerprint": 24, "decode_message": 40, "decode_body": 56, "encode_message": 8},
         {"decode_message": 17, "decode_body": 37},
     ),
-    "types": ({"fingerprint": 8, "decode_record": 63}, {"decode_record": 21}),
+    # 0.1.0 and the relations of 0.2.0 (spec/conformance.md, section 7.5): 9 + 65 vectors, 18 rejected.
+    "types": ({"fingerprint": 17, "decode_record": 128}, {"decode_record": 39}),
     "time": (
         {"fingerprint": 4, "decode_record": 81, "resolve_date_time": 10, "add_duration": 22},
         {"decode_record": 46},
@@ -6956,7 +7102,7 @@ def main() -> None:
         counts.append((c.name, len(c.vectors)))
         assert (op_counts(c.vectors), op_counts(c.vectors, rejected=True)) == COUNTS[c.name], (
             f"{c.name}: {op_counts(c.vectors)}, rejected {op_counts(c.vectors, rejected=True)}; "
-            "not the counts of spec/conformance.md, section 7.4"
+            "not the counts of spec/conformance.md, sections 7.4 and 7.5"
         )
         if args.check:
             # The DEFLATE of a large value depends on the zlib that writes it; its length and SHA-256 do not.

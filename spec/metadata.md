@@ -1,6 +1,6 @@
 # Field metadata
 
-Status: released in 0.1.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md).
+Status: released in 0.1.0, changed in 0.2.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md).
 
 This document defines the attributes that a schema carries so that a receiver which learns a type only from its schema can show and check each field: labels, help texts and emoji in English and other languages, the order and groups of fields, hints for inputs, formats, patterns and limits. It also says what a sender and a receiver do with a value that breaks a check, and how a receiver names that value.
 
@@ -276,7 +276,7 @@ When several values break a rule, the error names the first in the order of the 
 The two errors about the body of a `DATA` divide by one rule:
 
 - **`UNDECODABLE`**: the bytes are not a value of the offered schema. They end early, bytes are left over, a string is not well-formed UTF-8, an index or a length is out of range, or the data nest deeper than 32 ([types.md](types.md), section 5.7). The fault is in the sender's encoder, and nothing in the value can be named.
-- **`VALUE_INVALID`**: the bytes are a value of the schema, and the value breaks a rule set for it: a rule of a time type ([time.md](time.md), section 8), which every receiver checks, or a check of the schema's attributes, which a receiver may check. The fault is in the data, and `field` names the value, so that the sender can show its user what to correct.
+- **`VALUE_INVALID`**: the bytes are a value of the schema, and the value breaks a rule set for it: a rule of a time type ([time.md](time.md), section 8) or of a relation ([types.md](types.md), section 8.4), which every receiver checks, or a check of the schema's attributes, which a receiver may check. The fault is in the data, and `field` names the value, so that the sender can show its user what to correct.
 
 ## 8. Security
 
