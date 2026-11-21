@@ -1,0 +1,80 @@
+<!-- page: title="Keep the logs within the rules" track="relay" order=3 summary="What the reference relay logs, what the proxy in front logs, and how to keep both within the rules on secrets and client addresses." -->
+<p class="lede">
+  A relay sees mailbox ids and client addresses. Together they tell who fetches from which
+  mailbox, so the rules on logs keep secrets out of every log and keep lines with both for no more
+  than 7 days.
+</p>
+
+<h2>The rules</h2>
+<p>
+  For every relay (<a href="../spec/transports.html#section-5-7">transports.md, section 5.7</a>):
+</p>
+<ul>
+  <li>It never logs mailbox secrets or the value of <code>Authorization</code> headers.</li>
+  <li>
+    It should not log mailbox ids together with client addresses, and deletes every log entry that
+    holds both within 7 days.
+  </li>
+  <li>It keeps no message beyond the holding time, also not in a backup.</li>
+</ul>
+<p>
+  A request path holds the mailbox id, so a log line with a path and a client address holds both.
+</p>
+
+<h2>What the reference relay logs</h2>
+<p>
+  The relay logs to its standard error, one line per event, with the time in UTC
+  (<a href="../spec/relay.html#section-6">relay.md, section 6</a>):
+</p>
+<ul>
+  <li>at start, the address, the port and the base path it listens on;</li>
+  <li>
+    for each request, unless <code>--no-access-log</code>: the client address, the action
+    (<code>create</code>, <code>remove</code>, <code>put</code>, <code>list</code>,
+    <code>fetch</code>, <code>delete</code>, or the method), the status code, and the bytes of the
+    message put or fetched;
+  </li>
+  <li>
+    for a request that cannot be parsed, or that times out: the client address,
+    <code>malformed</code> and the status code;
+  </li>
+  <li>for a failure of the storage or of the program: the error with its traceback, without a client address.</li>
+</ul>
+<p>
+  It never logs the value of <code>Authorization</code>, a mailbox secret, the request line or any
+  content, and never a mailbox id or a message id in a line with a client address. A traceback can
+  name a path in the storage, and with it a mailbox id, but never with a client address. No line of
+  the relay holds both, so the 7-day rule applies to none of them.
+</p>
+<p>
+  <code>--no-access-log</code> drops the line per request. The client addresses of the access lines
+  are the ones the proxy passes, when the relay reads them with
+  <code>--client-address-header</code>.
+</p>
+
+<h2>What the proxy logs</h2>
+<p>
+  The proxy is where the rules are easy to break. Many proxies log request paths with client
+  addresses by default: in their access log, and in their error log for a request that fails. nginx
+  and Caddy both do. For the proxy (<a href="../spec/relay.html#section-6">relay.md, section 6</a>,
+  and <a href="../spec/relay.html#section-7-2">section 7.2</a>):
+</p>
+<ul>
+  <li>Never log <code>Authorization</code>.</li>
+  <li>Turn the access log off, or log no path.</li>
+  <li>Keep the error log for at most 7 days.</li>
+  <li>Delete every line that holds a request path and a client address within 7 days.</li>
+</ul>
+<p>
+  The examples on <a href="proxy.html">Put a proxy in front</a> follow this: the nginx example sets
+  <code>access_log off</code>, and Caddy writes no access log unless told to. Both still write an
+  error log, which you keep for at most 7 days.
+</p>
+
+<h2>What the relay learns</h2>
+<p>
+  Even without logs, a relay learns the mailbox ids, the size of each message, when it is put,
+  fetched and deleted, and the addresses of the clients that do so. It learns no key and no content:
+  the messages are sealed (<a href="../spec/transports.html#section-5-7">transports.md, section
+  5.7</a>). What it keeps on disk is on <a href="limits.html">Limits and storage</a>.
+</p>

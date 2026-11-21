@@ -1,10 +1,71 @@
-<!-- page: title="Run a relay" track="relay" order=0 summary="The Run a relay track: the reference relay, how to start it, and how to keep it running." -->
+<!-- page: title="Run a relay" track="relay" order=0 summary="The Run a relay track: set up the reference relay safely, and know what a relay of your own must do." -->
 <p class="lede">
   For whoever runs a relay, the sealed mailbox that stores and forwards end-to-end encrypted
-  messages: the reference relay, its settings and its operation.
+  messages and sees neither their content nor their type. Anyone can run one: AXT has no default
+  relay operator, and each app chooses its relay.
 </p>
 
+<h2>The reference relay</h2>
 <p>
-  The interface every relay offers and the reference relay's behaviour are in the
-  <a href="../spec/index.html">Specification</a>.
+  The repository's reference relay is one Python program on the standard library. It is a
+  reference and a test oracle, not a production server, and it runs behind a proxy that
+  terminates TLS.
+</p>
+<ul class="cards">
+  <li>
+    <a class="card" href="run.html">
+      <p class="eyebrow">Guide</p>
+      <p class="card-title">Run the reference relay</p>
+      <p>Start it with Python or in a container, choose its options, and stop it.</p>
+    </a>
+  </li>
+  <li>
+    <a class="card" href="proxy.html">
+      <p class="eyebrow">Guide</p>
+      <p class="card-title">Put a proxy in front</p>
+      <p>TLS, the largest message, long lists and the client address, with examples for Caddy and nginx.</p>
+    </a>
+  </li>
+  <li>
+    <a class="card" href="logs.html">
+      <p class="eyebrow">Guide</p>
+      <p class="card-title">Keep the logs within the rules</p>
+      <p>What the relay and the proxy log, and what must never be logged or kept.</p>
+    </a>
+  </li>
+  <li>
+    <a class="card" href="limits.html">
+      <p class="eyebrow">Guide</p>
+      <p class="card-title">Limits and storage</p>
+      <p>Room, times and rate limits, what is on disk, and why it needs no backup.</p>
+    </a>
+  </li>
+</ul>
+
+<h2>A relay of your own</h2>
+<p>
+  A relay may be written in any language and store messages in any way, as long as it follows the
+  interface and passes the conformance vectors.
+</p>
+<ul class="cards">
+  <li>
+    <a class="card" href="own-relay.html">
+      <p class="eyebrow">Guide</p>
+      <p class="card-title">Write a relay of your own</p>
+      <p>The mailboxes, the six requests and their codes, the holding time, limits, TLS and logs.</p>
+    </a>
+  </li>
+  <li>
+    <a class="card" href="vectors.html">
+      <p class="eyebrow">Guide</p>
+      <p class="card-title">Run the relay-server vectors</p>
+      <p>Run them against the reference relay, and write the adapter for a relay of your own.</p>
+    </a>
+  </li>
+</ul>
+
+<p>
+  The interface every relay offers is in
+  <a href="../spec/transports.html#section-5">transports.md, section 5</a>; the reference relay's
+  own behaviour is in <a href="../spec/relay.html">relay.md</a>.
 </p>

@@ -1,0 +1,107 @@
+<!-- page: title="Limits and storage" track="relay" order=4 summary="The limits of the reference relay, its times and rate limits, how it stores messages on disk, and why its storage needs no backup." -->
+<p class="lede">
+  Some limits are the same for every relay: the size of a message and the holding time of 14 days.
+  Others are the reference relay's own choice, and most of them are options. This page names both,
+  and what the relay keeps on disk.
+</p>
+
+<h2>Size and room</h2>
+<p>From <a href="../spec/relay.html#section-4-1">relay.md, section 4.1</a>:</p>
+<table>
+  <thead>
+    <tr><th>Limit</th><th>Value</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>A message</td><td>1 to 17,301,553 bytes, the same for every relay; a larger <code>Content-Length</code> gets <code>413</code> (<a href="../spec/transports.html#section-5-6">transports.md, section 5.6</a>)</td></tr>
+    <tr><td>The room of a mailbox</td><td>64 MiB of held messages by default (<code>--quota-bytes</code>); a put that would go above it gets <code>507</code>, except into an empty mailbox, which always takes one message</td></tr>
+    <tr><td>The number of messages</td><td>No limit beyond the room; a list shows the oldest 1,000</td></tr>
+    <tr><td>Who may create a mailbox</td><td>Every client, within the rate limits</td></tr>
+  </tbody>
+</table>
+<p>
+  The room counts the bytes of the messages held, without the header of a message file. A message
+  past its holding time does not count. At most 1,000 lists wait at the same time
+  (<code>--max-waiting</code>); a further list answers at once
+  (<a href="../spec/relay.html#section-3-3">relay.md, section 3.3</a>).
+</p>
+
+<h2>Times</h2>
+<p>From <a href="../spec/relay.html#section-4-2">relay.md, section 4.2</a>. None of them is an option:</p>
+<table>
+  <thead>
+    <tr><th>Time</th><th>Value</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Holding time</td><td>14 days from the put, the same for every relay (<a href="../spec/transports.html#section-5-5">transports.md, section 5.5</a>). From then on a message is neither listed nor fetched nor counted</td></tr>
+    <tr><td>Deleting it</td><td>At the next sweep, at most 10 minutes later, or earlier when a put, list or fetch touches its mailbox</td></tr>
+    <tr><td>A repeated put</td><td>Changes nothing; it does not extend the holding time</td></tr>
+    <tr><td>An idle mailbox</td><td>Removed with its messages at the first sweep at least 91 days after the stored time of its owner's last request. That time is written at most once a day, so a mailbox is never removed before the 90 days of transports.md, section 5.5</td></tr>
+    <tr><td>The sweep</td><td>Every 10 minutes</td></tr>
+  </tbody>
+</table>
+
+<h2>Rate limits</h2>
+<p>
+  Each client address has two token buckets, which refill evenly over their period
+  (<a href="../spec/relay.html#section-4-3">relay.md, section 4.3</a>):
+</p>
+<table>
+  <thead>
+    <tr><th>Limit</th><th>Default</th><th>Option</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Requests per minute, of every kind</td><td>600</td><td><code>--rate-requests</code></td></tr>
+    <tr><td>Mailboxes created per hour, only new ones</td><td>20</td><td><code>--rate-creations</code></td></tr>
+  </tbody>
+</table>
+<p>
+  A request above a limit gets <code>429</code> with <code>Retry-After</code>, the whole seconds
+  until the bucket holds a token again. <code>0</code> turns a limit off. There is no limit per
+  mailbox beyond its room: whoever knows a mailbox id can put messages into it, and the room bounds
+  what they can put. Behind a proxy, name the client address header, or every client shares the
+  proxy's buckets (<a href="proxy.html">Put a proxy in front</a>).
+</p>
+
+<h2>What is on disk</h2>
+<p>
+  The storage directory, <code>--storage</code>, holds
+  (<a href="../spec/relay.html#section-5-1">relay.md, section 5.1</a>):
+</p>
+<table>
+  <thead>
+    <tr><th>Path</th><th>Content</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>mailboxes/&lt;mailbox id&gt;/</code></td><td>One directory per mailbox, named by its id</td></tr>
+    <tr><td><code>mailboxes/&lt;mailbox id&gt;/&lt;message id&gt;</code></td><td>One file per message held, named by its SHA-256</td></tr>
+    <tr><td><code>mailboxes/&lt;mailbox id&gt;/seen</code></td><td>The time of the owner's last request, in milliseconds, as decimal text</td></tr>
+    <tr><td><code>tmp/</code></td><td>Files being written, and mailboxes being removed; emptied at each start</td></tr>
+  </tbody>
+</table>
+<p>
+  A message file is a header of 20 bytes, with the time of the put and a sequence number, followed
+  by the sealed message as it was put (<a href="../spec/relay.html#section-5-2">relay.md, section
+  5.2</a>). The relay writes <code>seen</code> when a mailbox is created and then at most once a
+  day. It keeps no mailbox secret: it checks a secret by computing the mailbox id from it.
+</p>
+<p>
+  A put is first written under <code>tmp/</code>, flushed to the disk and then renamed into its
+  mailbox, so a crash or a full disk leaves either the whole message or none
+  (<a href="../spec/relay.html#section-5-3">relay.md, section 5.3</a>). The rename is atomic within one
+  file system. When the storage fails, such as when the disk is full, the relay
+  answers <code>503</code> with <code>Retry-After: 60</code>.
+</p>
+
+<h2>Copies and backups</h2>
+<p>
+  A copy of the storage gives away the mailbox ids, the sealed messages, their sizes, and the times
+  of their puts and of the owners' last requests. It gives away no secret and no content. A relay
+  keeps no message beyond the holding time, also not in a backup
+  (<a href="../spec/relay.html#section-5-4">relay.md, section 5.4</a>).
+</p>
+<p>
+  The storage needs no backup. A lost storage loses messages, which their senders send again after
+  the holding time (<a href="../spec/protocol.html#section-11">protocol.md, section 11</a>), and
+  owners create their mailboxes again after a <code>404</code>
+  (<a href="../spec/transports.html#section-5-4">transports.md, section 5.4</a>).
+</p>
