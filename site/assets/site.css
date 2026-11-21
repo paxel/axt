@@ -828,6 +828,29 @@ h3:hover .anchor,
   margin: 0;
 }
 
+/* ---------- generated reference pages: facts of a schema, translations ---------- */
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.3rem 1rem;
+  margin: 0 0 1.5rem;
+}
+
+.facts dt {
+  font-weight: 600;
+}
+
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.translation {
+  color: var(--muted);
+  font-size: 0.9em;
+}
+
 /* ---------- footer ---------- */
 
 .site-footer {

@@ -568,7 +568,7 @@ export function readIndex(index) {
  * README becomes the track's start page.
  * @param {string} specDir
  * @param {{ repoUrl: string, ref: string, strict: boolean }} options
- * @returns {{ pages: { title: string, track: string, order: number, summary: string, url: string, body: string }[], warnings: string[] }}
+ * @returns {{ pages: { title: string, track: string, order: number, summary: string, url: string, body: string }[], warnings: string[], docs: Map<string, SpecDocument> }}
  */
 export function specPages(specDir, { repoUrl, ref, strict }) {
   const files = fs
@@ -599,5 +599,5 @@ export function specPages(specDir, { repoUrl, ref, strict }) {
       body: html,
     };
   });
-  return { pages, warnings };
+  return { pages, warnings, docs };
 }

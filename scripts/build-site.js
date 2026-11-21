@@ -12,6 +12,7 @@ import http from "node:http";
 import { fileURLToPath } from "node:url";
 import { escapeHtml } from "./site/html.js";
 import { specPages } from "./site/markdown.js";
+import { referencePages } from "./site/schemas.js";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
@@ -26,6 +27,7 @@ const REPO_URL = "https://github.com/paxel/axt";
  * @property {string} summary
  * @property {string} url
  * @property {string} body
+ * @property {boolean} [nav] false keeps a page out of the sidebar, such as the page of one schema
  */
 
 /** @typedef {{ level: number, id: string, text: string }} Heading */
@@ -346,14 +348,14 @@ export function sortPages(pages) {
 }
 
 /**
- * @param {(Pick<Page, "title" | "track" | "order" | "url"> & { summary?: string })[]} pages
+ * @param {(Pick<Page, "title" | "track" | "order" | "url"> & { summary?: string, nav?: boolean })[]} pages
  * @returns {Nav}
  */
 export function buildNav(pages) {
   return TRACKS.map((track) => ({
     ...track,
     pages: pages
-      .filter((p) => p.track === track.id)
+      .filter((p) => p.track === track.id && p.nav !== false)
       .sort((a, b) => a.order - b.order || a.title.localeCompare(b.title))
       .map(({ title, url, order, summary }) => ({ title, url, order, summary })),
   }));
@@ -783,10 +785,20 @@ export function collectPages({
   const hasSite = fs.existsSync(srcDir);
   const pages = hasSite ? loadPages(srcDir) : [];
   if (fs.existsSync(specDir)) {
-    const spec = specPages(specDir, { repoUrl: REPO_URL, ref: tag ?? "summer", strict });
+    const ref = tag ?? "summer";
+    const spec = specPages(specDir, { repoUrl: REPO_URL, ref, strict });
+    const reference = referencePages({
+      repoRoot: path.dirname(specDir),
+      docs: spec.docs,
+      repoUrl: REPO_URL,
+      ref,
+      strict,
+      warnings: spec.warnings,
+      order: 100,
+    });
     for (const warning of spec.warnings)
       console.warn(`build-site: ${tag ?? "working tree"}: ${warning}`);
-    for (const page of spec.pages) {
+    for (const page of [...spec.pages, ...reference]) {
       if (pages.some((p) => p.url === page.url)) {
         throw new Error(`${page.url}: written in ${srcDir} and converted from ${specDir}`);
       }

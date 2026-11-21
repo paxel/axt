@@ -35,10 +35,11 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 
 /**
- * The paths of a release a site build reads: its pages, its specification and its version. A
- * release before the site has the specification only.
+ * The paths of a release a site build reads: its pages, its specification with the schemas and
+ * the glossary its reference pages come from, and its version. A release before the site has
+ * the specification only.
  */
-export const RELEASE_PATHS = ["site", "spec", "pyproject.toml"];
+export const RELEASE_PATHS = ["site", "spec", "types", "CONTEXT.md", "pyproject.toml"];
 
 const RELEASE_TAG = /^v(\d+)\.(\d+)\.(\d+)$/;
 
@@ -112,7 +113,9 @@ export function listReleaseTags(repoRoot = REPO_ROOT) {
  */
 export function extractTag(repoRoot, tag, destDir) {
   const paths = RELEASE_PATHS.filter((p) => p === "pyproject.toml" || tagHas(repoRoot, tag, p));
-  if (paths.length === 1) throw new Error(`${tag}: holds neither site/ nor spec/`);
+  if (!paths.includes("site") && !paths.includes("spec")) {
+    throw new Error(`${tag}: holds neither site/ nor spec/`);
+  }
   fs.mkdirSync(destDir, { recursive: true });
   const archive = execFileSync(GIT, ["archive", "--format=tar", tag, "--", ...paths], {
     cwd: repoRoot,
