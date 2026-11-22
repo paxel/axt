@@ -62,7 +62,7 @@
 
 <h3>Per field or the whole record</h3>
 <ul>
-  <li><strong>Per field</strong>, which a receiver should do: for each top-level field, it takes the sender's value if its user has not changed the field and keeps its user's value if the user has. A nested record, an array or a map counts as one value (<a href="../spec/records.html#section-6-1">section 6.1</a>).</li>
+  <li><strong>Per field</strong>, which a receiver should do: for each top-level field, it takes the sender's value if its user has not changed the field and keeps its user's value if the user has. A nested record, an array or a map counts as one value, except a list of relations, which merges relation by relation: the user's added and removed relations stay, and the sender's other changes are taken (<a href="../spec/records.html#section-6-1">section 6.1</a>).</li>
   <li><strong>Whole record</strong>: a receiver that does not track fields treats any change as a change of the whole record, and either takes the whole update or keeps the record as its user left it (<a href="../spec/records.html#section-6-2">section 6.2</a>).</li>
 </ul>
 <p>

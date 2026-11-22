@@ -568,6 +568,7 @@ class Receiver:
                 "state": "there" if is_data else "tombstone",
                 "value": dict(m["value"]) if is_data else None,
                 "changed": set(),
+                "taken": dict(m["value"]) if is_data else {},  # the value last taken from the sender
             }
             return self.result("APPLIED", r)
         r["version"] = m["version"]
@@ -581,21 +582,24 @@ class Receiver:
             return self.result("APPLIED", r)
         r["type"] = m["type"]
         if r["state"] == "tombstone":  # the record comes back as a new record under the same id
-            r.update(state="there", value=dict(m["value"]), changed=set())
+            r.update(state="there", value=dict(m["value"]), changed=set(), taken=dict(m["value"]))
             return self.result("APPLIED", r)
         if r["state"] == "deleted_by_user":
             return self.result("KEPT", r)
         if not r["changed"] or self.mode == "whole_record_take":
-            r.update(value=dict(m["value"]), changed=set())
+            r.update(value=dict(m["value"]), changed=set(), taken=dict(m["value"]))
             return self.result("APPLIED", r)
         if self.mode == "whole_record_keep":
             return self.result("KEPT", r)
-        kept = [f for f in r["changed"] if f in r["value"] and r["value"][f] != m["value"].get(f)]
         value = dict(m["value"])
+        lists = sy.element_fields(m["type"])
         for f in r["changed"]:
             if f in r["value"]:
-                value[f] = r["value"][f]
-        r["value"] = value
+                # A list merged per element (records.md, section 6.1).
+                mine = r["value"][f]
+                value[f] = sy.merge_elements(r["taken"].get(f, []), mine, value[f]) if f in lists else mine
+        kept = [f for f in r["changed"] if f in value and value[f] != m["value"].get(f)]
+        r.update(value=value, taken=dict(m["value"]))
         return self.result("MERGED" if kept else "APPLIED", r, kept)
 
     def local_change(self, rid: str, field: str, value: Any) -> None:

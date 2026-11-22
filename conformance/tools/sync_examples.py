@@ -72,6 +72,7 @@ import datetime
 import hashlib
 import importlib.util
 import io
+import itertools
 import json
 import re
 from collections.abc import Callable
@@ -527,7 +528,7 @@ def record_message(
         return ("DELETE", state.state_stamp)
     versions = SCHEMA_VERSIONS if versions is None else versions
     for name, field in state.fields.items():
-        lacking = writer_fields is not None and name not in writer_fields
+        lacking = writer_fields is not None and part_of(name)[0] not in writer_fields
         if lacking and field.stamp >= 1 and versions[field.schema] > writer_version:
             return None
     return ("DATA", state.state_stamp)
@@ -3015,6 +3016,11 @@ def read_field(schema: dict[str, Any], name: str, buf: io.BytesIO) -> tuple[dict
     field's type, with well-formed strings, or that go deeper than 32 (section 8.3, step 11)."""
     one = field_schema(schema, name)
     assert one is not None, name
+    return read_one(one, name, buf)
+
+
+def read_one(one: dict[str, Any], name: str, buf: io.BytesIO) -> tuple[dict[str, Any], Any]:
+    """read_field with the schema of the one field."""
     try:
         parsed = fastavro.parse_schema(one, _write_hint=False)
         value = fastavro.schemaless_reader(buf, parsed, parsed)
@@ -3036,6 +3042,239 @@ def field_value(schema: dict[str, Any], name: str, value: Any) -> bytes:
     avro.io.DatumWriter(avro.schema.parse(json.dumps(one))).write({name: value}, avro.io.BinaryEncoder(other))
     assert out.getvalue() == other.getvalue(), name
     return out.getvalue()
+
+
+# --- lists merged per element (section 25) ----------------------------------------------------------------
+
+# The item types whose lists are merged per element, with the member whose value is an element's key.
+ELEMENT_KEYS = {"axt.Relation": "id"}
+KEY_TEXT = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+MAX_ELEMENTS = 256  # the elements a value of the field holds (spec/fields.md, section 11.4)
+
+
+def element_member(schema: dict[str, Any], name: str) -> str | None:
+    """The member that keys the elements of the top-level field `name`, for a list merged per element
+    (section 25.1); None for every other field and for a name the schema lacks."""
+    one = field_schema(schema, name)
+    if one is None:
+        return None
+    t = one["fields"][0]["type"]
+    if not isinstance(t, dict) or t.get("type") != "array":
+        return None
+    items = t["items"]
+    if isinstance(items, str):
+        return ELEMENT_KEYS.get(items)
+    named = isinstance(items, dict) and items.get("type") == "record"
+    return ELEMENT_KEYS.get(_named(items, "")[0]) if named else None
+
+
+def element_key(value: Any) -> str:
+    """The key of an element in a part name: its id in lower case (section 25.2); fastavro gives a uuid
+    as a UUID."""
+    return str(value).lower()
+
+
+def part_of(name: str) -> tuple[str, str | None]:
+    """The field of a field state's name, and the key of an element part, or None (section 25.2)."""
+    field, slash, key = name.partition("/")
+    return field, (key if slash else None)
+
+
+def part_schema(schema: dict[str, Any], name: str) -> dict[str, Any] | None:
+    """The schema of the value of the field state `name`, as field_schema gives it for a field: for a
+    list merged per element, the order part `name` holds an array of strings, and the element part
+    `name/key` a union of null, for the element's removal, and the item type (section 25.2). None for a
+    name the schema has no field state of."""
+    field, key = part_of(name)
+    if element_member(schema, field) is None:
+        return None if key is not None else field_schema(schema, name)
+    if key is not None and not KEY_TEXT.match(key):
+        return None
+    one = field_schema(schema, field)
+    assert one is not None
+    items = one["fields"][0]["type"]["items"]
+    t: Any = {"type": "array", "items": "string"} if key is None else ["null", items]
+    return {"type": "record", "name": "axt_sync_examples.OneField", "fields": [{"name": name, "type": t}]}
+
+
+def read_part(schema: dict[str, Any], name: str, buf: io.BytesIO) -> tuple[dict[str, Any], Any]:
+    """read_field for the value of a field state, by part_schema."""
+    one = part_schema(schema, name)
+    assert one is not None, name
+    return read_one(one, name, buf)
+
+
+def _item_schema(schema: dict[str, Any], field: str) -> Any:
+    one = field_schema(schema, field)
+    assert one is not None
+    return fastavro.parse_schema(one["fields"][0]["type"]["items"], _write_hint=False)
+
+
+def split_value(schema: dict[str, Any], field: str, data: bytes) -> dict[str, bytes]:
+    """The parts of a value of a list merged per element, from the bytes of the value as a DATA carries
+    it: the order part, the keys of the elements in their order as an array of strings, and one element
+    part for each element, the bytes of the union's branch of the item followed by the item's own bytes,
+    cut out of the value and not encoded again (section 25.2)."""
+    member = element_member(schema, field)
+    assert member is not None, field
+    item = _item_schema(schema, field)
+    buf, order, parts = io.BytesIO(data), list[str](), dict[str, bytes]()
+    while True:
+        count = keys_long(buf)
+        if count == 0:
+            break
+        if count < 0:
+            count = -count
+            keys_long(buf)  # the size of the block
+        for _ in range(count):
+            start = buf.tell()
+            value = fastavro.schemaless_reader(buf, item, item)
+            assert isinstance(value, dict)
+            key = element_key(value[member])
+            order.append(key)
+            parts[f"{field}/{key}"] = b"\x02" + data[start : buf.tell()]
+    assert buf.tell() == len(data), field
+    return {field: order_value(order), **parts}
+
+
+def keys_long(buf: io.BytesIO) -> int:
+    n, pos = keys.read_long(buf.getvalue(), buf.tell())
+    buf.seek(pos)
+    return int(n)
+
+
+def order_value(order: list[str]) -> bytes:
+    """The value of an order part: the keys as an Avro array of strings; one byte 0 when it is empty."""
+    if not order:
+        return b"\x00"
+    items = b"".join(bytes(keys.zigzag(len(k.encode()))) + k.encode() for k in order)
+    return bytes(keys.zigzag(len(order))) + items + b"\x00"
+
+
+def composed(field: str, parts: dict[str, bytes]) -> list[tuple[str, bytes]]:
+    """The elements of a list merged per element, from its parts: those named in the order part in its
+    order, then the others by their keys in the order of their code points, each present and not
+    removed, at most 256 (section 25.4). Each as its key and the bytes of the item."""
+    present = {
+        key: v[1:]
+        for name, v in parts.items()
+        for f, key in [part_of(name)]
+        if f == field and key is not None and v[:1] == b"\x02"
+    }
+    order: list[str] = []
+    if field in parts:
+        buf = io.BytesIO(parts[field])
+        order = [str(k) for k in cast_list(fastavro.schemaless_reader(buf, ORDER, ORDER))]
+    named = [k for k in dict.fromkeys(order) if k in present]
+    rest = sorted(k for k in present if k not in named)
+    return [(k, present[k]) for k in [*named, *rest][:MAX_ELEMENTS]]
+
+
+ORDER = fastavro.parse_schema({"type": "array", "items": "string"})
+
+
+def cast_list(v: Any) -> list[Any]:
+    assert isinstance(v, list)
+    return v
+
+
+def compose_value(field: str, parts: dict[str, bytes]) -> bytes:
+    """The value of a list merged per element, as a DATA carries it, from its parts (section 25.4)."""
+    elements = composed(field, parts)
+    if not elements:
+        return b"\x00"
+    return bytes(keys.zigzag(len(elements))) + b"".join(item for _, item in elements) + b"\x00"
+
+
+def element_fields(type_name: str) -> set[str]:
+    """The lists merged per element of an example type of version 1, by its full name (section 25.1)."""
+    short = type_name.rsplit(".", 1)[-1]
+    path = REPO / "types" / "axt" / "example" / "v1" / f"{short}.1.avsc"
+    if not type_name.startswith("axt.example.v1.") or not path.exists():
+        return set()
+    schema = json.loads(path.read_text(encoding="utf-8"))
+    return {f["name"] for f in schema["fields"] if element_member(schema, f["name"]) is not None}
+
+
+def merge_elements(base: list[Any], mine: list[Any], theirs: list[Any], member: str = "id") -> list[Any]:
+    """The merge per element of spec/records.md, section 6.1, at a receiver without stamps: `base` is the
+    list it last took from the sender, `mine` its user's list, `theirs` the list of the message. An element
+    the user added or changed keeps the user's value, one the user removed stays removed, and every other
+    comes from the message; in the message's order, then the user's additions in the user's order."""
+
+    def key(e: Any) -> str:
+        return element_key(e[member])
+
+    before, own = {key(e): e for e in base}, {key(e): e for e in mine}
+    changed = {k for k, e in own.items() if before.get(k) != e}
+    removed = {k for k in before if k not in own}
+    out = [own[key(e)] if key(e) in changed else e for e in theirs if key(e) not in removed]
+    there = {key(e) for e in theirs}
+    out += [e for e in mine if key(e) in changed and key(e) not in there]
+    return out[:MAX_ELEMENTS]
+
+
+def part_mismatch(schema: dict[str, Any], name: str, value: Any) -> str | None:
+    """Why an element part does not hold the element its name has the key of (section 25.5), or None."""
+    field, key = part_of(name)
+    member = element_member(schema, field)
+    if key is None or member is None or value is None:
+        return None
+    return None if element_key(value[member]) == key else f"{name}: the key of another element"
+
+
+def list_change(
+    schema: dict[str, Any], field: str, value: bytes, fields: dict[str, FieldState]
+) -> dict[str, bytes]:
+    """The parts that a change to the whole list `value` sets, where the state holds `fields`: every part
+    of the list, and the removal mark of each element that the state holds and the list lacks (25.6)."""
+    parts = split_value(schema, field, value)
+    for name, f in fields.items():
+        if part_of(name)[0] == field and name not in parts and f.value is not None and f.value[:1] == b"\x02":
+            parts[name] = b"\x00"
+    return parts
+
+
+def record_parts(schema: dict[str, Any], values: dict[str, bytes]) -> dict[str, bytes]:
+    """The values of the field states of a record whose fields have the values, as a DATA carries them:
+    a list merged per element as its parts (section 25.6)."""
+    out: dict[str, bytes] = {}
+    for name, value in values.items():
+        if element_member(schema, name) is None:
+            out[name] = value
+        else:
+            out.update(split_value(schema, name, value))
+    return out
+
+
+def owner_elements(
+    schema: dict[str, Any], field: str, value: bytes, over: dict[str, bytes]
+) -> tuple[list[bytes], list[bytes]]:
+    """The elements of a list merged per element of a received record, as the items' bytes: the sender's,
+    from its value, and those the device shows with the owner's parts `over` them (section 25.7, as
+    spec/records.md, section 6.1): the sender's elements in the sender's order, each as the owner's part
+    has it and left out for a removal mark, then the elements that only the owner's layer holds, in the
+    order of the owner's order part and then by their keys; at most 256."""
+    theirs = split_value(schema, field, value)
+    order = [str(k) for k in cast_list(fastavro.schemaless_reader(io.BytesIO(theirs[field]), ORDER, ORDER))]
+    sender = [theirs[f"{field}/{k}"][1:] for k in order]
+    shown_parts = [over.get(f"{field}/{k}", theirs[f"{field}/{k}"]) for k in order]
+    mine = []
+    if field in over:
+        mine = [str(k) for k in cast_list(fastavro.schemaless_reader(io.BytesIO(over[field]), ORDER, ORDER))]
+    added = sorted(
+        k for n in over for f, k in [part_of(n)] if f == field and k is not None and k not in order
+    )
+    for k in dict.fromkeys([*(k for k in mine if k not in order), *added]):
+        if f"{field}/{k}" in over:
+            shown_parts.append(over[f"{field}/{k}"])
+    out = [part[1:] for part in shown_parts if part[:1] == b"\x02"][:MAX_ELEMENTS]
+    return sender, out
+
+
+def list_bytes(items: list[bytes]) -> bytes:
+    """The value of an array with the items' bytes, in one block."""
+    return bytes(keys.zigzag(len(items))) + b"".join(items) + b"\x00" if items else b"\x00"
 
 
 # --- the body of a CHANGE (sections 8.1 and 8.2) ---------------------------------------------------------
@@ -3324,6 +3563,7 @@ def shown(
     layer: State | None,
     version: int = 0,
     beside: tuple[dict[str, bytes], bytes] | None = None,
+    texts: dict[bytes, str] | None = None,
 ) -> tuple[str, dict[str, tuple[bytes, bytes, str]]]:
     """The record a device shows, from the two layers alone, by the rules 0 to 3b of section 22.1. `there`
     is None for a device that holds no record message of the record, True for a sender's layer that ends
@@ -3343,8 +3583,16 @@ def shown(
         values, schema = beside  # rule 3a: the DATA beside the tombstone, with the owner's values
     assert schema is not None
     own = owner_values(layer)
+    text = (SCHEMA_TEXTS if texts is None else texts).get(schema)
+    writer = None if text is None else json.loads(text)
     out: dict[str, tuple[bytes, bytes, str]] = {}
     for name, value in values.items():
+        if writer is not None and element_member(writer, name) is not None:
+            # A list merged per element: the sender's elements, the owner's parts over them (25.7).
+            over = {n: f.value for n, f in own.items() if part_of(n)[0] == name and f.value is not None}
+            sender, items = owner_elements(writer, name, value, over)
+            out[name] = (list_bytes(items), schema, "owner") if items != sender else (value, schema, "sender")
+            continue
         mine = own.get(name)
         if mine is None or mine.value is None:
             out[name] = (value, schema, "sender")
@@ -3372,12 +3620,18 @@ def answered(
     if owner_deleted(layer):
         return "KEPT", []  # the record stays deleted (spec/records.md, section 6.3)
     written = json.loads(texts[schema])
-    kept_fields = [
-        n
-        for n in values
-        if n in own
-        and not same_value(n, own[n].value or b"", json.loads(texts[own[n].schema]), values[n], written)
-    ]
+    kept_fields = []
+    for n in values:
+        if element_member(written, n) is not None:
+            # A list merged per element is kept where the list shown differs from the sender's (25.7).
+            over = {p: f.value for p, f in own.items() if part_of(p)[0] == n and f.value is not None}
+            sender, items = owner_elements(written, n, values[n], over)
+            if items != sender:
+                kept_fields.append(n)
+        elif n in own and not same_value(
+            n, own[n].value or b"", json.loads(texts[own[n].schema]), values[n], written
+        ):
+            kept_fields.append(n)
     return ("MERGED" if kept_fields else "APPLIED"), kept_fields
 
 
@@ -4228,7 +4482,7 @@ class SetDevice:
         fp = schema_fingerprint(schema_text)
         if body[:10] != MARKER + fp:
             return False, []
-        buf, fields = io.BytesIO(body[10:]), dict[str, FieldState]()
+        buf, values = io.BytesIO(body[10:]), dict[str, bytes]()
         for f in schema["fields"]:
             start = buf.tell()
             try:
@@ -4237,11 +4491,11 @@ class SetDevice:
                 return False, []
             if tm.value_breaches(one, value):  # step 9
                 return False, []
-            fields[f["name"]] = FieldState(
-                body[10 + start : 10 + buf.tell()], -1, sender, fp
-            )  # of unknown age
+            values[f["name"]] = body[10 + start : 10 + buf.tell()]
         if buf.tell() != len(body) - 10:
             return False, []
+        # Of unknown age; a list merged per element as its parts (section 25.6).
+        fields = {n: FieldState(v, -1, sender, fp) for n, v in record_parts(schema, values).items()}
         done = device_merge(
             None, State(fields, None, record["version"]), self.now_ms, self.highest, self._draw()
         )
@@ -4451,7 +4705,7 @@ class SetDevice:
             schemas[entry["schema"]], texts[entry["schema"]] = json.loads(text), text
         for entry in d["fields"]:  # step 8
             schema = schemas[entry["schema"]]
-            if full_name(schema) != d["type"] or field_schema(schema, entry["name"]) is None:
+            if full_name(schema) != d["type"] or part_schema(schema, entry["name"]) is None:
                 raise Reject("INVALID_MESSAGE", f"{entry['name']}: not a field of a schema of {d['type']}")
         held = self._held(ref)
         names: set[str | None] = {held.type} if held is not None else set()
@@ -4470,17 +4724,20 @@ class SetDevice:
                 continue  # the owner discarded a change of the field (section 21.1)
             buf = io.BytesIO(entry["value"])
             try:
-                one, value = read_field(schemas[entry["schema"]], entry["name"], buf)
+                one, value = read_part(schemas[entry["schema"]], entry["name"], buf)
             except ValueError as e:
                 raise Reject("UNDECODABLE", str(e)) from None
             if buf.tell() != len(entry["value"]):
                 raise Reject("UNDECODABLE", f"{entry['name']}: bytes left over after the value")
-            decoded.append((one, value))
-        for one, value in decoded:  # step 12
+            decoded.append((one, value, entry))
+        for one, value, entry in decoded:  # step 12
             broken = tm.value_breaches(one, value)
             if broken:
                 path, rule, why = broken[0]
                 raise Reject("VALUE_INVALID", f"{rule}: {why}", field=mr.error_field(path))
+            mismatch = part_mismatch(schemas[entry["schema"]], entry["name"], value[entry["name"]])
+            if mismatch:
+                raise Reject("VALUE_INVALID", mismatch, field=mr.error_field(f"{entry['name']}.id"))
         # Step 13: the merge and its outcome (section 8.4).
         removal, keep = d["removal"], d["keep"]
         other = State(
@@ -5349,6 +5606,13 @@ class SetDevice:
                 return False, []  # every proposed value shown, or no ACCEPTED (section 15.1 there)
             # Every proposed field is stamped, also one whose value the record holds already (section 15.2).
             values = {f["name"]: (f["value"], f["schema"]) for f in d["fields"]}
+            for f in d["fields"]:
+                writer = json.loads(self.schemas[f["schema"]])
+                if element_member(writer, f["name"]) is not None:
+                    # A whole list merged per element becomes the change of its parts (section 25.6).
+                    del values[f["name"]]
+                    parts = list_change(writer, f["name"], f["value"], held.state.fields)
+                    values.update({n: (v, f["schema"]) for n, v in parts.items()})
             if values:
                 first_schema = next(iter(values.values()))[1]
                 done = change(
@@ -5802,6 +6066,12 @@ class SetDevice:
             layer.state if layer else None,
             rec.version if rec else 0,
             beside,
+            {
+                **SCHEMA_TEXTS,
+                **self.schemas,
+                **({fp: rec.schema} if fp is not None and rec is not None and rec.schema else {}),
+                **({beside[1]: b.schema} if beside is not None and b is not None and b.schema else {}),
+            },
         )
         out["shown"] = {
             "record": state,
@@ -6879,10 +7149,112 @@ _other["axt.title"] = "location"  # its title names a field of text (spec/fields
 APPOINTMENT_3 = fe.source(json.dumps(_other))
 APPOINTMENT_3_JSON: dict[str, Any] = json.loads(APPOINTMENT_3)
 SCHEMA_3 = schema_fingerprint(APPOINTMENT_3)
+# The schemas of the cases, by fingerprint, where a function has no device that keeps them.
+SCHEMA_TEXTS = {SCHEMA_1: APPOINTMENT_1, SCHEMA_2: APPOINTMENT_2, SCHEMA_3: APPOINTMENT_3, SCHEMA_PET: PET_1}
 SCHEMA_NONE = bytes.fromhex("0102030405060708")  # the fingerprint of no schema
 SCHEMA_NONE_2 = bytes.fromhex("1112131415161718")
 BASE = State({name: FieldState(value, 100, PHONE) for name, value in VALUE.items()}, None, 101)
 ROOM = field_value(APPOINTMENT_2_JSON, "room", "2")
+
+
+# --- lists merged per element (section 25): the example of section 25.8 and the CHANGE of 16.8 --------
+
+MIMI_RELATION = tm.rules.RELATIONS["Appointment"][0]  # to the pet Mimi, a record of the same sender
+VET_RELATION = tm.rules.RELATIONS["Appointment"][1]  # to the vet, a record of another sender
+MIMI_KEY, VET_KEY = (element_key(r["id"]) for r in (MIMI_RELATION, VET_RELATION))
+
+
+def relation_parts(*relations: dict[str, Any]) -> dict[str, bytes]:
+    """The parts of a list of relations of the appointment, split from its value (section 25.6)."""
+    return split_value(
+        APPOINTMENT_JSON, "relations", field_value(APPOINTMENT_JSON, "relations", list(relations))
+    )
+
+
+def element_states(stamp: int, device: bytes, parts: dict[str, bytes]) -> dict[str, FieldState]:
+    return {name: FieldState(value, stamp, device) for name, value in parts.items()}
+
+
+def composed_ids(fields: dict[str, FieldState]) -> list[str]:
+    """The ids of the relations in the composed value of the field states (section 25.4)."""
+    value = compose_value("relations", {n: f.value for n, f in fields.items() if f.value is not None})
+    _, v = read_field(APPOINTMENT_JSON, "relations", io.BytesIO(value))
+    return [element_key(r["id"]) for r in v["relations"]]
+
+
+def tablet_relation_change() -> dict[str, Any]:
+    """The body of the tablet's CHANGE of section 16.8: the vet's relation and the order part, stamp 121."""
+    parts = relation_parts(VET_RELATION)
+    return {
+        "to": PHONE,
+        "origin": None,
+        "type": APPOINTMENT_TYPE,
+        "state": 122,
+        "whole": False,
+        "removal": None,
+        "keep": None,
+        "fields": [
+            entry(n, FieldState(parts[n], 121, TABLET)) for n in ("relations", f"relations/{VET_KEY}")
+        ],
+    }
+
+
+def check_elements(out: list[str]) -> None:
+    """Section 25.8 recomputed with the merge of section 4, the parts of section 25.2 and the value of
+    section 25.4; and the CHANGE of section 16.8 built field by field."""
+    assert (
+        MIMI_KEY == "f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b"
+        and VET_KEY == "6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60"
+    )
+    assert BASE.fields["relations"].value == b"\x00" == order_value([]), "an empty list is one byte 0"
+    phone = with_fields(BASE, 111, **element_states(110, PHONE, relation_parts(MIMI_RELATION)))
+    tablet = with_fields(BASE, 122, **element_states(121, TABLET, relation_parts(VET_RELATION)))
+    for own, other in ((phone, tablet), (tablet, phone)):
+        both = merge(own, other)
+        assert sorted(n for n in both.fields if n.startswith("relations")) == sorted(
+            ["relations", f"relations/{MIMI_KEY}", f"relations/{VET_KEY}"]
+        )
+        assert both.fields["relations"].device == TABLET, "the later order part is the tablet's"
+        assert composed_ids(both.fields) == [VET_KEY, MIMI_KEY], "the vet's relation, then Mimi's"
+    merged = merge(phone, tablet).fields
+    # The phone's user removes Mimi's relation; a stale state with the relation does not bring it back.
+    removed = {
+        **merged,
+        f"relations/{MIMI_KEY}": FieldState(b"\x00", 130, PHONE),
+        "relations": FieldState(order_value([VET_KEY]), 130, PHONE),
+    }
+    assert composed_ids(merge(State(removed, None, 131), phone).fields) == [VET_KEY]
+    assert composed_ids(merge(phone, State(removed, None, 131)).fields) == [VET_KEY]
+    # A change of the content of Mimi's relation on the tablet, with a stamp below the removal's, loses.
+    noted = relation_parts(dict(MIMI_RELATION, note="Booster"))[f"relations/{MIMI_KEY}"]
+    later = State({**merged, f"relations/{MIMI_KEY}": FieldState(noted, 125, TABLET)}, None, 126)
+    assert composed_ids(merge(State(removed, None, 131), later).fields) == [VET_KEY]
+    # The order of the merges does not matter (section 4.5): every order of the four states composes alike.
+    states = [phone, tablet, State(removed, None, 131), later]
+    results = set()
+    for order in itertools.permutations(states):
+        held: State | None = None
+        for st in order:
+            held = State(merge(held, st).fields, None, 1)
+        assert held is not None
+        results.add(tuple(composed_ids(held.fields)))
+    assert results == {(VET_KEY,)}, results
+    out.append("25.8: two relations added apart are both kept, the vet's first; a removal mark stands")
+
+    d = tablet_relation_change()
+    assert change_version(d) == 122 and change_problem(d, 122) is None
+    vet_bytes = d["fields"][1]["value"]
+    notes = {
+        "relations": f'the value: an array of 1 string, "{VET_KEY}"',
+        f"relations/{VET_KEY}": "the value: union index 1, axt.Relation, the vet's relation",
+    }
+    body = change_parts(d, notes)
+    assert b"".join(p[0] for p in body) == body_of("Change", d), "the body differs from fastavro"
+    assert apache_body("Change", body_of("Change", d)) == d
+    assert vet_bytes[:1] == b"\x02"
+    parts, m = message_parts(TABLET_SEED, "CHANGE", (RECORD_ID, 122), body)
+    show(out, "16.8: the tablet's CHANGE with one relation", parts, m)
+    EXAMPLE_MESSAGES["the CHANGE of sync.md, section 16.8"] = m
 
 
 def text_value(text: str) -> bytes:
@@ -7119,12 +7491,18 @@ def _fields_brief(fields: dict[str, Any]) -> str:
             name if f["value"] is not None else f"{name}=null"
         )
     return (
-        " ".join(
-            f"{','.join(names) if len(names) < len(APPOINTMENT) else 'all eight'}@{stamp}{who}"
-            for (stamp, who), names in sorted(groups.items())
-        )
+        " ".join(f"{_names_brief(names)}@{stamp}{who}" for (stamp, who), names in sorted(groups.items()))
         or "no field"
     )
+
+
+def _names_brief(names: list[str]) -> str:
+    """The names of a group: `all eight` for every field of the appointment, and the parts of its relations
+    after it (section 25.2)."""
+    if len(names) < len(APPOINTMENT):
+        return ",".join(names)
+    more = [n for n in names if n.startswith("relations/")]
+    return ",".join(["all eight", *more]) if len(names) - len(more) == len(APPOINTMENT) else "all eight"
 
 
 def _removal_brief(r: dict[str, Any] | None) -> str:
@@ -7846,7 +8224,9 @@ def sessions() -> list[Session]:
     s.nothing()
     pet = tm.rules.DATA["Pet"]
     pet_json = json.loads(PET_1)
-    pet_fields = {n: FieldState(field_value(pet_json, n, v), 200, TABLET, SCHEMA_PET) for n, v in pet.items()}
+    # Its relations as the parts of a list merged per element (section 25.2).
+    pet_values = record_parts(pet_json, {n: field_value(pet_json, n, v) for n, v in pet.items()})
+    pet_fields = {n: FieldState(v, 200, TABLET, SCHEMA_PET) for n, v in pet_values.items()}
     s = new(
         "a record of a type the device does not know is kept whole and passed on",
         ["sync.md 8.5", "sync.md 7.2"],
@@ -8694,6 +9074,50 @@ def sessions() -> list[Session]:
         message(PHONE_SEED, "DATA", (RECORD_ID, 7), MARKER + SCHEMA_1 + b"".join(VALUE.values())[:-3]),
     ]:
         s.step({"file_record": m, "schema": APPOINTMENT_1})
+    s.query()
+
+    # --- lists merged per element (section 25) ---
+    mimi = relation_parts(MIMI_RELATION)
+    s = new(
+        "relations that two devices add apart are both kept, as parts of their own",
+        ["sync.md 25.2", "sync.md 25.3", "sync.md 25.4", "sync.md 25.5", "sync.md 16.8"],
+    )
+    s.change("set", mimi, (8, 0))
+    s.receive(EXAMPLE_MESSAGES["the CHANGE of sync.md, section 16.8"], (0,))
+    s.acks()
+    s.query()
+    s = new(
+        "a removal mark that is later than a sibling's change of the relation stands",
+        ["sync.md 25.2", "sync.md 25.3", "sync.md 4.1"],
+    )
+    s.change("set", mimi, (8, 0))
+    s.change("set", {f"relations/{MIMI_KEY}": b"\x00", "relations": order_value([])}, (0, 0))
+    noted = relation_parts(dict(MIMI_RELATION, note="Booster"))[f"relations/{MIMI_KEY}"]
+    s.receive(change_message("tablet", 112, {f"relations/{MIMI_KEY}": FieldState(noted, 111, TABLET)}))
+    s.acks()
+    s.query()
+    vet = relation_parts(VET_RELATION)[f"relations/{VET_KEY}"]
+    s = new(
+        "an element part whose relation has another id than its name is rejected",
+        ["sync.md 25.5", "sync.md 8.3"],
+    )
+    s.receive(change_message("tablet", 112, {f"relations/{MIMI_KEY}": FieldState(vet, 111, TABLET)}))
+    s.nothing()
+    s = new(
+        "a part of a key in upper case, or of a field that is no list merged per element, is rejected",
+        ["sync.md 25.5", "sync.md 8.3"],
+    )
+    s.receive(change_message("tablet", 112, {f"relations/{VET_KEY.upper()}": FieldState(vet, 111, TABLET)}))
+    s.receive(change_message("tablet", 112, {f"reminders/{VET_KEY}": FieldState(vet, 111, TABLET)}))
+    s.nothing()
+    s = new(
+        "a DATA of a file of the device's own set gives the parts of its relations, of unknown age",
+        ["sync.md 25.6", "sync.md 13.4", "sync.md 4.6"],
+        from_file,
+    )
+    linked = {**APPOINTMENT, "relations": [MIMI_RELATION, VET_RELATION]}
+    m = data_message("tablet", 7, APPOINTMENT_1, linked)
+    s.step({"file_record": m, "schema": APPOINTMENT_1, "now_ms": "0", "r": [0]})
     s.query()
     return out
 
@@ -10185,6 +10609,17 @@ def received_sessions() -> list[Session]:
     s.take(big, text)
     s.owner("set", {"location": VALUE_WEBER}, (4, 0))
     s.about(None)
+    praxis: dict[str, bytes | None] = {**relation_parts(tm.rules.RELATIONS["Appointment"][2])}
+    s = new(
+        "a relation that the owner adds to a received record stays when the sender's relations change, and "
+        "the record shows both",
+        ["sync.md 25.7", "sync.md 22.1", "sync.md 22.2", "records.md 6.1"],
+        known(),
+    )
+    s.owner("set", praxis, (4, 0))
+    s.take(other_data(2, relations=[MIMI_RELATION]), text)
+    s.acks()
+    s.about()
 
     # --- the answer to a RESYNC (section 20.4) ---
     layer = State({"location": weber}, None, 205)  # the phone took it from the tablet, as in section 16.7
@@ -19255,6 +19690,140 @@ SAID: dict[str, list[list[str]]] = {
             "ERROR to tablet: OFFER_INVALID",
         ],
     ],
+    "relations that two devices add apart are both kept, as parts of their own": [
+        [
+            "made: True",
+            (
+                "CHANGE to tablet, version 111, state 111, in part: "
+                "relations,relations/f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b@110p"
+            ),
+        ],
+        ["outcome: APPLIED"],
+        ["ACK to tablet: version 122 APPLIED, receiver 123"],
+        [
+            (
+                "state stamp 123; all_day,end,location,notes,reminders,start,title@100p "
+                "relations/f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b@110p "
+                "relations,relations/6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60@121t; sibling stamp 122; "
+                "to pass None; highest 123"
+            ),
+            (
+                "tablet: known, delivered: "
+                "all_day,end,location,notes,relations,relations/6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60,remind"
+                "ers,start,title"
+            ),
+        ],
+    ],
+    "a removal mark that is later than a sibling's change of the relation stands": [
+        [
+            "made: True",
+            (
+                "CHANGE to tablet, version 111, state 111, in part: "
+                "relations,relations/f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b@110p"
+            ),
+        ],
+        [
+            "made: True",
+            (
+                "CHANGE to tablet, version 113, state 113, in part: "
+                "relations,relations/f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b@112p"
+            ),
+        ],
+        [
+            "outcome: STALE",
+            (
+                "CHANGE to tablet, version 113, state 113, in part: "
+                "relations,relations/f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b@112p"
+            ),
+        ],
+        ["ACK to tablet: version 112 STALE, receiver 113"],
+        [
+            (
+                "state stamp 113; all_day,end,location,notes,reminders,start,title@100p "
+                "relations,relations/f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b@112p; sibling stamp 112; "
+                "to pass None; highest 113"
+            ),
+            "tablet: known, delivered: all_day,end,location,notes,reminders,start,title",
+        ],
+    ],
+    "an element part whose relation has another id than its name is rejected": [
+        [
+            "outcome: None",
+            "ERROR to tablet: VALUE_INVALID, field relations/f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b.id",
+        ],
+        [],
+        [
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
+            "tablet: known, delivered: all",
+        ],
+    ],
+    "a part of a key in upper case, or of a field that is no list merged per element, is rejected": [
+        ["outcome: None", "ERROR to tablet: INVALID_MESSAGE"],
+        ["outcome: None", "ERROR to tablet: INVALID_MESSAGE"],
+        [],
+        [
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
+            "tablet: known, delivered: all",
+        ],
+    ],
+    "a DATA of a file of the device's own set gives the parts of its relations, of unknown age": [
+        [
+            "taken: True",
+            (
+                "CHANGE to laptop, version 8, state 8, whole: all "
+                "eight,relations/6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60,relations/f1b3d5a7-2c4e-4f60-8a1b-3c5"
+                "d7e9f0a2b@-1t"
+            ),
+            (
+                "CHANGE to tablet, version 8, state 8, whole: all "
+                "eight,relations/6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60,relations/f1b3d5a7-2c4e-4f60-8a1b-3c5"
+                "d7e9f0a2b@-1t"
+            ),
+        ],
+        [
+            (
+                "state stamp 8; all "
+                "eight,relations/6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60,relations/f1b3d5a7-2c4e-4f60-8a1b-3c5"
+                "d7e9f0a2b@-1t; "
+                "sibling stamp 7; to pass None; highest 8"
+            ),
+            "laptop: not known",
+            "tablet: not known",
+        ],
+    ],
+    (
+        "a relation that the owner adds to a received record stays when the sender's "
+        "relations change, and the record shows both"
+    ): [
+        [
+            "made: True",
+            (
+                "CHANGE, origin other app, to tablet, version 201, state 201, whole: "
+                "relations,relations/a2c4e6f8-0b1d-4e3f-8a5c-7e9f1b3d5a70@200p"
+            ),
+        ],
+        [
+            "outcome: MERGED, kept ['relations']",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, relations changed, with the schema as offered",
+        ],
+        ["ACK to other app: version 2 MERGED, receiver 2, kept ['relations']"],
+        [
+            "sender first known by other app; current: other app; highest 201",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2, relations changed; delivered to no sibling",
+            (
+                "sender's layer: there, version 2, type axt.example.v1.Appointment, from DATA "
+                "version 2, relations changed"
+            ),
+            (
+                "owner's layer: state stamp 201; "
+                "relations,relations/a2c4e6f8-0b1d-4e3f-8a5c-7e9f1b3d5a70@200p; type "
+                "axt.example.v1.Appointment"
+            ),
+            "tablet: not known",
+            "shows: there; the owner's value in relations",
+        ],
+    ],
 }
 
 
@@ -19288,6 +19857,7 @@ def check() -> list[str]:
     check_schemas(out)
     check_messages(out)
     check_received(out)
+    check_elements(out)
     check_envelopes()
     check_sessions(out)
     return out

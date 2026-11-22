@@ -109,7 +109,7 @@ For every record of its set, a device keeps the record's id, the full name of it
 
 ### 3.1 Field states
 
-The fields are the top-level fields of the record's writer schema, as in [records.md](records.md), section 6.1: a nested record, an array or a map is one value, with one stamp.
+The fields are the top-level fields of the record's writer schema, as in [records.md](records.md), section 6.1: a nested record, an array or a map is one value, with one stamp. A list merged per element, such as the relations of a record, is held as several field states, its parts, each with a stamp of its own (section 25).
 
 A field state is:
 
@@ -292,7 +292,7 @@ Toward other apps, a device sends a record of its set as [records.md](records.md
 
 - The version, `record.version` of the message ([envelope.md](envelope.md), section 2), is the device's state stamp of the record at the time it writes the message.
 - The message is a `DATA` when the record is there (section 4.3), and a `DELETE` when it is deleted. To an app of another user, a device sends a record only while it is shared with that app, and sends a `WITHDRAW` under a version of its own when it is withdrawn from it ([shares.md](shares.md), sections 2.2 and 5.3).
-- A `DATA` carries the values of the field states the device holds, for the fields of the writer schema it offered. It carries no stamp and no device key: other apps get whole records, as before.
+- A `DATA` carries the values of the field states the device holds, for the fields of the writer schema it offered; the value of a list merged per element is composed from its parts (section 25.4). It carries no stamp and no device key: other apps get whole records, as before.
 - A device MUST NOT send a `DATA` of a record for which it holds a stamped field state, one with a stamp of at least 1, whose field the writer schema it would write with lacks, if that field state was written with a later version of the type than the one the device writes with: the record it would send drops a value that a sibling on a later version set, and a receiver would lose it. It leaves sending that record to a sibling whose schema has the field, or sends it once it writes with such a schema itself. The device tells this by the version of the schema that the field state names in `schema` (section 3.1), compared with the `axt.version` of its own writer schema. A field that its own version of the type, or an earlier one, removed ([types.md](types.md), section 3.3) does not hold a record back: its field state was written with the device's own version or an earlier one. Nor does a field state never stamped (section 3.4).
 - A device MUST NOT send a record it holds incompletely (section 4.3), and MUST NOT send a record for whose state it could take no state stamp (section 2.3).
 - A device MUST NOT send a `DATA` of a record of which it holds a field state of unknown age, with the stamp −1 (section 4.6), while it has a `RESYNC` open toward a sibling (section 11.3) and has taken the acknowledgement of none of its open requests, for at most 14 days from the moment it opened the first of those requests, which is when it first sends that `RESYNC` or, toward a sibling it cannot reach yet, when it decides to ask. After the first acknowledgement of one of its open requests, or after those 14 days, it sends as this section says, also while other requests are still open: the hold ends when the wait of section 12.1 ends. If all its requests have closed and it opens one later, the hold and its 14 days begin anew with that request. An old value from a backup or a file so does not go to other apps under a new version while a sibling's answer is still expected. The acknowledgement says that the answer was sent: a `CHANGE` of it can still come later, and gives the record a new state stamp when the device takes something from it. A device that has no `RESYNC` open, such as one that only took records from a file and asked no sibling, is not held back.
@@ -612,17 +612,18 @@ A device processes a `CHANGE` in these steps. A step that fails ends the process
 | 5    | `record.version` is at least 1                                                                                                                                                                                                                                            | `VERSION_INVALID`                                                                                                                                  |
 | 6    | The body is valid (section 8.2)                                                                                                                                                                                                                                           | `INVALID_MESSAGE`                                                                                                                                  |
 | 7    | For every entry of `fields`, the device holds a schema whose fingerprint is the entry's `schema` (section 7.3)                                                                                                                                                            | `SCHEMA_UNKNOWN`                                                                                                                                   |
-| 8    | For every entry of `fields`, that schema is the schema of a record whose full name is `type`, and it has a top-level field whose name is the entry's `name`                                                                                                               | `INVALID_MESSAGE`                                                                                                                                  |
+| 8    | For every entry of `fields`, that schema is the schema of a record whose full name is `type`, and it has a top-level field whose name is the entry's `name`, or the entry is a part of a list merged per element of that schema (section 25.5)                            | `INVALID_MESSAGE`                                                                                                                                  |
 | 9    | The device keeps no other full name than `type` for the id (section 3)                                                                                                                                                                                                    | `TYPE_CHANGED`                                                                                                                                     |
 | 10   | `whole` is `true`; or the device holds a state of the record that holds at least one field state; or it holds a state of the record that holds no removal                                                                                                                 | `RECORD_UNKNOWN`                                                                                                                                   |
 | 11   | For every entry of `fields`, `value` decodes, in Avro binary encoding, as one value of the type that the field `name` has in the entry's schema, with no bytes left over, with well-formed strings, and to a data depth of at most 32 ([types.md](types.md), section 5.7) | `UNDECODABLE`                                                                                                                                      |
-| 12   | Every time value in the decoded values is valid ([time.md](time.md), section 8) and every relation keeps the rules of [fields.md](fields.md), section 11.4                                                                                                                   | `VALUE_INVALID`                                                                                                                                    |
+| 12   | Every time value in the decoded values is valid ([time.md](time.md), section 8) and every relation keeps the rules of [fields.md](fields.md), section 11.4                                                                                                                | `VALUE_INVALID`                                                                                                                                    |
 | 13   | The device merges the message and reaches an outcome (section 8.4)                                                                                                                                                                                                        | (no failure)                                                                                                                                       |
 
 - **Steps 1 to 3.** A message without `record` is reported with `INVALID_MESSAGE` only to a sibling and to a current key of another known sender, as [protocol.md](protocol.md), section 8.3, allows; nothing goes to the device's own key, to a removed key or to a key the device does not know. A message whose `sender` is no sibling gets the result of its row of section 7.1 without its body being read. A body that does not decode as one `axt.Change` fails after that, at step 3, and is reported to the sibling with `INVALID_MESSAGE`; step 6 checks the content of a body that decodes.
 - **Step 7.** The error's `fingerprint` is the `schema` of the first entry of `fields`, in the order of the message, for which the device holds no schema. `SCHEMA_UNKNOWN` is the rejection and the request for that schema, as for a `DATA` ([protocol.md](protocol.md), section 6.2).
 - **Step 8.** The full name is compared with `type` as text, and the field name with `name` by code points; the aliases of a schema are not looked at.
 - **Step 10** fails for a message that is not whole when the device holds no state of the record, and when the state it holds has a removal and no field state, as for a deleted record whose field states it discarded (section 4.3). A device takes a record that it lacks, or of which it holds only the removal, from a whole message alone.
+- **Steps 8, 11 and 12 for parts.** Section 25.5 says how a device checks the parts of a list merged per element: their names, the types their values decode as, and the key of an element.
 - **Step 11.** The data depth counts the record as depth 1, as in [types.md](types.md), section 5.7: a value that is an array is at depth 2. The device decodes with the entry's schema alone. Whether that schema resolves against the device's own schema of the type is not checked (section 8.5).
 - **Step 12.** The error's `field` is the path of the first value that fails, in the order of `fields` and within one value in the order of the encoding, by the field names of the entry's schema ([metadata.md](metadata.md), section 7.2); it begins with the entry's `name`. A device MUST NOT reject a `CHANGE` for a check of the attributes of [metadata.md](metadata.md), section 7.1: the device on which the change was made applied them, and a value that one sibling rejected would stay different on the devices of the set.
 - **No version rule.** A `CHANGE` is not compared by its version with anything the device keeps: the version rule of [records.md](records.md), section 5.2, is for record messages. Every `CHANGE` that passes steps 1 to 12 is merged. Its id and version name the message for the `ACK` and for an `ERROR`.
@@ -940,6 +941,7 @@ A file MUST NOT hold a `CHANGE` or a `RESYNC`. Each is for one device, whose key
 A file stays what it is: whole records as `DATA` and `DELETE` messages, without stamps. A device can read a file whose sender is its own set, that is, whose `axt.sender` is its own key or a sibling, as it is or by the chain at the start of the file ([keys.md](keys.md), section 5.5), for example to take its first records before sibling sync has brought them. It checks such a file as [transports.md](transports.md), section 2.2, says, and asks its user about no key. It MUST NOT keep the records of such a file as records it received from a sender: they are records of its own set. It MAY take them, and if it does:
 
 - **A `DATA` of a record of which it holds no state**, that passes the steps 2, 3, 8 and 9 of [protocol.md](protocol.md), section 6.2: the device merges, by section 4, a state that it builds from the message. The fingerprint of the body is that of one of the schemas of the file's `axt.schemas`, or the file is rejected ([envelope.md](envelope.md), section 4.3); the device decodes the body with that writer schema alone. The state has one field state for each top-level field of that schema: its `name` is the field's name; its `value` is the bytes of that field in the body, which in Avro binary encoding holds the fields of the record one after the other; its `schema` is the fingerprint of the body; its `stamp` is −1, that of a field state of unknown age (section 4.6); its `device` is the key in `axt.sender`, which in a valid file is also the `sender` of the `DATA`. The state has no removal, and its state stamp is `record.version` of the message. The device so keeps the record, counts the version as a stamp it has seen and as a state stamp of the record that it has seen from a sibling (section 3), takes a state stamp of its own (section 4.4), and keeps the full name of the body's schema as the record's type. Whether the type fits the device's manifest is not looked at.
+- **A list merged per element** in such a `DATA` gives its parts, each of unknown age, by section 25.6.
 - **A `DATA` of a record of which it holds a state** is not applied.
 - **A `DELETE`** is not applied: it carries no removal, and a removal has a stamp of at least 1 (section 4.6). The deletion reaches the device in a `CHANGE`.
 - **A `WITHDRAW`** is not applied: it is a message of the set to another app, and changes nothing of the record ([shares.md](shares.md), section 8.2).
@@ -1625,6 +1627,145 @@ The `CHANGE`: 335 bytes, SHA-256 `b154971f55eb2dbdaec6ed5fd59c914bacd5b14f80a00a
 
 The phone processes it by section 21.4. The key in `origin` is a current key of a sender it knows, so step 10 passes; it holds the schema, and the value decodes as a string. It holds no owner's layer of the record and takes the state of the message. The outcome is `APPLIED`. The phone had given or seen the stamps up to 195; it counts 200 and 201 as seen and takes the state stamp 205 for the layer. Its `ACK` to the tablet carries the id, the version 201, `APPLIED`, the `receiver_version` 205 and no kept field: 198 bytes, SHA-256 `5843bef17607d2bb18ffdf6df39abae414d969d03762bcb47e6c75ed37a7b734`. The phone sends Old Brain Fix nothing. Both devices now show the appointment with `start` 10:00 from the sender's layer and `location` "Dr. Weber, Hauptstr. 5" from the owner's layer (section 22.1).
 
+### 16.8 A `CHANGE` with one relation
+
+The example of section 25.8: the tablet's user links the appointment of section 16.1 to the vet, with the relation `6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60` of the example Appointment ([types.md](types.md), section 7), while the phone's user links it to Mimi. The tablet takes the stamp 121 for the change and the state stamp 122 (section 3.5). The change stamps two parts of the list `relations` (section 25.3): the element part of the new relation and the order part, which names its key. The record is known to the phone, so the `CHANGE` carries these two parts and is not whole (section 10.2).
+
+| Part of the message | Value                                                                                                                                                      |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `format`            | 1                                                                                                                                                          |
+| `kind`              | `CHANGE`                                                                                                                                                   |
+| `sender`            | the tablet's key                                                                                                                                           |
+| `record.id`         | `3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80`                                                                                                                     |
+| `record.version`    | 122, the highest of 122 and 121                                                                                                                            |
+| `to`                | the phone's key                                                                                                                                            |
+| `origin`            | `null`                                                                                                                                                     |
+| `type`              | `axt.example.v1.Appointment`                                                                                                                               |
+| `state`             | 122                                                                                                                                                        |
+| `whole`             | `false`                                                                                                                                                    |
+| `removal`           | `null`                                                                                                                                                     |
+| `keep`              | `null`                                                                                                                                                     |
+| `fields`            | two entries: the order part `relations` and the element part of the vet's relation                                                                         |
+| `signature`         | the tablet's signature: `6fab7823d1561d219ffd80c718618da8363c3ea8774375584062b8782ca9f791e6133e636bc500bc62377082976d2316b935d71fea1d5ca5daf1ec64b9c7bd09` |
+
+| `name`                                           | `schema`                         | `value`                                                                                   | `stamp` | `device` |
+| ------------------------------------------------ | -------------------------------- | ----------------------------------------------------------------------------------------- | ------- | -------- |
+| `relations`                                      | the fingerprint of Appointment.1 | an array of one string, the key `6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60`                    | 121     | tablet   |
+| `relations/6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60` | the fingerprint of Appointment.1 | the byte 2, the branch `axt.Relation` of the union, followed by the vet's relation        | 121     | tablet   |
+
+The `CHANGE`: 658 bytes, SHA-256 `fedd6920387022b3d0208a9c4b4c82f55072e004785decdb696ba304054b5e4a`. Its bytes, with offsets in hexadecimal:
+
+```text
+0000  c3 01                    single-object marker
+0002  16 30 6f 71 b9 ce 9e a8  fingerprint of axt.Envelope, format 1
+000a  02                       format: int 1
+000b  16                       kind: enum index 11, CHANGE
+000c  ee 08 ea a3 d8 aa 50 73  sender: fixed(32), the tablet's test key
+      43 bc 02 92 4f e9 8d 02
+      f9 e4 47 16 27 ac e6 15
+      54 f1 b4 96 35 f2 4a b2
+002c  02                       record: union index 1, axt.RecordRef
+002d  48                       record.id: string length 36
+002e  33 66 32 63 38 61 35 65  "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80"
+      2d 39 62 31 64 2d 34 63
+      37 65 2d 38 61 36 66 2d
+      32 64 34 62 35 63 36 65
+      37 66 38 30
+0052  f4 01                    record.version: long 122
+0054  f8 07                    body: bytes length 508
+0056  c3 01                    body: single-object marker
+0058  c1 88 f8 c5 af 4d 09 4d  body: fingerprint of axt.Change, format 1
+0060  c3 38 de 9e 8b c4 ca 4a  body: to: fixed(32), the phone's test key
+      88 6f 9d ae fc 0a 4f 47
+      6b d7 c5 fc cf 0d 0a 43
+      05 74 d0 fd b8 50 8c e0
+0080  00                       body: origin: union index 0, null
+0081  34                       body: type: string length 26
+0082  61 78 74 2e 65 78 61 6d  body: "axt.example.v1.Appointment"
+      70 6c 65 2e 76 31 2e 41
+      70 70 6f 69 6e 74 6d 65
+      6e 74
+009c  f4 01                    body: state: long 122
+009e  00                       body: whole: boolean false
+009f  00                       body: removal: union index 0, null
+00a0  00                       body: keep: union index 0, null
+00a1  04                       body: fields: array block of 2 items
+00a2  12                       body: fields[0].name: string length 9
+00a3  72 65 6c 61 74 69 6f 6e  body: "relations"
+      73
+00ac  86 e6 cf be 06 63 41 49  body: fields[0].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+00b4  02                       body: fields[0].value: union index 1, bytes
+00b5  4e                       body: fields[0].value: bytes length 39
+00b6  02 48 36 63 38 65 30 61  body: the value: an array of 1 string, "6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60"
+      32 62 2d 34 64 36 66 2d
+      34 61 38 31 2d 39 63 33
+      65 2d 35 66 37 61 39 62
+      31 64 33 65 36 30 00
+00dd  f2 01                    body: fields[0].stamp: long 121
+00df  ee 08 ea a3 d8 aa 50 73  body: fields[0].device: fixed(32), the tablet's test key
+      43 bc 02 92 4f e9 8d 02
+      f9 e4 47 16 27 ac e6 15
+      54 f1 b4 96 35 f2 4a b2
+00ff  5c                       body: fields[1].name: string length 46
+0100  72 65 6c 61 74 69 6f 6e  body: "relations/6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60"
+      73 2f 36 63 38 65 30 61
+      32 62 2d 34 64 36 66 2d
+      34 61 38 31 2d 39 63 33
+      65 2d 35 66 37 61 39 62
+      31 64 33 65 36 30
+012e  86 e6 cf be 06 63 41 49  body: fields[1].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+0136  02                       body: fields[1].value: union index 1, bytes
+0137  ec 03                    body: fields[1].value: bytes length 246
+0139  02 48 36 63 38 65 30 61  body: the value: union index 1, axt.Relation, the vet's relation
+      32 62 2d 34 64 36 66 2d
+      34 61 38 31 2d 39 63 33
+      65 2d 35 66 37 61 39 62
+      31 64 33 65 36 30 2e 6f
+      72 67 2e 65 78 61 6d 70
+      6c 65 2e 63 61 74 61 6c
+      6f 67 2e 76 65 74 00 48
+      35 64 32 65 39 63 37 31
+      2d 33 61 34 62 2d 34 65
+      38 66 2d 62 36 64 30 2d
+      37 66 31 61 32 63 39 65
+      34 62 35 38 02 1b 84 a6
+      00 f3 50 3e 22 bb cc 99
+      e6 32 02 a7 19 4b f6 bd
+      69 af f1 47 1c ce 64 10
+      d5 3c 26 ec 4a 2a 61 78
+      74 2e 65 78 61 6d 70 6c
+      65 2e 76 31 2e 50 65 72
+      73 6f 6e 2c 44 72 2e 20
+      41 6e 6e 61 20 4d 61 72
+      69 61 20 53 63 68 6d 69
+      64 74 00 00 00 04 30 6f
+      72 67 2e 65 78 61 6d 70
+      6c 65 2e 63 61 74 61 6c
+      6f 67 2e 72 6f 6c 65 06
+      76 65 74 36 6f 72 67 2e
+      65 78 61 6d 70 6c 65 2e
+      63 61 74 61 6c 6f 67 2e
+      70 61 69 64 5f 62 79 0a
+      6f 77 6e 65 72 00
+022f  f2 01                    body: fields[1].stamp: long 121
+0231  ee 08 ea a3 d8 aa 50 73  body: fields[1].device: fixed(32), the tablet's test key
+      43 bc 02 92 4f e9 8d 02
+      f9 e4 47 16 27 ac e6 15
+      54 f1 b4 96 35 f2 4a b2
+0251  00                       body: fields: end of the array
+0252  6f ab 78 23 d1 56 1d 21  signature: fixed(64)
+      9f fd 80 c7 18 61 8d a8
+      36 3c 3e a8 77 43 75 58
+      40 62 b8 78 2c a9 f7 91
+      e6 13 3e 63 6b c5 00 bc
+      62 37 70 82 97 6d 23 16
+      b9 35 d7 1f ea 1d 5c a5
+      da f1 ec 64 b9 c7 bd 09
+0292  end
+```
+
+The phone holds the record with its own relation to Mimi, an element part of the stamp 110, and the order part of the stamp 110 that names it. It processes the message by section 8.3: both names are parts of the list `relations` (section 25.5, step 8), the values decode, and the relation's id is the key in its name. The merge takes the element part, which the phone lacks, and the order part, whose stamp 121 is above 110, and keeps the phone's element part of Mimi's relation. The outcome is `APPLIED`; the phone takes the state stamp 123. The record's value of `relations` is now the vet's relation and then Mimi's (section 25.4), as on the tablet once the phone's `CHANGE` has reached it.
+
 ## 17. Records received from other apps
 
 Sections 17 to 24 define what the devices of a set do with what they got from other apps: the keys of the senders they know, the manifests of those senders, the records they took from them, and what the owner changed in those records. Another app has to reach only one device of the set. That device passes each message of the other app on to its siblings, as the signed message it is, inside a `FORWARD` message (section 18), and what the owner did with a received record travels in `CHANGE` messages that name the record's sender in `origin` (section 21).
@@ -2065,6 +2206,7 @@ What a device holds of a received record is its sender's layer (section 20.1) an
 
 - **Kept against the deletion.** A record whose sender's layer ends in a `DELETE` or a `WITHDRAW` is kept exactly when the owner's layer holds a keep that is not given up and whose `version` is at least the version of that `DELETE` or `WITHDRAW`, the owner's layer holds at least one owner's value, the owner's removal does not stand, and the device holds a `DATA` beside the tombstone (section 20.1). In every other case it is deleted (rule 3b). Owner's values alone keep nothing, and a keep alone keeps nothing either: a keep that reaches a device whose owner's layer holds no owner's value is merged all the same (section 21.1), and shows nothing on its own.
 - **The same on every device.** The sender's layer is the same on two devices once each holds the record message with the highest version, and beside a `DELETE` the same `DATA` (sections 19.5 and 20.1); the owner's layer is the same once each has merged the parts of the other (section 4.5). Until then a device shows what the layers it holds give.
+- **A list merged per element** has the sender's elements with the owner's parts over them, as section 25.7 says; the answering device counts it as kept by that section as well.
 - **An owner's value** is read with the schema that its field state names, resolved against the device's reader schema, like a value of a record of the set (section 3.1). An owner's value for a field that the writer schema of the `DATA` does not have is kept and not shown.
 - **A received record is never sent on as itself.** What a device shows is for its user. It sends no version of a received record to any app ([records.md](records.md), section 1).
 
@@ -2219,6 +2361,84 @@ A `FORWARD`, and a `CHANGE` with a key in `origin`, travel between two siblings 
 | A `CHANGE` with a key in `origin`                                                                    | The limits of section 14                                                                      |
 
 A device MUST NOT produce a `FORWARD` above these limits, and MUST NOT reject one for its size while it is within them.
+
+## 25. Lists merged per element
+
+A list whose elements carry a key of their own, such as the relations of a record ([fields.md](fields.md), section 11), is not one value between the devices of a set. When the owner adds an element on one device and another element on a second one, both stay; a removal is kept as a mark, as the deletion of a record is (section 3.2). This section defines such a list by the type of its elements and the member that keys them, so that a later version of this specification can name further types.
+
+### 25.1 Which lists
+
+A **list merged per element** is a top-level field of a record's writer schema whose type is an array of an item type of this table:
+
+| Item type      | Key  | Key text                                       |
+| -------------- | ---- | ---------------------------------------------- |
+| `axt.Relation` | `id` | the UUID in text form, its letters lower case |
+
+Every other field is one value (section 3.1). That includes an array of another type, and a relation field nested in an object or in a list, which is part of the value of its top-level field. The item types of the table are defined in every schema that holds them as they are published ([fields.md](fields.md), section 11.6). The encoding of an element is therefore the same under every writer schema of a type.
+
+### 25.2 Parts
+
+A device holds a list merged per element as field states of section 3.1 of two kinds, its **parts**. Each is a part of the record's state in the sense of section 10.1, as every field state is:
+
+- **The order part**, under the name of the field, such as `relations`. Its `value` is an Avro `array` of `string`: the key texts of the elements in the order that the user gave them. An empty list is one byte 0, as an empty array of the item type is.
+- **One element part** for each element that the list holds or has held, under the name of the field, a `/` and the element's key text, such as `relations/1a3c5e7f-9b0d-4c2e-8f4a-6c8e0a2c4e13`. Its `value` is the Avro binary encoding of a union of `null` and the item type. An element that the list holds is the byte 2 followed by the element's encoding. An element that was removed is the byte 0, the branch `null`: the element's **removal mark**.
+
+The `schema` of a part is the fingerprint of the writer schema of the record, as for every field state. Each part is a field state like any other, on its own: it is stamped (section 25.3), merged by section 4.1 under its name, due and delivered (section 10), and sent in a `CHANGE` (section 25.5). The merge of two states therefore keeps every element that either holds, decides an element that both changed by its stamps, and keeps a removal mark that is later than the element's other part.
+
+A name that holds a `/` is a part: no Avro field name holds one. A later version of this specification MAY name parts within an element part, after a further `/`.
+
+### 25.3 What a change stamps
+
+A change of a list merged per element stamps the parts it changes, each with the one stamp of the change (section 3.5):
+
+- adding an element stamps its element part with the element, and the order part with the new order;
+- changing the content of an element stamps its element part with the changed element;
+- removing an element stamps its element part with the removal mark, and the order part with the order without its key;
+- moving elements stamps the order part.
+
+A device SHOULD NOT stamp a part whose value the change leaves as it was. On the creation of a record, the list gives its order part and one element part for each element. A removal mark stays in the state as long as the record: without it, an older state of a sibling would bring the element back. The parts of all lists of a record count, with its other field states, toward the 4,096 entries of a `CHANGE` (section 14); a device SHOULD refuse a change of its user after which a whole `CHANGE` of the record would hold more, as it refuses one that makes it larger than 16 MiB (section 10.2).
+
+### 25.4 The value of the list
+
+Wherever a device needs the value of the field, it composes it from the parts. That includes a `DATA` to another app (section 5.1) and what it shows its user. The value holds the elements whose element part holds an element, not a removal mark:
+
+1. first the elements whose keys the order part names, in its order; a key that it names twice counts at its first place, and a key without an element is passed over;
+2. then the other elements, by their key texts in the order of their code points.
+
+The value holds at most 256 elements, the first ones of that order ([fields.md](fields.md), section 11.4). The others stay in the state, and come into the value when earlier ones are removed. Two devices that hold the same parts compose the same value. An element that one device added while another moved the list, and that the order part that stands does not name, comes after the elements that it names, on every device.
+
+### 25.5 In a `CHANGE`
+
+A `CHANGE` carries the parts as entries of `fields`, each under its name, with the schema of `axt.Change` as it is (section 15). A `CHANGE` that is not whole and carries one added relation holds two entries: the element part and the order part. One that carries the changed content of a relation holds its element part alone. For the steps of section 8.3:
+
+- **Step 8.** An entry's `name` is a top-level field of the entry's schema, or the name of an element part: a list merged per element of that schema, a `/`, and a key text of section 25.1. Any other name fails with `INVALID_MESSAGE`.
+- **Step 11.** The `value` of an order part decodes as an `array` of `string`, and that of an element part as the union of section 25.2.
+- **Step 12.** An element in an element part keeps the rules of its type, for a relation those of [fields.md](fields.md), section 11.4, with the paths of the error beginning with the entry's `name`. Its key, by section 25.1, is the key text of its name, or the step fails with `VALUE_INVALID` and the `field` the entry's `name` followed by `.id`. The rules of a list as a whole, its 256 relations and the ids that are not repeated, are rules of the composed value (section 25.4) and not of the parts.
+
+A device whose schema of the type lacks the field keeps the parts and passes them on, as section 8.5 says of every field state.
+
+### 25.6 From a whole value
+
+A device that builds field states from a record's whole value splits the list into its parts: an order part with the keys of the elements in their order, and one element part for each element, whose bytes are those of the element in the value, after the byte 2, cut out and not encoded again (section 3.1). It does so for a `DATA` of a file of its own set (section 13.4), and for the values of the sender's layer of a received record wherever it compares them or shows them (section 25.7). A proposal that the owner takes ([shares.md](shares.md), section 15.2) carries a list as its whole value; the device's change stamps every part of that list and the removal mark of each element that the record holds and the proposed list lacks.
+
+### 25.7 Received records
+
+When the owner changes a list merged per element of a received record, the owner's layer (section 21.1) holds the parts that the change stamps, by section 25.3: an element added, changed or removed as an element part, and the order as the order part. A discarded part holds `null`, as a field does (section 21.1).
+
+- **The record a device shows** (section 22.1) has as the list's value the elements of the sender's value in the sender's order, each as the owner's element part of its key has it where the owner's layer holds one, and left out where that part is the removal mark; then the elements that only the owner's layer holds, in the order of the owner's order part and then by their key texts in the order of their code points; at most 256. This is the merge per element of [records.md](records.md), section 6.1, with the owner's parts as the user's changes, so that a set and a receiver on one device show the same list.
+- **The answering device** (section 22.2) counts the field as kept when the list it shows differs from the list of the message, and reports the field by its name in `kept_fields`.
+
+### 25.8 Example
+
+The phone and the tablet hold the appointment of section 16.1 without relations: its order part `relations` is one byte 0, with the stamp 100. While apart, the phone's user links the appointment to the pet Mimi, with the stamp 110, and the tablet's user links it to the vet, with the stamp 121:
+
+| Part                    | On the phone      | On the tablet      | Merged on both     |
+| ----------------------- | ----------------- | ------------------ | ------------------ |
+| `relations`             | Mimi's key, 110   | the vet's key, 121 | the vet's key, 121 |
+| `relations/<Mimi's>`    | the relation, 110 | none               | the relation, 110  |
+| `relations/<the vet's>` | none              | the relation, 121  | the relation, 121  |
+
+Both relations stay. The tablet's order part is the later one; it names the vet's relation, so the composed value is the vet's relation and then Mimi's, on both devices. When the phone's user later removes Mimi's relation, its element part becomes the removal mark with a new stamp, and a stale state of a third device that still holds the relation does not bring it back. Section 16.8 shows the `CHANGE` of the tablet.
 
 ## References
 

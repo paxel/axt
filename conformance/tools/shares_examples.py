@@ -110,6 +110,7 @@ class Held:
     value: dict[str, Any] | None
     changed: set[str] = field(default_factory=set)
     kept: str | None = None  # the kind of the DELETE or WITHDRAW it reported KEPT for, at `version`
+    taken: dict[str, Any] = field(default_factory=dict)  # the value it last took from the sender
 
 
 class Receiver:
@@ -148,6 +149,7 @@ class Receiver:
             state = {"DATA": "there", "DELETE": "tombstone", "WITHDRAW": "withdrawn"}[kind]
             value = dict(m["value"]) if kind == "DATA" else None
             r = self.records[key] = Held(m["type"] if kind == "DATA" else None, m["version"], state, value)
+            r.taken = dict(value or {})
             return self.result("WITHDRAWN" if kind == "WITHDRAW" else "APPLIED", r)
         r.version, r.kept = m["version"], None
         if kind != "DATA":
@@ -165,22 +167,25 @@ class Receiver:
             return self.result(taken, r)
         r.type = m["type"]
         if r.state in ("tombstone", "withdrawn"):  # the record comes back as a new record under the same id
-            r.state, r.value, r.changed = "there", dict(m["value"]), set()
+            r.state, r.value, r.changed, r.taken = "there", dict(m["value"]), set(), dict(m["value"])
             return self.result("APPLIED", r)
         if r.state == "deleted_by_user":
             return self.result("KEPT", r)
         assert r.value is not None
         if not r.changed or self.mode == "whole_record_take":
-            r.value, r.changed = dict(m["value"]), set()
+            r.value, r.changed, r.taken = dict(m["value"]), set(), dict(m["value"])
             return self.result("APPLIED", r)
         if self.mode == "whole_record_keep":
             return self.result("KEPT", r)
-        kept = [f for f in r.changed if f in r.value and r.value[f] != m["value"].get(f)]
         value = dict(m["value"])
+        lists = sy.element_fields(m["type"])
         for f in r.changed:
             if f in r.value:
-                value[f] = r.value[f]
-        r.value = value
+                # A list merged per element (spec/records.md, section 6.1).
+                mine = r.value[f]
+                value[f] = sy.merge_elements(r.taken.get(f, []), mine, value[f]) if f in lists else mine
+        kept = [f for f in r.changed if f in value and value[f] != m["value"].get(f)]
+        r.value, r.taken = value, dict(m["value"])
         return self.result("MERGED" if kept else "APPLIED", r, kept)
 
     def local_change(self, rid: str, name: str, value: Any) -> None:

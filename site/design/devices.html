@@ -70,7 +70,7 @@
   <a href="../spec/sync.html#section-4">4</a>):
 </p>
 <ul>
-  <li>Each change carries a <a href="../spec/glossary.html#term-stamp">stamp</a> from a clock that never runs backwards. Per top-level field, the change with the higher stamp wins; a nested record, an array or a map is one value.</li>
+  <li>Each change carries a <a href="../spec/glossary.html#term-stamp">stamp</a> from a clock that never runs backwards. Per top-level field, the change with the higher stamp wins; a nested record, an array or a map is one value. A list of relations merges per relation, so relations added on two devices both stay (<a href="../spec/sync.html#section-25">sync, section 25</a>).</li>
   <li>Two devices that change different fields of a record keep both changes. Two that change the same field keep the later one.</li>
   <li>A deletion and a change of the record on another device are decided the same way: the later one wins, so a change made after a deletion brings the record back.</li>
   <li>Between the devices only the changed fields travel, after the first transfer of a record, which is whole. Each device sends another what that one has not acknowledged (<a href="../spec/keys.html#section-5-6">keys, section 5.6</a>; <a href="../spec/sync.html#section-10">sync, section 10</a>).</li>

@@ -20,6 +20,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - The relation brick `axt.RelationField`: a field of relations, each an `axt.Relation`, in any type, with its rules and limits and `bricks` vectors. ([axt-1046](https://github.com/paxel/axt/issues/54))
 - Each example type is published as its description of bricks, one version each, with its derived schema and fingerprint generated beside it. ([axt-1045](https://github.com/paxel/axt/issues/53))
 - Relations to records of other senders, named by any key of the sender's set and shown as linked from, with the `records` operation `relations`. ([axt-1038](https://github.com/paxel/axt/issues/46))
+- Relations merge per relation between an owner's devices and at a receiver, so additions on two devices both stay and removals stay removed. ([axt-1039](https://github.com/paxel/axt/issues/47))
 
 ### Changed
 

@@ -112,12 +112,14 @@ Where the receiver runs on several devices of one owner, the devices of the set 
 
 ### 6.1 Per field
 
-A receiver SHOULD merge per field. The fields are the top-level fields of the record's writer schema; a nested record, an array or a map is one value. For each field of a `DATA` message with a higher version:
+A receiver SHOULD merge per field. The fields are the top-level fields of the record's writer schema; a nested record, an array or a map is one value, apart from a list merged per element, as below. For each field of a `DATA` message with a higher version:
 
 - if the receiver's user has not changed the field, the receiver takes the value from the message;
 - if the user has changed it, the receiver keeps the user's value.
 
 A field counts as changed by the user from the user's first change of it until the user discards that change, for example with an action that takes the sender's value again. A receiver MAY tell changed fields by keeping, for each field, the value it last took from the sender and comparing it with the current value. If a message brings the value the user set, the receiver MAY count the field as no longer changed.
+
+A list merged per element ([sync.md](sync.md), section 25.1), such as the relations of a record, is merged per element, by the key of each element: the receiver keeps every element that its user added or changed, leaves out every element that its user removed, and takes every other element from the message. The elements are in the order of the message, followed by those that the user added and the message does not hold, in the user's order, at most 256 ([fields.md](fields.md), section 11.4). A receiver tells what the user changed by comparing the user's list with the list it last took from the sender. The field counts as kept, for `MERGED` and `kept_fields`, when the merged list differs from the list in the message. A receiver on several devices of one owner merges such a list per element between them as well ([sync.md](sync.md), section 25.7).
 
 Fields of the writer schema that the receiver does not keep or use are not local changes. A receiver that maps a type into a model of its own, such as an Appointment into a reminder, merges the fields it maps in the same way.
 

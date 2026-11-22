@@ -3926,6 +3926,40 @@ def records_category() -> Category:
         ],
     )
 
+    # The relations of an appointment merge per element (spec/records.md, section 6.1): the user's addition
+    # and removal stay, the sender's change of another relation and its addition are taken.
+    mimi = rules.RELATIONS["Appointment"][0]
+    praxis = rules.RELATIONS["Appointment"][2]  # to a thing outside AXT
+    booster = dict(mimi, note="Booster")
+    task_link = rules.relation(
+        "d2e4f6a8-1b3c-4d5e-9f70-8a1b2c3d4e5f",
+        rules.record_target(rules.PET_ID, "axt.example.v1.Task", "Collar"),
+    )
+    linked = dict(v1, relations=[mimi])
+    scenario(
+        "relations merge per element: the user's addition and removal stay, also when the sender adds the "
+        "same relation again, and the sender's other changes are taken",
+        ["records.md 6.1", "sync.md 25.1"],
+        per_field_delete,
+        [
+            (data(1, linked), done("APPLIED", 1, "there", linked)),
+            (change("relations", [mimi, praxis]), None),
+            (
+                data(2, dict(v1, relations=[booster, task_link])),
+                done("MERGED", 2, "there", dict(v1, relations=[booster, task_link, praxis]), ["relations"]),
+            ),
+            (change("relations", [task_link, praxis]), None),
+            (
+                data(3, dict(v1, relations=[booster, task_link])),
+                done("MERGED", 3, "there", dict(v1, relations=[task_link, praxis]), ["relations"]),
+            ),
+            (
+                data(4, dict(v1, relations=[booster, task_link, praxis])),
+                done("MERGED", 4, "there", dict(v1, relations=[task_link, praxis]), ["relations"]),
+            ),
+        ],
+    )
+
     # Every value in the sessions is a valid record of its type: it encodes with the type's schema, and its
     # time values and the checks of its schema hold (spec/time.md, section 8; spec/metadata.md, section 6).
     schemas = {
@@ -7173,7 +7207,7 @@ COUNTS = {
         {"decode_record": 46},
     ),
     "metadata": ({"describe": 22, "check_record": 200}, {"check_record": 104}),
-    "records": ({"apply": 13, "relations": 4}, {}),
+    "records": ({"apply": 14, "relations": 4}, {}),
     "manifest": ({"check_manifest": 52, "fit": 19}, {"check_manifest": 46}),
     "keys": (
         {
@@ -7219,7 +7253,7 @@ COUNTS = {
             "stale": 10,
             "pass_version": 5,
             "shown": 23,
-            "siblings": 476,
+            "siblings": 482,
             "withdrawal_stamp": 4,
         },
         {},
