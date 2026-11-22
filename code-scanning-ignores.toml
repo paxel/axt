@@ -105,3 +105,11 @@ path = "conformance/tools/transports_examples.py"
 ignoreUntil = 2027-05-19
 reason = """192.168.1.20 is the example address of the QR code of spec/transports.md, section 7.2, \
 a private address that the example only encodes."""
+
+[[IgnoredAlerts]]
+tool = "SonarQube Cloud"
+rule = "pythonsecurity:S8707"
+path = "relay/axt_relay.py"
+ignoreUntil = 2027-05-19
+reason = """The path is --storage, the directory the operator starts the relay with (spec/relay.md, \
+section 5); no request reaches it. The relay creates and uses only mailboxes/ and tmp/ below it."""
