@@ -21,7 +21,9 @@
 <h2>What travels</h2>
 <ul>
   <li>
-    <strong>Typed records.</strong> Every record type is an Apache Avro schema. A record is one
+    <strong>Typed records.</strong> Every record type is described by bricks, typed fields put
+    together, from which its Apache Avro schema is derived
+    (<a href="../spec/fields.html#section-9">Typed fields, section 9</a>). A record is one
     datum of a type, with a stable id and a rising version
     (<a href="../spec/records.html#section-1">Records, section 1</a>). Avro 1.12 schema
     resolution applies, so two apps can hold different versions of a type
@@ -75,7 +77,7 @@
       <td>Relay</td>
       <td>
         A sealed mailbox: it holds end-to-end encrypted messages until their owner fetches them,
-        and its holding time is 14 days. It sees neither their content nor their type. There is no default
+        and holds each for the holding time <a href="../spec/limits.html#transports.holding"><code>transports.holding</code></a>. It sees neither their content nor their type. There is no default
         operator: each app chooses its relay, and anyone can run the reference relay.
       </td>
       <td>

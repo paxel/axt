@@ -71,7 +71,7 @@
     <tr><th>Code</th><th>When</th></tr>
   </thead>
   <tbody>
-    <tr><td><code>400</code></td><td>A put whose body is empty or whose SHA-256 is not <code>{message}</code>; a <code>wait</code> that is not 0 to 60; a query on another request</td></tr>
+    <tr><td><code>400</code></td><td>A put whose body is empty or whose SHA-256 is not <code>{message}</code>; a <code>wait</code> that is not 0 to <a href="../spec/limits.html#transports.list_wait"><code>transports.list_wait</code></a>; a query on another request</td></tr>
     <tr><td><code>401</code></td><td>An owner request without <code>Authorization</code>, or with one that is not a secret in the form above</td></tr>
     <tr><td><code>403</code></td><td>An owner request whose secret is not the mailbox's; a mailbox the relay does not create for this app</td></tr>
     <tr><td><code>404</code></td><td>A mailbox that does not exist, except for its deletion; a message the mailbox does not hold</td></tr>

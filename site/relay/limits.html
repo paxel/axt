@@ -1,6 +1,7 @@
 <!-- page: title="Limits and storage" track="relay" order=4 summary="The limits of the reference relay, its times and rate limits, how it stores messages on disk, and why its storage needs no backup." -->
 <p class="lede">
-  Some limits are the same for every relay: the size of a message and the holding time of 14 days.
+  Some limits are the same for every relay: the size of a message and the holding time
+  <a href="../spec/limits.html#transports.holding"><code>transports.holding</code></a>.
   Others are the reference relay's own choice, and most of them are options. This page names both,
   and what the relay keeps on disk.
 </p>
@@ -12,9 +13,9 @@
     <tr><th>Limit</th><th>Value</th></tr>
   </thead>
   <tbody>
-    <tr><td>A message</td><td>1 to 17,301,553 bytes, the same for every relay; a larger <code>Content-Length</code> gets <code>413</code> (<a href="../spec/transports.html#section-5-6">transports.md, section 5.6</a>)</td></tr>
+    <tr><td>A message</td><td>1 byte to <a href="../spec/limits.html#transports.sealed_message"><code>transports.sealed_message</code></a>, the same for every relay; a larger <code>Content-Length</code> gets <code>413</code> (<a href="../spec/transports.html#section-5-6">transports.md, section 5.6</a>)</td></tr>
     <tr><td>The room of a mailbox</td><td>64 MiB of held messages by default (<code>--quota-bytes</code>); a put that would go above it gets <code>507</code>, except into an empty mailbox, which always takes one message</td></tr>
-    <tr><td>The number of messages</td><td>No limit beyond the room; a list shows the oldest 1,000</td></tr>
+    <tr><td>The number of messages</td><td>No limit beyond the room; a list shows the oldest <a href="../spec/limits.html#transports.list_messages"><code>transports.list_messages</code></a></td></tr>
     <tr><td>Who may create a mailbox</td><td>Every client, within the rate limits</td></tr>
   </tbody>
 </table>
@@ -32,10 +33,10 @@
     <tr><th>Time</th><th>Value</th></tr>
   </thead>
   <tbody>
-    <tr><td>Holding time</td><td>14 days from the put, the same for every relay (<a href="../spec/transports.html#section-5-5">transports.md, section 5.5</a>). From then on a message is neither listed nor fetched nor counted</td></tr>
+    <tr><td>Holding time</td><td><a href="../spec/limits.html#transports.holding"><code>transports.holding</code></a> from the put, the same for every relay (<a href="../spec/transports.html#section-5-5">transports.md, section 5.5</a>). From then on a message is neither listed nor fetched nor counted</td></tr>
     <tr><td>Deleting it</td><td>At the next sweep, at most 10 minutes later, or earlier when a put, list or fetch touches its mailbox</td></tr>
     <tr><td>A repeated put</td><td>Changes nothing; it does not extend the holding time</td></tr>
-    <tr><td>An idle mailbox</td><td>Removed with its messages at the first sweep at least 91 days after the stored time of its owner's last request. That time is written at most once a day, so a mailbox is never removed before the 90 days of transports.md, section 5.5</td></tr>
+    <tr><td>An idle mailbox</td><td>Removed with its messages at the first sweep at least one day more than <a href="../spec/limits.html#transports.mailbox_idle"><code>transports.mailbox_idle</code></a> after the stored time of its owner's last request. That time is written at most once a day, so a mailbox is never removed before <a href="../spec/limits.html#transports.mailbox_idle"><code>transports.mailbox_idle</code></a> (<a href="../spec/transports.html#section-5-5">transports.md, section 5.5</a>)</td></tr>
     <tr><td>The sweep</td><td>Every 10 minutes</td></tr>
   </tbody>
 </table>

@@ -73,14 +73,16 @@
 
 <h2>Offer</h2>
 <p>
-  An offer names the types whose records the sender wants to send, with their full writer
-  schemas. The receiver answers each type with an accept or a decline; a type that fits the
-  manifest is still only taken when the receiver accepts it. After that, each record in a live
-  connection names its schema by a fingerprint only. A file has no offer: its header carries the schemas instead.
+  An offer names the types whose records the sender wants to send, each by its description, from
+  which the receiver derives the writer schema. The receiver answers each type with an accept or
+  a decline; a type that fits the manifest is still only taken when the receiver accepts it.
+  After that, each record in a live connection names its schema by a fingerprint only. A file has
+  no offer: its header carries the description and the derived schema of each type instead.
 </p>
 <p>
   Spec: <a href="../spec/protocol.html#section-4">Protocol, section 4</a> and
-  <a href="../spec/protocol.html#section-5">section 5</a>; schema
+  <a href="../spec/protocol.html#section-5">section 5</a>;
+  <a href="../spec/fields.html#section-10">Typed fields, section 10</a>; schema
   <a href="../spec/axt.Offer.html"><code>axt.Offer</code></a>. Glossary:
   <a href="../spec/glossary.html#term-offer">offer</a>,
   <a href="../spec/glossary.html#term-fingerprint">fingerprint</a>.

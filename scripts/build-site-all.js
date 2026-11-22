@@ -35,11 +35,18 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
 
 /**
- * The paths of a release a site build reads: its pages, its specification with the schemas and
- * the glossary its reference pages come from, and its version. A release before the site has
- * the specification only.
+ * The paths of a release a site build reads: its pages, its specification with the schemas, the
+ * limits and the glossary its reference pages come from, the adapter protocol they link, and its
+ * version. A release before the site has the specification only.
  */
-export const RELEASE_PATHS = ["site", "spec", "types", "CONTEXT.md", "pyproject.toml"];
+export const RELEASE_PATHS = [
+  "site",
+  "spec",
+  "types",
+  "vectors/adapter.schema.json",
+  "CONTEXT.md",
+  "pyproject.toml",
+];
 
 const RELEASE_TAG = /^v(\d+)\.(\d+)\.(\d+)$/;
 

@@ -8,15 +8,19 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  brickHtml,
   canonicalForm,
   crc64avro,
+  describedTypes,
   docMarkdown,
   fingerprintText,
   fullName,
   glossaryHtml,
+  limitValue,
   readSchemas,
   referencePages,
   symbolMeanings,
+  textsHtml,
 } from "../../scripts/site/schemas.js";
 import { readDocument } from "../../scripts/site/markdown.js";
 import { buildNav } from "../../scripts/build-site.js";
@@ -258,6 +262,127 @@ before(() => {
       { name: "again", type: ["null", "axt.Date"], default: null, doc: "Again." },
     ],
   });
+  writeJson("types/axt/Field.avsc", {
+    type: "record",
+    name: "Field",
+    namespace: "axt",
+    doc: "A typed field.",
+    fields: [
+      { name: "name", type: "string", doc: "Its name (spec/records.md, section 7)." },
+      {
+        name: "kind",
+        doc: "The brick.",
+        type: [
+          {
+            type: "record",
+            name: "StringField",
+            doc: "Plain text.",
+            fields: [
+              { name: "max_length", type: ["null", "int"], default: null, doc: "The most." },
+              { name: "items", type: ["null", "Field"], default: null, doc: "Itself." },
+            ],
+          },
+          { type: "record", name: "EmailField", doc: "The format email of a text.", fields: [] },
+        ],
+      },
+    ],
+  });
+  writeJson("types/axt/example/v1/Cat.1.avsc", {
+    type: "record",
+    name: "Cat",
+    namespace: "axt.example.v1",
+    doc: "A cat.",
+    "axt.version": 1,
+    fields: [
+      { name: "name", type: "string", default: "", doc: "The name." },
+      {
+        name: "coat",
+        type: {
+          type: "enum",
+          name: "CatCoat",
+          doc: "The coat. UNKNOWN: not known. TABBY: striped.",
+          symbols: ["UNKNOWN", "TABBY"],
+          default: "UNKNOWN",
+        },
+        default: "UNKNOWN",
+        doc: "The coat.",
+      },
+      { name: "tags", type: { type: "array", items: "string" }, default: [], doc: "Tags." },
+      { name: "extra", type: "string", default: "", doc: "Not described." },
+    ],
+  });
+  /**
+   * @param {string} label
+   * @param {string} emoji
+   */
+  const texts = (label, emoji) => ({
+    label,
+    label_translations: {},
+    help: "",
+    help_translations: {},
+    emoji,
+  });
+  /**
+   * @param {string} name
+   * @param {Record<string, unknown>} kind
+   * @param {Record<string, unknown>} [common]
+   */
+  const typed = (name, kind, common = {}) => ({
+    name,
+    doc: `The ${name}.`,
+    texts: texts(name, ""),
+    required: false,
+    order: null,
+    group: "",
+    sensitive: false,
+    advanced: false,
+    kind,
+    ...common,
+  });
+  writeJson("types/axt/example/v1/Cat.1.json", {
+    ...typed("cat", {
+      "axt.ObjectField": {
+        name: "axt.example.v1.Cat",
+        fields: [
+          typed(
+            "name",
+            { "axt.StringField": { default: "", max_length: 40, pattern: null, placeholder: "" } },
+            { required: true, order: 0, texts: { ...texts("Name", "🏷️"), help: "Its name." } },
+          ),
+          typed("coat", {
+            "axt.EnumField": {
+              name: "CatCoat",
+              symbols: [
+                { symbol: "UNKNOWN", texts: texts("Unknown", "") },
+                { symbol: "TABBY", texts: texts("Tabby", "🐅") },
+              ],
+              fallback: "UNKNOWN",
+              default: null,
+            },
+          }),
+          typed("tags", {
+            "axt.ListField": { items: typed("tags", { "axt.StringField": { max_length: 32 } }) },
+          }),
+        ],
+        groups: [],
+        version: 1,
+        title: "name",
+      },
+    }),
+    texts: { ...texts("Cat", "🐈"), label_translations: { de: "Katze" }, help: "A cat." },
+  });
+  writeJson("types/axt/limits.json", {
+    limits: {
+      "envelope.message": {
+        value: 16777216,
+        unit: "bytes",
+        what: "One message",
+        section: "records.md, section 7",
+      },
+      "x.wait": { value: 1209600, unit: "seconds", what: "A wait", section: "elsewhere" },
+    },
+  });
+  writeJson("spec/relay-api.json", { openapi: "3.1.0" });
   fs.writeFileSync(path.join(tmp, "CONTEXT.md"), "# Context\n\n**Record**: one datum.\n");
 });
 
@@ -276,7 +401,11 @@ void test("reference pages: overviews, one page per schema out of the sidebar, g
       ["spec/axt.Ack.html", 110, false],
       ["spec/axt.Date.html", 111, false],
       ["spec/axt.Error.html", 112, false],
-      ["spec/axt.example.v1.Pet.1.html", 200, false],
+      ["spec/axt.Field.html", 113, false],
+      ["spec/axt.example.v1.Cat.1.html", 200, false],
+      ["spec/axt.example.v1.Pet.1.html", 201, false],
+      ["spec/bricks.html", 104, true],
+      ["spec/limits.html", 105, true],
       ["spec/glossary.html", 102, true],
       ["spec/errors.html", 103, true],
     ],
@@ -333,6 +462,75 @@ void test("reference pages: overviews, one page per schema out of the sidebar, g
     /<h2 id="type-axt-Date">record <code>axt\.Date<\/code><\/h2>/,
   );
   assert.match(byUrl("spec/example-types.html"), /<td>🐾 Pet<\/td>/);
+  assert.match(byUrl("spec/example-types.html"), /<td>🐈 Cat<\/td>/);
+  const schemas = byUrl("spec/schemas.html");
+  assert.match(
+    schemas,
+    /<li><a href="https:\/\/github\.com\/paxel\/axt\/blob\/summer\/spec\/relay-api\.json"><code>spec\/relay-api\.json<\/code><\/a>: The interface/,
+  );
+  assert.match(
+    schemas,
+    /<code>types\/axt\/limits\.json<\/code><\/a>: The limits, also as the page <a href="limits\.html">/,
+  );
+  assert.doesNotMatch(schemas, /adapter\.schema\.json/, "a file the tree lacks is not linked");
+  // An example type with a description: its texts and bricks come from the description.
+  const cat = byUrl("spec/axt.example.v1.Cat.1.html");
+  assert.match(
+    cat,
+    /<p class="lede">🐈 <strong>Cat<\/strong> <span class="translation"><code>de<\/code> Katze<\/span>: A cat\.<\/p>/,
+  );
+  assert.match(cat, /<dt>Version<\/dt><dd><code>version<\/code> 1<\/dd>/);
+  assert.match(cat, /<dt>Title field<\/dt><dd><code>name<\/code><\/dd>/);
+  assert.match(
+    cat,
+    /<dt>Description<\/dt><dd><a href="https:\/\/github\.com\/paxel\/axt\/blob\/summer\/types\/axt\/example\/v1\/Cat\.1\.json">/,
+  );
+  assert.match(cat, /<dt>Derived schema<\/dt>/);
+  assert.match(cat, /<th>Brick, checks and hints<\/th>/);
+  assert.match(
+    cat,
+    /<td>🏷️ Name<br><em>Its name\.<\/em><\/td>.*<td><a href="bricks\.html#axt\.StringField"><code>axt\.StringField<\/code><\/a><br><code>required<\/code><br><code>order: 0<\/code><br><code>max_length: 40<\/code><\/td>/,
+  );
+  assert.match(cat, /<tr><td><code>TABBY<\/code><\/td><td>🐅 Tabby<\/td><td>striped\.<\/td><\/tr>/);
+  assert.match(
+    cat,
+    /<code>axt\.ListField<\/code><\/a><br>items: <a href="bricks\.html#axt\.StringField"><code>axt\.StringField<\/code><\/a><br><code>max_length: 32<\/code>/,
+  );
+  assert.match(
+    cat,
+    /<code>extra<\/code><\/td><td><\/td>.*<td><\/td><\/tr>/,
+    "a field the description lacks has no texts and no brick",
+  );
+  const bricks = byUrl("spec/bricks.html");
+  assert.match(bricks, /<h2 id="common-part">/);
+  assert.match(
+    bricks,
+    /<tr><td><code>name<\/code><\/td><td><code>string<\/code><\/td><td><\/td><td>Its name \(<a href="records\.html">spec\/records\.md<\/a>/,
+  );
+  assert.doesNotMatch(bricks, /<td><code>kind<\/code>/, "the union of the bricks is no member");
+  assert.match(
+    bricks,
+    /<tr><td><a href="#axt\.StringField"><code>axt\.StringField<\/code><\/a><\/td><td>Plain text\.<\/td><td><code>max_length<\/code><\/td><\/tr>/,
+  );
+  assert.match(bricks, /<td><code>format<\/code> \(<code>email<\/code>\)<\/td>/);
+  assert.match(
+    bricks,
+    /<h2 id="axt\.EmailField"><code>axt\.EmailField<\/code><\/h2>\n<p>The format email of a text\.<\/p>\n<p>It has no members\.<\/p>/,
+  );
+  assert.match(
+    bricks,
+    /<code>null<\/code> or <a href="axt\.Field\.html#type-axt-Field"><code>axt\.Field<\/code><\/a>/,
+    "a type of axt.Field links into its page",
+  );
+  const limits = byUrl("spec/limits.html");
+  assert.match(
+    limits,
+    /<tr id="envelope\.message"><td><code>envelope\.message<\/code><\/td><td>16,777,216 \(16 MiB\)<\/td><td>bytes<\/td><td>One message<\/td><td><a href="records\.html">records\.md<\/a>, section <a href="records\.html#section-7">7<\/a><\/td><\/tr>/,
+  );
+  assert.match(
+    limits,
+    /<td>1,209,600 \(14 days\)<\/td><td>seconds<\/td><td>A wait<\/td><td>elsewhere<\/td>/,
+  );
   assert.match(byUrl("spec/glossary.html"), /<dt id="term-record">/);
   const errors = byUrl("spec/errors.html");
   assert.match(errors, /<h2 id="error-codes">enum <code>axt\.ErrorCode<\/code><\/h2>/);
@@ -342,10 +540,47 @@ void test("reference pages: overviews, one page per schema out of the sidebar, g
   const nav = buildNav(pages);
   assert.deepEqual(
     nav.find((t) => t.id === "spec")?.pages.map((p) => p.url),
-    ["spec/schemas.html", "spec/example-types.html", "spec/glossary.html", "spec/errors.html"],
+    [
+      "spec/schemas.html",
+      "spec/example-types.html",
+      "spec/glossary.html",
+      "spec/errors.html",
+      "spec/bricks.html",
+      "spec/limits.html",
+    ],
   );
   assert.deepEqual(
     referencePages({ repoRoot: path.join(tmp, "none"), ...convert(), order: 1 }),
     [],
   );
+});
+
+void test("limits: a value with the larger unit it is a whole number of", () => {
+  assert.equal(limitValue(1, "bytes"), "1");
+  assert.equal(limitValue(1024, "bytes"), "1,024 (1 KiB)");
+  assert.equal(limitValue(3600, "seconds"), "3,600 (1 hour)");
+  assert.equal(limitValue(90, "seconds"), "90");
+  assert.equal(limitValue(1000, "entries"), "1,000");
+});
+
+void test("descriptions: what is not a typed field yields nothing", () => {
+  assert.equal(describedTypes({}).size, 0);
+  assert.equal(describedTypes({ kind: { "axt.ObjectField": 1 } }).size, 0);
+  assert.equal(brickHtml({ kind: {} }), "");
+  assert.equal(textsHtml(null), "");
+  assert.equal(textsHtml({ label: "A", emoji: "", help: 3 }), "A");
+});
+
+void test("a description that is not an object fails its folder", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "axt-site-description-"));
+  try {
+    fs.writeFileSync(
+      path.join(dir, "A.1.avsc"),
+      JSON.stringify({ type: "record", name: "A", fields: [] }),
+    );
+    fs.writeFileSync(path.join(dir, "A.1.json"), "[]");
+    assert.throws(() => readSchemas(dir, "."), /A\.1\.json: not a description/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

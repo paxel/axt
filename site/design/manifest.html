@@ -39,8 +39,8 @@
   <li><strong>A purpose sentence</strong> for each entry (below).</li>
 </ul>
 <p>
-  A manifest names each full name at most once in <code>takes</code>, and holds at most 256
-  entries (<a href="../spec/manifest.html#section-4">section 4</a>). An app that takes no type
+  A manifest names each full name at most once in <code>takes</code>, and holds at most
+  <a href="../spec/limits.html#manifest.takes"><code>manifest.takes</code></a> entries (<a href="../spec/manifest.html#section-4">section 4</a>). An app that takes no type
   still sends a manifest, with an empty <code>takes</code>
   (<a href="../spec/manifest.html#section-5-1">section 5.1</a>).
 </p>
@@ -69,7 +69,7 @@
   (<a href="../spec/manifest.html#section-3-6">section 3.6</a>).
 </p>
 <ul>
-  <li>It is one line of plain text, not empty, at most 512 bytes. No markup is interpreted in it (<a href="../spec/manifest.html#section-4">section 4</a>).</li>
+  <li>It is one line of plain text, not empty, within <a href="../spec/limits.html#manifest.purpose"><code>manifest.purpose</code></a>. No markup is interpreted in it (<a href="../spec/manifest.html#section-4">section 4</a>).</li>
   <li><code>purpose_translations</code> gives the sentence in other languages, keyed by language tag, such as <code>de</code>, never <code>en</code>. The English sentence is always there, so every app has one to show.</li>
   <li>The other app picks the sentence in its user's language, and the English one when none matches: a user who reads <code>de-AT</code> gets the <code>de</code> sentence, and one who reads <code>fr-CH</code> and <code>fr</code> gets the English one if there is no <code>fr</code>.</li>
 </ul>

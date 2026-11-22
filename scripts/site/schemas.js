@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 // Reference pages of the Specification track, generated from the sources so they cannot drift
-// from them: one page per schema of types/axt/, one per example type of types/axt/example/v1/,
-// the glossary of CONTEXT.md, and the error codes and outcomes of the enums of Error.avsc and
-// Ack.avsc. Fingerprints are computed here, without a dependency: the CRC-64-AVRO of the
+// from them: one page per schema of types/axt/, one per example type of types/axt/example/v1/
+// with the texts and checks of its description, the bricks of Field.avsc, the limits of
+// limits.json, the glossary of CONTEXT.md, and the error codes and outcomes of the enums of
+// Error.avsc and Ack.avsc. Fingerprints are computed here, without a dependency: the CRC-64-AVRO of the
 // Parsing Canonical Form, as the Avro 1.12 specification defines both.
 
 import fs from "node:fs";
@@ -178,6 +179,8 @@ export function fingerprintText(fp) {
  * @property {string} canonical
  * @property {bigint} fingerprint
  * @property {{ full: string, schema: JsonObject }[]} named
+ * @property {JsonObject} [description] the description beside it, for an example type
+ * @property {string} [descriptionFile] its path in the repository
  */
 
 /**
@@ -250,7 +253,17 @@ export function readSchemas(repoRoot, dir) {
         JSON.parse(fs.readFileSync(path.join(full, f), "utf8"))
       );
       if (!isObject(schema)) throw new Error(`${file}: not a named schema`);
-      return readSchema(file, schema);
+      const read = readSchema(file, schema);
+      const json = f.replace(/\.avsc$/, ".json");
+      if (fs.existsSync(path.join(full, json))) {
+        const description = /** @type {unknown} */ (
+          JSON.parse(fs.readFileSync(path.join(full, json), "utf8"))
+        );
+        if (!isObject(description)) throw new Error(`${dir}/${json}: not a description`);
+        read.description = description;
+        read.descriptionFile = `${dir}/${json}`;
+      }
+      return read;
     });
 }
 
@@ -278,6 +291,10 @@ export function docMarkdown(text) {
  * @property {ConvertContext} convert
  * @property {Map<string, SchemaFile>} pages every schema with a page, by full name
  * @property {SchemaFile} current the schema of the page being rendered
+ * @property {string} [base] the page that holds the sections of the current schema's named
+ *   types, when the page being rendered is another one
+ * @property {Map<string, Described>} [described] the typed fields of the current schema's
+ *   objects and enums, from its description
  */
 
 /**
@@ -309,7 +326,7 @@ export function typeId(full) {
 function typeHref(full, ctx) {
   const published = ctx.pages.get(full);
   if (published && published !== ctx.current) return path.posix.basename(published.url);
-  return `#${typeId(full)}`;
+  return `${ctx.base ?? ""}#${typeId(full)}`;
 }
 
 /**
@@ -414,7 +431,8 @@ function translationsHtml(translations) {
 }
 
 /**
- * The checks and display attributes of a field beyond its label, help and emoji.
+ * The checks and display attributes of a field beyond its label, help and emoji, in a release
+ * whose example types carry them as attributes of the schema.
  * @param {JsonObject} field
  * @returns {string}
  */
@@ -423,6 +441,169 @@ function checksHtml(field) {
     .filter(([key]) => key.startsWith("axt.") && !SHOWN.has(key))
     .map(([key, value]) => `<code>${escapeHtml(key)}: ${escapeHtml(JSON.stringify(value))}</code>`)
     .join("<br>");
+}
+
+/**
+ * The texts of a schema or a field of a release whose example types carry them as attributes,
+ * in the form of the texts of a typed field.
+ * @param {JsonObject} s
+ * @returns {JsonObject}
+ */
+function attributeTexts(s) {
+  return {
+    label: s["axt.label"],
+    label_translations: s["axt.label_translations"],
+    help: s["axt.help"],
+    help_translations: s["axt.help_translations"],
+    emoji: s["axt.emoji"],
+  };
+}
+
+/**
+ * The texts of a typed field, an enum symbol or a group: its emoji and label, their
+ * translations, and its help text with its translations.
+ * @param {unknown} texts
+ * @returns {string}
+ */
+export function textsHtml(texts) {
+  if (!isObject(texts)) return "";
+  const emoji = typeof texts.emoji === "string" && texts.emoji ? `${escapeHtml(texts.emoji)} ` : "";
+  let html = `${emoji}${escapeHtml(str(texts.label))}`;
+  const labels = translationsHtml(texts.label_translations);
+  if (labels) html += `<br>${labels}`;
+  if (typeof texts.help === "string" && texts.help) {
+    html += `<br><em>${escapeHtml(texts.help)}</em>`;
+    const helps = translationsHtml(texts.help_translations);
+    if (helps) html += `<br>${helps}`;
+  }
+  return html;
+}
+
+// ---------------------------------------------------------------------------
+// Descriptions: the typed fields of spec/fields.md, from which an example type's schema is derived
+
+/**
+ * One object or enum of a description: the typed field that describes it, and its brick.
+ * @typedef {{ field: JsonObject, brick: JsonObject }} Described
+ */
+
+/**
+ * The brick of a typed field: the one branch of its union `kind`, by its full name.
+ * @param {unknown} field
+ * @returns {{ name: string, value: JsonObject } | undefined}
+ */
+export function brickOf(field) {
+  if (!isObject(field) || !isObject(field.kind)) return undefined;
+  const [entry] = Object.entries(field.kind);
+  if (!entry || !isObject(entry[1])) return undefined;
+  return { name: entry[0], value: entry[1] };
+}
+
+/**
+ * @param {unknown} value
+ * @returns {JsonObject[]}
+ */
+function objects(value) {
+  return Array.isArray(value) ? value.filter(isObject) : [];
+}
+
+/**
+ * The objects and enums of a description by their full names; a nested one takes the namespace
+ * of the root (spec/fields.md, section 9.1).
+ * @param {JsonObject} root
+ * @returns {Map<string, Described>}
+ */
+export function describedTypes(root) {
+  /** @type {Map<string, Described>} */
+  const out = new Map();
+  const space = namespaceOf(str(brickOf(root)?.value.name));
+  /** @param {unknown} field */
+  const walk = (field) => {
+    const brick = brickOf(field);
+    if (!brick || !isObject(field)) return;
+    const v = brick.value;
+    if (brick.name === "axt.ObjectField" || brick.name === "axt.EnumField") {
+      const full = fullName(str(v.name), undefined, space);
+      if (!out.has(full)) out.set(full, { field, brick: v });
+    }
+    for (const f of objects(v.fields)) walk(f);
+    walk(v.items);
+    walk(v.values);
+  };
+  walk(root);
+  return out;
+}
+
+/** The members of a brick that give the type its shape, shown elsewhere on the page. */
+const SHAPE = new Set([
+  "default",
+  "name",
+  "fields",
+  "groups",
+  "version",
+  "title",
+  "symbols",
+  "fallback",
+  "items",
+  "values",
+]);
+
+/**
+ * Whether a member's value says something: not null, empty or false.
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isSet(value) {
+  if (value === null || value === undefined || value === "" || value === false) return false;
+  if (Array.isArray(value)) return value.length > 0;
+  return !isObject(value) || Object.keys(value).length > 0;
+}
+
+/**
+ * @param {string} key
+ * @param {unknown} value
+ * @returns {string}
+ */
+function memberHtml(key, value) {
+  return value === true
+    ? `<code>${escapeHtml(key)}</code>`
+    : `<code>${escapeHtml(key)}: ${escapeHtml(JSON.stringify(value))}</code>`;
+}
+
+/**
+ * The brick of a typed field, linked to the Bricks page, with what the field sets beyond its
+ * shape: `required`, its place and how it is shown, the checks and hints of its brick, and for
+ * a list or a map the same of its items or values.
+ * @param {JsonObject} field
+ * @returns {string}
+ */
+export function brickHtml(field) {
+  const brick = brickOf(field);
+  if (!brick) return "";
+  const parts = [
+    `<a href="bricks.html#${escapeHtml(brick.name)}"><code>${escapeHtml(brick.name)}</code></a>`,
+  ];
+  for (const key of ["required", "order", "group", "sensitive", "advanced"]) {
+    if (isSet(field[key])) parts.push(memberHtml(key, field[key]));
+  }
+  for (const [key, value] of Object.entries(brick.value)) {
+    if (!SHAPE.has(key) && isSet(value)) parts.push(memberHtml(key, value));
+  }
+  for (const key of ["items", "values"]) {
+    const inner = brick.value[key];
+    if (isObject(inner)) parts.push(`${key}: ${brickHtml(inner)}`);
+  }
+  return parts.join("<br>");
+}
+
+/**
+ * The texts of an example type: of its description, or of its attributes in a release before
+ * the bricks.
+ * @param {SchemaFile} schema
+ * @returns {unknown}
+ */
+function rootTexts(schema) {
+  return schema.description ? schema.description.texts : attributeTexts(schema.schema);
 }
 
 /**
@@ -444,11 +625,17 @@ function namedSection(named, ctx, example) {
       symbols,
     );
     if (intro) html += `<p>${docHtml(intro, ctx)}</p>\n`;
-    html += "<table>\n<thead><tr><th>Symbol</th><th>Meaning</th></tr></thead>\n<tbody>\n";
+    const described = ctx.described?.get(named.full);
+    const texts = new Map(
+      objects(described?.brick.symbols).map((sym) => [str(sym.symbol), sym.texts]),
+    );
+    html += `<table>\n<thead><tr><th>Symbol</th>${described ? "<th>Label</th>" : ""}<th>Meaning</th></tr></thead>\n<tbody>\n`;
     html += symbols
       .map(
         (sym) =>
-          `<tr><td><code>${escapeHtml(sym)}</code></td><td>${docHtml(meanings.get(sym) ?? "", ctx)}</td></tr>`,
+          `<tr><td><code>${escapeHtml(sym)}</code></td>` +
+          (described ? `<td>${textsHtml(texts.get(sym))}</td>` : "") +
+          `<td>${docHtml(meanings.get(sym) ?? "", ctx)}</td></tr>`,
       )
       .join("\n");
     html += "\n</tbody>\n</table>\n";
@@ -460,22 +647,19 @@ function namedSection(named, ctx, example) {
   if (s.doc !== undefined) html += `<p>${docHtml(s.doc, ctx)}</p>\n`;
   if (type === "fixed") return `${html}<p>Size: ${escapeHtml(String(s.size))} bytes.</p>\n`;
   const fields = Array.isArray(s.fields) ? /** @type {JsonObject[]} */ (s.fields) : [];
+  const described = ctx.described?.get(named.full);
+  const checks = described ? "Brick, checks and hints" : "Checks";
   const head = example
-    ? "<th>Field</th><th>Label</th><th>Type</th><th>Default</th><th>Description</th><th>Checks</th>"
+    ? `<th>Field</th><th>Label</th><th>Type</th><th>Default</th><th>Description</th><th>${checks}</th>`
     : "<th>Field</th><th>Type</th><th>Default</th><th>Description</th>";
   const rows = fields.map((f) => {
     const name = `<td id="${typeId(named.full)}-${escapeHtml(String(f.name))}"><code>${escapeHtml(String(f.name))}</code></td>`;
     const common = `<td>${typeHtml(f.type, space, ctx)}</td><td>${defaultHtml(f)}</td><td>${docHtml(f.doc, ctx)}</td>`;
     if (!example) return `<tr>${name}${common}</tr>`;
-    const emoji = typeof f["axt.emoji"] === "string" ? `${escapeHtml(f["axt.emoji"])} ` : "";
-    const label =
-      `${emoji}${escapeHtml(str(f["axt.label"]))}` +
-      (f["axt.label_translations"] ? `<br>${translationsHtml(f["axt.label_translations"])}` : "");
-    const help = f["axt.help"]
-      ? `<br><em>${escapeHtml(str(f["axt.help"]))}</em>` +
-        (f["axt.help_translations"] ? `<br>${translationsHtml(f["axt.help_translations"])}` : "")
-      : "";
-    return `<tr>${name}<td>${label}${help}</td>${common}<td>${checksHtml(f)}</td></tr>`;
+    if (!ctx.described)
+      return `<tr>${name}<td>${textsHtml(attributeTexts(f))}</td>${common}<td>${checksHtml(f)}</td></tr>`;
+    const typed = objects(described?.brick.fields).find((c) => c.name === f.name);
+    return `<tr>${name}<td>${typed ? textsHtml(typed.texts) : ""}</td>${common}<td>${typed ? brickHtml(typed) : ""}</td></tr>`;
   });
   return `${html}<table>\n<thead><tr>${head}</tr></thead>\n<tbody>\n${rows.join("\n")}\n</tbody>\n</table>\n`;
 }
@@ -490,29 +674,39 @@ function namedSection(named, ctx, example) {
  * @returns {GeneratedPage}
  */
 function schemaPage(schema, pages, convert, example, order) {
+  /** @type {RenderContext} */
   const ctx = { convert, pages, current: schema };
+  if (schema.description) ctx.described = describedTypes(schema.description);
   const { hex, bytes } = fingerprintText(schema.fingerprint);
   const s = schema.schema;
-  const source = `${convert.repoUrl}/blob/${convert.ref}/${schema.file}`;
+  const blob = (/** @type {string} */ file) => `${convert.repoUrl}/blob/${convert.ref}/${file}`;
+  const root = schema.description ? brickOf(schema.description)?.value : undefined;
   let body = "";
   if (example) {
-    const emoji = typeof s["axt.emoji"] === "string" ? `${escapeHtml(s["axt.emoji"])} ` : "";
-    body += `<p class="lede">${emoji}<strong>${escapeHtml(str(s["axt.label"]))}</strong>`;
-    if (s["axt.label_translations"]) body += ` ${translationsHtml(s["axt.label_translations"])}`;
-    body += `: ${escapeHtml(str(s["axt.help"]))}</p>\n`;
-    if (s["axt.help_translations"])
-      body += `<p>${translationsHtml(s["axt.help_translations"])}</p>\n`;
+    const texts = /** @type {JsonObject} */ (rootTexts(schema) ?? {});
+    const emoji =
+      typeof texts.emoji === "string" && texts.emoji ? `${escapeHtml(texts.emoji)} ` : "";
+    body += `<p class="lede">${emoji}<strong>${escapeHtml(str(texts.label))}</strong>`;
+    const labels = translationsHtml(texts.label_translations);
+    if (labels) body += ` ${labels}`;
+    body += `: ${escapeHtml(str(texts.help))}</p>\n`;
+    const helps = translationsHtml(texts.help_translations);
+    if (helps) body += `<p>${helps}</p>\n`;
   }
   body += `<p${example ? "" : ' class="lede"'}>${docHtml(s.doc, ctx)}</p>\n<dl class="facts">\n`;
   if (example) {
-    body += `<dt>Version</dt><dd><code>axt.version</code> ${escapeHtml(String(s["axt.version"]))}</dd>\n`;
-    if (typeof s["axt.title"] === "string") {
-      body += `<dt>Title field</dt><dd><code>${escapeHtml(s["axt.title"])}</code></dd>\n`;
+    const version = root ? root.version : s["axt.version"];
+    body += `<dt>Version</dt><dd><code>${root ? "version" : "axt.version"}</code> ${escapeHtml(str(version))}</dd>\n`;
+    const title = root ? root.title : s["axt.title"];
+    if (typeof title === "string" && title) {
+      body += `<dt>Title field</dt><dd><code>${escapeHtml(title)}</code></dd>\n`;
     }
   }
-  body +=
-    `<dt>Fingerprint</dt><dd>CRC-64-AVRO <code>${hex}</code>, as bytes <code>${bytes}</code></dd>\n` +
-    `<dt>Schema</dt><dd><a href="${escapeHtml(source)}">${escapeHtml(schema.file)}</a></dd>\n</dl>\n`;
+  body += `<dt>Fingerprint</dt><dd>CRC-64-AVRO <code>${hex}</code>, as bytes <code>${bytes}</code></dd>\n`;
+  if (schema.descriptionFile) {
+    body += `<dt>Description</dt><dd><a href="${escapeHtml(blob(schema.descriptionFile))}">${escapeHtml(schema.descriptionFile)}</a></dd>\n`;
+  }
+  body += `<dt>${schema.descriptionFile ? "Derived schema" : "Schema"}</dt><dd><a href="${escapeHtml(blob(schema.file))}">${escapeHtml(schema.file)}</a></dd>\n</dl>\n`;
   const own = schema.named.filter((n) => n.full === schema.name || !pages.has(n.full));
   for (const named of own) body += namedSection(named, ctx, example);
   body += `<h2 id="canonical-form">Parsing Canonical Form</h2>\n<pre><code class="language-json">${escapeHtml(schema.canonical)}</code></pre>\n`;
@@ -538,8 +732,9 @@ function overviewTable(schemas, example) {
   const rows = schemas.map((schema) => {
     const s = schema.schema;
     const doc = typeof s.doc === "string" ? (/^[^.]*\./.exec(s.doc)?.[0] ?? s.doc) : "";
+    const texts = /** @type {JsonObject} */ (example ? (rootTexts(schema) ?? {}) : {});
     const label = example
-      ? `<td>${escapeHtml(str(s["axt.emoji"]))} ${escapeHtml(str(s["axt.label"]))}</td>`
+      ? `<td>${escapeHtml(str(texts.emoji))} ${escapeHtml(str(texts.label))}</td>`
       : "";
     return (
       `<tr><td><a href="${path.posix.basename(schema.url)}"><code>${escapeHtml(schema.name)}</code></a></td>` +
@@ -550,6 +745,207 @@ function overviewTable(schemas, example) {
     ? "<th>Type</th><th>Label</th><th>What it is</th><th>CRC-64-AVRO</th>"
     : "<th>Schema</th><th>What it is</th><th>CRC-64-AVRO</th>";
   return `<table>\n<thead><tr>${head}</tr></thead>\n<tbody>\n${rows.join("\n")}\n</tbody>\n</table>`;
+}
+
+/** The members of a brick that a value can break (spec/fields.md, section 7). */
+const CHECKS = new Set(["min_length", "max_length", "pattern", "min", "max"]);
+
+/**
+ * The members of a record as the rows of a table: name, type, default and doc.
+ * @param {JsonObject[]} fields
+ * @param {string} space
+ * @param {RenderContext} ctx
+ * @returns {string}
+ */
+function membersTable(fields, space, ctx) {
+  const rows = fields.map(
+    (f) =>
+      `<tr><td><code>${escapeHtml(str(f.name))}</code></td><td>${typeHtml(f.type, space, ctx)}</td>` +
+      `<td>${defaultHtml(f)}</td><td>${docHtml(f.doc, ctx)}</td></tr>`,
+  );
+  return (
+    "<table>\n<thead><tr><th>Member</th><th>Type</th><th>Default</th><th>What it is</th></tr></thead>\n" +
+    `<tbody>\n${rows.join("\n")}\n</tbody>\n</table>\n`
+  );
+}
+
+/**
+ * The checks of a brick: the members a value can break, and the format of a semantic brick,
+ * which its doc names.
+ * @param {JsonObject} brick
+ * @returns {string}
+ */
+export function brickChecks(brick) {
+  /** @type {string[]} */
+  const checks = [];
+  const format = /\bthe format ([a-z-]+) of\b/i.exec(str(brick.doc));
+  if (format) checks.push(`<code>format</code> (<code>${escapeHtml(format[1] ?? "")}</code>)`);
+  for (const f of objects(brick.fields)) {
+    if (CHECKS.has(str(f.name))) checks.push(`<code>${escapeHtml(str(f.name))}</code>`);
+  }
+  return checks.join(", ");
+}
+
+/**
+ * The page of the bricks: the common part of axt.Field and each brick of its union `kind`,
+ * with its members and its checks.
+ * @param {SchemaFile} field the schema of axt.Field
+ * @param {Map<string, SchemaFile>} pages
+ * @param {ConvertContext} convert
+ * @param {number} order
+ * @returns {GeneratedPage}
+ */
+function bricksPage(field, pages, convert, order) {
+  const base = path.posix.basename(field.url);
+  /** @type {RenderContext} */
+  const ctx = { convert, pages, current: field, base };
+  const space = namespaceOf(field.name);
+  const members = objects(field.schema.fields);
+  const kind = members.find((m) => m.name === "kind");
+  const bricks = objects(kind?.type).map((b) => ({
+    full: fullName(str(b.name), b.namespace, space),
+    brick: b,
+  }));
+  let body =
+    '<p class="lede">The bricks of AXT: a typed field describes one field of a type, its name, ' +
+    "the texts a receiver shows for it and the checks its values keep, and a type is described " +
+    `by typed fields put together. Generated from <a href="${base}"><code>axt.Field</code></a>; ` +
+    'the rules are in <a href="fields.html">fields.md</a>.</p>\n' +
+    '<h2 id="common-part">The common part</h2>\n' +
+    "<p>Every typed field has these members beside its brick. Its <code>required</code> is a check " +
+    "of every brick.</p>\n" +
+    membersTable(
+      members.filter((m) => m !== kind),
+      space,
+      ctx,
+    ) +
+    '<h2 id="bricks">The bricks</h2>\n' +
+    "<table>\n<thead><tr><th>Brick</th><th>Values</th><th>Checks</th></tr></thead>\n<tbody>\n" +
+    bricks
+      .map(
+        ({ full, brick }) =>
+          `<tr><td><a href="#${escapeHtml(full)}"><code>${escapeHtml(full)}</code></a></td>` +
+          `<td>${docHtml(brick.doc, ctx)}</td><td>${brickChecks(brick)}</td></tr>`,
+      )
+      .join("\n") +
+    "\n</tbody>\n</table>\n";
+  for (const { full, brick } of bricks) {
+    body += `<h2 id="${escapeHtml(full)}"><code>${escapeHtml(full)}</code></h2>\n<p>${docHtml(brick.doc, ctx)}</p>\n`;
+    const own = objects(brick.fields);
+    body += own.length ? membersTable(own, space, ctx) : "<p>It has no members.</p>\n";
+  }
+  return {
+    title: "Bricks",
+    track: "spec",
+    order,
+    summary:
+      "The bricks of axt.Field: the common part of a typed field, and each brick with its members and checks.",
+    url: "spec/bricks.html",
+    body,
+  };
+}
+
+/**
+ * A limit's value, with the larger unit it is a whole number of, such as 16 MiB or 14 days.
+ * @param {unknown} value
+ * @param {unknown} unit
+ * @returns {string}
+ */
+export function limitValue(value, unit) {
+  const n = Number(value);
+  const text = n.toLocaleString("en-US");
+  /** @type {[number, string][]} */
+  const scales =
+    unit === "bytes"
+      ? [
+          [2 ** 30, "GiB"],
+          [2 ** 20, "MiB"],
+          [2 ** 10, "KiB"],
+        ]
+      : unit === "seconds"
+        ? [
+            [86400, "days"],
+            [3600, "hours"],
+            [60, "minutes"],
+          ]
+        : [];
+  for (const [size, name] of scales) {
+    if (n >= size && n % size === 0) {
+      const count = n / size;
+      return `${text} (${String(count)} ${count === 1 ? name.replace(/s$/, "") : name})`;
+    }
+  }
+  return text;
+}
+
+/**
+ * The page of the limits of types/axt/limits.json, one row per limit, its id its key.
+ * @param {string} repoRoot
+ * @param {ConvertContext} convert
+ * @param {number} order
+ * @returns {GeneratedPage | undefined}
+ */
+function limitsPage(repoRoot, convert, order) {
+  const file = "types/axt/limits.json";
+  const full = path.join(repoRoot, file);
+  if (!fs.existsSync(full)) return undefined;
+  const data = /** @type {unknown} */ (JSON.parse(fs.readFileSync(full, "utf8")));
+  const limits = isObject(data) && isObject(data.limits) ? data.limits : {};
+  const rows = Object.entries(limits).map(([key, limit]) => {
+    const l = isObject(limit) ? limit : {};
+    const doc = /^([a-z0-9-]+)\.md(,.*)?$/.exec(str(l.section));
+    const section = doc
+      ? inline(`[${doc[1] ?? ""}.md](${doc[1] ?? ""}.md)${doc[2] ?? ""}`, convert, newBlock())
+      : escapeHtml(str(l.section));
+    return (
+      `<tr id="${escapeHtml(key)}"><td><code>${escapeHtml(key)}</code></td>` +
+      `<td>${escapeHtml(limitValue(l.value, l.unit))}</td><td>${escapeHtml(str(l.unit))}</td>` +
+      `<td>${escapeHtml(str(l.what))}</td><td>${section}</td></tr>`
+    );
+  });
+  const source = `${convert.repoUrl}/blob/${convert.ref}/${file}`;
+  return {
+    title: "Limits",
+    track: "spec",
+    order,
+    summary:
+      "Every limit of the specification by its key, with its value, its unit and the section that applies it.",
+    url: "spec/limits.html",
+    body:
+      '<p class="lede">The limits of AXT, generated from ' +
+      `<a href="${escapeHtml(source)}">${file}</a>: every bound on a size, a count, a length, a depth ` +
+      "or a time. The documents name each limit by its key; the value is here.</p>\n" +
+      "<table>\n<thead><tr><th>Key</th><th>Value</th><th>Unit</th><th>What it bounds</th><th>Section</th></tr></thead>\n" +
+      `<tbody>\n${rows.join("\n")}\n</tbody>\n</table>`,
+  };
+}
+
+/**
+ * The definitions of the specification beside its schemas, each linked where the build's tree
+ * holds it.
+ * @param {string} repoRoot
+ * @param {ConvertContext} convert
+ * @returns {string}
+ */
+function otherDefinitions(repoRoot, convert) {
+  /** @type {[string, string][]} */
+  const files = [
+    ["types/axt/limits.json", 'The limits, also as the page <a href="limits.html">Limits</a>'],
+    ["spec/relay-api.json", "The interface every relay offers, as OpenAPI 3.1"],
+    [
+      "vectors/adapter.schema.json",
+      "The adapter protocol of the conformance suite, as JSON Schema",
+    ],
+  ];
+  const items = files
+    .filter(([file]) => fs.existsSync(path.join(repoRoot, file)))
+    .map(
+      ([file, what]) =>
+        `<li><a href="${escapeHtml(`${convert.repoUrl}/blob/${convert.ref}/${file}`)}"><code>${file}</code></a>: ${what}.</li>`,
+    );
+  return items.length
+    ? `\n<h2 id="other-definitions">Other definitions</h2>\n<ul>\n${items.join("\n")}\n</ul>`
+    : "";
 }
 
 /**
@@ -627,7 +1023,8 @@ export function referencePages({ repoRoot, docs, repoUrl, ref, strict, warnings,
       body:
         '<p class="lede">The schemas of the specification under <code>types/axt/</code>, generated ' +
         "from the files, with their fields, defaults, docs and fingerprints.</p>\n" +
-        overviewTable(spec, false),
+        overviewTable(spec, false) +
+        otherDefinitions(repoRoot, convert("schemas")),
     },
     {
       title: "Example types",
@@ -637,7 +1034,7 @@ export function referencePages({ repoRoot, docs, repoUrl, ref, strict, warnings,
       url: "spec/example-types.html",
       body:
         '<p class="lede">The example types under <code>types/axt/example/v1/</code>, which work ' +
-        "between apps without prior agreement, with the labels and checks they carry.</p>\n" +
+        "between apps without prior agreement, with the labels and checks of their descriptions.</p>\n" +
         overviewTable(examples, true),
     },
   ];
@@ -663,6 +1060,10 @@ export function referencePages({ repoRoot, docs, repoUrl, ref, strict, warnings,
       ),
     );
   }
+  const field = pages.get("axt.Field");
+  if (field) out.push(bricksPage(field, pages, convert("bricks"), order + 4));
+  const limits = limitsPage(repoRoot, convert("limits"), order + 5);
+  if (limits) out.push(limits);
   const context = path.join(repoRoot, "CONTEXT.md");
   if (fs.existsSync(context)) {
     out.push({

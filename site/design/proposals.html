@@ -39,7 +39,8 @@
 <p>
   The app keeps each answer, as records of a type in its own namespace, as it keeps its shares, so
   that every device of the owner holds it. It keeps an answer as long as the record is shared with
-  the proposer, and at least 15 days. It also keeps the schemas of the records it sent to each
+  the proposer, and at least
+  <a href="../spec/limits.html#transports.longest_holding"><code>transports.longest_holding</code></a>. It also keeps the schemas of the records it sent to each
   receiver, so that every device can read a proposal written against them
   (<a href="../spec/shares.html#section-15-1">section 15.1</a>).
 </p>
@@ -57,7 +58,8 @@
   proposals from one receiver, for one record, one type or all records, and keeps that stop as
   records of its own type. To take no more proposals for a type at all, it sends a manifest in
   which <code>proposals</code> is <code>false</code> for that type. The specification also bounds
-  how many open proposals of one proposer a device takes: 16 for one record and 256 in all
+  how many open proposals of one proposer a device takes: <a href="../spec/limits.html#shares.open_per_record"><code>shares.open_per_record</code></a> for
+  one record and <a href="../spec/limits.html#shares.open"><code>shares.open</code></a> in all
   (<a href="../spec/shares.html#section-18-3">section 18.3</a>).
 </p>
 
@@ -66,7 +68,7 @@
   <li><strong>Merge per field.</strong> An app that lets its user propose changes to records of a type merges per field for that type (<a href="../spec/shares.html#section-17-2">section 17.2</a>; <a href="records.html">Updates, deletions and the receiver's changes</a>).</li>
   <li><strong>The proposed value is the user's change.</strong> It shows in the record at once and stands, before the answer and after a refusal, until the user discards it. An update from the owner does not end it by itself.</li>
   <li><strong>Only for a record that is there.</strong> The app proposes only for a record whose last message from the owner is an update, not for one the owner deleted or withdrew, and not for one its own user deleted (<a href="../spec/shares.html#section-13-1">section 13.1</a>).</li>
-  <li><strong>Repeated until answered.</strong> A proposal without a reply is sent again: at the start of each later live connection, and through a relay every 14 days (<a href="../spec/shares.html#section-16-2">section 16.2</a>). No message takes a proposal back.</li>
+  <li><strong>Repeated until answered.</strong> A proposal without a reply is sent again: at the start of each later live connection, and through a relay once the holding time <a href="../spec/limits.html#transports.holding"><code>transports.holding</code></a> has passed (<a href="../spec/shares.html#section-16-2">section 16.2</a>). No message takes a proposal back.</li>
   <li><strong>The answer.</strong> The app may show its user the reply. <code>ACCEPTED</code> says an update is coming; <code>DECLINED</code> says none is coming for this proposal (<a href="../spec/shares.html#section-14-2">section 14.2</a>).</li>
 </ul>
 <p>

@@ -23,10 +23,12 @@
 <h2>Versions and major versions</h2>
 <p>
   An example type carries its major version in its namespace: <code>v1</code> in
-  <code>axt.example.v1.Note</code>. Within a major version, each published schema carries the
-  attribute <code>axt.version</code>, an integer that is 1 for the first and grows by one with
-  each version (<a href="../spec/types.html#section-3-1">types, sections 3.1</a> and
-  <a href="../spec/types.html#section-3-2">3.2</a>).
+  <code>axt.example.v1.Note</code>. Within a major version, the description of each version holds
+  its <code>version</code>, an integer that is 1 for the first and grows by one with each
+  version; the derived schema carries it as <code>axt.version</code>
+  (<a href="../spec/types.html#section-3-1">types, sections 3.1</a> and
+  <a href="../spec/types.html#section-3-2">3.2</a>;
+  <a href="../spec/fields.html#section-9-1">fields, section 9.1</a>).
 </p>
 <ul>
   <li>Compatible versions keep the full name, so a receiver with one version reads records of every other version of the same major version, in both directions.</li>
@@ -34,11 +36,11 @@
   <li>The major version belongs to each type, not to the set: Task stays <code>axt.example.v1.Task</code> while Note moves to <code>v2</code>.</li>
 </ul>
 <p>
-  These rules are binding for the example types. A type of your own should carry
-  <code>axt.version</code> in the same way (<a href="../spec/types.html#section-3-2">section
-  3.2</a>): a schema without it counts as version 1, so a receiver cannot tell its versions apart
-  (<a href="../spec/manifest.html#section-3-4">manifest, section 3.4</a>). Resolution works by full
-  name for every type, so the reasons behind the rules hold for yours as well.
+  These rules are binding for the example types. The description of a type of your own has a
+  version as well, and it should count its versions in the same way
+  (<a href="../spec/types.html#section-3-2">section 3.2</a>), so that receivers can tell them
+  apart (<a href="../spec/manifest.html#section-3-4">manifest, section 3.4</a>). Resolution works
+  by full name for every type, so the reasons behind the rules hold for yours as well.
 </p>
 
 <h2>Changes that keep a type compatible</h2>
@@ -83,7 +85,8 @@
 <p>
   In a live connection, a record names its schema by a fingerprint over the schema's Parsing
   Canonical Form, which
-  drops <code>doc</code>, defaults, logical types and every attribute, and the texts, hints and checks are not in the schema at all
+  drops <code>doc</code>, defaults, logical types and every attribute. The texts, hints and
+  checks stay in the description and are not in the derived schema at all
   (<a href="../spec/types.html#section-3-4">types, section 3.4</a>). Every published version of a
   full name must differ from the earlier ones in that form, so that the fingerprint tells them
   apart. A change of <code>doc</code> texts, texts, hints or checks alone is therefore not a version of its

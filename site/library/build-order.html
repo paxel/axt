@@ -11,7 +11,7 @@
     <tr><th>Part</th><th>Specification</th><th>Categories</th></tr>
   </thead>
   <tbody>
-    <tr><td>1. Avro, fingerprints and the types</td><td><a href="../spec/envelope.html#section-1">envelope.md</a> 1 and 5 to 8; <a href="../spec/types.html">types.md</a>; <a href="../spec/time.html">time.md</a>; <a href="../spec/metadata.html">metadata.md</a>; <a href="../spec/fields.html#section-11">fields.md</a> 11 and 12</td><td><code>encoding</code>, <code>types</code>, <code>time</code>; <code>describe</code> and <code>check_record</code> of <code>bricks</code></td></tr>
+    <tr><td>1. Avro, fingerprints, the bricks and the types</td><td><a href="../spec/envelope.html#section-1">envelope.md</a> 1 and 5 to 8; <a href="../spec/fields.html">fields.md</a>; <a href="../spec/types.html">types.md</a>; <a href="../spec/time.html">time.md</a>; <a href="../spec/metadata.html">metadata.md</a></td><td><code>encoding</code>, <code>types</code>, <code>time</code>, <code>bricks</code></td></tr>
     <tr><td>2. The envelope and signatures</td><td><a href="../spec/envelope.html#section-2">envelope.md</a> 2 to 4; <a href="../spec/keys.html#section-2">keys.md</a> 2</td><td><code>encoding</code>, <code>keys</code></td></tr>
     <tr><td>3. Records</td><td><a href="../spec/records.html">records.md</a>; <a href="../spec/fields.html#section-12-4">fields.md</a> 12.4</td><td><code>records</code></td></tr>
     <tr><td>4. The manifest and the protocol</td><td><a href="../spec/manifest.html">manifest.md</a>; <a href="../spec/protocol.html">protocol.md</a></td><td><code>manifest</code>, <code>protocol</code></td></tr>
@@ -42,7 +42,7 @@
   </p>
 </div>
 
-<h2>1. Avro, fingerprints and the types</h2>
+<h2>1. Avro, fingerprints, the bricks and the types</h2>
 <p>
   AXT encodes everything with Apache Avro 1.12: the binary encoding, the single-object encoding,
   the object container file, the Parsing Canonical Form, CRC-64-AVRO and schema resolution
@@ -52,7 +52,7 @@
 <ul>
   <li>
     <strong>Fingerprints.</strong> A fingerprint is the CRC-64-AVRO of the schema's Parsing
-    Canonical Form, written as 8 bytes in little-endian order. The canonical form drops
+    Canonical Form, for a type that of its derived schema, written as 8 bytes in little-endian order. The canonical form drops
     <code>logicalType</code>, so a <code>uuid</code> string is written as <code>"string"</code>.
     At least one Avro library writes it otherwise and computes another fingerprint; the vectors
     catch that (<a href="../spec/envelope.html#section-5">section 5</a>).
@@ -67,15 +67,24 @@
     not Avro's logical types for times (<a href="../spec/envelope.html#section-7">section 7</a>).
   </li>
   <li>
-    <strong>Limits.</strong> A message is at most 16 MiB, and a decoder checks a declared length
-    against the input that is left before it allocates for it
-    (<a href="../spec/envelope.html#section-8">section 8</a>). A receiver decodes records up to a data depth of 32 and rejects a deeper one
-    (<a href="../spec/types.html#section-5-7">types.md, section 5.7</a>).
+    <strong>Limits.</strong> A message is at most <a href="../spec/limits.html#envelope.message"><code>envelope.message</code></a>, and a decoder
+    checks a declared length against the input that is left before it allocates for it
+    (<a href="../spec/envelope.html#section-8">section 8</a>). A receiver decodes records up to the
+    data depth <a href="../spec/limits.html#types.data_depth"><code>types.data_depth</code></a> and rejects a deeper one, so that a small message
+    cannot exhaust its stack (<a href="../spec/types.html#section-5-7">types.md, section 5.7</a>).
+    Every limit is on <a href="../spec/limits.html">Limits</a>.
   </li>
   <li>
     <strong>The time types.</strong> <code>axt.Date</code>, <code>axt.Time</code>,
     <code>axt.DateTime</code> and <code>axt.Duration</code>, their validity, zone rules that differ
     and adding a duration (<a href="../spec/time.html">time.md</a>).
+  </li>
+  <li>
+    <strong>The bricks.</strong> <a href="../spec/axt.Field.html"><code>axt.Field</code></a> and its
+    bricks, a valid description, checking a value, the derived schema and its text, and the
+    descriptions in offers and files (<a href="../spec/fields.html">fields.md</a>, sections
+    <a href="../spec/fields.html#section-1">1</a> to <a href="../spec/fields.html#section-10">10</a>).
+    The bricks and their members are on <a href="../spec/bricks.html">Bricks</a>.
   </li>
   <li>
     <strong>Metadata.</strong> What a receiver shows of a type and checks of its values, by its
@@ -94,8 +103,8 @@
   Tested by: <code>encoding</code> (<code>fingerprint</code>), <code>types</code>
   (<code>fingerprint</code>, <code>decode_record</code>), <code>time</code>
   (<code>fingerprint</code>, <code>decode_record</code>, <code>resolve_date_time</code>,
-  <code>add_duration</code>) and <code>bricks</code> (<code>describe</code>,
-  <code>check_record</code>); the relations by <code>decode_record</code> of <code>types</code>
+  <code>add_duration</code>) and <code>bricks</code> (<code>derive</code>, <code>describe</code>,
+  <code>check_record</code>, <code>decode_record</code>); the relations by <code>decode_record</code> of <code>types</code>
   and of <code>bricks</code>, the extensions by <code>decode_record</code> of
   <code>types</code>. The example types are listed on
   <a href="../spec/example-types.html">Example types</a>.

@@ -1,8 +1,9 @@
 <!-- page: title="Choose a type" track="design" order=1 summary="Decide whether your app exchanges an example type or a type of its own, and how to name and shape a type of your own." -->
 <p class="lede">
-  Every record an app exchanges has a type: an Avro record schema, named by its full name. The
-  first decision is whether a record of your app is one of the example types or a type of your
-  own.
+  Every record an app exchanges has a type, named by its full name. A type is written as its
+  description, from which its Avro schema is derived (<a href="metadata.html">Describe the
+  fields</a>). The first decision is whether a record of your app is one of the example types or
+  a type of your own.
 </p>
 
 <h2>The example types</h2>
@@ -28,7 +29,8 @@
 </table>
 <p>
   The table of <a href="../spec/types.html#section-7-1">types, section 7.1</a>, lists their
-  fields, and <a href="../spec/example-types.html">Example types</a> shows each schema. If a
+  fields, and <a href="../spec/example-types.html">Example types</a> shows each description and
+  its derived schema. If a
   record of your app is one of these things, the example type is the one that other apps already
   know: Old Brain Fix can take cat-a-log's vet appointment because both use
   <code>axt.example.v1.Appointment</code>.
@@ -42,7 +44,7 @@
 <ul>
   <li>It lives under a namespace of the app. The namespace <code>axt</code> and every namespace beginning with <code>axt.</code> are reserved for the AXT repository (<a href="../spec/types.html#section-2">section 2</a>).</li>
   <li>The namespace should be a domain that you control, in reverse order, such as <code>org.example.catalog</code>, so that two apps do not pick the same full name by accident.</li>
-  <li>You may start from a copy of an example type. The copy is then a type of your app, with its own <code>axt.version</code> from 1 on, and no longer the example type.</li>
+  <li>You may start from a copy of an example type. The copy is then a type of your app, with its own full name and its own version from 1 on, and no longer the example type.</li>
   <li>A type that only your app uses stays under your namespace; it is not added to the repository.</li>
 </ul>
 
@@ -67,7 +69,8 @@
 <p>
   Every example type keeps the rules of <a href="../spec/types.html#section-5">types,
   section 5</a>, and a type of your own should keep them too, so that receivers can show and map
-  it. In short:
+  it. The derivation already gives the forms of optional values and defaults
+  (<a href="../spec/fields.html#section-9-2">fields, section 9.2</a>). In short:
 </p>
 <ul>
   <li><strong>Documentation.</strong> The record, every nested type and every field carry a <code>doc</code> in English. A field's <code>doc</code> says what its value is and what an empty string, an empty array or <code>null</code> means in it (<a href="../spec/types.html#section-5-1">5.1</a>).</li>
@@ -76,7 +79,7 @@
   <li><strong>Defaults.</strong> Give every field a default unless a record has no meaning without it, as an Appointment has none without its <code>start</code>. A field without a default can never be removed within the major version. Every enum has a default symbol; where reading an unknown symbol as a known one would change a value, as with a unit, that default is <code>UNKNOWN</code> (<a href="../spec/types.html#section-5-4">5.4</a>).</li>
   <li><strong>Times.</strong> Dates, times of day, dates and times, and lengths of time are the time types <code>axt.Date</code>, <code>axt.Time</code>, <code>axt.DateTime</code> and <code>axt.Duration</code>, not Avro's logical types (<a href="../spec/types.html#section-5-5">5.5</a>; <a href="../spec/time.html#section-3-2">time, section 3.2</a>). The zone belongs into the <code>axt.DateTime</code>, not into a field of its own (<a href="../spec/types.html#section-5-6">5.6</a>).</li>
   <li><strong>No id or version fields.</strong> The envelope carries the id and the version of every record (<a href="../spec/types.html#section-5-8">5.8</a>).</li>
-  <li><strong>Depth.</strong> A type of your own may be recursive, but no record may nest deeper than 32 levels of records, arrays and maps (<a href="../spec/types.html#section-5-7">5.7</a>).</li>
+  <li><strong>Depth.</strong> A description is a tree of typed fields, so no type is recursive. No record nests deeper in records, arrays and maps than <a href="../spec/limits.html#types.data_depth"><code>types.data_depth</code></a>, which keeps a small message from exhausting a decoder's stack (<a href="../spec/types.html#section-5-7">5.7</a>).</li>
   <li><strong>Labels and checks.</strong> Labels, help texts, emoji, formats and limits are in the type's description: <a href="metadata.html">Describe the fields</a>.</li>
 </ul>
 <p>

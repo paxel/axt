@@ -58,7 +58,7 @@
   forms: a string of lower-case hexadecimal digits, or, for a large value, an object with
   <code>deflate</code>, <code>length</code> and <code>sha256</code>
   (<a href="../spec/conformance.html#section-3-2">section 3.2</a>). The second vector uses it for a
-  message of 17,301,553 bytes, the largest a relay accepts.
+  message of <a href="../spec/limits.html#transports.sealed_message"><code>transports.sealed_message</code></a> bytes, the largest a relay accepts.
 </p>
 <p>
   The <code>now</code> of the requests jumps ahead by days, to test the holding time, and goes back

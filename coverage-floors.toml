@@ -15,4 +15,4 @@ floor = 96.71
 [[parts]]
 name = "site"
 lcov = "coverage/site.lcov"
-floor = 97.89
+floor = 98.17

@@ -15,13 +15,13 @@
     recommends them, with a certificate that apps can check as for any HTTPS server;
   </li>
   <li>
-    accepts request bodies of at least 17,301,553 bytes, the largest sealed message
+    accepts request bodies of at least <a href="../spec/limits.html#transports.sealed_message"><code>transports.sealed_message</code></a>, the largest sealed message
     (<a href="../spec/transports.html#section-5-6">transports.md, section 5.6</a>);
   </li>
   <li>passes <code>Content-Length</code> and <code>Authorization</code> to the relay unchanged;</li>
   <li>
-    waits more than 60 seconds for the relay's response, since a list may wait up to 60 seconds
-    for a message (<a href="../spec/relay.html#section-3-3">relay.md, section 3.3</a>);
+    waits longer for the relay's response than a list may wait for a message,
+    <a href="../spec/limits.html#transports.list_wait"><code>transports.list_wait</code></a> (<a href="../spec/relay.html#section-3-3">relay.md, section 3.3</a>);
   </li>
   <li>
     never logs <code>Authorization</code>, and keeps no line with a request path and a client
@@ -76,8 +76,9 @@
     }
 }</code></pre>
 <p>
-  <code>client_max_body_size 17m</code> is 17 MiB, above 17,301,553 bytes, and
-  <code>proxy_read_timeout 75s</code> is above 60 seconds. <code>access_log off</code> keeps the
+  <code>client_max_body_size 17m</code> is 17 MiB, above
+  <a href="../spec/limits.html#transports.sealed_message"><code>transports.sealed_message</code></a>, and <code>proxy_read_timeout 75s</code> is above
+  <a href="../spec/limits.html#transports.list_wait"><code>transports.list_wait</code></a>. <code>access_log off</code> keeps the
   access log from holding request paths with client addresses.
 </p>
 
