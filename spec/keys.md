@@ -246,7 +246,7 @@ A sender MUST pad to exactly P(n). Some lengths:
 | 100,000               | 100,352       |
 | 16,777,216, the limit | 17,301,504    |
 
-The sealed message is 49 bytes longer than the padded message, so the largest is 17,301,553 bytes; a relay MUST accept sealed messages up to that size ([transports.md](transports.md), section 5.6).
+The sealed message is 49 bytes longer than the padded message, so the largest is `transports.sealed_message` bytes ([types/axt/limits.json](../types/axt/limits.json)); a relay MUST accept sealed messages up to that size ([transports.md](transports.md), section 5.6).
 
 The length is what the relay sees of a message besides its mailbox and its time (section 4.6). The minimum of 1,024 bytes gives the small messages, such as an `ACK`, a `DELETE`, a short `DATA` and most manifests, one length; above it, Padmé leaves only the top bits of the length visible and adds less than a sixteenth of the length, 6.25 %.
 
@@ -690,7 +690,7 @@ The two signatures with the neutral element as key verify for every message unde
 
 - [protocol.md](protocol.md): the `OFFER` as section 2.4 requires it (section 4 there); the binding of `ACCEPT`, `DECLINE`, `ACK` and `ERROR` to their receiver, and how every kind is made safe to repeat (section 2.6; section 9 there); how a message whose signature does not verify is reported (section 8.3 there); where the chain stands in a connection, how often it is sent, and the error `DEVICE_REJECTED` (sections 5.3 to 5.5; section 3.3 there); the addressee of a reply, which is the key of one device (section 5.6; section 9.1 there).
 - [sync.md](sync.md): the stamps and the merge of the records of a set, and the messages `CHANGE` and `RESYNC` between its devices, among them what a device does when a device of its set is added, removed or restored (section 5.6; sections 7 to 14 there).
-- [transports.md](transports.md): the QR payload with the signing key, the encryption key, the mailbox and the mark of a join code (sections 3.2 and 5.2; section 3 there); the connection in which a device joins a set (section 5.2; section 4.7 there); the TLS connection on the local network, whose certificate has a key of its own, and the `HELLO` that binds it to the signing key (section 2.2; sections 4.3 and 4.5 there); the chain at the start of a file (section 5.4; section 2.1 there); the mailbox, which is bound to no key (section 4.6; section 5.1 there); the size limit of the relay, which accepts sealed messages up to 17,301,553 bytes (section 4.4; section 5.6 there); the holding time of 14 days (section 4.2; section 5.5 there); and the mailbox of each device of a set (section 5.6; section 5.8 there).
+- [transports.md](transports.md): the QR payload with the signing key, the encryption key, the mailbox and the mark of a join code (sections 3.2 and 5.2; section 3 there); the connection in which a device joins a set (section 5.2; section 4.7 there); the TLS connection on the local network, whose certificate has a key of its own, and the `HELLO` that binds it to the signing key (section 2.2; sections 4.3 and 4.5 there); the chain at the start of a file (section 5.4; section 2.1 there); the mailbox, which is bound to no key (section 4.6; section 5.1 there); the size limit of the relay, which accepts sealed messages up to `transports.sealed_message` bytes (section 4.4; section 5.6 there); the holding time (section 4.2; section 5.5 there); and the mailbox of each device of a set (section 5.6; section 5.8 there).
 
 ## References
 

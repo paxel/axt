@@ -514,14 +514,11 @@ OPERATIONS = {
     "fetch": ("GET", "/v1/mailboxes/{mailbox}/messages/{message}"),
     "delete": ("DELETE", "/v1/mailboxes/{mailbox}/messages/{message}"),
 }
-# Responses the document allows that the reference relay never gives: it answers the deletion of a
-# mailbox that does not exist with 204, so that a deletion can be repeated.
-NOT_GIVEN = {("remove", "404")}
 
 
 class InterfaceTest(unittest.TestCase):
     """The reference relay answers every operation of spec/relay-api.json as the document says, and gives
-    every response the document lists, but those of NOT_GIVEN."""
+    every response the document lists."""
 
     def setUp(self) -> None:
         self.dir = tempfile.mkdtemp(prefix="axt-relay-api-")
@@ -608,6 +605,7 @@ class InterfaceTest(unittest.TestCase):
             self.check(op, 401, r.request(method, target, bad))
             self.check(op, 403, r.request(method, target, wrong))
         self.check("remove", 204, r.request("DELETE", box, OWNER))
+        self.check("remove", 204, r.request("DELETE", f"v1/mailboxes/{wrong_box}", wrong))  # none: repeatable
         calls = [
             ("create", box, OWNER, b""),
             ("remove", box, OWNER, b""),
@@ -636,7 +634,7 @@ class InterfaceTest(unittest.TestCase):
             if m != "parameters"
             for status in o["responses"]
         }
-        self.assertEqual(documented - self.seen, NOT_GIVEN)
+        self.assertEqual(documented - self.seen, set())
 
 
 if __name__ == "__main__":

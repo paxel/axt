@@ -53,7 +53,7 @@
   </thead>
   <tbody>
     <tr><td><code>PUT v1/mailboxes/{mailbox}</code></td><td>owner</td><td><code>201</code> for a new mailbox, <code>204</code> for one that exists</td></tr>
-    <tr><td><code>DELETE v1/mailboxes/{mailbox}</code></td><td>owner</td><td><code>204</code>; the mailbox and its messages are gone</td></tr>
+    <tr><td><code>DELETE v1/mailboxes/{mailbox}</code></td><td>owner</td><td><code>204</code>; the mailbox and its messages are gone, also for one that does not exist</td></tr>
     <tr><td><code>PUT v1/mailboxes/{mailbox}/messages/{message}</code></td><td>anyone</td><td><code>201</code>, or <code>204</code> if the relay holds the message already</td></tr>
     <tr><td><code>GET v1/mailboxes/{mailbox}/messages</code></td><td>owner</td><td><code>200</code> with the list of the messages held; optional query <code>wait</code></td></tr>
     <tr><td><code>GET v1/mailboxes/{mailbox}/messages/{message}</code></td><td>owner</td><td><code>200</code> with the sealed message as <code>application/octet-stream</code></td></tr>
@@ -74,9 +74,9 @@
     <tr><td><code>400</code></td><td>A put whose body is empty or whose SHA-256 is not <code>{message}</code>; a <code>wait</code> that is not 0 to 60; a query on another request</td></tr>
     <tr><td><code>401</code></td><td>An owner request without <code>Authorization</code>, or with one that is not a secret in the form above</td></tr>
     <tr><td><code>403</code></td><td>An owner request whose secret is not the mailbox's; a mailbox the relay does not create for this app</td></tr>
-    <tr><td><code>404</code></td><td>A mailbox that does not exist; a message the mailbox does not hold</td></tr>
+    <tr><td><code>404</code></td><td>A mailbox that does not exist, except for its deletion; a message the mailbox does not hold</td></tr>
     <tr><td><code>411</code></td><td>A put without <code>Content-Length</code></td></tr>
-    <tr><td><code>413</code></td><td>A put above 17,301,553 bytes</td></tr>
+    <tr><td><code>413</code></td><td>A put above <code>transports.sealed_message</code> bytes</td></tr>
     <tr><td><code>429</code></td><td>A request above the relay's rate limits, with <code>Retry-After</code></td></tr>
     <tr><td><code>503</code></td><td>The relay cannot serve the request now</td></tr>
     <tr><td><code>507</code></td><td>A put into a mailbox that has no room</td></tr>
@@ -94,7 +94,7 @@
 <h3>Putting</h3>
 <p>
   A put is checked in this order: <code>Content-Length</code> is present (<code>411</code>) and at
-  most 17,301,553 (<code>413</code>), which the relay knows before it reads the body; the mailbox
+  most <code>transports.sealed_message</code> (<code>413</code>), which the relay knows before it reads the body; the mailbox
   exists (<code>404</code>); the body is not empty and its SHA-256 is <code>{message}</code>
   (<code>400</code>); the relay holds the message already (<code>204</code>, and nothing changes);
   the mailbox has room (<code>507</code>). Then the relay holds the message (<code>201</code>)
@@ -105,31 +105,32 @@
 <h3>Listing, fetching and deleting</h3>
 <p>
   The list is a JSON object with the media type <code>application/json</code>. Its member
-  <code>messages</code> is an array of the messages held, oldest put first, at most 1,000, each an
+  <code>messages</code> is an array of the messages held, oldest put first, at most <code>transports.list_messages</code>, each an
   object with <code>id</code>, the SHA-256 as 64 lower-case hexadecimal digits, and
   <code>size</code>, its length in bytes
   (<a href="../spec/transports.html#section-5-4">transports.md, section 5.4</a>):
 </p>
 <pre><code class="language-text">{"messages":[{"id":"7cbe…","size":1073}]}</code></pre>
 <p>
-  With <code>wait</code> from 1 to 60 and no message in the mailbox, the relay holds the response
+  With <code>wait</code> from 1 to <code>transports.list_wait</code> and no message in the mailbox, the relay holds the response
   for up to that many seconds until a message is put, and then answers with the list. It may answer
   sooner. Without <code>wait</code>, or with 0, it answers at once.
 </p>
 
 <h2>Holding time</h2>
 <p>
-  The holding time is 14 days, the same for every relay, because the protocol depends on it and a
+  The holding time is <code>transports.holding</code> of
+  <a href="https://github.com/paxel/axt/blob/summer/types/axt/limits.json">types/axt/limits.json</a>, the same for every relay, because the protocol depends on it and a
   sender cannot ask a relay for it
   (<a href="../spec/transports.html#section-5-5">transports.md, section 5.5</a>):
 </p>
 <ul>
   <li>
-    A relay holds each message for 14 days after its put, unless the owner deletes it first, and
-    deletes it within one day after that. A repeated put does not extend the time.
+    A relay holds each message for the holding time after its put, unless the owner deletes it first,
+    and has deleted it once <code>transports.longest_holding</code> has passed since its put. A repeated put does not extend the time.
   </li>
   <li>
-    A relay may remove a mailbox, with its messages, when its owner has made no request for 90 days,
+    A relay may remove a mailbox, with its messages, when its owner has made no request for <code>transports.mailbox_idle</code>,
     and never before.
   </li>
 </ul>
@@ -138,7 +139,7 @@
 <p>From <a href="../spec/transports.html#section-5-6">transports.md, section 5.6</a>:</p>
 <ul>
   <li>
-    <strong>Size.</strong> A relay accepts sealed messages up to 17,301,553 bytes, the largest
+    <strong>Size.</strong> A relay accepts sealed messages up to <code>transports.sealed_message</code> bytes, the largest
     message sealed and padded, and rejects a larger one with <code>413</code>. This one is not a
     choice.
   </li>

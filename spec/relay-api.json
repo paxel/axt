@@ -72,7 +72,7 @@
         ],
         "responses": {
           "204": {
-            "description": "The mailbox and its messages are gone."
+            "description": "The mailbox and its messages are gone, also for a mailbox that does not exist: a deletion can be repeated."
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -82,9 +82,6 @@
           },
           "403": {
             "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
           },
           "429": {
             "$ref": "#/components/responses/TooManyRequests"

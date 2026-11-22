@@ -251,34 +251,25 @@ An installation has one mailbox at a time, the same for every app that sends to 
 
 The relay is an HTTP service ([RFC 9110](https://www.rfc-editor.org/rfc/rfc9110)), reached over HTTP/1.1 ([RFC 9112](https://www.rfc-editor.org/rfc/rfc9112)) or HTTP/2 ([RFC 9113](https://www.rfc-editor.org/rfc/rfc9113)) with TLS (section 5.7).
 
-The OpenAPI 3.1 document [spec/relay-api.json](relay-api.json) defines its requests, their responses, status codes and headers, and the body of a list. This section says what a relay and an app do with them; the tables below summarize the document.
+The OpenAPI 3.1 document [spec/relay-api.json](relay-api.json) defines its requests, their responses, status codes and headers, and the body of a list. This section says what a relay and an app do with them.
 
-**The base URL.** A relay is named by its base URL: an absolute URL with the scheme `https`, a host, and a path that ends with `/`, without user information, query, fragment, spaces or control characters, of at most `transports.relay_url` bytes ([types/axt/limits.json](../types/axt/limits.json)), such as `https://relay.example.org/axt/`. The paths of the table below are appended to it.
+**The base URL.** A relay is named by its base URL: an absolute URL with the scheme `https`, a host, and a path that ends with `/`, without user information, query, fragment, spaces or control characters, of at most `transports.relay_url` bytes ([types/axt/limits.json](../types/axt/limits.json)), such as `https://relay.example.org/axt/`. The paths of the document are appended to it.
 
-In the paths, `{mailbox}` is a mailbox id and `{message}` the SHA-256 of a sealed message, each as 64 lower-case hexadecimal digits. "Owner" means that the request carries the header `Authorization`, with the value `Bearer`, one space and the mailbox secret as 64 lower-case hexadecimal digits, in the syntax of [RFC 6750, section 2.1](https://www.rfc-editor.org/rfc/rfc6750#section-2.1).
+In the paths, `{mailbox}` is a mailbox id and `{message}` the SHA-256 of a sealed message. An owner request carries the mailbox secret in `Authorization` as the document's security scheme `owner` says; only the holder of the secret is the owner (section 5.1).
 
-| Request                                            | By     | Body               | Success                                                                          |
-| -------------------------------------------------- | ------ | ------------------ | -------------------------------------------------------------------------------- |
-| `PUT v1/mailboxes/{mailbox}`                       | owner  | none               | `201 Created` for a new mailbox, `204 No Content` for one that exists            |
-| `DELETE v1/mailboxes/{mailbox}`                    | owner  | none               | `204 No Content`; the mailbox and its messages are gone                          |
-| `PUT v1/mailboxes/{mailbox}/messages/{message}`    | anyone | the sealed message | `201 Created`, or `204 No Content` if the relay holds the message already        |
-| `GET v1/mailboxes/{mailbox}/messages`              | owner  | none               | `200 OK` with the list of the messages held (section 5.4); optional query `wait` |
-| `GET v1/mailboxes/{mailbox}/messages/{message}`    | owner  | none               | `200 OK` with the sealed message as `application/octet-stream`                   |
-| `DELETE v1/mailboxes/{mailbox}/messages/{message}` | owner  | none               | `204 No Content`, also for a message the relay does not hold                     |
+The six requests create and delete a mailbox, put a message, which anyone may, and list, fetch and delete the messages, which only the owner may. A deletion can be repeated: deleting a mailbox or a message that does not exist succeeds. A request that fails gets a status code of the document, and the app reacts to it as follows:
 
-The relay answers a request that fails with one of these codes:
-
-| Code                       | When                                                                                                                                        | The app                                                      |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `400 Bad Request`          | A put whose body is empty or whose SHA-256 is not `{message}`; a `wait` that is not 0 to `transports.list_wait`; a query on another request | Does not repeat the request; it is a fault of the app        |
-| `401 Unauthorized`         | An owner request without `Authorization`, or with one that is not a secret in the form above                                                | Does not repeat the request                                  |
-| `403 Forbidden`            | An owner request whose secret is not the mailbox's; a mailbox the relay does not create for this app (section 5.6)                          | Does not repeat the request                                  |
-| `404 Not Found`            | A mailbox that does not exist; a message the mailbox does not hold                                                                          | As section 5.3 says for a put, and section 5.4 for the owner |
-| `411 Length Required`      | A put without `Content-Length`                                                                                                              | Sends `Content-Length`                                       |
-| `413 Content Too Large`    | A put above `transports.sealed_message` bytes (section 5.6)                                                                                 | Does not repeat the request                                  |
-| `429 Too Many Requests`    | A request above the relay's rate limits (section 5.6)                                                                                       | Waits as `Retry-After` says, then repeats it                 |
-| `503 Service Unavailable`  | The relay cannot serve the request now                                                                                                      | Waits as `Retry-After` or section 5.3 says, then repeats it  |
-| `507 Insufficient Storage` | A put into a mailbox that has no room (section 5.6)                                                                                         | Waits as section 5.3 says, then repeats it                   |
+| Code  | The app                                                      |
+| ----- | ------------------------------------------------------------ |
+| `400` | Does not repeat the request; it is a fault of the app        |
+| `401` | Does not repeat the request                                  |
+| `403` | Does not repeat the request                                  |
+| `404` | As section 5.3 says for a put, and section 5.4 for the owner |
+| `411` | Sends `Content-Length`                                       |
+| `413` | Does not repeat the request                                  |
+| `429` | Waits as `Retry-After` says, then repeats it                 |
+| `503` | Waits as `Retry-After` or section 5.3 says, then repeats it  |
+| `507` | Waits as section 5.3 says, then repeats it                   |
 
 Only the list and the fetch have a body in their response. An app MUST ignore the body of every other response, and MUST NOT send cookies. A relay MUST NOT require cookies or any header that this section does not name.
 
@@ -338,7 +329,7 @@ A put token separate from the mailbox id would travel the same way, in the manif
 
 ### 5.8 Changing the relay, and device sets
 
-- **Another relay or mailbox.** An app that moves to another relay or another mailbox creates the new mailbox and puts it into a manifest with a higher revision ([manifest.md](manifest.md), section 3.10). It sends that manifest to every app it exchanges with through the relay, into their mailboxes, and in every live connection. It keeps fetching the old mailbox for 15 days after it has sent the manifest to all of them, and then deletes the old mailbox.
+- **Another relay or mailbox.** An app that moves to another relay or another mailbox creates the new mailbox and puts it into a manifest with a higher revision ([manifest.md](manifest.md), section 3.10). It sends that manifest to every app it exchanges with through the relay, into their mailboxes, and in every live connection. It keeps fetching the old mailbox for `transports.longest_holding` after it has sent the manifest to all of them, and then deletes the old mailbox.
 - **A device set.** Each device of a set has a mailbox secret, a mailbox and an encryption key of its own, and names its mailbox in its own `MANIFEST` ([keys.md](keys.md), section 5.6). A device MUST NOT give its mailbox secret to another device of its set (section 5.1). A message is sealed for one device and put into that device's mailbox.
 - **A new device.** A device that joins a set, also one that takes the place of an old device ([keys.md](keys.md), section 5.7), creates a mailbox of its own and names it in its `MANIFEST`, which it sends after its chain. Nothing of another device's mailbox moves to it.
 - **A removed device.** An app puts no further message into the mailbox of a removed key ([keys.md](keys.md), section 5.5). Messages that wait there get no outcome; their senders send them again to a remaining device ([keys.md](keys.md), section 5.6; [protocol.md](protocol.md), section 11).

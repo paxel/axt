@@ -200,7 +200,7 @@ Note, Task, Appointment, Person and Car are the example types named when the sco
 
 - **Pet**: the animal a pet log is about. Its other records, such as a vet appointment or a weight, concern one pet.
 - **Measurement**: one value at a point in time, such as a pet's weight, a blood pressure reading or a tally of glasses of water. Its unit is a UCUM code, so that values from different apps can be compared and added up; a count has the unit `1`, or an annotation alone such as `{glass}`.
-- **Document**: a file with a title and a date, such as a scanned vet invoice or a vaccination certificate. The file travels in the record, within the message limit of 16 MiB ([envelope.md](envelope.md), section 8).
+- **Document**: a file with a title and a date, such as a scanned vet invoice or a vaccination certificate. The file travels in the record, within the message limit, `envelope.message` ([envelope.md](envelope.md), section 8).
 
 ### 7.3 Fingerprints
 

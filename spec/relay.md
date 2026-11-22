@@ -4,7 +4,7 @@ Status: written, 0.1.0.
 
 This document describes the reference relay of the repository, [relay/axt_relay.py](../relay/axt_relay.py): how it implements the relay's interface, the limits it chooses within the specification, how it stores messages, what it logs, how it is run, and its test mode.
 
-The interface that every relay offers, and on which apps depend, is defined in [transports.md](transports.md), section 5: mailboxes, the HTTP requests and their status codes, the holding time of 14 days, the size limit, and what a relay may log. That section is the wire contract. This document adds nothing that an app needs: the limits and behaviour that only this document names are those of the reference relay, and other relays choose their own.
+The interface that every relay offers, and on which apps depend, is defined in [transports.md](transports.md), section 5: mailboxes, the HTTP requests and their status codes, the holding time, the size limit, and what a relay may log; [relay-api.json](relay-api.json) defines the requests and responses, and [types/axt/limits.json](../types/axt/limits.json) the limits. That section is the wire contract. This document adds nothing that an app needs: the limits and behaviour that only this document names are those of the reference relay, and other relays choose their own.
 
 The reference relay is a reference and a test oracle, not a production server. It is written in Python 3.11 or later with the standard library only, so that it runs wherever Python runs and can be read in one sitting. A production relay MAY be written in any language and MAY store messages in any way; it is a relay of AXT when it follows [transports.md](transports.md), section 5, and passes the `relay-server` vectors ([conformance.md](conformance.md), section 2.2).
 
@@ -35,7 +35,7 @@ The relay answers each request with the first of these checks that fails, in thi
 1. A request above the rate limit of its client address: `429` (section 4.3).
 2. A path that is not one of [transports.md](transports.md), section 5.2, under the base path: `404`.
 3. A query on a request other than a list: `400`.
-4. A put of a message, which needs no owner, in the order of [transports.md](transports.md), section 5.3: no `Content-Length` (`411`); a `Content-Length` that is not one decimal number, or one together with `Transfer-Encoding` (`400`); above 17,301,553 (`413`); no such mailbox (`404`); an empty body, or one whose SHA-256 is not the id in the path (`400`); a message held already (`204`); no room (`507`). It then holds the message (`201`).
+4. A put of a message, which needs no owner, in the order of [transports.md](transports.md), section 5.3: no `Content-Length` (`411`); a `Content-Length` that is not one decimal number, or one together with `Transfer-Encoding` (`400`); above `transports.sealed_message` (`413`); no such mailbox (`404`); an empty body, or one whose SHA-256 is not the id in the path (`400`); a message held already (`204`); no room (`507`). It then holds the message (`201`).
 5. Every other request is an owner request: no `Authorization`, more than one, or one that is not `Bearer`, one space and 64 lower-case hexadecimal digits (`401`); a secret whose mailbox id is not the one in the path (`403`).
 6. Creating (`201`, `204` for a mailbox that exists, or `429` above the creation limit of section 4.3) and removing (`204`, also for a mailbox that does not exist) need no existing mailbox.
 7. A list, a fetch or a delete of a mailbox that does not exist: `404`.
@@ -48,7 +48,7 @@ The relay answers `503` with `Retry-After: 60` when its storage fails, such as w
 ### 3.2 HTTP
 
 - A response without a body carries `Content-Length: 0`, except `204`, which carries no `Content-Length` ([RFC 9110, section 8.6](https://www.rfc-editor.org/rfc/rfc9110#section-8.6)).
-- The list is the JSON object of [transports.md](transports.md), section 5.4, without spaces, such as `{"messages":[{"id":"7cbe…","size":1073}]}`, with the messages held in the order of their puts. It holds at most 1,000 messages, the oldest.
+- The list is the JSON object of [transports.md](transports.md), section 5.4, without spaces, such as `{"messages":[{"id":"7cbe…","size":1073}]}`, with the messages held in the order of their puts. It holds at most `transports.list_messages` messages, the oldest.
 - A connection stays open for further requests unless the client asks to close it or the relay answers a request without reading its body. The relay answers a put that fails before its body is read (`411`, `413`, `404`) without reading the body, then closes the connection, after reading for up to 2 seconds what the client still sends, so that the client can read the answer. A request other than a put that carries a body is answered and its connection closed in the same way.
 - A request without `Content-Length` and without `Transfer-Encoding` has no body ([RFC 9112, section 6.3](https://www.rfc-editor.org/rfc/rfc9112#section-6.3)); a put of this kind gets `411`. A put with `Transfer-Encoding` and no `Content-Length` also gets `411`, since [transports.md](transports.md), section 5.3, requires `Content-Length`.
 - The relay sends `100 Continue` to a request with `Expect: 100-continue` only when it starts to read the body, so that a put that fails before is answered without its body being sent.
@@ -57,7 +57,7 @@ The relay answers `503` with `Retry-After: 60` when its storage fails, such as w
 
 ### 3.3 Waiting lists
 
-A list with `wait` from 1 to 60, of a mailbox with no message, waits on the system's monotonic clock until a message is put into the mailbox or the wait is over, and then answers with the list. It answers `404` at once when the mailbox is removed while it waits. At most 1,000 lists wait at the same time (`--max-waiting`); a further list answers at once, which [transports.md](transports.md), section 5.4, allows.
+A list with `wait` from 1 to `transports.list_wait`, of a mailbox with no message, waits on the system's monotonic clock until a message is put into the mailbox or the wait is over, and then answers with the list. It answers `404` at once when the mailbox is removed while it waits. At most 1,000 lists wait at the same time (`--max-waiting`); a further list answers at once, which [transports.md](transports.md), section 5.4, allows.
 
 ## 4. Limits
 
@@ -65,7 +65,7 @@ A list with `wait` from 1 to 60, of a mailbox with no message, waits on the syst
 
 | Limit                    | Value                                                                                                                                                       |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A message                | 1 to 17,301,553 bytes; a larger `Content-Length` gets `413` ([transports.md](transports.md), section 5.6)                                                   |
+| A message                | 1 to `transports.sealed_message` bytes; a larger `Content-Length` gets `413` ([transports.md](transports.md), section 5.6)                                  |
 | The room of a mailbox    | 64 MiB of held messages by default (`--quota-bytes`); a put that would go above it gets `507`, except into an empty mailbox, which always takes one message |
 | The number of messages   | No limit beyond the room; a list shows the oldest 1,000                                                                                                     |
 | Who may create a mailbox | Every client, within the rate limits; the relay answers no creation with `403`                                                                              |
@@ -74,13 +74,13 @@ The room counts the bytes of the messages held, without the header of section 5.
 
 ### 4.2 Times
 
-| Time            | Value                                                                                                                                                                         |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Holding time    | A message is held from its put until 14 days later on the relay's clock. From then on it is neither listed nor fetched nor counted, and a put of it is a new put (`201`)      |
-| Deleting it     | At the next sweep, at most 10 minutes later, or earlier when a put, list or fetch touches its mailbox: well within the one day of [transports.md](transports.md), section 5.5 |
-| A repeated put  | Changes nothing: it does not extend the holding time                                                                                                                          |
-| An idle mailbox | Removed with its messages at the first sweep at least 91 days after the stored time of its owner's last request (section 5.1), so never before 90 days                        |
-| The sweep       | Every 10 minutes, and in test mode also each time the test sets the clock (section 8)                                                                                         |
+| Time            | Value                                                                                                                                                                                                    |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Holding time    | A message is held from its put until the holding time, `transports.holding`, later on the relay's clock. From then on it is neither listed nor fetched nor counted, and a put of it is a new put (`201`) |
+| Deleting it     | At the next sweep, at most 10 minutes later, or earlier when a put, list or fetch touches its mailbox: well within the one day of [transports.md](transports.md), section 5.5                            |
+| A repeated put  | Changes nothing: it does not extend the holding time                                                                                                                                                     |
+| An idle mailbox | Removed with its messages at the first sweep at least 91 days after the stored time of its owner's last request (section 5.1), so never before `transports.mailbox_idle`                                 |
+| The sweep       | Every 10 minutes, and in test mode also each time the test sets the clock (section 8)                                                                                                                    |
 
 ### 4.3 Rate limits
 
@@ -178,7 +178,7 @@ The relay stops on `SIGTERM` and `SIGINT`. Since every write is atomic (section 
 [transports.md](transports.md), section 5.7, requires that apps reach a relay only over HTTPS. The reference relay serves plain HTTP and MUST be run behind a proxy that terminates TLS; it MUST NOT be reachable by apps without it. The proxy:
 
 - MUST serve TLS 1.3 or TLS 1.2 as [RFC 9325](https://www.rfc-editor.org/rfc/rfc9325) recommends them, with a certificate that apps can check as for any HTTPS server;
-- MUST accept request bodies of at least 17,301,553 bytes, and MUST pass `Content-Length` and `Authorization` to the relay unchanged;
+- MUST accept request bodies of at least `transports.sealed_message` bytes, and MUST pass `Content-Length` and `Authorization` to the relay unchanged;
 - MUST wait more than 60 seconds for the relay's response, for a list that waits (section 3.3);
 - MUST follow the rule on logs of section 6;
 - when the relay takes the client address from a header (section 7.1), MUST set that header itself, and the relay MUST then be reachable only through the proxy, since a client could otherwise set the header.
