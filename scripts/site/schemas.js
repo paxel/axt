@@ -960,14 +960,18 @@ export function glossaryHtml(source, convert) {
   /** @type {string[]} */
   const intro = [];
   for (const paragraph of source.split(/\n\s*\n/)) {
-    const text = paragraph.replace(/\s*\n\s*/g, " ").trim();
+    const text = paragraph
+      .split("\n")
+      .map((line) => line.trim())
+      .join(" ")
+      .trim();
     if (!text || text.startsWith("# ")) continue;
     // CONTEXT.md is at the repository's root, the glossary page in spec/.
     const md = text.replace(/\]\((?!https?:|#)([^)]+)\)/g, (_, url) => {
       const target = String(url);
       return `](${target.startsWith("spec/") ? target.slice(5) : `../${target}`})`;
     });
-    const term = /^((?:\*\*[^*]+\*\*(?: and | or |, )?)+):\s+([\s\S]*)$/.exec(md);
+    const term = /^(\*\*[^*]+\*\*(?:(?: and | or |, )\*\*[^*]+\*\*)*):\s(.*)$/.exec(md);
     if (!term) {
       intro.push(`<p>${inline(md, convert, newBlock())}</p>`);
       continue;
@@ -975,7 +979,7 @@ export function glossaryHtml(source, convert) {
     const names = [...(term[1] ?? "").matchAll(/\*\*([^*]+)\*\*/g)].map((m) => m[1] ?? "");
     const id = `term-${(names[0] ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
     items.push(
-      `<dt id="${id}">${inline(term[1] ?? "", convert, newBlock())}</dt>\n<dd>${inline(term[2] ?? "", convert, newBlock())}</dd>`,
+      `<dt id="${id}">${inline(term[1] ?? "", convert, newBlock())}</dt>\n<dd>${inline((term[2] ?? "").trimStart(), convert, newBlock())}</dd>`,
     );
   }
   return `${intro.join("\n")}\n<dl class="glossary">\n${items.join("\n")}\n</dl>`;
