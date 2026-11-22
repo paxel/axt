@@ -26,7 +26,9 @@ annotated hex, and checks them:
   decoded with fastavro and avro;
 - a model of a receiver that follows the devices of its known senders
   (spec/keys.md, section 5.5), against the result of every cell of the
-  section's table and of each of its rules, written out by hand here;
+  section's table and of each of its rules, written out by hand here, and
+  the resolution of relations across senders by that receiver
+  (spec/records.md, section 10), against results written out here as well;
 - the short fingerprints of the test keys.
 
 Every key here is a TEST KEY, derived from a published text. It protects
@@ -1075,6 +1077,260 @@ def check_device_cases() -> int:
     return len(table) + len(chains)
 
 
+# --- relations across senders (spec/records.md, section 10) ----------------------------------------
+
+
+@dataclass
+class HeldRelation:
+    """A relation with a record target that the receiver holds: its id; a key of the sender of the record
+    that holds it, and that record's id; the target's sender, None for the holder's sender; and the
+    target's id."""
+
+    id: str
+    holder: bytes
+    record: str
+    sender: bytes | None
+    target: str
+
+
+class RelationReceiver(DeviceReceiver):
+    """A receiver of section 5.5 that holds relations and resolves them (spec/records.md, section 10.2):
+    a target's sender by any key of its set, current or removed, among the known senders and the
+    receiver's own set; a target's record among that sender's records, held and not a tombstone. The
+    result is a lookup and is never kept, so a chain or a join changes it."""
+
+    def __init__(
+        self,
+        own: KnownSender,
+        senders: list[KnownSender],
+        refused: list[bytes] | None = None,
+        relations: list[HeldRelation] | None = None,
+    ) -> None:
+        super().__init__(senders, refused)
+        self.own = own
+        self.relations = relations or []
+
+    def set_of(self, key: bytes) -> KnownSender | None:
+        """The sender of whose set the key is a key, current or removed, or the receiver's own set; None
+        for a key of no known sender, a refused key among them (step 1)."""
+        if key in self.own.current or key in self.own.removed:
+            return self.own
+        return None if key in self.refused else self.sender_of(key)
+
+    def resolve(self, r: HeldRelation) -> tuple[KnownSender | None, bool]:
+        """The sender a relation names, and whether the receiver holds its record (step 2)."""
+        s = self.set_of(r.holder if r.sender is None else r.sender)
+        return s, s is not None and s.records.get(r.target, (0, ""))[1] == "there"
+
+    def lookup(self) -> dict[str, Any]:
+        """Each relation resolved, in their order, and for each record that relations resolve to the
+        records and relations that it is linked from (section 10.1), sorted."""
+        relations: list[dict[str, Any]] = []
+        linked: dict[tuple[str, str], list[tuple[str, str, str]]] = {}
+        for r in self.relations:
+            s, resolved = self.resolve(r)
+            holder = cast(KnownSender, self.set_of(r.holder))
+            assert holder.records[r.record][1] == "there", "a relation of a record the receiver holds"
+            relations.append({"id": r.id, "sender": None if s is None else s.name, "resolved": resolved})
+            if s is not None and resolved:
+                linked.setdefault((s.name, r.target), []).append((holder.name, r.record, r.id))
+        return {
+            "relations": relations,
+            "linked_from": [
+                {
+                    "sender": name,
+                    "id": rid,
+                    "from": [{"sender": n, "id": i, "relation": q} for n, i, q in sorted(sources)],
+                }
+                for (name, rid), sources in sorted(linked.items())
+            ],
+        }
+
+
+# The cases of spec/records.md, section 10, with the results the text gives, written out by hand. The
+# receiver's own set is the sender "me"; a relation is its id, the holder's sender and record, and the
+# target's key (None for the holder's sender) and record. A step is a chain, with its messages and the
+# result of each, or a lookup, with each relation's sender and whether it is resolved, and the records
+# linked from others: each with the holder's sender, record and relation.
+OWN = "me"
+RelationCase = tuple[str, str, str, str | None, str]
+LookupCase = tuple[str, list[tuple[str | None, bool]], list[tuple[str, str, list[tuple[str, str, str]]]]]
+
+
+def relation_cases() -> list[tuple[str, str, list[SenderCase], RecordCase, list[RelationCase], list[Any]]]:
+    """(name, what the case shows, the senders before with the own set and the refused keys, their
+    records, the relations, the steps)."""
+    return [
+        (
+            "any-key",
+            "a relation names a sender by any key of its set, current or removed, or by null for the "
+            "holder's sender; a key of the receiver's own set names its own records; a key of no known "
+            "sender, a refused key among them, a record not held and a tombstone leave it unresolved",
+            [(OWN, "O", "P"), ("s", "A", "R"), ("t", "X", ""), (REFUSED_KEYS, "F", "")],
+            {
+                OWN: [("r4", 1, "there")],
+                "s": [("r1", 2, "there"), ("r2", 3, "tombstone")],
+                "t": [("r3", 1, "there"), ("r5", 4, "there")],
+            },
+            [
+                ("q1", "t", "r3", "A", "r1"),
+                ("q2", "t", "r3", "R", "r1"),
+                ("q3", "t", "r3", None, "r5"),
+                ("q4", "t", "r3", "X", "r5"),
+                ("q5", "t", "r3", "A", "r2"),
+                ("q6", "t", "r3", "A", "r6"),
+                ("q7", "t", "r3", "B", "r1"),
+                ("q8", "t", "r3", "F", "r1"),
+                ("q9", "t", "r3", "P", "r4"),
+            ],
+            [
+                (
+                    "lookup",
+                    [
+                        ("s", True),
+                        ("s", True),
+                        ("t", True),
+                        ("t", True),
+                        ("s", False),
+                        ("s", False),
+                        (None, False),
+                        (None, False),
+                        (OWN, True),
+                    ],
+                    [
+                        (OWN, "r4", [("t", "r3", "q9")]),
+                        ("s", "r1", [("t", "r3", "q1"), ("t", "r3", "q2")]),
+                        ("t", "r5", [("t", "r3", "q3"), ("t", "r3", "q4")]),
+                    ],
+                )
+            ],
+        ),
+        (
+            "chain",
+            "a relation by a key the receiver does not know stays unresolved until a chain adds the key "
+            "to the sender, and stays resolved after the key's removal",
+            [(OWN, "O", ""), ("s", "A", ""), ("t", "X", "")],
+            {OWN: [("r4", 1, "there")], "s": [("r1", 2, "there")], "t": [("r3", 1, "there")]},
+            [("q1", "t", "r3", "B", "r1")],
+            [
+                ("lookup", [(None, False)], []),
+                ("chain", [(ADD, "A", "B")], [APPLIED]),
+                ("lookup", [("s", True)], [("s", "r1", [("t", "r3", "q1")])]),
+                ("chain", [(REMOVE, "A", "B")], [APPLIED]),
+                ("lookup", [("s", True)], [("s", "r1", [("t", "r3", "q1")])]),
+            ],
+        ),
+        (
+            "own-link",
+            "the receiver's own link: a relation on its own record to a received record, which shows it "
+            "as linked from, and a relation of the sender to the receiver's record, by a key of the "
+            "receiver's set",
+            [(OWN, "O", ""), ("s", "A", "")],
+            {OWN: [("r4", 1, "there")], "s": [("r1", 2, "there"), ("r2", 1, "there")]},
+            [("q1", OWN, "r4", "A", "r1"), ("q2", "s", "r2", "O", "r4")],
+            [
+                (
+                    "lookup",
+                    [("s", True), (OWN, True)],
+                    [(OWN, "r4", [("s", "r2", "q2")]), ("s", "r1", [(OWN, "r4", "q1")])],
+                )
+            ],
+        ),
+        (
+            "join",
+            "after two senders join, a key of the second names the sender that stays, and null names "
+            "the records the second sender brought",
+            [(OWN, "O", ""), ("s", "A", "R"), ("t", "X", "")],
+            {OWN: [("r4", 1, "there")], "s": [("r1", 2, "there")], "t": [("r3", 1, "there")]},
+            [("q1", "s", "r1", "X", "r3"), ("q2", "t", "r3", None, "r1")],
+            [
+                ("lookup", [("t", True), ("t", False)], [("t", "r3", [("s", "r1", "q1")])]),
+                ("chain", [(ADD, "A", "X")], [APPLIED]),
+                (
+                    "lookup",
+                    [("s", True), ("s", True)],
+                    [("s", "r1", [("s", "r3", "q2")]), ("s", "r3", [("s", "r1", "q1")])],
+                ),
+            ],
+        ),
+    ]
+
+
+def relation_receiver(
+    senders: list[SenderCase],
+    records: RecordCase,
+    relations: list[RelationCase],
+    key: Callable[[str], bytes],
+    record_id: Callable[[str], str] = str,
+    relation_id: Callable[[str], str] = str,
+) -> RelationReceiver:
+    """The receiver of a case of relation_cases(), with key, record_id and relation_id mapping its
+    letters and names."""
+
+    def known(name: str, current: str, removed: str) -> KnownSender:
+        return KnownSender(
+            name,
+            [key(k) for k in current],
+            [key(k) for k in removed],
+            {record_id(rid): (version, state) for rid, version, state in records.get(name, [])},
+        )
+
+    first = {name: key(current[0]) for name, current, _ in senders if name != REFUSED_KEYS}
+    return RelationReceiver(
+        next(known(*s) for s in senders if s[0] == OWN),
+        [known(*s) for s in senders if s[0] not in (OWN, REFUSED_KEYS)],
+        [key(k) for name, letters, _ in senders if name == REFUSED_KEYS for k in letters],
+        [
+            HeldRelation(
+                relation_id(q), first[holder], record_id(rid), None if k is None else key(k), record_id(t)
+            )
+            for q, holder, rid, k, t in relations
+        ],
+    )
+
+
+def expected_lookup(
+    relations: list[RelationCase],
+    step: LookupCase,
+    record_id: Callable[[str], str] = str,
+    relation_id: Callable[[str], str] = str,
+) -> dict[str, Any]:
+    """The result of a lookup step of a case, in the form of RelationReceiver.lookup."""
+    _, resolved, linked = step
+    return {
+        "relations": [
+            {"id": relation_id(q[0]), "sender": s, "resolved": ok}
+            for q, (s, ok) in zip(relations, resolved, strict=True)
+        ],
+        "linked_from": [
+            {
+                "sender": name,
+                "id": record_id(rid),
+                "from": [
+                    {"sender": n, "id": record_id(i), "relation": relation_id(q)} for n, i, q in sources
+                ],
+            }
+            for name, rid, sources in linked
+        ],
+    }
+
+
+def check_relation_cases() -> int:
+    """Run the model over the cases above with letters as keys; the number of cases."""
+    cases = relation_cases()
+    for name, _, senders, records, relations, steps in cases:
+        r = relation_receiver(senders, records, relations, str.encode)
+        for step in steps:
+            if step[0] == "chain":
+                got = r.chain(
+                    [(kind, signer.encode(), device.encode(), None) for kind, signer, device in step[1]]
+                )
+                assert got == step[2], (name, got)
+            else:
+                assert r.lookup() == expected_lookup(relations, step), (name, r.lookup())
+    return len(cases)
+
+
 # --- the edges of verification (spec/keys.md, section 7.6) --------------------
 
 
@@ -1642,6 +1898,7 @@ def main() -> None:
         "cat-a-log",
     )
     device_cases = check_device_cases()
+    relation_count = check_relation_cases()
     # The join that led to the addition (section 5.2): the old phone asks its user, and the new phone
     # takes the chain that ends with its addition.
     assert join_action(old["pub"], [], [], old["pub"], new["pub"], proof) == "ask"
@@ -1781,6 +2038,7 @@ def main() -> None:
         print(" | ".join(row))
     print()
     print(f"device sets: {device_cases} cases of section 5.5 hold in the model")
+    print(f"relations: {relation_count} cases of spec/records.md, section 10, hold in the model")
     print()
     print("== The canonical encodings of the eight points of small order ==")
     for e in small:

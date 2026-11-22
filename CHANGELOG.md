@@ -19,6 +19,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - Offers and files carry each type as a description of bricks, from which its schema is derived; the new vector category `bricks` tests it. ([axt-1044](https://github.com/paxel/axt/issues/52))
 - The relation brick `axt.RelationField`: a field of relations, each an `axt.Relation`, in any type, with its rules and limits and `bricks` vectors. ([axt-1046](https://github.com/paxel/axt/issues/54))
 - Each example type is published as its description of bricks, one version each, with its derived schema and fingerprint generated beside it. ([axt-1045](https://github.com/paxel/axt/issues/53))
+- Relations to records of other senders, named by any key of the sender's set and shown as linked from, with the `records` operation `relations`. ([axt-1038](https://github.com/paxel/axt/issues/46))
 
 ### Changed
 

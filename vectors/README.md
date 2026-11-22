@@ -11,7 +11,7 @@ This directory holds the test vectors of AXT: bytes with their expected meaning,
 | [types/types.json](types/types.json)                             | The example types and schema resolution ([spec/types.md](../spec/types.md))                           |
 | [time/time.json](time/time.json)                                 | The time types, zone rules and durations ([spec/time.md](../spec/time.md))                            |
 | [metadata/metadata.json](metadata/metadata.json)                 | Labels, formats, patterns and limits of fields ([spec/metadata.md](../spec/metadata.md))              |
-| [records/records.json](records/records.json)                     | Applying record messages ([spec/records.md](../spec/records.md))                                      |
+| [records/records.json](records/records.json)                     | Applying record messages, resolving relations ([spec/records.md](../spec/records.md))                 |
 | [manifest/manifest.json](manifest/manifest.json)                 | Validity of a manifest and which types fit ([spec/manifest.md](../spec/manifest.md))                  |
 | [keys/keys.json](keys/keys.json)                                 | Signatures, device sets, sealing ([spec/keys.md](../spec/keys.md))                                    |
 | [protocol/protocol.json](protocol/protocol.json)                 | One app in a live connection ([spec/protocol.md](../spec/protocol.md))                                |

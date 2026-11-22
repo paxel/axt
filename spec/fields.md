@@ -304,10 +304,10 @@ A sender creates the id of a relation as the id of a record ([records.md](record
 
 The field `target` is a union of two records. Each has a field without a default that the other lacks, so that a value of one is never a value of the other:
 
-- **A record**, `axt.RelationRecordTarget`: `id`, the id of the target record; `sender`, an Ed25519 public key ([keys.md](keys.md)) of the target record's sender, or `null` for a record of the sender of the record that holds the relation; `type`, the full name of the target record's type, which holds its major version, such as `axt.example.v1.Pet`, or empty when it is not known; and `text`, a display text, such as the target's title.
+- **A record**, `axt.RelationRecordTarget`: `id`, the id of the target record; `sender`, an Ed25519 public key ([keys.md](keys.md)) of the target record's sender, any key of its device set, current or removed, or `null` for a record of the sender of the record that holds the relation; `type`, the full name of the target record's type, which holds its major version, such as `axt.example.v1.Pet`, or empty when it is not known; and `text`, a display text, such as the target's title.
 - **A thing outside AXT**, `axt.RelationOutsideTarget`: `uri`, a URI of [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986) of any scheme, with the format `uri` of [metadata.md](metadata.md), section 6.3; and `text`, a display text, such as the thing's name.
 
-A receiver SHOULD show the display text of a record target while it does not hold the target record, and that of an outside target in place of its URI. It shows and opens a URI as [metadata.md](metadata.md), section 6.3, says of the format `uri`.
+A receiver resolves a record target to the record it names, also of another sender, as [records.md](records.md), section 10, says. It SHOULD show the display text of a record target while it does not hold the target record, and that of an outside target in place of its URI. It shows and opens a URI as [metadata.md](metadata.md), section 6.3, says of the format `uri`.
 
 ### 11.4 Rules and limits
 

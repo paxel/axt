@@ -193,7 +193,9 @@ def flip_signature(message: bytes) -> bytes:
 
 # --- device sets (spec/keys.md, section 5.5) ---------------------------------------
 
-RECORD_IDS = {f"r{n}": f"0000000{n}-5e55-4d0e-8a11-00000000000{n}" for n in range(1, 5)}
+RECORD_IDS = {f"r{n}": f"0000000{n}-5e55-4d0e-8a11-00000000000{n}" for n in range(1, 7)}
+# The ids of the relations of keys_examples.relation_cases.
+RELATION_IDS = {f"q{n}": f"0000000{n}-4e1a-4b0e-9c22-00000000000{n}" for n in range(1, 10)}
 
 
 def set_seed(letter: str) -> bytes:
@@ -2536,6 +2538,22 @@ def protocol_category() -> Category:
     obf_takes = {A, T, OUT, VISIT}
     nil_id, del_id = "00000000-0000-0000-0000-000000000000", "d4c3b2a1-0f9e-4d8c-b7a6-5f4e3d2c1b0a"
     note_id = "c1d2e3f4-a5b6-4c7d-8e9f-0a1b2c3d4e5f"
+    # The appointment of example_types.py with its relations, and one more to a record of the key of
+    # cat-a-log's new phone, which Old Brain Fix does not know.
+    rel_ap_id = "e5f6a7b8-c9d0-4e1f-8a2b-3c4d5e6f7a8b"
+    new_phone = keys.public_key(test_secret("cat-a-log, new phone, Ed25519"))
+    rel_ap = dict(
+        rules.DATA["Appointment"],
+        relations=[
+            *rules.RELATIONS["Appointment"],
+            rules.relation(
+                "b8c9d0e1-f2a3-4b4c-9d5e-6f7a8b9c0d1e",
+                rules.record_target(
+                    "c3d4e5f6-a7b8-4c9d-8e0f-1a2b3c4d5e6f", "axt.example.v1.Pet", "Felix", new_phone
+                ),
+            ),
+        ],
+    )
     oversized = pe.data_msg + bytes(pe.MAX_MESSAGE)
 
     def bad_offer(types: list[Any], oid: str = "4a5b6c7d-8e9f-4a0b-9c1d-2e3f4a5b6c7d") -> Any:
@@ -2589,6 +2607,10 @@ def protocol_category() -> Category:
         r(pe.data_msg[:2] + bytes(8) + pe.data_msg[10:], "ERROR FORMAT_UNSUPPORTED"),
         r(pe.del_unknown, "APPLIED"),
         ("query", "record", del_id, {"record": {"version": 4, "state": "tombstone"}}),
+        # Relations that the app cannot resolve: to a record of cat-a-log that has not arrived, by null and
+        # by cat-a-log's key, and to a record of a key it does not know (spec/records.md, section 10.3).
+        r(pe.obf_data(rel_ap_id, 1, ap_text, rel_ap), "APPLIED"),
+        ("query", "record", rel_ap_id, {"record": {"version": 1, "state": "there"}}),
         r(pe.task_offer, "answers", answers={"0c9b8a7f-6e5d-4c3b-a291-8f7e6d5c4b3a": {T: "ACCEPT"}}),
         r(pe.obf_data(AID, 9, pe.TASK_TEXT, rules.DATA["Task"]), "ERROR TYPE_CHANGED"),
         r(pe.outline_offer, "answers", answers={"1d2e3f40-5a6b-4c7d-9e8f-a0b1c2d3e4f5": {OUT: "ACCEPT"}}),
@@ -2612,6 +2634,13 @@ def protocol_category() -> Category:
             "flush",
             [
                 {"id": del_id, "version": 4, "outcome": "APPLIED", "receiver_version": 4, "kept_fields": []},
+                {
+                    "id": rel_ap_id,
+                    "version": 1,
+                    "outcome": "APPLIED",
+                    "receiver_version": 1,
+                    "kept_fields": [],
+                },
                 {
                     "id": "2e3f4051-6b7c-4d8e-8f90-b1c2d3e4f506",
                     "version": 1,
@@ -2637,6 +2666,7 @@ def protocol_category() -> Category:
             "protocol.md 8",
             "protocol.md 9.2",
             "protocol.md 17",
+            "records.md 10.3",
             "time.md 8",
         ],
         OBF_SEED,
@@ -3715,7 +3745,8 @@ def records_category() -> Category:
     c = Category(
         "records",
         "A receiver applying the record messages of one sender: the version rule, deletions and "
-        "tombstones, and its user's own changes (spec/records.md).",
+        "tombstones, and its user's own changes; and the relations it holds, resolved across senders "
+        "(spec/records.md).",
     )
 
     def scenario(label: str, refs: list[str], policy: dict[str, Any], steps: list[Any]) -> None:
@@ -3913,7 +3944,71 @@ def records_category() -> Category:
                         "id"
                     ]
                     assert tm.receiver_breaches(schema, value) == [], v["id"]
+    relation_sessions(c)
     return c
+
+
+def relation_sessions(c: Category) -> None:
+    """The cases of keys_examples.relation_cases as sessions: a receiver that resolves the relations it
+    holds across senders (spec/records.md, section 10) and follows the devices of its known senders with
+    signed chains (spec/keys.md, section 5.5)."""
+
+    def rid(r: str) -> str:
+        return RECORD_IDS[r]
+
+    def qid(q: str) -> str:
+        return RELATION_IDS[q]
+
+    for name, what, senders, records, relations, steps in keys.relation_cases():
+        receiver = keys.relation_receiver(senders, records, relations, set_key, rid, qid)
+        start = receiver.state()
+        own = {
+            "name": receiver.own.name,
+            "current": sorted(k.hex() for k in receiver.own.current),
+            "removed": sorted(k.hex() for k in receiver.own.removed),
+            "records": [
+                {"id": r, "version": receiver.own.records[r][0], "state": receiver.own.records[r][1]}
+                for r in sorted(receiver.own.records)
+            ],
+        }
+        held = [
+            {
+                "id": qid(q),
+                "holder": {"sender": holder, "id": rid(r)},
+                "target": {"sender": None if k is None else H(set_key(k)), "id": rid(target)},
+            }
+            for q, holder, r, k, target in relations
+        ]
+        inputs: list[dict[str, Any]] = []
+        expected: list[dict[str, Any]] = []
+        for step in steps:
+            if step[0] == "chain":
+                built = [set_message(*m) for m in step[1]]
+                got = receiver.chain([model for _, model in built])
+                assert got == step[2], (name, got)
+                inputs.append({"chain": [B(m) for m, _ in built]})
+                expected.append({"results": got})
+            else:
+                lookup = receiver.lookup()
+                assert lookup == keys.expected_lookup(relations, step, rid, qid), (name, lookup)
+                inputs.append({"lookup": True})
+                expected.append(lookup)
+        c.add(
+            "relations",
+            what,
+            ["records.md 10.1", "records.md 10.2", "records.md 10.3"]
+            + (["records.md 10.5"] if name == "own-link" else [])
+            + (["keys.md 3.4"] if name == "any-key" else [])
+            + (["keys.md 5.5"] if name in ("chain", "join") else []),
+            {
+                "own": own,
+                "senders": start,
+                "refused": sorted(H(k) for k in receiver.refused),
+                "relations": held,
+                "steps": inputs,
+            },
+            {"steps": expected},
+        )
 
 
 # --- shares (spec/shares.md) ------------------------------------------------------------------
@@ -7078,7 +7173,7 @@ COUNTS = {
         {"decode_record": 46},
     ),
     "metadata": ({"describe": 22, "check_record": 200}, {"check_record": 104}),
-    "records": ({"apply": 13}, {}),
+    "records": ({"apply": 13, "relations": 4}, {}),
     "manifest": ({"check_manifest": 52, "fit": 19}, {"check_manifest": 46}),
     "keys": (
         {

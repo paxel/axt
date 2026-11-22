@@ -92,7 +92,7 @@
 <ul>
   <li>The reference is a field of the type <code>string</code> with the logical type <code>uuid</code>, or <code>["null", that]</code> where it may be absent. It holds the id of the other record.</li>
   <li>Its <code>doc</code> should name the type or types it refers to. No attribute marks a reference, so a receiver that does not know your type cannot tell it from another <code>uuid</code> field.</li>
-  <li>It names a record of your own app only, never one your app received from another app. References across senders are not defined in 0.1.0.</li>
+  <li>It names a record of your own app only, never one your app received from another app. A link to a record of another app is a relation (<a href="../spec/records.html#section-10">records, section 10</a>).</li>
   <li>The receiver may not have the other record yet, or may have declined its type. It keeps the reference and resolves it when the record arrives; it never rejects a record for it.</li>
 </ul>
 <p>The example types of version 1 carry no references; Measurement names what was measured as text in <code>subject</code>.</p>

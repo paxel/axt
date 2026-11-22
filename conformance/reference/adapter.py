@@ -1149,6 +1149,49 @@ def op_device_sets(i: Any) -> dict[str, Any]:
     return {"steps": steps}
 
 
+def op_relations(i: Any) -> dict[str, Any]:
+    """A receiver that resolves the relations it holds across senders (records.md, section 10), with the
+    model of keys_examples.py, and follows the devices of its known senders as op_device_sets does."""
+
+    def known(s: Any) -> Any:
+        return keys.KnownSender(
+            s["name"],
+            [b_in(k) for k in s["current"]],
+            [b_in(k) for k in s["removed"]],
+            {r["id"].lower(): (r["version"], r["state"]) for r in s["records"]},
+        )
+
+    own, senders = known(i["own"]), [known(s) for s in i["senders"]]
+    first = {s.name: s.current[0] for s in [own, *senders]}
+    receiver = keys.RelationReceiver(
+        own,
+        senders,
+        [b_in(k) for k in i["refused"]],
+        [
+            keys.HeldRelation(
+                r["id"],
+                first[r["holder"]["sender"]],
+                r["holder"]["id"].lower(),
+                None if r["target"]["sender"] is None else b_in(r["target"]["sender"]),
+                r["target"]["id"].lower(),
+            )
+            for r in i["relations"]
+        ],
+    )
+    steps: list[dict[str, Any]] = []
+    for step in i["steps"]:
+        if "chain" in step:
+            messages = []
+            for m in step["chain"]:
+                kind, signer, d, signed, sig = pe.device_parts(b_in(m))
+                problem = keys.device_message_problem(kind, signer, signed, sig, d["device"], d.get("proof"))
+                messages.append((kind, signer, d["device"], problem))
+            steps.append({"results": receiver.chain(messages)})
+        else:
+            steps.append(receiver.lookup())
+    return {"steps": steps}
+
+
 def op_seal(i: Any) -> dict[str, Any]:
     message, key = b_in(i["message"]), b_in(i["encryption_key"])
     if keys.encryption_key_problem(key):
@@ -1418,6 +1461,7 @@ OPS: dict[str, Callable[[Any], dict[str, Any]]] = {
     "decode_body": op_decode_body,
     "read_file": op_read_file,
     "apply": op_apply,
+    "relations": op_relations,
     "parse_qr": op_parse_qr,
     "qr_text": lambda i: ok({"text": tx.qr_text(b_in(i["payload"]))}),
     "hello_frame": lambda i: ok(

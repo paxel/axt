@@ -178,6 +178,12 @@
   <code>device_join</code>, <code>join_chain</code>, <code>device_sets</code>). Sealing and
   opening are in the category every library implements, whether or not it supports the relay.
 </p>
+<p>
+  With the device sets in place, a receiver resolves the relations of the records it holds, also
+  to records of another sender, by any key of that sender's set
+  (<a href="../spec/records.html#section-10">records.md, section 10</a>). Tested by:
+  <code>records</code> (<code>relations</code>).
+</p>
 
 <h2>6. Shares</h2>
 <p>

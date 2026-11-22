@@ -2,7 +2,7 @@
  "format": 1,
  "specification": "0.2.0",
  "category": "records",
- "description": "A receiver applying the record messages of one sender: the version rule, deletions and tombstones, and its user's own changes (spec/records.md).",
+ "description": "A receiver applying the record messages of one sender: the version rule, deletions and tombstones, and its user's own changes; and the relations it holds, resolved across senders (spec/records.md).",
  "vectors": [
   {
    "id": "records/apply/the-example-of-records-md-section-9-with-a-receiver-that-deletes",
@@ -2634,6 +2634,489 @@
        "reminders": [],
        "relations": []
       }
+     }
+    ]
+   }
+  },
+  {
+   "id": "records/relations/a-relation-names-a-sender-by-any-key-of-its-set-current-or-removed-or-by",
+   "op": "relations",
+   "description": "a relation names a sender by any key of its set, current or removed, or by null for the holder's sender; a key of the receiver's own set names its own records; a key of no known sender, a refused key among them, a record not held and a tombstone leave it unresolved",
+   "refs": ["records.md 10.1", "records.md 10.2", "records.md 10.3", "keys.md 3.4"],
+   "input": {
+    "own": {
+     "name": "me",
+     "current": ["2a2a57f1835a1c4f3d06c3f4137f9454b4bdf5244ff4982c71967b3f7173961e"],
+     "removed": ["0552d4c40a4b4b7f8a14163e4f179726709654a879592d378b89931e2f9883fe"],
+     "records": [
+      {"id": "00000004-5e55-4d0e-8a11-000000000004", "version": 1, "state": "there"}
+     ]
+    },
+    "senders": [
+     {
+      "name": "s",
+      "current": ["7b4c758de98220326aec1dc4b22500409dd74c45977c6148e2874dbd99f58d35"],
+      "removed": ["d126bc923963f9b5c4225c23e9460c6c3324325ecee3e39736e97660d3859361"],
+      "records": [
+       {"id": "00000001-5e55-4d0e-8a11-000000000001", "version": 2, "state": "there"},
+       {"id": "00000002-5e55-4d0e-8a11-000000000002", "version": 3, "state": "tombstone"}
+      ]
+     },
+     {
+      "name": "t",
+      "current": ["38b3cd22d386cec6b4160f20df1cb3c4af4360a900890edad9cc02b6f397a566"],
+      "removed": [],
+      "records": [
+       {"id": "00000003-5e55-4d0e-8a11-000000000003", "version": 1, "state": "there"},
+       {"id": "00000005-5e55-4d0e-8a11-000000000005", "version": 4, "state": "there"}
+      ]
+     }
+    ],
+    "refused": ["839bdf8c8dd591ef1e47f0626c0ccf58f5f21241495f1ccf01f9cf75a394abb2"],
+    "relations": [
+     {
+      "id": "00000001-4e1a-4b0e-9c22-000000000001",
+      "holder": {"sender": "t", "id": "00000003-5e55-4d0e-8a11-000000000003"},
+      "target": {
+       "sender": "7b4c758de98220326aec1dc4b22500409dd74c45977c6148e2874dbd99f58d35",
+       "id": "00000001-5e55-4d0e-8a11-000000000001"
+      }
+     },
+     {
+      "id": "00000002-4e1a-4b0e-9c22-000000000002",
+      "holder": {"sender": "t", "id": "00000003-5e55-4d0e-8a11-000000000003"},
+      "target": {
+       "sender": "d126bc923963f9b5c4225c23e9460c6c3324325ecee3e39736e97660d3859361",
+       "id": "00000001-5e55-4d0e-8a11-000000000001"
+      }
+     },
+     {
+      "id": "00000003-4e1a-4b0e-9c22-000000000003",
+      "holder": {"sender": "t", "id": "00000003-5e55-4d0e-8a11-000000000003"},
+      "target": {"sender": null, "id": "00000005-5e55-4d0e-8a11-000000000005"}
+     },
+     {
+      "id": "00000004-4e1a-4b0e-9c22-000000000004",
+      "holder": {"sender": "t", "id": "00000003-5e55-4d0e-8a11-000000000003"},
+      "target": {
+       "sender": "38b3cd22d386cec6b4160f20df1cb3c4af4360a900890edad9cc02b6f397a566",
+       "id": "00000005-5e55-4d0e-8a11-000000000005"
+      }
+     },
+     {
+      "id": "00000005-4e1a-4b0e-9c22-000000000005",
+      "holder": {"sender": "t", "id": "00000003-5e55-4d0e-8a11-000000000003"},
+      "target": {
+       "sender": "7b4c758de98220326aec1dc4b22500409dd74c45977c6148e2874dbd99f58d35",
+       "id": "00000002-5e55-4d0e-8a11-000000000002"
+      }
+     },
+     {
+      "id": "00000006-4e1a-4b0e-9c22-000000000006",
+      "holder": {"sender": "t", "id": "00000003-5e55-4d0e-8a11-000000000003"},
+      "target": {
+       "sender": "7b4c758de98220326aec1dc4b22500409dd74c45977c6148e2874dbd99f58d35",
+       "id": "00000006-5e55-4d0e-8a11-000000000006"
+      }
+     },
+     {
+      "id": "00000007-4e1a-4b0e-9c22-000000000007",
+      "holder": {"sender": "t", "id": "00000003-5e55-4d0e-8a11-000000000003"},
+      "target": {
+       "sender": "cb19b756c119bc48305a62ba6818a32255e01f7c84e2d2945de8b83bb35eb85b",
+       "id": "00000001-5e55-4d0e-8a11-000000000001"
+      }
+     },
+     {
+      "id": "00000008-4e1a-4b0e-9c22-000000000008",
+      "holder": {"sender": "t", "id": "00000003-5e55-4d0e-8a11-000000000003"},
+      "target": {
+       "sender": "839bdf8c8dd591ef1e47f0626c0ccf58f5f21241495f1ccf01f9cf75a394abb2",
+       "id": "00000001-5e55-4d0e-8a11-000000000001"
+      }
+     },
+     {
+      "id": "00000009-4e1a-4b0e-9c22-000000000009",
+      "holder": {"sender": "t", "id": "00000003-5e55-4d0e-8a11-000000000003"},
+      "target": {
+       "sender": "0552d4c40a4b4b7f8a14163e4f179726709654a879592d378b89931e2f9883fe",
+       "id": "00000004-5e55-4d0e-8a11-000000000004"
+      }
+     }
+    ],
+    "steps": [
+     {"lookup": true}
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "relations": [
+       {"id": "00000001-4e1a-4b0e-9c22-000000000001", "sender": "s", "resolved": true},
+       {"id": "00000002-4e1a-4b0e-9c22-000000000002", "sender": "s", "resolved": true},
+       {"id": "00000003-4e1a-4b0e-9c22-000000000003", "sender": "t", "resolved": true},
+       {"id": "00000004-4e1a-4b0e-9c22-000000000004", "sender": "t", "resolved": true},
+       {"id": "00000005-4e1a-4b0e-9c22-000000000005", "sender": "s", "resolved": false},
+       {"id": "00000006-4e1a-4b0e-9c22-000000000006", "sender": "s", "resolved": false},
+       {"id": "00000007-4e1a-4b0e-9c22-000000000007", "sender": null, "resolved": false},
+       {"id": "00000008-4e1a-4b0e-9c22-000000000008", "sender": null, "resolved": false},
+       {"id": "00000009-4e1a-4b0e-9c22-000000000009", "sender": "me", "resolved": true}
+      ],
+      "linked_from": [
+       {
+        "sender": "me",
+        "id": "00000004-5e55-4d0e-8a11-000000000004",
+        "from": [
+         {
+          "sender": "t",
+          "id": "00000003-5e55-4d0e-8a11-000000000003",
+          "relation": "00000009-4e1a-4b0e-9c22-000000000009"
+         }
+        ]
+       },
+       {
+        "sender": "s",
+        "id": "00000001-5e55-4d0e-8a11-000000000001",
+        "from": [
+         {
+          "sender": "t",
+          "id": "00000003-5e55-4d0e-8a11-000000000003",
+          "relation": "00000001-4e1a-4b0e-9c22-000000000001"
+         },
+         {
+          "sender": "t",
+          "id": "00000003-5e55-4d0e-8a11-000000000003",
+          "relation": "00000002-4e1a-4b0e-9c22-000000000002"
+         }
+        ]
+       },
+       {
+        "sender": "t",
+        "id": "00000005-5e55-4d0e-8a11-000000000005",
+        "from": [
+         {
+          "sender": "t",
+          "id": "00000003-5e55-4d0e-8a11-000000000003",
+          "relation": "00000003-4e1a-4b0e-9c22-000000000003"
+         },
+         {
+          "sender": "t",
+          "id": "00000003-5e55-4d0e-8a11-000000000003",
+          "relation": "00000004-4e1a-4b0e-9c22-000000000004"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "records/relations/a-relation-by-a-key-the-receiver-does-not-know-stays-unresolved-until-a",
+   "op": "relations",
+   "description": "a relation by a key the receiver does not know stays unresolved until a chain adds the key to the sender, and stays resolved after the key's removal",
+   "refs": ["records.md 10.1", "records.md 10.2", "records.md 10.3", "keys.md 5.5"],
+   "input": {
+    "own": {
+     "name": "me",
+     "current": ["2a2a57f1835a1c4f3d06c3f4137f9454b4bdf5244ff4982c71967b3f7173961e"],
+     "removed": [],
+     "records": [
+      {"id": "00000004-5e55-4d0e-8a11-000000000004", "version": 1, "state": "there"}
+     ]
+    },
+    "senders": [
+     {
+      "name": "s",
+      "current": ["7b4c758de98220326aec1dc4b22500409dd74c45977c6148e2874dbd99f58d35"],
+      "removed": [],
+      "records": [
+       {"id": "00000001-5e55-4d0e-8a11-000000000001", "version": 2, "state": "there"}
+      ]
+     },
+     {
+      "name": "t",
+      "current": ["38b3cd22d386cec6b4160f20df1cb3c4af4360a900890edad9cc02b6f397a566"],
+      "removed": [],
+      "records": [
+       {"id": "00000003-5e55-4d0e-8a11-000000000003", "version": 1, "state": "there"}
+      ]
+     }
+    ],
+    "refused": [],
+    "relations": [
+     {
+      "id": "00000001-4e1a-4b0e-9c22-000000000001",
+      "holder": {"sender": "t", "id": "00000003-5e55-4d0e-8a11-000000000003"},
+      "target": {
+       "sender": "cb19b756c119bc48305a62ba6818a32255e01f7c84e2d2945de8b83bb35eb85b",
+       "id": "00000001-5e55-4d0e-8a11-000000000001"
+      }
+     }
+    ],
+    "steps": [
+     {"lookup": true},
+     {
+      "chain": [
+       "c30116306f71b9ce9ea802127b4c758de98220326aec1dc4b22500409dd74c45977c6148e2874dbd99f58d3500d401c30131317b4bf41e0dc6cb19b756c119bc48305a62ba6818a32255e01f7c84e2d2945de8b83bb35eb85b5db4a75265af1b9f4dfb645675c6976898262d29f251bb07eca5176cd341ba1b7d6c9e5c87232efda427bfea837179e01e0c303a161c1c14cec4146584071a0ff469c19b080391ed36b6db90239bac248c37126079abab18062031ea7905c1bac084e143a65026a182ac3098f676d3da66bf2c857f263d02b1584fe48f642b08"
+      ]
+     },
+     {"lookup": true},
+     {
+      "chain": [
+       "c30116306f71b9ce9ea802147b4c758de98220326aec1dc4b22500409dd74c45977c6148e2874dbd99f58d350054c301dcaab2aa8275f5d0cb19b756c119bc48305a62ba6818a32255e01f7c84e2d2945de8b83bb35eb85b7ff4149a811cbc7686e4cd1aeccd39713b6d023bbb83ee915b269f25098a5ae437ff9ed103533ff95c0dcbe15869df84c9aa324f1be4f6fce90cf64bae5e7305"
+      ]
+     },
+     {"lookup": true}
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "relations": [
+       {"id": "00000001-4e1a-4b0e-9c22-000000000001", "sender": null, "resolved": false}
+      ],
+      "linked_from": []
+     },
+     {
+      "results": ["APPLIED"]
+     },
+     {
+      "relations": [
+       {"id": "00000001-4e1a-4b0e-9c22-000000000001", "sender": "s", "resolved": true}
+      ],
+      "linked_from": [
+       {
+        "sender": "s",
+        "id": "00000001-5e55-4d0e-8a11-000000000001",
+        "from": [
+         {
+          "sender": "t",
+          "id": "00000003-5e55-4d0e-8a11-000000000003",
+          "relation": "00000001-4e1a-4b0e-9c22-000000000001"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "results": ["APPLIED"]
+     },
+     {
+      "relations": [
+       {"id": "00000001-4e1a-4b0e-9c22-000000000001", "sender": "s", "resolved": true}
+      ],
+      "linked_from": [
+       {
+        "sender": "s",
+        "id": "00000001-5e55-4d0e-8a11-000000000001",
+        "from": [
+         {
+          "sender": "t",
+          "id": "00000003-5e55-4d0e-8a11-000000000003",
+          "relation": "00000001-4e1a-4b0e-9c22-000000000001"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "records/relations/the-receiver-s-own-link-a-relation-on-its-own-record-to-a-received-recor",
+   "op": "relations",
+   "description": "the receiver's own link: a relation on its own record to a received record, which shows it as linked from, and a relation of the sender to the receiver's record, by a key of the receiver's set",
+   "refs": ["records.md 10.1", "records.md 10.2", "records.md 10.3", "records.md 10.5"],
+   "input": {
+    "own": {
+     "name": "me",
+     "current": ["2a2a57f1835a1c4f3d06c3f4137f9454b4bdf5244ff4982c71967b3f7173961e"],
+     "removed": [],
+     "records": [
+      {"id": "00000004-5e55-4d0e-8a11-000000000004", "version": 1, "state": "there"}
+     ]
+    },
+    "senders": [
+     {
+      "name": "s",
+      "current": ["7b4c758de98220326aec1dc4b22500409dd74c45977c6148e2874dbd99f58d35"],
+      "removed": [],
+      "records": [
+       {"id": "00000001-5e55-4d0e-8a11-000000000001", "version": 2, "state": "there"},
+       {"id": "00000002-5e55-4d0e-8a11-000000000002", "version": 1, "state": "there"}
+      ]
+     }
+    ],
+    "refused": [],
+    "relations": [
+     {
+      "id": "00000001-4e1a-4b0e-9c22-000000000001",
+      "holder": {"sender": "me", "id": "00000004-5e55-4d0e-8a11-000000000004"},
+      "target": {
+       "sender": "7b4c758de98220326aec1dc4b22500409dd74c45977c6148e2874dbd99f58d35",
+       "id": "00000001-5e55-4d0e-8a11-000000000001"
+      }
+     },
+     {
+      "id": "00000002-4e1a-4b0e-9c22-000000000002",
+      "holder": {"sender": "s", "id": "00000002-5e55-4d0e-8a11-000000000002"},
+      "target": {
+       "sender": "2a2a57f1835a1c4f3d06c3f4137f9454b4bdf5244ff4982c71967b3f7173961e",
+       "id": "00000004-5e55-4d0e-8a11-000000000004"
+      }
+     }
+    ],
+    "steps": [
+     {"lookup": true}
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "relations": [
+       {"id": "00000001-4e1a-4b0e-9c22-000000000001", "sender": "s", "resolved": true},
+       {"id": "00000002-4e1a-4b0e-9c22-000000000002", "sender": "me", "resolved": true}
+      ],
+      "linked_from": [
+       {
+        "sender": "me",
+        "id": "00000004-5e55-4d0e-8a11-000000000004",
+        "from": [
+         {
+          "sender": "s",
+          "id": "00000002-5e55-4d0e-8a11-000000000002",
+          "relation": "00000002-4e1a-4b0e-9c22-000000000002"
+         }
+        ]
+       },
+       {
+        "sender": "s",
+        "id": "00000001-5e55-4d0e-8a11-000000000001",
+        "from": [
+         {
+          "sender": "me",
+          "id": "00000004-5e55-4d0e-8a11-000000000004",
+          "relation": "00000001-4e1a-4b0e-9c22-000000000001"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "records/relations/after-two-senders-join-a-key-of-the-second-names-the-sender-that-stays-a",
+   "op": "relations",
+   "description": "after two senders join, a key of the second names the sender that stays, and null names the records the second sender brought",
+   "refs": ["records.md 10.1", "records.md 10.2", "records.md 10.3", "keys.md 5.5"],
+   "input": {
+    "own": {
+     "name": "me",
+     "current": ["2a2a57f1835a1c4f3d06c3f4137f9454b4bdf5244ff4982c71967b3f7173961e"],
+     "removed": [],
+     "records": [
+      {"id": "00000004-5e55-4d0e-8a11-000000000004", "version": 1, "state": "there"}
+     ]
+    },
+    "senders": [
+     {
+      "name": "s",
+      "current": ["7b4c758de98220326aec1dc4b22500409dd74c45977c6148e2874dbd99f58d35"],
+      "removed": ["d126bc923963f9b5c4225c23e9460c6c3324325ecee3e39736e97660d3859361"],
+      "records": [
+       {"id": "00000001-5e55-4d0e-8a11-000000000001", "version": 2, "state": "there"}
+      ]
+     },
+     {
+      "name": "t",
+      "current": ["38b3cd22d386cec6b4160f20df1cb3c4af4360a900890edad9cc02b6f397a566"],
+      "removed": [],
+      "records": [
+       {"id": "00000003-5e55-4d0e-8a11-000000000003", "version": 1, "state": "there"}
+      ]
+     }
+    ],
+    "refused": [],
+    "relations": [
+     {
+      "id": "00000001-4e1a-4b0e-9c22-000000000001",
+      "holder": {"sender": "s", "id": "00000001-5e55-4d0e-8a11-000000000001"},
+      "target": {
+       "sender": "38b3cd22d386cec6b4160f20df1cb3c4af4360a900890edad9cc02b6f397a566",
+       "id": "00000003-5e55-4d0e-8a11-000000000003"
+      }
+     },
+     {
+      "id": "00000002-4e1a-4b0e-9c22-000000000002",
+      "holder": {"sender": "t", "id": "00000003-5e55-4d0e-8a11-000000000003"},
+      "target": {"sender": null, "id": "00000001-5e55-4d0e-8a11-000000000001"}
+     }
+    ],
+    "steps": [
+     {"lookup": true},
+     {
+      "chain": [
+       "c30116306f71b9ce9ea802127b4c758de98220326aec1dc4b22500409dd74c45977c6148e2874dbd99f58d3500d401c30131317b4bf41e0dc638b3cd22d386cec6b4160f20df1cb3c4af4360a900890edad9cc02b6f397a566841ca90895fd60e7b70b6825c09a1f7c0df9edb6f97ccd961660a06fa489c74e5151ac3330b8fd4621eaa6629f9412f9b3d539ff46fa8e09724497b3c0169e0939562c385d3c248507567486d3a74eb4afcdd822eb23fe21de0d6241df095a1a2bb2bb6218261ee83122ddbd56ff98d475ac62a8b3fc323ddd5cbe60183f4700"
+      ]
+     },
+     {"lookup": true}
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "relations": [
+       {"id": "00000001-4e1a-4b0e-9c22-000000000001", "sender": "t", "resolved": true},
+       {"id": "00000002-4e1a-4b0e-9c22-000000000002", "sender": "t", "resolved": false}
+      ],
+      "linked_from": [
+       {
+        "sender": "t",
+        "id": "00000003-5e55-4d0e-8a11-000000000003",
+        "from": [
+         {
+          "sender": "s",
+          "id": "00000001-5e55-4d0e-8a11-000000000001",
+          "relation": "00000001-4e1a-4b0e-9c22-000000000001"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "results": ["APPLIED"]
+     },
+     {
+      "relations": [
+       {"id": "00000001-4e1a-4b0e-9c22-000000000001", "sender": "s", "resolved": true},
+       {"id": "00000002-4e1a-4b0e-9c22-000000000002", "sender": "s", "resolved": true}
+      ],
+      "linked_from": [
+       {
+        "sender": "s",
+        "id": "00000001-5e55-4d0e-8a11-000000000001",
+        "from": [
+         {
+          "sender": "s",
+          "id": "00000003-5e55-4d0e-8a11-000000000003",
+          "relation": "00000002-4e1a-4b0e-9c22-000000000002"
+         }
+        ]
+       },
+       {
+        "sender": "s",
+        "id": "00000003-5e55-4d0e-8a11-000000000003",
+        "from": [
+         {
+          "sender": "s",
+          "id": "00000001-5e55-4d0e-8a11-000000000001",
+          "relation": "00000001-4e1a-4b0e-9c22-000000000001"
+         }
+        ]
+       }
+      ]
      }
     ]
    }

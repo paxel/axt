@@ -723,6 +723,20 @@
     {
      "if": {
       "properties": {
+       "op": {"const": "relations"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["own", "senders", "refused", "relations", "steps"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
        "op": {"const": "relay"}
       }
      },
@@ -1058,7 +1072,7 @@
       "items": {
        "properties": {
         "op": {
-         "enum": ["apply"]
+         "enum": ["apply", "relations"]
         }
        }
       }
