@@ -184,6 +184,20 @@ class RelayTest(unittest.TestCase):
         self.assertEqual(r.list(wait=30), (200, []))
         self.assertLess(time.monotonic() - start, 5)
 
+    def test_a_start_deletes_only_the_relays_own_temporary_entries(self) -> None:
+        storage = Path(self.dir)
+        tmp = storage / ".axt-relay-tmp"
+        tmp.mkdir()
+        (tmp / ("a" * 32)).write_bytes(b"left by a put")
+        (tmp / ("b" * 32)).mkdir()
+        (tmp / ("b" * 32) / sha(message(1))).write_bytes(b"a removed mailbox")
+        (tmp / "notes.txt").write_text("not the relay's", encoding="ascii")
+        (storage / "tmp").mkdir()
+        (storage / "tmp" / ("c" * 32)).write_bytes(b"not in the relay's directory")
+        self.relay().stop()
+        self.assertEqual(sorted(p.name for p in tmp.iterdir()), ["notes.txt"])
+        self.assertTrue((storage / "tmp" / ("c" * 32)).exists())
+
     def test_a_restart_keeps_messages_their_order_and_their_put_times(self) -> None:
         r = self.relay()
         r.create()

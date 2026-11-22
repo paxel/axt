@@ -106,7 +106,7 @@ The storage directory (`--storage`) holds:
 | `mailboxes/<mailbox id>/`             | One directory per mailbox, named by its id in 64 lower-case hexadecimal digits                    |
 | `mailboxes/<mailbox id>/<message id>` | One file per message held, named by its SHA-256 in 64 lower-case hexadecimal digits (section 5.2) |
 | `mailboxes/<mailbox id>/seen`         | The time of the owner's last request on the relay's clock, in milliseconds, as decimal text       |
-| `tmp/`                                | Files being written, and mailboxes being removed; emptied at each start                           |
+| `.axt-relay-tmp/`                     | Files being written, and mailboxes being removed; at each start the relay deletes its own entries |
 
 The relay writes `seen` when a mailbox is created and then at most once a day, so that a list every minute does not write to the disk. The relay keeps no mailbox secret: it checks a secret by computing the mailbox id from it.
 
@@ -126,11 +126,11 @@ The list orders the messages by their sequence number, so that puts in the same 
 
 A put is written so that a stop at any point, such as a crash or a full disk, leaves either the whole message or none:
 
-1. The relay streams the body into a new file under `tmp/`, behind 20 zero bytes, and computes its SHA-256 while it reads.
+1. The relay streams the body into a new file under `.axt-relay-tmp/`, behind 20 zero bytes, and computes its SHA-256 while it reads.
 2. If the SHA-256 is the id in the path, it writes the header and flushes the file to the disk (`fsync`).
 3. It then checks, under the lock of the relay's index, that the mailbox still exists, that the message is not held already and that the mailbox has room, and renames the file to `mailboxes/<mailbox id>/<message id>` (`os.replace`), which is atomic within one file system.
 
-A removed mailbox is first renamed into `tmp/` and then deleted, so that a put cannot write into a mailbox that is gone. `seen` is written to `tmp/` and renamed in the same way.
+A removed mailbox is first renamed into `.axt-relay-tmp/` and then deleted, so that a put cannot write into a mailbox that is gone. `seen` is written to `.axt-relay-tmp/` and renamed in the same way. Each entry the relay writes there is named by 32 random lower-case hexadecimal digits; at each start it deletes the entries so named and nothing else, so that a `--storage` pointing at a directory of other files deletes none of them.
 
 ### 5.4 Copies and backups
 

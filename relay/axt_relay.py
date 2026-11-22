@@ -63,6 +63,7 @@ DRAIN_SECONDS = 2  # how long the relay reads what a client still sends after an
 DRAIN_BYTES = 32 * 2**20
 
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
+TMP_NAME = re.compile(r"^[0-9a-f]{32}$")  # the names of the entries the relay writes to its tmp directory
 PATH = re.compile(r"^v1/mailboxes/([0-9a-f]{64})(?:/messages(?:/([0-9a-f]{64}))?)?$")
 WAIT = re.compile(r"^wait=([0-9]{1,2})$")
 DIGITS = re.compile(r"^[0-9]{1,20}$")
@@ -127,7 +128,7 @@ class Store:
 
     <root>/mailboxes/<mailbox id>/<message id>  the header above, then the sealed message
     <root>/mailboxes/<mailbox id>/seen          the time of the last owner request, in milliseconds
-    <root>/tmp/                                 files being written, and mailboxes being removed
+    <root>/.axt-relay-tmp/                      files being written, and mailboxes being removed
     """
 
     def __init__(
@@ -135,7 +136,7 @@ class Store:
     ) -> None:
         self.root = Path(root)
         self.boxes_dir = self.root / "mailboxes"
-        self.tmp_dir = self.root / "tmp"
+        self.tmp_dir = self.root / ".axt-relay-tmp"
         self.clock = clock
         self.quota_bytes = quota_bytes
         self.max_waiting = max_waiting
@@ -143,8 +144,8 @@ class Store:
         self.lock = threading.Lock()
         self.boxes: dict[str, Mailbox] = {}
         self.boxes_dir.mkdir(parents=True, exist_ok=True)
-        shutil.rmtree(self.tmp_dir, ignore_errors=True)
         self.tmp_dir.mkdir(parents=True, exist_ok=True)
+        self._clear_tmp()
         self.seq = itertools.count(self._load())
 
     def _load(self) -> int:
@@ -178,6 +179,16 @@ class Store:
                 box.messages[name] = m
             self.boxes[d.name] = box
         return top + 1
+
+    def _clear_tmp(self) -> None:
+        """Deletes what an earlier run left in the tmp directory: only entries named like those of _tmp."""
+        for entry in self.tmp_dir.iterdir():
+            if not TMP_NAME.match(entry.name):
+                continue
+            if entry.is_dir() and not entry.is_symlink():
+                shutil.rmtree(entry, ignore_errors=True)
+            else:
+                entry.unlink(missing_ok=True)
 
     def _tmp(self) -> Path:
         return self.tmp_dir / secrets.token_hex(16)

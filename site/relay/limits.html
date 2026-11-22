@@ -76,7 +76,7 @@
     <tr><td><code>mailboxes/&lt;mailbox id&gt;/</code></td><td>One directory per mailbox, named by its id</td></tr>
     <tr><td><code>mailboxes/&lt;mailbox id&gt;/&lt;message id&gt;</code></td><td>One file per message held, named by its SHA-256</td></tr>
     <tr><td><code>mailboxes/&lt;mailbox id&gt;/seen</code></td><td>The time of the owner's last request, in milliseconds, as decimal text</td></tr>
-    <tr><td><code>tmp/</code></td><td>Files being written, and mailboxes being removed; emptied at each start</td></tr>
+    <tr><td><code>.axt-relay-tmp/</code></td><td>Files being written, and mailboxes being removed; at each start the relay deletes its own entries</td></tr>
   </tbody>
 </table>
 <p>
@@ -86,7 +86,7 @@
   day. It keeps no mailbox secret: it checks a secret by computing the mailbox id from it.
 </p>
 <p>
-  A put is first written under <code>tmp/</code>, flushed to the disk and then renamed into its
+  A put is first written under <code>.axt-relay-tmp/</code>, flushed to the disk and then renamed into its
   mailbox, so a crash or a full disk leaves either the whole message or none
   (<a href="../spec/relay.html#section-5-3">relay.md, section 5.3</a>). The rename is atomic within one
   file system. When the storage fails, such as when the disk is full, the relay

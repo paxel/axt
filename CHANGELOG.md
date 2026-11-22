@@ -36,6 +36,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - The documents name the definitions instead of restating them, and the schema attributes are retired: bricks hold texts and checks, which `bricks` vectors test. ([axt-1050](https://github.com/paxel/axt/issues/58))
 - The test vectors are those of specification 0.2.0. ([axt-1036](https://github.com/paxel/axt/issues/44))
 
+### Fixed
+
+- At start the reference relay deletes only its own temporary files, so a wrong `--storage` no longer deletes other files. ([axt-1053](https://github.com/paxel/axt/issues/62))
+
 ---
 
 Historical changes have been moved to [OLDER_CHANGES.md](OLDER_CHANGES.md).
