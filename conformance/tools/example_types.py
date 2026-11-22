@@ -104,7 +104,10 @@ TIME_TYPES = {
 }
 # The published types that a type defines in place, the time types and axt.Relation (spec/fields.md, 11.6).
 RELATION = json.loads((REPO / "types" / "axt" / "Relation.avsc").read_text(encoding="utf-8"))
-PUBLISHED: dict[str, Any] = dict(TIME_TYPES, **{"axt.Relation": RELATION})
+EXTENSION_PUBLISHED = json.loads((REPO / "types" / "axt" / "Extension.avsc").read_text(encoding="utf-8"))
+PUBLISHED: dict[str, Any] = dict(
+    TIME_TYPES, **{"axt.Relation": RELATION, "axt.Extension": EXTENSION_PUBLISHED}
+)
 NUMBERS = {"int", "long", "float", "double"}
 MAX_SCHEMA_BYTES = 262144  # spec/envelope.md, section 8
 MAX_JSON_DEPTH = 64  # spec/envelope.md, section 8
@@ -323,6 +326,95 @@ RELATIONS: dict[str, list[dict[str, Any]]] = {
 }
 for _n, _rs in RELATIONS.items():
     DATA[_n]["relations"] = _rs  # the relations of the example datum, its last field
+
+# --- extensions (spec/fields.md, section 12) ------------------------------------------------------
+
+for _n in DATA:
+    DATA[_n]["extensions"] = []  # the example data have no extension, the last field
+# The extension of cat-a-log for a pet, a type of its own namespace: a schema that the app offers beside Pet.
+CAT_EXTENSION_SCHEMA: dict[str, Any] = {
+    "type": "record",
+    "name": "CatExtension",
+    "namespace": "org.example.catalog",
+    "doc": "What cat-a-log adds to a pet that is a cat.",
+    "fields": [
+        {
+            "name": "tasso_id",
+            "type": "string",
+            "default": "",
+            "doc": "The TASSO registration; empty if none.",
+        },
+        {"name": "fur", "type": "string", "default": "", "doc": "The colour of the fur; empty if not known."},
+    ],
+}
+CAT_EXTENSION_TEXT = json.dumps(CAT_EXTENSION_SCHEMA, separators=(",", ":"))
+CAT_EXTENSION = "org.example.catalog.CatExtension"
+
+
+def single_object_of(schema: dict[str, Any], datum: dict[str, Any]) -> bytes:
+    """The single-object encoding of a datum: C3 01, the fingerprint of the schema in little-endian order,
+    and the datum's Avro binary encoding (spec/envelope.md, section 3)."""
+    out = io.BytesIO()
+    fastavro.schemaless_writer(out, fastavro.parse_schema(schema), datum)
+    fp = fa_fingerprint(to_parsing_canonical_form(schema), "CRC-64-AVRO")
+    return b"\xc3\x01" + bytes.fromhex(fp) + out.getvalue()
+
+
+def extension(name: str = CAT_EXTENSION, data: bytes | None = None, **values: str) -> dict[str, Any]:
+    """An axt.Extension: by default cat-a-log's, with the values given."""
+    if data is None:
+        data = single_object_of(CAT_EXTENSION_SCHEMA, {"tasso_id": "", "fur": "", **values})
+    return {"name": name, "data": data}
+
+
+MIMI_CAT = extension(tasso_id="276098100123456", fur="tabby")
+EXTENSION_VALID = [
+    ("a pet with cat-a-log's extension", "Pet", dict(copy.deepcopy(DATA["Pet"]), extensions=[MIMI_CAT])),
+    (
+        "a pet with 32 extensions of types that no receiver knows, carried as bytes",
+        "Pet",
+        dict(
+            copy.deepcopy(DATA["Pet"]),
+            extensions=[
+                extension(f"org.example.app{i}.Extra", b"\xc3\x01" + bytes(8) + b"\x00") for i in range(32)
+            ],
+        ),
+    ),
+]
+EXT = "axt.Extension"
+EXTENSION_BREACHES = [
+    (
+        "a pet with 33 extensions",
+        "Pet",
+        dict(
+            copy.deepcopy(DATA["Pet"]),
+            extensions=[extension(f"org.example.app{i}.Extra", b"\xc3\x01" + bytes(8)) for i in range(33)],
+        ),
+        "extensions",
+        EXT,
+    ),
+    (
+        "a pet with two extensions of one type",
+        "Pet",
+        dict(copy.deepcopy(DATA["Pet"]), extensions=[MIMI_CAT, extension(fur="black")]),
+        "extensions[1].name",
+        EXT,
+    ),
+    (
+        "an extension whose name has no namespace",
+        "Pet",
+        dict(copy.deepcopy(DATA["Pet"]), extensions=[dict(MIMI_CAT, name="CatExtension")]),
+        "extensions[0].name",
+        EXT,
+    ),
+    (
+        "an extension whose data is no single-object encoding",
+        "Pet",
+        dict(copy.deepcopy(DATA["Pet"]), extensions=[dict(MIMI_CAT, data=b"\x00" * 12)]),
+        "extensions[0].data",
+        EXT,
+    ),
+]
 
 
 def floating(y: int, mo: int, d: int, h: int, mi: int) -> dict[str, Any]:
@@ -730,7 +822,7 @@ def check_cases(schemas: dict[str, Any]) -> None:
             fail(name, f"{label}: {found}")
         elif (
             rule.startswith("axt.")
-            and rule[4:] in ("Date", "Time", "DateTime", "Duration", "Relation")
+            and rule[4:] in ("Date", "Time", "DateTime", "Duration", "Relation", "Extension")
             and tm.value_breaches(schemas[name], datum)[0][:2] != (path, rule)
         ):
             fail(name, f"{label}: not the first time value that is not valid")
@@ -1078,6 +1170,7 @@ def nested_arrays(schema: Any) -> list[Any]:
         and isinstance(f["type"]["items"], dict)
         and f["type"]["items"]["type"] == "record"
         and not time_type(f["type"]["items"])
+        and f["type"]["items"]["name"] != "Extension"  # axt.Extension has no defaults to use
     ]
 
 

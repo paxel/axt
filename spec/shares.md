@@ -438,11 +438,11 @@ The `PROPOSAL` of step 2 of section 11.3 is a live message in envelope format 1 
 | `body.proposal_id`      | `"7b3e9d21-4c8a-4f6e-9a1b-5d2c8e4f6a70"`                                                                                                                                                                                                                                                                                                             |
 | `body.fields`           | One entry                                                                                                                                                                                                                                                                                                                                            |
 | `body.fields[0].name`   | `"start"`                                                                                                                                                                                                                                                                                                                                            |
-| `body.fields[0].schema` | The fingerprint of [Appointment.1.avsc](../types/axt/example/v1/Appointment.1.avsc) ([types.md](types.md)): `86 e6 cf be 06 63 41 49`                                                                                                                                                                                                                |
+| `body.fields[0].schema` | The fingerprint of [Appointment.1.avsc](../types/axt/example/v1/Appointment.1.avsc) ([types.md](types.md)): `25 ad db 94 70 73 d0 10`                                                                                                                                                                                                                |
 | `body.fields[0].value`  | The `axt.DateTime` of 2025-11-18 11:00: `year` 2025, `month` 11, `day` 18, `hour` 11, `minute` 0, `second` 0, `millisecond` 0, `zone` `"Europe/Berlin"`, `offset_seconds` 3600, `instant_ms` 1763460000000, in Avro binary encoding: `d2 1f 16 24 16 00 00 00 02 1a 45 75 72 6f 70 65 2f 42 65 72 6c 69 6e 02 a0 38 02 80 a4 c1 e6 d2 66`, length 33 |
 | `signature`             | `e55c67f798efc57693d118f8ecf47f7c646381c7717fdb58ca480929ca2d5d752ed9ce53402c9fe2e60b36d6d1c9b28f64e308fdd209ff6af5359841924dfc0b`                                                                                                                                                                                                                   |
 
-The message: 278 bytes, SHA-256 `15e4c1f9c9db307cc51bb59cdba7acd853caf7b43c5689948d73c18b398e9b96`. The signature covers the prefix `AXT-v1 message` and its zero byte, and the bytes from offset `000a` to the signature ([keys.md](keys.md), section 2.2). `instant_ms` is the instant of 2025-11-18 10:00 UTC in milliseconds since 1970-01-01 00:00 UTC: 20,410 days of 86,400,000 milliseconds and 10 hours of 3,600,000.
+The message: 278 bytes, SHA-256 `70e9e60c868c05bd243015c0a38d9a40fde50c7d944c4dcbb80fbae4ee697476`. The signature covers the prefix `AXT-v1 message` and its zero byte, and the bytes from offset `000a` to the signature ([keys.md](keys.md), section 2.2). `instant_ms` is the instant of 2025-11-18 10:00 UTC in milliseconds since 1970-01-01 00:00 UTC: 20,410 days of 86,400,000 milliseconds and 10 hours of 3,600,000.
 
 ```text
 0000  c3 01                    single-object marker
@@ -477,7 +477,7 @@ The message: 278 bytes, SHA-256 `15e4c1f9c9db307cc51bb59cdba7acd853caf7b43c56899
 00a4  02                       body: fields: array block of 1 item
 00a5  0a                       body: fields[0].name: string length 5
 00a6  73 74 61 72 74           body: "start"
-00ab  86 e6 cf be 06 63 41 49  body: fields[0].schema: fixed(8), the fingerprint of the writer schema
+00ab  25 ad db 94 70 73 d0 10  body: fields[0].schema: fixed(8), the fingerprint of the writer schema
 00b3  42                       body: fields[0].value: bytes length 33
 00b4  d2 1f 16 24 16 00 00 00  body: fields[0].value: wall clock 2025-11-18 11:00:00.000, seven ints
 00bc  02                       body: fields[0].value.zone: union index 1, string
@@ -489,14 +489,14 @@ The message: 278 bytes, SHA-256 `15e4c1f9c9db307cc51bb59cdba7acd853caf7b43c56899
 00ce  02                       body: fields[0].value.instant_ms: union index 1, long
 00cf  80 a4 c1 e6 d2 66        body: fields[0].value.instant_ms: long 1763460000000
 00d5  00                       body: fields: end of the array
-00d6  e5 5c 67 f7 98 ef c5 76  signature: fixed(64)
-      93 d1 18 f8 ec f4 7f 7c
-      64 63 81 c7 71 7f db 58
-      ca 48 09 29 ca 2d 5d 75
-      2e d9 ce 53 40 2c 9f e2
-      e6 0b 36 d6 d1 c9 b2 8f
-      64 e3 08 fd d2 09 ff 6a
-      f5 35 98 41 92 4d fc 0b
+00d6  47 ad 62 97 a2 28 bf 7b  signature: fixed(64)
+      d3 57 1e 56 39 0c 16 8a
+      e9 e2 66 d8 84 02 8e 15
+      c8 8d ce f1 93 8b fb f8
+      57 9d b2 56 dd 59 d3 da
+      a7 9a a5 56 f1 a3 b5 71
+      2f 02 9f 94 2d 33 8b c6
+      fb 4d c6 6b 37 93 b3 07
 0116  end
 ```
 

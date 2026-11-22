@@ -206,15 +206,16 @@ Note, Task, Appointment, Person and Car are the example types named when the sco
 
 | Type | Version | Schema | CRC-64-AVRO | As bytes |
 | --- | --- | --- | --- | --- |
-| `axt.example.v1.Appointment` | 1 | [Appointment.1.avsc](../types/axt/example/v1/Appointment.1.avsc) | `0x49416306becfe686` | `86 e6 cf be 06 63 41 49` |
-| `axt.example.v1.Car` | 1 | [Car.1.avsc](../types/axt/example/v1/Car.1.avsc) | `0xa8eaa96101d47106` | `06 71 d4 01 61 a9 ea a8` |
-| `axt.example.v1.Document` | 1 | [Document.1.avsc](../types/axt/example/v1/Document.1.avsc) | `0x69594b59d2ce6dca` | `ca 6d ce d2 59 4b 59 69` |
-| `axt.example.v1.Measurement` | 1 | [Measurement.1.avsc](../types/axt/example/v1/Measurement.1.avsc) | `0xa4713c50ea54b494` | `94 b4 54 ea 50 3c 71 a4` |
-| `axt.example.v1.Note` | 1 | [Note.1.avsc](../types/axt/example/v1/Note.1.avsc) | `0xad64ede05937d517` | `17 d5 37 59 e0 ed 64 ad` |
-| `axt.example.v1.Person` | 1 | [Person.1.avsc](../types/axt/example/v1/Person.1.avsc) | `0x05eacdcbb91f9865` | `65 98 1f b9 cb cd ea 05` |
-| `axt.example.v1.Pet` | 1 | [Pet.1.avsc](../types/axt/example/v1/Pet.1.avsc) | `0xf4c8934cfd75ff20` | `20 ff 75 fd 4c 93 c8 f4` |
-| `axt.example.v1.Task` | 1 | [Task.1.avsc](../types/axt/example/v1/Task.1.avsc) | `0x7d271ca0ac137ed9` | `d9 7e 13 ac a0 1c 27 7d` |
+| `axt.example.v1.Appointment` | 1 | [Appointment.1.avsc](../types/axt/example/v1/Appointment.1.avsc) | `0x10d0737094dbad25` | `25 ad db 94 70 73 d0 10` |
+| `axt.example.v1.Car` | 1 | [Car.1.avsc](../types/axt/example/v1/Car.1.avsc) | `0x69f6c9b3011d6449` | `49 64 1d 01 b3 c9 f6 69` |
+| `axt.example.v1.Document` | 1 | [Document.1.avsc](../types/axt/example/v1/Document.1.avsc) | `0xb9b0bf18faa7a1ae` | `ae a1 a7 fa 18 bf b0 b9` |
+| `axt.example.v1.Measurement` | 1 | [Measurement.1.avsc](../types/axt/example/v1/Measurement.1.avsc) | `0xbec4b5c9bccd12da` | `da 12 cd bc c9 b5 c4 be` |
+| `axt.example.v1.Note` | 1 | [Note.1.avsc](../types/axt/example/v1/Note.1.avsc) | `0x7ce83c7900093771` | `71 37 09 00 79 3c e8 7c` |
+| `axt.example.v1.Person` | 1 | [Person.1.avsc](../types/axt/example/v1/Person.1.avsc) | `0xf170f92b8540a13f` | `3f a1 40 85 2b f9 70 f1` |
+| `axt.example.v1.Pet` | 1 | [Pet.1.avsc](../types/axt/example/v1/Pet.1.avsc) | `0xb5d0dab082cb46ea` | `ea 46 cb 82 b0 da d0 b5` |
+| `axt.example.v1.Task` | 1 | [Task.1.avsc](../types/axt/example/v1/Task.1.avsc) | `0x4e1b59a67c4c64d9` | `d9 64 4c 7c a6 59 1b 4e` |
 | `axt.Relation` | – | [Relation.avsc](../types/axt/Relation.avsc) | `0x190bf11052cf9f10` | `10 9f cf 52 10 f1 0b 19` |
+| `axt.Extension` | – | [Extension.avsc](../types/axt/Extension.avsc) | `0x636f04d4d973a062` | `62 a0 73 d9 d4 04 6f 63` |
 
 The fingerprints were computed with [conformance/tools/example_types.py](../conformance/tools/example_types.py). For every example type, the script:
 
@@ -262,6 +263,10 @@ Moved to [fields.md](fields.md), section 11.5. The example types use relations o
 ### 8.6 Defined in place
 
 The rule is in [fields.md](fields.md), section 11.6, and applies to the example types as to every type: Note, Task, Appointment and Measurement hold an `axt.DateTime` before their relations, so their `axt.Relation` has `"axt.DateTime"` in `start`; Person, Car, Pet and Document hold none, so their `axt.Relation` defines `axt.DateTime` in `start`, as the published schema does.
+
+## 9. Extensions
+
+Every example type has a field `extensions`, its last, whose brick is `axt.ExtensionField` ([fields.md](fields.md), section 12): a list of records of the apps' own types, such as the `org.example.catalog.CatExtension` with a TASSO registration and the fur that cat-a-log adds to a Pet. An app that takes an example type and needs fields of its own adds them as an extension and does not fork the type, so that every app that takes the type still takes the record, and one that does not know the extension carries it along unchanged. Different apps extend one type differently; mapping the fields of one app's extension to those of another, such as a `tassoId` to a `TASSO_REG`, is the choice of the receiver's user, and AXT defines no format for it. The example data hold no extension; the vectors of the `types` category hold records with extensions of known and of unknown types, and with every rule of [fields.md](fields.md), section 12.3.
 
 ## References
 

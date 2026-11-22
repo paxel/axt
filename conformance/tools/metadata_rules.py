@@ -1119,28 +1119,32 @@ def breaches(
                 here = path_join(path, f["name"])
                 why = relations.relation_problem(full, f["name"], v[f["name"]]) if relations else None
                 if why:
-                    out.append((here, relations.RELATION, why))
+                    out.append((here, full if full == "axt.Extension" else relations.RELATION, why))
                 visit(f["type"], v[f["name"]], here, inner, (f, inner))
             return
         if kind == "array":
             items = names.resolve(strip(node["items"]), namespace)[0]
-            of_relations = (
-                relations is not None
-                and isinstance(items, dict)
-                and "name" in items
-                and full_name(items, namespace)[0] == relations.RELATION
+            lists = getattr(relations, "LISTS", None) or {getattr(relations, "RELATION", ""): "id"}
+            member = (
+                lists.get(full_name(items, namespace)[0])
+                if relations is not None and isinstance(items, dict) and "name" in items
+                else None
             )
+            of_relations = member is not None
             why = relations.list_problem(v) if of_relations else None
+            list_rule = full_name(items, namespace)[0] if of_relations else ""
             if why:
-                out.append((path, relations.RELATION, why))
+                out.append((path, list_rule, why))
             repeated = relations.repeated_ids(v) if of_relations else set()
             for i, item in enumerate(v):
                 if i in repeated:
                     out.append(
                         (
-                            path_join(path_join(path, i), "id"),
-                            relations.RELATION,
-                            "an id of an earlier relation",
+                            path_join(path_join(path, i), str(member)),
+                            list_rule,
+                            "an id of an earlier relation"
+                            if member == "id"
+                            else "a name of an earlier extension",
                         )
                     )
                 visit(node["items"], item, path_join(path, i), namespace, field)

@@ -257,6 +257,29 @@
           "kind": {
             "axt.RelationField": {}
           }
+        },
+        {
+          "name": "extensions",
+          "doc": "The extensions of the record: records of the apps' own types that add fields of their own to it (spec/fields.md, section 12), at most one of each type. Empty when it has none.",
+          "texts": {
+            "label": "Extensions",
+            "label_translations": {
+              "de": "Erweiterungen"
+            },
+            "help": "Further fields that apps add to this entry.",
+            "help_translations": {
+              "de": "Weitere Felder, die Apps diesem Eintrag hinzufügen."
+            },
+            "emoji": "🧩"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": true,
+          "kind": {
+            "axt.ExtensionField": {}
+          }
         }
       ],
       "groups": [],

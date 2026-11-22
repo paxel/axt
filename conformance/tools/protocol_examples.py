@@ -1138,7 +1138,7 @@ APPOINTMENT_ID = "a2d4f6b8-1c3e-4a5b-9d7f-0e2c4a6b8d1f"
 PET_ID = "5e8a1f3c-7b2d-4c6e-a9f0-3d5b7c9e1a2f"
 # The records of the walk-through have no relations: one byte each for the empty list (spec/fields.md, 11).
 APPOINTMENT = dict(rules.DATA["Appointment"], relations=[])
-APPOINTMENT_FP = 0x49416306BECFE686  # spec/types.md, section 7.3
+APPOINTMENT_FP = 0x10D0737094DBAD25  # spec/types.md, section 7.3
 PET = dict(rules.DATA["Pet"], relations=[])
 
 obf_decide = {"axt.example.v1.Appointment": True}
@@ -1200,7 +1200,7 @@ for text in (PET_TEXT, APPOINTMENT_TEXT):
     assert canonical_fp(text) == rules.crc64_avro(
         fastavro.schema.to_parsing_canonical_form(fastavro.parse_schema(json.loads(text))).encode()
     )
-assert canonical_fp(APPOINTMENT_TEXT) == APPOINTMENT_FP and canonical_fp(PET_TEXT) == 0xF4C8934CFD75FF20
+assert canonical_fp(APPOINTMENT_TEXT) == APPOINTMENT_FP and canonical_fp(PET_TEXT) == 0xB5D0DAB082CB46EA
 
 # 4. and 5. Old Brain Fix accepts the Appointment and declines the Pet; cat-a-log takes both answers.
 what, replies = obf_app.receive(offer_msg)
@@ -1271,6 +1271,7 @@ def appointment_parts(a: dict[str, Any]) -> list[tuple[Any, ...]]:
         *string_parts("notes", a["notes"]),
         *array_parts("reminders", a["reminders"], duration_parts),
         *array_parts("relations", a["relations"], lambda n, r: []),
+        *array_parts("extensions", a["extensions"], lambda n, r: []),
     ]
 
 

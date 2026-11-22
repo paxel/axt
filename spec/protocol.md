@@ -555,7 +555,7 @@ Their Parsing Canonical Forms, with the fields of `axt.Field`, which `axt.Offer`
 
 | Schema        | Envelope format | CRC-64-AVRO          | As bytes                  |
 | ------------- | --------------- | -------------------- | ------------------------- |
-| `axt.Offer`   | 1               | `0x6cd74c5cd5b0ae53` | `53 ae b0 d5 5c 4c d7 6c` |
+| `axt.Offer`   | 1               | `0x8a0dfc77b054b97f` | `7f b9 54 b0 77 fc 0d 8a` |
 | `axt.Accept`  | 1               | `0x6b244fc3913d82ab` | `ab 82 3d 91 c3 4f 24 6b` |
 | `axt.Decline` | 1               | `0x70078f60f3ba4953` | `53 49 ba f3 60 8f 07 70` |
 | `axt.Ack`     | 1               | `0x38dd09198076e05c` | `5c e0 76 80 19 09 dd 38` |
@@ -591,7 +591,7 @@ The keys are the test keys of [keys.md](keys.md), section 7.1: cat-a-log signs w
 | `offer_id`           | `6f1c2b9e-3d4a-4e5f-8a7b-1c2d3e4f5a6b`                                                                                                                                                                                                                                                 |
 | The Appointment's id | `a2d4f6b8-1c3e-4a5b-9d7f-0e2c4a6b8d1f`, version 1                                                                                                                                                                                                                                      |
 | The Pet's id         | `5e8a1f3c-7b2d-4c6e-a9f0-3d5b7c9e1a2f`, version 1                                                                                                                                                                                                                                      |
-| The offered schemas  | Pet and Appointment, each offered as its published description, [Pet.1.json](../types/axt/example/v1/Pet.1.json) and [Appointment.1.json](../types/axt/example/v1/Appointment.1.json), which derives the schema of its `.avsc` file ([fields.md](fields.md), section 9): 2,394 and 3,137 bytes in the encoding of `axt.Field` |
+| The offered schemas  | Pet and Appointment, each offered as its published description, [Pet.1.json](../types/axt/example/v1/Pet.1.json) and [Appointment.1.json](../types/axt/example/v1/Appointment.1.json), which derives the schema of its `.avsc` file ([fields.md](fields.md), section 9): 2,725 and 3,468 bytes in the encoding of `axt.Field` |
 | The Appointment      | `title` "Vet: vaccination", `start` 2026-11-24 10:00 and `end` 10:30 in `Europe/Berlin` with the offset 3600, `location` "Tierarztpraxis, Hauptstraße 1", `notes` "Bring the vaccination certificate.", `reminders` `-P1D` and `-PT1H`, no `relations`                                               |
 
 | Step | Message, from → to                    | What happens                                                                                                                                                                                  |
@@ -670,7 +670,7 @@ Old Brain Fix's MANIFEST: 549 bytes, SHA-256 `3af8b09e06d556e993c33d1bf00f744645
 
 The two descriptions are shown shortened; [conformance/tools/protocol_examples.py](../conformance/tools/protocol_examples.py) reads them from Pet.1.json and Appointment.1.json, whose schemas they derive ([fields.md](fields.md), section 9).
 
-cat-a-log's OFFER: 5,725 bytes, SHA-256 `26ca5b40f5179333a75ca02443c6b42d683d31cd19eabaa9ea8c234358f54d8f`.
+cat-a-log's OFFER: 6,387 bytes, SHA-256 `9be4520d95761f0ae0344d2ddcd95e6ac0da7f57f28dc92db1620d7de29e6c3c`.
 
 ```text
 0000  c3 01                    single-object marker
@@ -682,9 +682,9 @@ cat-a-log's OFFER: 5,725 bytes, SHA-256 `26ca5b40f5179333a75ca02443c6b42d683d31c
       4b f6 bd 69 af f1 47 1c
       ce 64 10 d5 3c 26 ec 4a
 002c  00                       record: union index 0, null
-002d  dc 57                    body: bytes length 5614
+002d  88 62                    body: bytes length 6276
 002f  c3 01                    body: single-object marker
-0031  53 ae b0 d5 5c 4c d7 6c  body: fingerprint of axt.Offer, format 1
+0031  7f b9 54 b0 77 fc 0d 8a  body: fingerprint of axt.Offer, format 1
 0039  da 9e 54 c9 aa 2d b4 32  body: to: fixed(32), Old Brain Fix's test key
       44 df 99 88 9d 91 38 c1
       ca 71 75 d4 ca 09 08 16
@@ -696,20 +696,20 @@ cat-a-log's OFFER: 5,725 bytes, SHA-256 `26ca5b40f5179333a75ca02443c6b42d683d31c
       31 63 32 64 33 65 34 66
       35 61 36 62
 007e  04                       body: types: array block of 2 items
-007f  06 70 65 74 ... 6d 65    body: types[0].description: axt.Field of axt.example.v1.Pet version 1 (2394 bytes)
-09d9  02                       body: types[0].count: long 1
-09da  16 61 70 70 ... 6c 65    body: types[1].description: axt.Field of axt.example.v1.Appointment version 1 (3137 bytes)
-161b  02                       body: types[1].count: long 1
-161c  00                       body: types: end of the array
-161d  4c 8e 23 ac 0e 13 5e 22  signature: fixed(64)
-      b7 d4 50 a3 f6 eb 46 fd
-      1e 9c 0f 14 42 94 e2 20
-      1a f3 9d 74 d6 b8 d7 85
-      5d 6b ed 87 bc e6 24 c4
-      3c 2a c6 36 2e a2 2c 6a
-      2e 71 b0 e8 0e 98 7c 29
-      bb a4 a7 07 5a fe 72 03
-165d  end
+007f  06 70 65 74 ... 6d 65    body: types[0].description: axt.Field of axt.example.v1.Pet version 1 (2725 bytes)
+0b24  02                       body: types[0].count: long 1
+0b25  16 61 70 70 ... 6c 65    body: types[1].description: axt.Field of axt.example.v1.Appointment version 1 (3468 bytes)
+18b1  02                       body: types[1].count: long 1
+18b2  00                       body: types: end of the array
+18b3  d6 8d 56 22 75 da ba cd  signature: fixed(64)
+      49 9e c8 88 6c 80 64 ec
+      2f 80 ea 45 59 69 aa fb
+      27 dd 51 c6 73 df f5 21
+      de 1a 81 a7 16 fa 37 74
+      13 df 9e d7 b3 ee c2 4f
+      85 75 07 69 ed 06 12 03
+      f8 b2 54 83 c7 da f7 0c
+18f3  end
 ```
 
 ### 17.4 The answers
@@ -802,9 +802,9 @@ Old Brain Fix's DECLINE: 212 bytes, SHA-256 `b022ec43aa9d0ed5766195ef2c8ffa12938
 
 ### 17.5 The record and its acknowledgement
 
-The body of the `DATA` names the Appointment's schema by its fingerprint, `0x49416306becfe686` ([types.md](types.md), section 7.3). Old Brain Fix finds it among the schemas of cat-a-log's current offers, and only there.
+The body of the `DATA` names the Appointment's schema by its fingerprint, `0x10d0737094dbad25` ([types.md](types.md), section 7.3). Old Brain Fix finds it among the schemas of cat-a-log's current offers, and only there.
 
-cat-a-log's DATA: 322 bytes, SHA-256 `7879d724821aecbb0a48e477c8689cd85c5f53604b86d691002ad768cccc9837`.
+cat-a-log's DATA: 323 bytes, SHA-256 `a8122c5d19c4ee77bae62c714446a72fb47154b224a1e95bc6bf000cd0d6b8b7`.
 
 ```text
 0000  c3 01                    single-object marker
@@ -823,9 +823,9 @@ cat-a-log's DATA: 322 bytes, SHA-256 `7879d724821aecbb0a48e477c8689cd85c5f53604b
       30 65 32 63 34 61 36 62
       38 64 31 66
 0052  02                       record.version: long 1
-0053  da 02                    body: bytes length 173
+0053  dc 02                    body: bytes length 174
 0055  c3 01                    body: single-object marker
-0057  86 e6 cf be 06 63 41 49  body: fingerprint of axt.example.v1.Appointment, version 1
+0057  25 ad db 94 70 73 d0 10  body: fingerprint of axt.example.v1.Appointment, version 1
 005f  20                       body: title: string length 16
 0060  56 65 74 3a 20 76 61 63  body: "Vet: vaccination"
       63 69 6e 61 74 69 6f 6e
@@ -869,15 +869,16 @@ cat-a-log's DATA: 322 bytes, SHA-256 `7879d724821aecbb0a48e477c8689cd85c5f53604b
 00fc  ff b9 b7 03              body: reminders[1].millis: long -3600000
 0100  00                       body: reminders: end of the array
 0101  00                       body: relations: end of the array
-0102  53 58 21 a2 ab f2 9f 12  signature: fixed(64)
-      55 b1 a0 67 95 43 29 65
-      75 36 58 e5 b9 2a 48 50
-      58 ff 94 99 b3 94 5f b5
-      c2 7f 8c 85 55 83 db 1e
-      c0 f0 56 2e 5d d6 4b 22
-      5c 1b 81 08 b3 85 3d c8
-      e7 96 ff 64 fa f4 18 00
-0142  end
+0102  00                       body: extensions: end of the array
+0103  dc 76 8b da 9e 14 04 25  signature: fixed(64)
+      13 eb b4 05 23 c1 09 48
+      0f 0d bc 07 eb df 89 d7
+      d5 99 40 a5 d1 e4 22 e7
+      bb 27 4e 97 39 2a 79 ad
+      76 5b c6 99 83 7b bc f5
+      25 72 1e c5 9a 1c 89 b8
+      c8 0e 20 f1 9e 71 06 05
+0143  end
 ```
 
 Old Brain Fix's ACK: 196 bytes, SHA-256 `2a6d038f3ddebf887b598a53edce083e948760476295d58112915222062249c4`.
@@ -924,9 +925,9 @@ Old Brain Fix's ACK: 196 bytes, SHA-256 `2a6d038f3ddebf887b598a53edce083e9487604
 
 ### 17.6 A record without an accepted offer
 
-The `DATA` of step 8 carries the Pet of [conformance/tools/example_types.py](../conformance/tools/example_types.py), without its relations, as the record `5e8a1f3c-7b2d-4c6e-a9f0-3d5b7c9e1a2f`, version 1, written with the offered Pet schema. Old Brain Fix knows the fingerprint from the offer, but the Pet's answer was `DECLINE`, so step 5 of section 6.2 fails. The `ERROR` names the message by its hash, `037f7378db74f5c3279f9dd4811e012b33841467b10552131aa867cf15dc6c45`.
+The `DATA` of step 8 carries the Pet of [conformance/tools/example_types.py](../conformance/tools/example_types.py), without its relations, as the record `5e8a1f3c-7b2d-4c6e-a9f0-3d5b7c9e1a2f`, version 1, written with the offered Pet schema. Old Brain Fix knows the fingerprint from the offer, but the Pet's answer was `DECLINE`, so step 5 of section 6.2 fails. The `ERROR` names the message by its hash, `6470aeb2f769927b42d32cbfde76dfe7fcee430b2032f121bb1c902916f48cb8`.
 
-Old Brain Fix's ERROR: 246 bytes, SHA-256 `b69a91ebeadd33f6bf0d03a0ddfdcfe9b600f396fb6d7af7523fbeb57a8ad324`.
+Old Brain Fix's ERROR: 246 bytes, SHA-256 `ef11ee8786090f568dac49fec353efb2989f77ac47f41b3c23c63179ec9b789a`.
 
 ```text
 0000  c3 01                    single-object marker
@@ -946,10 +947,10 @@ Old Brain Fix's ERROR: 246 bytes, SHA-256 `b69a91ebeadd33f6bf0d03a0ddfdcfe9b600f
       4b f6 bd 69 af f1 47 1c
       ce 64 10 d5 3c 26 ec 4a
 0059  12                       body: code: enum index 9, NOT_ACCEPTED
-005a  03 7f 73 78 db 74 f5 c3  body: message_hash: fixed(32), SHA-256 of the reported message
-      27 9f 9d d4 81 1e 01 2b
-      33 84 14 67 b1 05 52 13
-      1a a8 67 cf 15 dc 6c 45
+005a  64 70 ae b2 f7 69 92 7b  body: message_hash: fixed(32), SHA-256 of the reported message
+      42 d3 2c bf de 76 df e7
+      fc ee 43 0b 20 32 f1 21
+      bb 1c 90 29 16 f4 8c b8
 007a  02                       body: record: union index 1, ErrorRecord
 007b  48                       body: record.id: string length 36
 007c  35 65 38 61 31 66 33 63  body: "5e8a1f3c-7b2d-4c6e-a9f0-3d5b7c9e1a2f"
@@ -964,14 +965,14 @@ Old Brain Fix's ERROR: 246 bytes, SHA-256 `b69a91ebeadd33f6bf0d03a0ddfdcfe9b600f
 00a4  61 78 74 2e 65 78 61 6d  body: "axt.example.v1.Pet"
       70 6c 65 2e 76 31 2e 50
       65 74
-00b6  ae 01 c2 cd 86 fb 1d c3  signature: fixed(64)
-      12 52 85 dc c5 09 96 99
-      43 ee 97 52 15 da 8c 61
-      99 a1 34 e9 76 95 0f 35
-      8c 3d f5 ca ba 92 ae c0
-      53 19 92 86 41 4a 3f a7
-      05 58 d9 95 04 28 aa 00
-      9c 31 05 8a 9a dc 82 03
+00b6  bf cb b4 39 7b 10 59 ef  signature: fixed(64)
+      04 63 dc 32 2c ec 0e 30
+      a0 3a dc b3 ea fa 00 5c
+      d5 48 26 83 e6 cc 98 30
+      ab 38 ed 2b 83 3b 5d 02
+      47 b1 d7 82 96 3e 69 6c
+      da 18 99 54 66 0c 9a 0a
+      9d 62 5c c6 96 cf 4a 01
 00f6  end
 ```
 

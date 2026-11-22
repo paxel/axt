@@ -354,6 +354,12 @@ RELATION = rec(
     f"record or to a thing outside AXT ({S}, section 11).",
     [],
 )
+EXTENSION = rec(
+    "ExtensionField",
+    f"A field whose value is a list of extensions, each an axt.Extension that holds a record of an app's own "
+    f"type ({S}, section 12).",
+    [],
+)
 
 KINDS = [
     STRING,
@@ -373,6 +379,7 @@ KINDS = [
     MARKDOWN,
     *[semantic(*s) for s in SEMANTIC],
     RELATION,
+    EXTENSION,
 ]
 
 FIELD = {

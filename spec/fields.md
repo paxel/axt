@@ -12,6 +12,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 - **Brick**: one branch of the union `kind`, such as `axt.StringField` or `axt.EmailField`. It names the kind of the field's values and holds the checks and hints of that kind.
 - **Value brick**: a brick of a kind of value: text, a number, a boolean, bytes, an enum, a list, a map, an object, or a time type (section 4).
 - **Relation brick**: `axt.RelationField`, whose value is a list of relations, each linking the record to another record or to a thing outside AXT (section 11).
+- **Extension brick**: `axt.ExtensionField`, whose value is a list of extensions, each a record of an app's own type added to the record (section 12).
 - **Semantic brick**: a brick of text of one form, such as an email address, whose check of that form is built in (section 5).
 - **Description**: a typed field whose brick is an `axt.ObjectField`, at the root of a type: the type's full name, version and fields, each a typed field, and so on down to the value bricks (section 9.1).
 - **Derived schema**: the Avro schema of a type, derived from its description by the rule of section 9.2; its fingerprint is the type's fingerprint ([envelope.md](envelope.md), section 5).
@@ -22,7 +23,7 @@ Sender, receiver and type have the meaning of [records.md](records.md), section 
 
 ## 2. The bricks
 
-[types/axt/Field.avsc](../types/axt/Field.avsc) defines `axt.Field` and, in place, every brick and every record a brick holds, so that the file is parsed on its own. Its CRC-64-AVRO is `0xbaed02035d879fb5`.
+[types/axt/Field.avsc](../types/axt/Field.avsc) defines `axt.Field` and, in place, every brick and every record a brick holds, so that the file is parsed on its own. Its CRC-64-AVRO is `0xe50fe3675c626251`.
 
 | Brick                | Values                                    | Section |
 | -------------------- | ----------------------------------------- | ------- |
@@ -54,6 +55,7 @@ Sender, receiver and type have the meaning of [records.md](records.md), section 
 | `axt.MediaTypeField` | a media type                              | 5       |
 | `axt.UcumField`      | a unit code                               | 5       |
 | `axt.RelationField`  | a list of relations, each `axt.Relation`  | 11      |
+| `axt.ExtensionField` | a list of extensions, each `axt.Extension` | 12      |
 
 The union `kind` has the bricks in this order.
 
@@ -230,7 +232,7 @@ The derived schema of a valid description is an Avro 1.12 schema of a record, wr
 
 - **The record.** The root gives the object `{"type": "record", "name": N, "namespace": S, "doc": D, "axt.version": V, "fields": F}`, where S and N are the namespace and the last part of the root's full name, D is the root's `doc`, V its `version`, and F its fields.
 - **The fields.** Each typed field of an object gives one field of its record, in the order of the object: `{"name": n, "type": T, "default": d, "doc": c}` with the typed field's `name` and `doc`, its type T, and its default d where it has one.
-- **The type.** T is the type of the brick, as the table below gives it, or `["null", T]` when the field may hold no value: when its brick is none of `axt.ListField`, `axt.MapField` and `axt.RelationField`, it is not `required`, and its brick gives no default, a `default` of `null` or no member `default` at all, as `axt.ObjectField` and the time bricks have.
+- **The type.** T is the type of the brick, as the table below gives it, or `["null", T]` when the field may hold no value: when its brick is none of `axt.ListField`, `axt.MapField`, `axt.RelationField` and `axt.ExtensionField`, it is not `required`, and its brick gives no default, a `default` of `null` or no member `default` at all, as `axt.ObjectField` and the time bricks have.
 - **The default.** A list and a list of relations have the default `[]`, and a map `{}`. A field whose brick gives a default has that default, a default of bytes written as the string whose code points are its bytes, as Avro writes it. A field of the type `["null", T]` has the default `null`. A `required` field whose brick gives no default has none.
 - **Items and values.** The items of a list and the values of a map have the type of their typed field by the same rule, and no default.
 
@@ -245,8 +247,9 @@ The derived schema of a valid description is an Avro 1.12 schema of a record, wr
 | `axt.ObjectField`                                                          | `{"type": "record", "name": its name, "doc": the field's doc, "fields": its fields}`                                                 |
 | `axt.DateField`, `axt.TimeField`, `axt.DateTimeField`, `axt.DurationField` | The published schema of `axt.Date`, `axt.Time`, `axt.DateTime` or `axt.Duration` at its first occurrence, and its full name after it |
 | `axt.RelationField`                                                        | `{"type": "array", "items": axt.Relation as section 11.6 defines it in place}`                                                       |
+| `axt.ExtensionField`                                                       | `{"type": "array", "items": axt.Extension as section 12.5 defines it in place}`                                                      |
 
-The first occurrence is the first in the order of the JSON, the fields of each record in their order and depth first, and a time type that a published schema defines inside itself, such as `axt.Time` in a schema that holds `axt.DateTime` first, has its first occurrence there ([time.md](time.md), section 3.1), as does `axt.DateTime` in `axt.Relation` (section 11.6). The derived schema carries no attribute other than `axt.version` and those of the published schema of `axt.Relation`: what a receiver shows of a type and checks of its values is in the description, which travels with it.
+The first occurrence is the first in the order of the JSON, the fields of each record in their order and depth first, and a time type that a published schema defines inside itself, such as `axt.Time` in a schema that holds `axt.DateTime` first, has its first occurrence there ([time.md](time.md), section 3.1), as does `axt.DateTime` in `axt.Relation` (section 11.6). The derived schema carries no attribute other than `axt.version` and those of the published schemas of `axt.Relation` and `axt.Extension`: what a receiver shows of a type and checks of its values is in the description, which travels with it.
 
 The rule gives the forms that [types.md](types.md), section 5, requires of a type: a value that may be absent is `["null", T]` with the default `null`, a text that may be empty is a `string` whose brick gives the default `""`, and a list is an array with the default `[]`. Each example type is published as its description, from which the schema file next to it under [types/axt/example/v1/](../types/axt/example/v1/) is derived ([types.md](types.md), section 7).
 
@@ -336,6 +339,35 @@ The references of [records.md](records.md), section 8, stay: a field whose value
 The type of a relation field in the derived schema (section 9.2) is an array whose items are `axt.Relation`, defined in place at its first occurrence, as the time types are: as its published schema, with every named type that an earlier occurrence in the same schema already defined replaced by its full name, and by its full name `"axt.Relation"` after it. Its nested types, `axt.RelationRecordTarget`, `axt.RelationRecordTargetSender` and `axt.RelationOutsideTarget`, keep the names and the namespace `axt` of the published schema. A derived schema that holds an `axt.DateTime` before its first relation field has `"axt.DateTime"` in the `start` of its `axt.Relation`; otherwise its `axt.Relation` defines `axt.DateTime` in `start`, as the published schema does, and a later `axt.DateTimeField` has its full name.
 
 A receiver MUST decline a type whose schema defines `axt.Relation` or one of its nested types otherwise, with `DOES_NOT_RESOLVE` ([protocol.md](protocol.md), section 5.2), as [time.md](time.md), section 3.1, has it decline a time type that is not defined as published.
+
+## 12. Extensions
+
+An extension adds fields of an app's own to a record of another type without forking that type, such as the TASSO registration and the fur of a cat that cat-a-log adds to an `axt.example.v1.Pet`. Every app that takes the type still takes the record, and an app that does not know the extension carries it along. A type has extensions through a field whose brick is `axt.ExtensionField`: its value is a list of extensions, each a value of the published type `axt.Extension`, [types/axt/Extension.avsc](../types/axt/Extension.avsc), which is normative for what an extension holds. The brick has no member, as `axt.RelationField` has none (section 11).
+
+### 12.1 The extension record
+
+| Field  | Avro type | Value                                                                                                                                                        |
+| ------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name` | `string`  | The full name of the extension's record type, with a namespace, such as `org.example.catalog.CatExtension`; it holds the type's major version, as a type's name does ([types.md](types.md), section 3) |
+| `data` | `bytes`   | The extension's record in single-object encoding ([envelope.md](envelope.md), section 3): `C3 01`, the fingerprint of its writer schema as 8 bytes in little-endian order, and the record's Avro binary encoding |
+
+An extension's type is a type of the app that defines it, in the app's own namespace ([types.md](types.md), section 2), and keeps the rules of [types.md](types.md), section 5, for its fields. The namespace `axt` and every namespace that begins with `axt.` are reserved for this specification. A list holds at most one extension of a name: the app that owns the type keeps its fields in that one record.
+
+### 12.2 The extension's schema
+
+The writer schema of an extension travels with the offer as the schema of every record does: the app offers the extension's type as a type of its own beside the type it extends, with its description ([protocol.md](protocol.md), section 5; section 10.1), and the receiver finds the schema by the fingerprint in `data`. A schema whose full name is not the extension's `name` is not the extension's: the receiver then keeps the extension as of a type it does not know. An app MAY offer an extension's type with a count of 0, since its records travel inside those of the other type. A receiver that accepts the extension's type decodes `data` with that schema, resolved against its own reader schema, and shows the extension's fields; a receiver that declines it, or does not know the fingerprint, keeps `data` as bytes.
+
+### 12.3 Rules and limits
+
+An extension is valid when its `name` is a full name of Avro with a namespace, of at most 256 bytes, and its `data` has 10 to 65,536 bytes and begins with `C3 01`. A list of extensions holds at most 32 extensions, and no two with the same `name`, compared as text. A sender MUST NOT send a record that breaks these rules, and a receiver MUST reject it with the error `VALUE_INVALID`, whose `field` names the first value that breaks a rule, as section 11.4 says of relations: a list of more than 32 extensions by its own path, such as `extensions`; the second of two extensions with one name by its name, such as `extensions[1].name`; and every other value by its path, such as `extensions[0].data`. A receiver does not check `data` beyond its first two bytes: it need not hold the extension's schema. The only check of an extension field is `required`, as for a relation field (section 3.3).
+
+### 12.4 Carried unchanged
+
+A receiver that does not know an extension's type keeps the extension as it received it: its name and its bytes. It never encodes `data` again, and keeps it through its user's changes of other fields and through the updates it merges ([records.md](records.md), section 6.1, where a list of extensions is merged per element). Between the devices of an owner, extensions merge per element by their name, and within an extension whose schema a device holds, field by field ([sync.md](sync.md), sections 25.1 and 25.9). A proposal of other fields leaves the extensions as they are ([shares.md](shares.md), section 12).
+
+### 12.5 Defined in place
+
+The type of an extension field in the derived schema (section 9.2) is an array whose items are `axt.Extension`, defined in place at its first occurrence as its published schema and by its full name `"axt.Extension"` after it, as section 11.6 says of `axt.Relation`. A receiver MUST decline a type whose schema defines `axt.Extension` otherwise, with `DOES_NOT_RESOLVE` ([protocol.md](protocol.md), section 5.2).
 
 ## References
 

@@ -1267,6 +1267,12 @@
           "name": "RelationField",
           "doc": "A field whose value is a list of relations, each an axt.Relation that links the record to another record or to a thing outside AXT (spec/fields.md, section 11).",
           "fields": []
+        },
+        {
+          "type": "record",
+          "name": "ExtensionField",
+          "doc": "A field whose value is a list of extensions, each an axt.Extension that holds a record of an app's own type (spec/fields.md, section 12).",
+          "fields": []
         }
       ],
       "doc": "The brick of the field's value: its kind and its checks (spec/fields.md, sections 4 and 5)."

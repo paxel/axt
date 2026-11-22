@@ -1069,7 +1069,7 @@ def encoding_category() -> Category:
         "DeviceJoin": 0xDFF876FAB5FECF2F,
         "DeviceAdd": 0xC60D1EF44B7B3131,
         "DeviceRemove": 0xD0F57582AAB2AADC,
-        "Offer": 0x6CD74C5CD5B0AE53,
+        "Offer": 0x8A0DFC77B054B97F,
         "Accept": 0x6B244FC3913D82AB,
         "Decline": 0x70078F60F3BA4953,
         "Ack": 0x38DD09198076E05C,
@@ -1081,7 +1081,7 @@ def encoding_category() -> Category:
         "Withdraw": se.WITHDRAW_FP,
         "Proposal": 0x2512222A12D90279,
         "ProposalReply": 0x64610CE36E75F8C6,
-        "Field": 0xBAED02035D879FB5,
+        "Field": 0xE50FE3675C626251,
     }
     sections = {
         "Envelope": "envelope.md 10.1",
@@ -1414,16 +1414,17 @@ def encoding_category() -> Category:
 EXAMPLES = REPO / "types" / "axt" / "example" / "v1"
 # The example types (spec/types.md, section 7.3), each published as its description, with one version.
 TYPE_FPS = {
-    "Appointment": 0x49416306BECFE686,
-    "Car": 0xA8EAA96101D47106,
-    "Document": 0x69594B59D2CE6DCA,
-    "Measurement": 0xA4713C50EA54B494,
-    "Note": 0xAD64EDE05937D517,
-    "Person": 0x05EACDCBB91F9865,
-    "Pet": 0xF4C8934CFD75FF20,
-    "Task": 0x7D271CA0AC137ED9,
+    "Appointment": 0x10D0737094DBAD25,
+    "Car": 0x69F6C9B3011D6449,
+    "Document": 0xB9B0BF18FAA7A1AE,
+    "Measurement": 0xBEC4B5C9BCCD12DA,
+    "Note": 0x7CE83C7900093771,
+    "Person": 0xF170F92B8540A13F,
+    "Pet": 0xB5D0DAB082CB46EA,
+    "Task": 0x4E1B59A67C4C64D9,
 }
 RELATION_FP = 0x190BF11052CF9F10
+EXTENSION_FP = 0x636F04D4D973A062
 
 
 def types_category() -> Category:
@@ -1689,6 +1690,16 @@ def relation_vectors(c: Category, texts: dict[str, str], record_vector: Callable
         {"schema": text},
         accept({"canonical_form": pcf, "fingerprint": H(pe.fp8(fp))}),
     )
+    text = (REPO / "types" / "axt" / "Extension.avsc").read_text(encoding="utf-8")
+    pcf, fp = me.fingerprint(text)
+    assert fp == EXTENSION_FP, "axt.Extension"
+    c.add(
+        "fingerprint",
+        "axt.Extension",
+        ["types.md 7.3", "fields.md 12.1"],
+        {"schema": text},
+        accept({"canonical_form": pcf, "fingerprint": H(pe.fp8(fp))}),
+    )
     # The further records with relations and those that break a rule (example_types.py). decode_record
     # rejects a relation that breaks a rule of spec/fields.md, section 11.4, as a time value that is not
     # valid; a value that only breaks a check of an attribute is taken (spec/conformance.md, section 5.2).
@@ -1713,6 +1724,26 @@ def relation_vectors(c: Category, texts: dict[str, str], record_vector: Callable
             None,
             single_object(texts[name], datum),
             expected,
+        )
+    # Extensions (spec/fields.md, section 12): the bytes of a type no receiver knows are taken as they are.
+    for label, key, datum in rules.EXTENSION_VALID:
+        record_vector(
+            f"axt.example.v1.{key}: {label}",
+            ["fields.md 12"],
+            texts[key],
+            None,
+            single_object(texts[key], datum),
+        )
+    for label, key, datum, path, rule in rules.EXTENSION_BREACHES:
+        found = tm.value_breaches(json.loads(texts[key]), datum)
+        assert found and (found[0][0], found[0][1]) == (path, rule), (label, found)
+        record_vector(
+            f"reject axt.example.v1.{key}: {label}",
+            ["fields.md 12.3", "metadata.md 7.2"],
+            texts[key],
+            None,
+            single_object(texts[key], datum),
+            reject("VALUE_INVALID", found[0][2], field=found[0][0]),
         )
     # A target whose union index is that of no branch.
     pet, relation = rules.DATA["Pet"], rules.RELATIONS["Pet"][0]
@@ -3772,6 +3803,7 @@ def records_category() -> Category:
         "notes": "",
         "reminders": [],
         "relations": [],
+        "extensions": [],
     }
     v3 = dict(v1, start=tm.zoned(2025, 11, 18, 10, 30, tm.BERLIN, tm.CET), notes="Bring the vaccination card")
     task = json.loads(
@@ -3960,6 +3992,34 @@ def records_category() -> Category:
         ],
     )
 
+    # An extension of a type the receiver does not know is carried as it came, by the user's change of
+    # another field and by the sender's update (spec/fields.md, section 12.4), as hex in the values.
+    vet_ext = {
+        "name": "org.example.vetapp.VetExtension",
+        "data": "c3010000000000000000" + "0208" + b"chip".hex(),
+    }
+    extended = dict(v1, extensions=[vet_ext])
+    scenario(
+        "an extension of a type the receiver does not know is kept as it came, through local changes and "
+        "updates",
+        ["records.md 6.1", "fields.md 12.4"],
+        per_field_delete,
+        [
+            (data(1, extended), done("APPLIED", 1, "there", extended)),
+            (change("location", mine), None),
+            (
+                data(2, dict(extended, notes="Bring the vaccination card")),
+                done(
+                    "MERGED",
+                    2,
+                    "there",
+                    dict(extended, notes="Bring the vaccination card", location=mine),
+                    ["location"],
+                ),
+            ),
+        ],
+    )
+
     # Every value in the sessions is a valid record of its type: it encodes with the type's schema, and its
     # time values and the checks of its schema hold (spec/time.md, section 8; spec/metadata.md, section 6).
     schemas = {
@@ -3974,7 +4034,13 @@ def records_category() -> Category:
             for value in (m["value"], result.get("value")):
                 if value is not None:
                     schema = schemas[m["type"]]
-                    assert decode_meaning(json.dumps(schema), None, avro_encode(schema, value)) == value, v[
+                    datum = dict(  # the bytes of an extension, which the values hold as hex (section 3.3)
+                        value,
+                        extensions=[
+                            dict(e, data=bytes.fromhex(e["data"])) for e in value.get("extensions", [])
+                        ],
+                    )
+                    assert decode_meaning(json.dumps(schema), None, avro_encode(schema, datum)) == value, v[
                         "id"
                     ]
                     assert tm.receiver_breaches(schema, value) == [], v["id"]
@@ -4161,6 +4227,7 @@ def shares_category() -> Category:
         "notes": "",
         "reminders": [],
         "relations": [],
+        "extensions": [],
     }
     v3 = dict(v1, start=tm.zoned(2025, 11, 18, 10, 30, tm.BERLIN, tm.CET), notes="Bring the vaccination card")
     task = json.loads(json.dumps(rules.DATA["Task"]))
@@ -7201,13 +7268,13 @@ COUNTS = {
         {"decode_message": 17, "decode_body": 37},
     ),
     # 0.1.0 and the relations of 0.2.0 (spec/conformance.md, section 7.5): 9 + 65 vectors, 18 rejected.
-    "types": ({"fingerprint": 9, "decode_record": 95}, {"decode_record": 39}),
+    "types": ({"fingerprint": 10, "decode_record": 101}, {"decode_record": 43}),
     "time": (
         {"fingerprint": 4, "decode_record": 81, "resolve_date_time": 10, "add_duration": 22},
         {"decode_record": 46},
     ),
     "metadata": ({"describe": 22, "check_record": 200}, {"check_record": 104}),
-    "records": ({"apply": 14, "relations": 4}, {}),
+    "records": ({"apply": 15, "relations": 4}, {}),
     "manifest": ({"check_manifest": 52, "fit": 19}, {"check_manifest": 46}),
     "keys": (
         {
@@ -7253,7 +7320,7 @@ COUNTS = {
             "stale": 10,
             "pass_version": 5,
             "shown": 23,
-            "siblings": 482,
+            "siblings": 485,
             "withdrawal_stamp": 4,
         },
         {},

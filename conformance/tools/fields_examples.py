@@ -52,7 +52,7 @@ _spec.loader.exec_module(mr)
 
 FIELD_TEXT = (REPO / "types" / "axt" / "Field.avsc").read_text(encoding="utf-8")
 FIELD_SCHEMA: dict[str, Any] = json.loads(FIELD_TEXT)
-FINGERPRINT = "0xbaed02035d879fb5"  # CRC-64-AVRO of axt.Field, shown in spec/fields.md, section 2
+FINGERPRINT = "0xe50fe3675c626251"  # CRC-64-AVRO of axt.Field, shown in spec/fields.md, section 2
 
 SNAKE = re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*")
 CAMEL = re.compile(r"[A-Z][A-Za-z0-9]*")
@@ -364,7 +364,7 @@ def root_problems(f: dict[str, Any], out: list[tuple[str, str]]) -> None:
         if where != "kind" and "." in full.split("#")[1]:
             out.append((mr.path_join(where, "name"), "a nested name with a namespace"))
         key = full.replace("#", ".")
-        if key in seen or key in TIME_SCHEMAS or key in RELATION_NAMES:
+        if key in seen or key in TIME_SCHEMAS or key in RELATION_NAMES or key == EXTENSION:
             out.append((mr.path_join(where, "name"), "a full name that another object or enum has"))
         seen.add(key)
         if where != "kind" and version is not None:
@@ -431,12 +431,13 @@ def walk(
     f: dict[str, Any], value: Any, path: str, out: list[tuple[str, str]], time_check: Any = None
 ) -> None:
     name, b = kind_of(f)
-    if name == "axt.RelationField":
-        # The check required; the rules of section 11.4 are rules every receiver checks, not checks.
+    if name in ("axt.RelationField", "axt.ExtensionField"):
+        # The check required; the rules of sections 11.4 and 12.3 are rules every receiver checks, not checks.
         if f["required"] and (value is None or len(value) == 0):
             out.append((path, "required"))
         elif time_check is not None and value is not None:
-            out.extend(relation_breaches(value, path, time_check))
+            items = RELATION_SCHEMA if name == "axt.RelationField" else EXTENSION_SCHEMA
+            out.extend(relation_breaches(value, path, time_check, items))
         return
     if name in {"axt.ListField", "axt.MapField", "axt.ObjectField"} and value is not None:
         if name == "axt.ObjectField":
@@ -464,11 +465,13 @@ def walk(
         out.append((path, TIME_BRICKS[name]))
 
 
-def relation_breaches(value: list[Any], path: str, time_check: Any) -> list[tuple[str, str]]:
+def relation_breaches(
+    value: list[Any], path: str, time_check: Any, items: Any = None
+) -> list[tuple[str, str]]:
     """The values of a list of relations that break a rule of section 11.4, as (field path, axt.Relation), or
     a time value in it that is not valid, or the URI of a target that does not have the format uri, which the
     published schema of axt.Relation gives it, as (field path, format)."""
-    schema = {"type": "array", "items": RELATION_SCHEMA}
+    schema = {"type": "array", "items": RELATION_SCHEMA if items is None else items}
     found = mr.breaches(schema, value, time_check, True, RELATION_RULES)
     out = []
     for where, rule, _why in found:
@@ -505,6 +508,18 @@ MAX_RELATION_URI = 2048
 MAX_RELATION_NOTE = 4096
 MAX_RELATION_KEY = 256  # a name in attributes
 MAX_RELATION_VALUE = 1024  # a value in attributes
+
+# --- extensions (spec/fields.md, section 12) ----------------------------------------------------
+
+EXTENSION = "axt.Extension"
+EXTENSION_SCHEMA: dict[str, Any] = json.loads(
+    (REPO / "types" / "axt" / "Extension.avsc").read_text(encoding="utf-8")
+)
+MAX_EXTENSIONS = 32  # items of a list of extensions
+MAX_EXTENSION_NAME = 256  # the full name of an extension's type
+MAX_EXTENSION_DATA = 65536  # the bytes of an extension, its single-object header included
+# The lists whose items have a key, by the full name of the items: the member a repeated key is reported by.
+LISTS = {RELATION: "id", EXTENSION: "name"}
 FULL_NAME = re.compile(rf"{mr.AVRO_NAME}(?:\.{mr.AVRO_NAME})*")  # a full name of Avro 1.12, Names
 KIND_NAME = re.compile(rf"{mr.AVRO_NAME}(?:\.{mr.AVRO_NAME})+")  # a full name with a namespace
 UUID_TEXT = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
@@ -547,6 +562,13 @@ def relation_problem(record: str, field: str, v: Any) -> str | None:
             return "the target's id is no UUID in text form, or the nil or the max UUID"
         if field == "type" and not (v == "" or (FULL_NAME.fullmatch(v) and utf8(v) <= MAX_RELATION_NAME)):
             return "the type is neither empty nor a full name of at most 256 bytes"
+    elif record == EXTENSION:
+        if field == "name" and not (FULL_NAME.fullmatch(v) and "." in v and utf8(v) <= MAX_EXTENSION_NAME):
+            return "the name is no full name with a namespace of at most 256 bytes"
+        if field == "data":
+            data = bytes.fromhex(v) if isinstance(v, str) else v  # the reference adapter decodes bytes as hex
+            if not (10 <= len(data) <= MAX_EXTENSION_DATA and data[:2] == b"\xc3\x01"):
+                return "the data is no single-object encoding of at most 65,536 bytes"
     elif record == "axt.RelationOutsideTarget" and field == "uri" and not 1 <= utf8(v) <= MAX_RELATION_URI:
         return "the URI is not of 1 to 2,048 bytes"
     if record in TARGETS and field == "text" and utf8(v) > MAX_RELATION_TEXT:
@@ -555,7 +577,10 @@ def relation_problem(record: str, field: str, v: Any) -> str | None:
 
 
 def list_problem(relations: list[Any]) -> str | None:
-    """The rule of section 11.4 that a list of relations as a whole breaks, or None."""
+    """The rule of section 11.4 that a list of relations as a whole breaks, or of section 12.3 for a list of
+    extensions, or None."""
+    if relations and isinstance(relations[0], dict) and "data" in relations[0]:
+        return "more than 32 extensions" if len(relations) > MAX_EXTENSIONS else None
     return "more than 256 relations" if len(relations) > MAX_RELATIONS else None
 
 
@@ -565,6 +590,11 @@ def repeated_ids(relations: list[Any]) -> set[int]:
     seen: set[str] = set()
     found: set[int] = set()
     for i, item in enumerate(relations):
+        if isinstance(item, dict) and "data" in item:  # an extension, by the name of its type (section 12.3)
+            if item["name"] in seen:
+                found.add(i)
+            seen.add(item["name"])
+            continue
         rid = item.get("id") if isinstance(item, dict) else None
         rid = str(rid) if isinstance(rid, uuid.UUID) else rid
         if isinstance(rid, str) and not uuid_problem(rid):
@@ -586,7 +616,12 @@ def json_depth(value: Any, depth: int = 1) -> int:
     return depth
 
 
-EMPTY: dict[str, Any] = {"axt.ListField": [], "axt.MapField": {}, "axt.RelationField": []}
+EMPTY: dict[str, Any] = {
+    "axt.ListField": [],
+    "axt.MapField": {},
+    "axt.RelationField": [],
+    "axt.ExtensionField": [],
+}
 
 
 def nullable(f: dict[str, Any]) -> bool:
@@ -626,6 +661,8 @@ def avro_type(f: dict[str, Any], defined: list[str], namespace: str) -> Any:
         t = {"type": "enum", "name": b["name"], "doc": f["doc"], "symbols": symbols, "default": b["fallback"]}
     elif name == "axt.RelationField":
         t = {"type": "array", "items": in_place(RELATION_SCHEMA, defined)}
+    elif name == "axt.ExtensionField":
+        t = {"type": "array", "items": in_place(EXTENSION_SCHEMA, defined)}
     elif name == "axt.ListField":
         t = {"type": "array", "items": avro_type(b["items"], defined, namespace)}
     elif name == "axt.MapField":
@@ -892,6 +929,10 @@ def describe_field(x: dict[str, Any], names: dict[str, Any]) -> dict[str, Any]:
         if x.get("default") != []:
             raise NotDescribable(f"a list of relations without an empty default in {x['name']}")
         kind, required = {"axt.RelationField": {}}, False
+    elif isinstance(t, dict) and t["type"] == "array" and of_relations(t["items"], EXTENSION):
+        if x.get("default") != []:
+            raise NotDescribable(f"a list of extensions without an empty default in {x['name']}")
+        kind, required = {"axt.ExtensionField": {}}, False
     elif isinstance(t, dict) and t["type"] in {"array", "map"}:
         if x.get("default") != EMPTY["axt.ListField" if t["type"] == "array" else "axt.MapField"]:
             raise NotDescribable(f"a list or map without an empty default in {x['name']}")
@@ -909,14 +950,15 @@ def describe_field(x: dict[str, Any], names: dict[str, Any]) -> dict[str, Any]:
     return f
 
 
-def of_relations(items: Any) -> bool:
-    """The items of an array are axt.Relation, by its full name or defined in place."""
+def of_relations(items: Any, full: str = "axt.Relation") -> bool:
+    """The items of an array are axt.Relation, or the published type `full`, by its full name or defined in
+    place."""
     if isinstance(items, str):
-        return items == RELATION
+        return items == full
     return (
         isinstance(items, dict)
         and items.get("type") == "record"
-        and items.get("name") == "Relation"
+        and items.get("name") == full.split(".")[1]
         and (items.get("namespace") == "axt")
     )
 
@@ -1096,8 +1138,11 @@ def check_schema() -> str:
             assert SNAKE.fullmatch(f["name"]), f"{full}.{f['name']} is not in snake_case"
         if t["type"] == "enum":
             assert all(UPPER.fullmatch(s) for s in t["symbols"]) and t["default"] in t["symbols"], full
-    assert all(b.endswith("Field") for b in BRICKS) and len(BRICKS) == len(set(BRICKS)) == 28
-    assert BRICKS[-1] == "axt.RelationField" and not NAMED["axt.RelationField"]["fields"]
+    assert all(b.endswith("Field") for b in BRICKS) and len(BRICKS) == len(set(BRICKS)) == 29
+    assert (
+        BRICKS[-2:] == ("axt.RelationField", "axt.ExtensionField")
+        and not NAMED["axt.ExtensionField"]["fields"]
+    )
     assert set(SEMANTIC) <= set(BRICKS) and set(SEMANTIC.values()) == set(mr.FORMATS) - {"plain"}
     canonical = to_parsing_canonical_form(FIELD_SCHEMA)
     assert avro.schema.parse(FIELD_TEXT).canonical_form == canonical, "avro and fastavro differ"
@@ -1705,7 +1750,11 @@ def links_description() -> dict[str, Any]:
 
 # The rules of section 11.4 for the walk of metadata_rules.breaches, as time_examples.py gives it this module.
 RELATION_RULES = types.SimpleNamespace(
-    RELATION=RELATION, relation_problem=relation_problem, list_problem=list_problem, repeated_ids=repeated_ids
+    RELATION=RELATION,
+    LISTS=LISTS,
+    relation_problem=relation_problem,
+    list_problem=list_problem,
+    repeated_ids=repeated_ids,
 )
 
 
@@ -1808,7 +1857,8 @@ def main() -> None:
         assert description_problems(d) == [], (name, description_problems(d))
         assert derive(d) == schema, avsc.name  # example_schemas.py writes it
         assert derive(describe_schema(derive(d))) == derive(d), avsc.name
-        assert kind_of(kind_of(d)[1]["fields"][-1])[0] == "axt.RelationField", name
+        last = [kind_of(x)[0] for x in kind_of(d)[1]["fields"][-2:]]
+        assert last == ["axt.RelationField", "axt.ExtensionField"], name
         assert description_of(derived_text(d)) is d, name  # the registry holds the published description
         print(f"{name} version {type_of(d)[1]}: a description of {round_trip(d)} bytes derives {avsc.name}")
     links = links_description()

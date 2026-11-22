@@ -323,7 +323,7 @@ def schema(name: str) -> Any:
 
 ENVELOPE_FP = bytes.fromhex("16306f71b9ce9ea8")
 BODY_FPS = {
-    "Offer": "53aeb0d55c4cd76c",
+    "Offer": "7fb954b077fc0d8a",
     "Accept": "ab823d91c34f246b",
     "Decline": "5349baf3608f0770",
     "Ack": "5ce076801909dd38",

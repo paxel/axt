@@ -613,7 +613,7 @@ data_frame = frame(MESSAGE, pe.data_msg)
 ping_frame = frame(PING, b"")
 assert (
     hashlib.sha256(pe.data_msg).hexdigest()
-    == "7879d724821aecbb0a48e477c8689cd85c5f53604b86d691002ad768cccc9837"
+    == "a8122c5d19c4ee77bae62c714446a72fb47154b224a1e95bc6bf000cd0d6b8b7"
 ), "not the DATA of spec/protocol.md, section 17.5"
 
 server = Peer(SERVER, CERT_HASH)
