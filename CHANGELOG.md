@@ -23,6 +23,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - Relations merge per relation between an owner's devices and at a receiver, so additions on two devices both stay and removals stay removed. ([axt-1039](https://github.com/paxel/axt/issues/47))
 - Extensions on every example type: an app adds fields of its own as `axt.Extension` records, which others carry unchanged or merge field by field. ([axt-1052](https://github.com/paxel/axt/issues/60))
 - Each share says whether a record's relations to unshared targets, outside things and extensions go along; by default they stay out. ([axt-1040](https://github.com/paxel/axt/issues/48))
+- A proposal can add, change or remove single relations and set single fields within an extension, element by element. ([axt-1041](https://github.com/paxel/axt/issues/49))
 
 ### Changed
 

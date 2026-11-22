@@ -6253,6 +6253,160 @@ def proposal_vectors(c: Category) -> None:
         ],
     )
 
+    # Proposals of single relations and of fields within an extension (spec/shares.md, section 20).
+    cat_text = sy.CAT_TEXT
+    cat_fp = sy.CAT_FP
+    cat_name = rules.CAT_EXTENSION
+    pet_key, vet_key = to_pet["id"], vet["id"]
+    added = rules.relation(
+        "b3d5f7a9-1c2e-4a4b-8d6f-0a1b2c3d4e5f",
+        rules.outside("https://tierarzt.example/notdienst", "Notdienst"),
+    )
+    tabby, black = (
+        se.json_form(rules.extension(tasso_id="276098100123456", fur=f)) for f in ("tabby", "black")
+    )
+    with_ext = dict(linked, extensions=[tabby])
+
+    def ext_device(links: bool) -> dict[str, Any]:
+        d = owner_device(schemas=[ap1, pet_text, cat_text])
+        d["records"][0] = {**d["records"][0], "value": with_ext}
+        d["receivers"][0] = {**d["receivers"][0], "links": links}
+        return d
+
+    def element(rel: dict[str, Any] | None) -> bytes:
+        return (
+            b"\x00"
+            if rel is None
+            else b"\x02" + sy.field_value(se.APPOINTMENT_SCHEMA, "relations", [rel])[1:-1]
+        )
+
+    def accept_it(value: dict[str, Any]) -> tuple[dict[str, Any], Any]:
+        return (
+            {"answer": {"receiver": "Old Brain Fix", "proposal_id": se.PROPOSAL_ID, "answer": "ACCEPTED"}},
+            {
+                "made": True,
+                "replies": [reply(se.PROPOSAL_ID, "ACCEPTED")],
+                "update": {"version": "4", "value": value},
+            },
+        )
+
+    fur = sy.text_value("black")
+    owner(
+        "a proposal of one relation by its element part changes that relation alone",
+        ["shares.md 20.1", "shares.md 20.3", "sync.md 25.2"],
+        ext_device(False),
+        [
+            ({"receive": P([(f"relations/{pet_key}", fp1, element(booster))])}, got("taken")),
+            accept_it(dict(with_ext, relations=se.json_form([booster, vet, praxis]))),
+        ],
+    )
+    owner(
+        "a proposal adds a relation and removes another by their element parts",
+        ["shares.md 20.1", "shares.md 20.3"],
+        ext_device(True),
+        [
+            (
+                {
+                    "receive": P(
+                        [
+                            (f"relations/{added['id']}", fp1, element(added)),
+                            (f"relations/{vet_key}", fp1, element(None)),
+                        ]
+                    )
+                },
+                got("taken"),
+            ),
+            accept_it(dict(with_ext, relations=se.json_form([to_pet, praxis, added]))),
+        ],
+    )
+    owner(
+        "a proposal of one field within an extension of a known type",
+        ["shares.md 20.1", "shares.md 20.3", "sync.md 25.9"],
+        ext_device(True),
+        [
+            ({"receive": P([(f"extensions/{cat_name}/fur", cat_fp, fur)])}, got("taken")),
+            accept_it(dict(with_ext, extensions=[black])),
+        ],
+    )
+    unseen = [
+        P([(f"relations/{vet_key}", fp1, element(None))], pid=pids[0]),
+        P([(f"extensions/{cat_name}/fur", cat_fp, fur)], pid=pids[1]),
+    ]
+    owner(
+        "a proposal of a relation or of an extension that the share left out is not taken",
+        ["shares.md 20.2", "shares.md 19.1", "shares.md 13.3"],
+        ext_device(False),
+        [({"receive": m}, got("rejected", err(m, "PROPOSALS_NOT_TAKEN"))) for m in unseen],
+    )
+    both = P(
+        [
+            ("relations", fp1, sy.field_value(se.APPOINTMENT_SCHEMA, "relations", [booster])),
+            (f"relations/{pet_key}", fp1, element(booster)),
+        ],
+        pid=pids[0],
+    )
+    misplaced = P([(f"relations/{vet_key}", fp1, element(booster))], pid=pids[1])
+    order = P([("relations/", fp1, element(booster))], pid=pids[2])
+    owner(
+        "a list proposed whole and by element, a name that is no part, and an element under another key "
+        "are rejected",
+        ["shares.md 20.1", "shares.md 13.3"],
+        ext_device(True),
+        [
+            ({"receive": both}, got("rejected", err(both, "INVALID_MESSAGE"))),
+            ({"receive": order}, got("rejected", err(order, "INVALID_MESSAGE"))),
+            (
+                {"receive": misplaced},
+                got("rejected", err(misplaced, "VALUE_INVALID", field=f"relations/{vet_key}.id")),
+            ),
+        ],
+    )
+    # The proposer proposes what its user changed of the relations and the extension, element by element.
+    seen_value = dict(v3_bytes)
+    seen_value["relations"] = H(sy.field_value(se.APPOINTMENT_SCHEMA, "relations", [to_pet, vet]))
+    seen_value["extensions"] = H(
+        sy.field_value(
+            se.APPOINTMENT_SCHEMA, "extensions", [rules.extension(tasso_id="276098100123456", fur="tabby")]
+        )
+    )
+    seeing = proposer_device(schemas=[cat_text])
+    seeing["records"][0] = {**seeing["records"][0], "values": seen_value}
+    tasso = sy.text_value("276098100123456")
+    proposer(
+        "a proposal holds the element parts and the parts within an extension that differ from the DATA",
+        ["shares.md 20.1", "shares.md 13.1"],
+        seeing,
+        [
+            (
+                {
+                    "propose": {
+                        "id": rid,
+                        "to": cat,
+                        "values": {
+                            f"relations/{pet_key}": element(booster),
+                            f"relations/{vet_key}": element(vet),
+                            f"relations/{added['id']}": element(None),
+                            f"extensions/{cat_name}/fur": fur,
+                            f"extensions/{cat_name}/tasso_id": tasso,
+                        },
+                    }
+                },
+                {
+                    "message": {
+                        "kind": "PROPOSAL",
+                        "to": cat,
+                        "record": {"id": rid, "version": 3},
+                        "proposal_id": pids[0],
+                        "fields": {
+                            f"extensions/{cat_name}/fur": {"schema": cat_fp.hex(), "value": fur.hex()},
+                            f"relations/{pet_key}": {"schema": fp1.hex(), "value": element(booster).hex()},
+                        },
+                    }
+                },
+            ),
+        ],
+    )
+
 
 # --- file (spec/transports.md, section 2) ---------------------------------------------------
 # The scripts write one file; the files below are built by hand, so that each broken one breaks one rule. The
@@ -7521,7 +7675,7 @@ COUNTS = {
             "stale": 10,
             "pass_version": 5,
             "shown": 27,
-            "siblings": 488,
+            "siblings": 489,
             "withdrawal_stamp": 4,
         },
         {},
@@ -7536,8 +7690,8 @@ COUNTS = {
             "join_receivers": 5,
             "offer_types": 2,
             "shared_value": 5,
-            "owner": 69,
-            "proposer": 33,
+            "owner": 74,
+            "proposer": 34,
         },
         {},
     ),

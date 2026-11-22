@@ -3420,6 +3420,30 @@ def list_value(field: str, fields: dict[str, FieldState], texts: dict[bytes, str
     return list_bytes([element_within(field, k, item, fields, texts) for k, item in composed(field, parts)])
 
 
+def proposal_entry(
+    schemas: dict[bytes, dict[str, Any]], type_name: str, name: str, fp: bytes
+) -> dict[str, Any] | None:
+    """The schema of one field with which the value of an entry of a PROPOSAL decodes (spec/shares.md,
+    sections 13.3 and 20.1), the entry's schema among `schemas` by its fingerprint: a top-level field of a
+    schema of the record's type; an element part, `field/key`, of a list merged per element of it; or a
+    part within an extension, `field/key/name`, in the extension's schema, of a list of extensions of a
+    schema of the type. None for any other name."""
+    writer = schemas.get(fp)
+    if writer is None:
+        return None
+    depth = name.count("/")
+    field, _ = part_of(name)
+    if depth == 0:
+        return field_schema(writer, name) if full_name(writer) == type_name else None
+    if depth == 1:
+        listed = full_name(writer) == type_name and element_member(writer, field) is not None
+        return part_schema(writer, name) if listed else None
+    extensions = any(
+        full_name(s) == type_name and element_member(s, field) == "name" for s in schemas.values()
+    )
+    return part_schema(writer, name) if depth == 2 and extensions else None
+
+
 def part_mismatch(schema: dict[str, Any], name: str, value: Any) -> str | None:
     """Why an element part does not hold the element its name has the key of (section 25.5), or None."""
     field, key = part_of(name)
@@ -5852,7 +5876,18 @@ class SetDevice:
             values = {f["name"]: (f["value"], f["schema"]) for f in d["fields"]}
             for f in d["fields"]:
                 writer = json.loads(self.schemas[f["schema"]])
-                if element_member(writer, f["name"]) is not None:
+                if f["name"].count("/") == 1:
+                    # A single element: its element part, and the order part where it adds or removes the
+                    # element (spec/shares.md, section 20.3; section 25.3).
+                    listed, ek = part_of(f["name"])
+                    order = self._order(held.state.fields, listed)
+                    there = ek in order
+                    if f["value"][:1] == b"\x02" and not there:
+                        values[listed] = (order_value([*order, str(ek)]), f["schema"])
+                    elif f["value"][:1] != b"\x02" and there:
+                        values[listed] = (order_value([k for k in order if k != ek]), f["schema"])
+                    continue
+                if "/" not in f["name"] and element_member(writer, f["name"]) is not None:
                     # A whole list merged per element becomes the change of its parts (section 25.6).
                     del values[f["name"]]
                     parts = list_change(writer, f["name"], f["value"], held.state.fields)
@@ -5891,18 +5926,26 @@ class SetDevice:
 
     def _can_show(self, type_name: str, f: dict[str, Any]) -> bool:
         """Whether the device can show a proposed value: it holds the schema of the entry, the value decodes
-        with it, and a schema of the type that the device holds has the field (spec/shares.md, 15.1)."""
-        text = self.schemas.get(f["schema"])
-        if text is None:
+        with it, and a schema of the type that the device holds has the field, or the list of an element
+        part or a part within an extension (spec/shares.md, sections 15.1 and 20.1)."""
+        schemas = {fp: json.loads(t) for fp, t in self.schemas.items()}
+        one = proposal_entry(schemas, type_name, f["name"], f["schema"])
+        if one is None:
             return False
         try:
-            read_field(json.loads(text), f["name"], io.BytesIO(f["value"]))
+            read_one(one, f["name"], io.BytesIO(f["value"]))
         except (ValueError, AssertionError):
             return False
-        return any(
-            full_name(json.loads(t)) == type_name and field_schema(json.loads(t), f["name"]) is not None
-            for t in self.schemas.values()
-        )
+        field = part_of(f["name"])[0]
+        return any(full_name(s) == type_name and field_schema(s, field) is not None for s in schemas.values())
+
+    @staticmethod
+    def _order(fields: dict[str, FieldState], field: str) -> list[str]:
+        """The keys that the order part of the list names, in its order; none without one."""
+        part = fields.get(field)
+        if part is None or part.value is None:
+            return []
+        return [str(k) for k in cast_list(fastavro.schemaless_reader(io.BytesIO(part.value), ORDER, ORDER))]
 
     def stop(self, key: bytes, rid: str | None) -> list[bytes]:
         """The app's records come to hold the proposals of the sender as stopped, for the record with the id
@@ -12045,6 +12088,21 @@ def proposal_sessions(
     )
     s.step({"answered": {"sender": obf, "proposal_id": PROPOSAL_IDS[0], "answer": "DECLINED"}})
     about(s)
+    s = new(
+        "ACCEPTED of a proposed element part stamps it and the order part that adds its key",
+        [*refs, "shares.md 20.3", "sync.md 25.3"],
+        owner(),
+    )
+    added = b"\x02" + field_value(APPOINTMENT_JSON, "relations", [MIMI_RELATION])[1:-1]
+    s.take(other_proposal(0, values={f"relations/{MIMI_KEY}": added}))
+    s.step(
+        {
+            "answer": {"sender": obf, "proposal_id": PROPOSAL_IDS[0], "answer": "ACCEPTED"},
+            "now_ms": "0",
+            "r": [5, 0],
+        }
+    )
+    s.query(OTHER_ID)
     s = new(
         "ACCEPTED is barred for a forwarded value whose schema the device lacks, and DECLINED is not",
         [*refs, "shares.md 15.1"],
@@ -20548,6 +20606,28 @@ SAID: dict[str, list[list[str]]] = {
             ),
             "tablet: not known",
             "shows: there; the owner's value in extensions",
+        ],
+    ],
+    "ACCEPTED of a proposed element part stamps it and the order part that adds its key": [
+        [
+            "taken: True",
+            "FORWARD 00000001 to tablet, #0: PROPOSAL 1 to the phone",
+        ],
+        [
+            "made: True",
+            "PROPOSAL_REPLY 00000001 to other app, version 1: ACCEPTED",
+            (
+                "CHANGE of 7b1e6c2a to tablet, version 202, state 202, in part: "
+                "relations,relations/f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b@201p"
+            ),
+        ],
+        [
+            (
+                "state stamp 202; title,start,end,all_day,location,notes,reminders,extensions@100p "
+                "relations,relations/f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b@201p; sibling stamp None; to "
+                "pass None; highest 202"
+            ),
+            "tablet: known, delivered: all_day,end,extensions,location,notes,reminders,start,title",
         ],
     ],
     (

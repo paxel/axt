@@ -237182,6 +237182,560 @@
    }
   },
   {
+   "id": "sync/siblings/accepted-of-a-proposed-element-part-stamps-it-and-the-order-part-that-ad",
+   "op": "siblings",
+   "description": "ACCEPTED of a proposed element part stamps it and the order part that adds its key",
+   "refs": ["shares.md 17.1", "sync.md 19.6", "sync.md 20.1", "shares.md 20.3", "sync.md 25.3"],
+   "input": {
+    "device": {
+     "seed": "b6e06f2ea4d9d00c20b8533fd838eff147895cf74d5c2f3f35390330d34bccf0",
+     "highest": "195",
+     "siblings": ["ee08eaa3d8aa507343bc02924fe98d02f9e4471627ace61554f1b49635f24ab2"],
+     "removed": [],
+     "others": [],
+     "gone": [],
+     "descriptions": [
+      {
+       "name": "appointment",
+       "doc": "An appointment: an event at a time and possibly a place, such as a visit to the vet.",
+       "texts": {
+        "label": "Appointment",
+        "label_translations": {"de": "Termin"},
+        "help": "An event at a time and possibly a place, such as a visit to the vet.",
+        "help_translations": {"de": "Ein Ereignis zu einer Zeit und vielleicht an einem Ort, etwa ein Besuch beim Tierarzt."},
+        "emoji": "📆"
+       },
+       "required": false,
+       "order": null,
+       "group": "",
+       "sensitive": false,
+       "advanced": false,
+       "kind": {
+        "axt.ObjectField": {
+         "name": "axt.example.v1.Appointment",
+         "fields": [
+          {
+           "name": "title",
+           "doc": "What the appointment is, as plain text on one line.",
+           "texts": {
+            "label": "Title",
+            "label_translations": {"de": "Titel"},
+            "help": "What the appointment is, on one line.",
+            "help_translations": {"de": "Worum es beim Termin geht, in einer Zeile."},
+            "emoji": "🏷️"
+           },
+           "required": false,
+           "order": null,
+           "group": "",
+           "sensitive": false,
+           "advanced": false,
+           "kind": {
+            "axt.StringField": {
+             "default": "",
+             "min_length": null,
+             "max_length": null,
+             "pattern": null,
+             "multiline": false,
+             "preferred_length": null,
+             "placeholder": "",
+             "example": ""
+            }
+           }
+          },
+          {
+           "name": "start",
+           "doc": "When the appointment starts, as a date and time on the wall clock, in a time zone or floating. For an all-day appointment, 00:00 of its first day, floating.",
+           "texts": {
+            "label": "Start",
+            "label_translations": {"de": "Beginn"},
+            "help": "When the appointment starts.",
+            "help_translations": {"de": "Wann der Termin beginnt."},
+            "emoji": "🕘"
+           },
+           "required": true,
+           "order": null,
+           "group": "",
+           "sensitive": false,
+           "advanced": false,
+           "kind": {
+            "axt.DateTimeField": {"anchor": "LOCAL"}
+           }
+          },
+          {
+           "name": "end",
+           "doc": "When the appointment ends: the first moment after it, which is not part of it. It is in a time zone when start is, possibly another one, as for a flight, and floating when start is floating. For an all-day appointment, 00:00 of the day after its last day, floating. Null when no end is given; an all-day appointment without an end takes one day.",
+           "texts": {
+            "label": "End",
+            "label_translations": {"de": "Ende"},
+            "help": "When the appointment is over.",
+            "help_translations": {"de": "Wann der Termin vorbei ist."},
+            "emoji": "🔚"
+           },
+           "required": false,
+           "order": null,
+           "group": "",
+           "sensitive": false,
+           "advanced": false,
+           "kind": {
+            "axt.DateTimeField": {"anchor": "LOCAL"}
+           }
+          },
+          {
+           "name": "all_day",
+           "doc": "True when the appointment takes whole days; start and end are then floating at 00:00, and only their days count.",
+           "texts": {
+            "label": "All day",
+            "label_translations": {"de": "Ganztägig"},
+            "help": "On when the appointment takes whole days.",
+            "help_translations": {"de": "An, wenn der Termin ganze Tage dauert."},
+            "emoji": "☀️"
+           },
+           "required": false,
+           "order": null,
+           "group": "",
+           "sensitive": false,
+           "advanced": false,
+           "kind": {
+            "axt.BooleanField": {"default": false}
+           }
+          },
+          {
+           "name": "location",
+           "doc": "Where the appointment takes place, as text, such as an address or a room. Empty when not given.",
+           "texts": {
+            "label": "Location",
+            "label_translations": {"de": "Ort"},
+            "help": "Where the appointment takes place, such as an address or a room.",
+            "help_translations": {"de": "Wo der Termin stattfindet, etwa eine Anschrift oder ein Raum."},
+            "emoji": "📍"
+           },
+           "required": false,
+           "order": null,
+           "group": "",
+           "sensitive": false,
+           "advanced": false,
+           "kind": {
+            "axt.StringField": {
+             "default": "",
+             "min_length": null,
+             "max_length": null,
+             "pattern": null,
+             "multiline": false,
+             "preferred_length": null,
+             "placeholder": "",
+             "example": ""
+            }
+           }
+          },
+          {
+           "name": "notes",
+           "doc": "Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.",
+           "texts": {
+            "label": "Notes",
+            "label_translations": {"de": "Notizen"},
+            "help": "Anything else about the appointment.",
+            "help_translations": {"de": "Alles Weitere zum Termin."},
+            "emoji": "📝"
+           },
+           "required": false,
+           "order": null,
+           "group": "",
+           "sensitive": false,
+           "advanced": false,
+           "kind": {
+            "axt.StringField": {
+             "default": "",
+             "min_length": null,
+             "max_length": null,
+             "pattern": null,
+             "multiline": true,
+             "preferred_length": null,
+             "placeholder": "",
+             "example": ""
+            }
+           }
+          },
+          {
+           "name": "reminders",
+           "doc": "When the user wants to be reminded, each as a duration added to start as spec/time.md, section 7.2, says: negative before start, such as -PT15M for 15 minutes before or -P1D for the day before at the same time on the wall clock, 0 at start, and positive after it. Empty when there are no reminders.",
+           "texts": {
+            "label": "Reminders",
+            "label_translations": {"de": "Erinnerungen"},
+            "help": "When to be reminded, each before or after the start.",
+            "help_translations": {"de": "Wann erinnert werden soll, jeweils vor oder nach dem Beginn."},
+            "emoji": "⏰"
+           },
+           "required": false,
+           "order": null,
+           "group": "",
+           "sensitive": false,
+           "advanced": false,
+           "kind": {
+            "axt.ListField": {
+             "items": {
+              "name": "reminders",
+              "doc": "When the user wants to be reminded, each as a duration added to start as spec/time.md, section 7.2, says: negative before start, such as -PT15M for 15 minutes before or -P1D for the day before at the same time on the wall clock, 0 at start, and positive after it. Empty when there are no reminders.",
+              "texts": {
+               "label": "",
+               "label_translations": {},
+               "help": "",
+               "help_translations": {},
+               "emoji": ""
+              },
+              "required": true,
+              "order": null,
+              "group": "",
+              "sensitive": false,
+              "advanced": false,
+              "kind": {
+               "axt.DurationField": {}
+              }
+             }
+            }
+           }
+          },
+          {
+           "name": "relations",
+           "doc": "The relations of the record to other records and to things outside AXT (spec/types.md, section 8), in the order the user gave them. Empty when it has none.",
+           "texts": {
+            "label": "Relations",
+            "label_translations": {"de": "Verknüpfungen"},
+            "help": "Entries and other things this one is linked to, such as the pets an appointment is for.",
+            "help_translations": {
+             "de": "Einträge und anderes, mit denen dieser verknüpft ist, etwa die Tiere, für die ein Termin ist."
+            },
+            "emoji": "🔗"
+           },
+           "required": false,
+           "order": null,
+           "group": "",
+           "sensitive": false,
+           "advanced": false,
+           "kind": {
+            "axt.RelationField": {}
+           }
+          },
+          {
+           "name": "extensions",
+           "doc": "The extensions of the record: records of the apps' own types that add fields of their own to it (spec/fields.md, section 12), at most one of each type. Empty when it has none.",
+           "texts": {
+            "label": "Extensions",
+            "label_translations": {"de": "Erweiterungen"},
+            "help": "Further fields that apps add to this entry.",
+            "help_translations": {"de": "Weitere Felder, die Apps diesem Eintrag hinzufügen."},
+            "emoji": "🧩"
+           },
+           "required": false,
+           "order": null,
+           "group": "",
+           "sensitive": false,
+           "advanced": true,
+           "kind": {
+            "axt.ExtensionField": {}
+           }
+          }
+         ],
+         "groups": [],
+         "version": 1,
+         "title": "title"
+        }
+       }
+      }
+     ],
+     "offer_ids": [
+      "00000001-0ffe-4000-8000-000000000001",
+      "00000002-0ffe-4000-8000-000000000002",
+      "00000003-0ffe-4000-8000-000000000003",
+      "00000004-0ffe-4000-8000-000000000004",
+      "00000005-0ffe-4000-8000-000000000005",
+      "00000006-0ffe-4000-8000-000000000006"
+     ],
+     "request_ids": [
+      "00000001-a5c0-4000-8000-000000000001",
+      "00000002-a5c0-4000-8000-000000000002",
+      "00000003-a5c0-4000-8000-000000000003"
+     ],
+     "relay": [],
+     "manifests": {},
+     "passed": {},
+     "accepted": {
+      "ee08eaa3d8aa507343bc02924fe98d02f9e4471627ace61554f1b49635f24ab2": ["25addb947073d010"]
+     },
+     "records": [
+      {
+       "id": "7b1e6c2a-4d3f-4a8b-9c5d-0e1f2a3b4c5d",
+       "type": "axt.example.v1.Appointment",
+       "state": {
+        "fields": {
+         "title": {
+          "value": "06566574",
+          "schema": "25addb947073d010",
+          "stamp": "100",
+          "device": "c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0"
+         },
+         "start": {
+          "value": "d21f162414000000021a4575726f70652f4265726c696e02a0380280ea89e3d266",
+          "schema": "25addb947073d010",
+          "stamp": "100",
+          "device": "c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0"
+         },
+         "end": {
+          "value": "00",
+          "schema": "25addb947073d010",
+          "stamp": "100",
+          "device": "c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0"
+         },
+         "all_day": {
+          "value": "00",
+          "schema": "25addb947073d010",
+          "stamp": "100",
+          "device": "c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0"
+         },
+         "location": {
+          "value": "00",
+          "schema": "25addb947073d010",
+          "stamp": "100",
+          "device": "c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0"
+         },
+         "notes": {
+          "value": "00",
+          "schema": "25addb947073d010",
+          "stamp": "100",
+          "device": "c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0"
+         },
+         "reminders": {
+          "value": "00",
+          "schema": "25addb947073d010",
+          "stamp": "100",
+          "device": "c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0"
+         },
+         "relations": {
+          "value": "00",
+          "schema": "25addb947073d010",
+          "stamp": "100",
+          "device": "c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0"
+         },
+         "extensions": {
+          "value": "00",
+          "schema": "25addb947073d010",
+          "stamp": "100",
+          "device": "c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0"
+         }
+        },
+        "removal": null,
+        "state_stamp": "101"
+       },
+       "sibling_stamp": null,
+       "to_pass": null,
+       "incomplete": false,
+       "siblings": {
+        "ee08eaa3d8aa507343bc02924fe98d02f9e4471627ace61554f1b49635f24ab2": {
+         "known": true,
+         "delivered": ["title", "start", "end", "all_day", "location", "notes", "reminders", "relations", "extensions"],
+         "removal": false
+        }
+       }
+      }
+     ],
+     "refused": [],
+     "forward_ids": [
+      "00000001-f0a0-4000-8000-000000000001",
+      "00000002-f0a0-4000-8000-000000000002",
+      "00000003-f0a0-4000-8000-000000000003",
+      "00000004-f0a0-4000-8000-000000000004",
+      "00000005-f0a0-4000-8000-000000000005",
+      "00000006-f0a0-4000-8000-000000000006",
+      "00000007-f0a0-4000-8000-000000000007",
+      "00000008-f0a0-4000-8000-000000000008",
+      "00000009-f0a0-4000-8000-000000000009"
+     ],
+     "senders": [
+      {
+       "origin": "da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7",
+       "current": ["da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7"],
+       "removed": [],
+       "chain": [],
+       "manifests": [
+        {
+         "message": "c30116306f71b9ce9ea80200da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb70044c3013e1fa5884ceb9ea5021a4f6c6420427261696e20466978000202000000000000a96dc379d14ebe15aa5f7c6f6a20bf50201f0738d4f3d7d55c1de622638bab67d7f85bfaf122f1c076753ed2faa67c1fcb2e07f1305142b88ab3bcd779a2cc05",
+         "schema": null,
+         "type": null,
+         "delivered": ["ee08eaa3d8aa507343bc02924fe98d02f9e4471627ace61554f1b49635f24ab2"]
+        }
+       ],
+       "records": [
+        {
+         "message": "c30116306f71b9ce9ea80208da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7024833663263386135652d396231642d346337652d386136662d326434623563366537663830026cc30125addb947073d01006566574d21f162414000000021a4575726f70652f4265726c696e02a0380280ea89e3d26600000000000000c0f7fb87ce52f3dadce4e26cd0c9280b405c82d7bae13d0992e4241d7bddc443543a4a2977c72ac2eb30612715d77d8bef108454f390e76fe836fbe24c033008",
+         "schema": "{\"axt.version\":1,\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"fields\":[{\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\",\"name\":\"title\",\"type\":\"string\"},{\"doc\":\"When the appointment starts, as a date and time on the wall clock, in a time zone or floating. For an all-day appointment, 00:00 of its first day, floating.\",\"name\":\"start\",\"type\":{\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\",\"name\":\"year\",\"type\":\"int\"},{\"doc\":\"The month, 1 (January) to 12 (December).\",\"name\":\"month\",\"type\":\"int\"},{\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\",\"name\":\"day\",\"type\":\"int\"},{\"doc\":\"The hour on the wall clock, 0 to 23.\",\"name\":\"hour\",\"type\":\"int\"},{\"doc\":\"The minute, 0 to 59.\",\"name\":\"minute\",\"type\":\"int\"},{\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\",\"name\":\"second\",\"type\":\"int\"},{\"doc\":\"The millisecond, 0 to 999.\",\"name\":\"millisecond\",\"type\":\"int\"},{\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\",\"name\":\"zone\",\"type\":[\"null\",\"string\"]},{\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\",\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"]},{\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\",\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"]}],\"name\":\"DateTime\",\"namespace\":\"axt\",\"type\":\"record\"}},{\"default\":null,\"doc\":\"When the appointment ends: the first moment after it, which is not part of it. It is in a time zone when start is, possibly another one, as for a flight, and floating when start is floating. For an all-day appointment, 00:00 of the day after its last day, floating. Null when no end is given; an all-day appointment without an end takes one day.\",\"name\":\"end\",\"type\":[\"null\",\"axt.DateTime\"]},{\"default\":false,\"doc\":\"True when the appointment takes whole days; start and end are then floating at 00:00, and only their days count.\",\"name\":\"all_day\",\"type\":\"boolean\"},{\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\",\"name\":\"location\",\"type\":\"string\"},{\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\",\"name\":\"notes\",\"type\":\"string\"},{\"default\":[],\"doc\":\"When the user wants to be reminded, each as a duration added to start as spec/time.md, section 7.2, says: negative before start, such as -PT15M for 15 minutes before or -P1D for the day before at the same time on the wall clock, 0 at start, and positive after it. Empty when there are no reminders.\",\"name\":\"reminders\",\"type\":{\"items\":{\"doc\":\"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"doc\":\"The number of calendar months, negative for a length back in time. A year is 12 months.\",\"name\":\"months\",\"type\":\"int\"},{\"doc\":\"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\",\"name\":\"days\",\"type\":\"int\"},{\"doc\":\"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\",\"name\":\"millis\",\"type\":\"long\"}],\"name\":\"Duration\",\"namespace\":\"axt\",\"type\":\"record\"},\"type\":\"array\"}},{\"default\":[],\"doc\":\"The relations of the record to other records and to things outside AXT (spec/types.md, section 8), in the order the user gave them. Empty when it has none.\",\"name\":\"relations\",\"type\":{\"items\":{\"axt.emoji\":\"🔗\",\"axt.help\":\"A link to another entry or to something outside, such as the pet an appointment is for.\",\"axt.help_translations\":{\"de\":\"Eine Verknüpfung mit einem anderen Eintrag oder mit etwas außerhalb, etwa mit dem Tier, für das ein Termin ist.\"},\"axt.label\":\"Relation\",\"axt.label_translations\":{\"de\":\"Verknüpfung\"},\"doc\":\"A relation: a link from the record that holds it to another record or to a thing outside AXT, of a kind, with information about the link. Defined in spec/fields.md, section 11.\",\"fields\":[{\"axt.advanced\":true,\"axt.emoji\":\"🆔\",\"axt.help\":\"The id of this relation.\",\"axt.help_translations\":{\"de\":\"Die ID dieser Verknüpfung.\"},\"axt.label\":\"Relation id\",\"axt.label_translations\":{\"de\":\"Verknüpfungs-ID\"},\"doc\":\"The id of the relation, a UUID in lower-case hexadecimal, unique among the relations of the record that holds it and kept for as long as the relation exists.\",\"name\":\"id\",\"type\":{\"logicalType\":\"uuid\",\"type\":\"string\"}},{\"axt.emoji\":\"🔖\",\"axt.help\":\"What kind of link this is.\",\"axt.help_translations\":{\"de\":\"Welche Art von Verknüpfung das ist.\"},\"axt.label\":\"Kind\",\"axt.label_translations\":{\"de\":\"Art\"},\"default\":\"axt.related\",\"doc\":\"The kind of the relation, a name in a namespace, written like the full name of a type, such as org.example.catalog.patient. axt.related, the only kind AXT defines, says only that the two are related. A receiver shows a kind it does not know as a relation of that name.\",\"name\":\"kind\",\"type\":\"string\"},{\"axt.emoji\":\"🎯\",\"axt.help\":\"What is linked.\",\"axt.help_translations\":{\"de\":\"Was verknüpft ist.\"},\"axt.label\":\"Target\",\"axt.label_translations\":{\"de\":\"Ziel\"},\"doc\":\"What the relation points at: a record, or a thing outside AXT.\",\"name\":\"target\",\"type\":[{\"axt.emoji\":\"📄\",\"axt.help\":\"An entry of this app or of another.\",\"axt.help_translations\":{\"de\":\"Ein Eintrag dieser App oder einer anderen.\"},\"axt.label\":\"Entry\",\"axt.label_translations\":{\"de\":\"Eintrag\"},\"doc\":\"A record as the target of a relation: by its id and its sender.\",\"fields\":[{\"axt.advanced\":true,\"axt.emoji\":\"🆔\",\"axt.help\":\"The id of the linked entry.\",\"axt.help_translations\":{\"de\":\"Die ID des verknüpften Eintrags.\"},\"axt.label\":\"Entry id\",\"axt.label_translations\":{\"de\":\"Eintrags-ID\"},\"doc\":\"The id of the target record.\",\"name\":\"id\",\"type\":{\"logicalType\":\"uuid\",\"type\":\"string\"}},{\"axt.advanced\":true,\"axt.emoji\":\"🔑\",\"axt.help\":\"The app the linked entry comes from.\",\"axt.help_translations\":{\"de\":\"Die App, von der der verknüpfte Eintrag kommt.\"},\"axt.label\":\"Sender\",\"axt.label_translations\":{\"de\":\"Absender\"},\"default\":null,\"doc\":\"A key of the device set of the target record's sender. Null when the target is a record of the sender of the record that holds the relation.\",\"name\":\"sender\",\"type\":[\"null\",{\"doc\":\"An Ed25519 public key in the encoding of RFC 8032. Defined in spec/keys.md.\",\"name\":\"RelationRecordTargetSender\",\"size\":32,\"type\":\"fixed\"}]},{\"axt.advanced\":true,\"axt.emoji\":\"🧩\",\"axt.help\":\"The type of the linked entry.\",\"axt.help_translations\":{\"de\":\"Der Typ des verknüpften Eintrags.\"},\"axt.label\":\"Type\",\"axt.label_translations\":{\"de\":\"Typ\"},\"default\":\"\",\"doc\":\"The full name of the target record's type, which holds its major version, such as axt.example.v1.Pet. Empty when not known.\",\"name\":\"type\",\"type\":\"string\"},{\"axt.emoji\":\"💬\",\"axt.help\":\"What to show for the linked entry.\",\"axt.help_translations\":{\"de\":\"Was für den verknüpften Eintrag angezeigt wird.\"},\"axt.label\":\"Display text\",\"axt.label_translations\":{\"de\":\"Anzeigetext\"},\"default\":\"\",\"doc\":\"A text to show for the target while the record itself is not at hand, such as its title. Empty when there is none.\",\"name\":\"text\",\"type\":\"string\"}],\"name\":\"RelationRecordTarget\",\"type\":\"record\"},{\"axt.emoji\":\"🌐\",\"axt.help\":\"Something that is not an entry, such as a web page.\",\"axt.help_translations\":{\"de\":\"Etwas, das kein Eintrag ist, etwa eine Webseite.\"},\"axt.label\":\"Outside thing\",\"axt.label_translations\":{\"de\":\"Etwas außerhalb\"},\"doc\":\"A thing outside AXT as the target of a relation: by a URI.\",\"fields\":[{\"axt.emoji\":\"🔗\",\"axt.format\":\"uri\",\"axt.help\":\"The address of the linked thing.\",\"axt.help_translations\":{\"de\":\"Die Adresse des verknüpften Dings.\"},\"axt.label\":\"URI\",\"axt.label_translations\":{\"de\":\"URI\"},\"doc\":\"A URI of RFC 3986 that names the thing, of any scheme, such as https: or urn:. Not empty.\",\"name\":\"uri\",\"type\":\"string\"},{\"axt.emoji\":\"💬\",\"axt.help\":\"What to show for the linked thing.\",\"axt.help_translations\":{\"de\":\"Was für das verknüpfte Ding angezeigt wird.\"},\"axt.label\":\"Display text\",\"axt.label_translations\":{\"de\":\"Anzeigetext\"},\"default\":\"\",\"doc\":\"A text to show for the thing, such as its name. Empty when there is none.\",\"name\":\"text\",\"type\":\"string\"}],\"name\":\"RelationOutsideTarget\",\"type\":\"record\"}]},{\"axt.emoji\":\"📝\",\"axt.help\":\"Something about this link.\",\"axt.help_translations\":{\"de\":\"Etwas zu dieser Verknüpfung.\"},\"axt.label\":\"Note\",\"axt.label_translations\":{\"de\":\"Notiz\"},\"axt.multiline\":true,\"default\":\"\",\"doc\":\"Free text about the link. Empty when there is none.\",\"name\":\"note\",\"type\":\"string\"},{\"axt.emoji\":\"▶️\",\"axt.help\":\"When the link begins.\",\"axt.help_translations\":{\"de\":\"Wann die Verknüpfung beginnt.\"},\"axt.label\":\"From\",\"axt.label_translations\":{\"de\":\"Ab\"},\"default\":null,\"doc\":\"When the link begins, such as the day a pet came to its keeper. Null when it has no beginning or it is not known.\",\"name\":\"start\",\"type\":[\"null\",\"axt.DateTime\"]},{\"axt.emoji\":\"⏹️\",\"axt.help\":\"When the link ends.\",\"axt.help_translations\":{\"de\":\"Wann die Verknüpfung endet.\"},\"axt.label\":\"Until\",\"axt.label_translations\":{\"de\":\"Bis\"},\"default\":null,\"doc\":\"The first moment after the link, as for the end of an appointment. Null when it has no end or it is not known.\",\"name\":\"end\",\"type\":[\"null\",\"axt.DateTime\"]},{\"axt.advanced\":true,\"axt.emoji\":\"🗂️\",\"axt.help\":\"Further details of the link.\",\"axt.help_translations\":{\"de\":\"Weitere Angaben zur Verknüpfung.\"},\"axt.label\":\"Details\",\"axt.label_translations\":{\"de\":\"Details\"},\"default\":{},\"doc\":\"Further values that the kind of the relation needs, by names its kind gives them. Empty when there are none.\",\"name\":\"attributes\",\"type\":{\"type\":\"map\",\"values\":\"string\"}}],\"name\":\"Relation\",\"namespace\":\"axt\",\"type\":\"record\"},\"type\":\"array\"}},{\"default\":[],\"doc\":\"The extensions of the record: records of the apps' own types that add fields of their own to it (spec/fields.md, section 12), at most one of each type. Empty when it has none.\",\"name\":\"extensions\",\"type\":{\"items\":{\"axt.emoji\":\"🧩\",\"axt.help\":\"Further fields that an app adds to this entry.\",\"axt.help_translations\":{\"de\":\"Weitere Felder, die eine App diesem Eintrag hinzufügt.\"},\"axt.label\":\"Extension\",\"axt.label_translations\":{\"de\":\"Erweiterung\"},\"doc\":\"An extension: one record of an app's own type that the app adds to a record of another type, such as the fields of its own that a cat-a-log adds to a Pet, held as the bytes of its single-object encoding. Defined in spec/fields.md, section 12.\",\"fields\":[{\"axt.advanced\":true,\"axt.emoji\":\"🔖\",\"axt.help\":\"The type of this extension.\",\"axt.help_translations\":{\"de\":\"Der Typ dieser Erweiterung.\"},\"axt.label\":\"Extension type\",\"axt.label_translations\":{\"de\":\"Erweiterungstyp\"},\"doc\":\"The full name of the extension's record type, such as org.example.catalog.CatExtension, which holds its major version, of at most 256 bytes; at most one extension of a name in a list.\",\"name\":\"name\",\"type\":\"string\"},{\"axt.advanced\":true,\"axt.emoji\":\"📦\",\"axt.help\":\"The values of this extension.\",\"axt.help_translations\":{\"de\":\"Die Werte dieser Erweiterung.\"},\"axt.label\":\"Extension data\",\"axt.label_translations\":{\"de\":\"Erweiterungsdaten\"},\"doc\":\"The extension's record in single-object encoding: the marker C3 01, the fingerprint of its writer schema as 8 bytes in little-endian order, and the record's Avro binary encoding. Passed on unchanged by an app that does not know the type.\",\"name\":\"data\",\"type\":\"bytes\"}],\"name\":\"Extension\",\"namespace\":\"axt\",\"type\":\"record\"},\"type\":\"array\"}}],\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"type\":\"record\"}",
+         "type": null,
+         "delivered": ["ee08eaa3d8aa507343bc02924fe98d02f9e4471627ace61554f1b49635f24ab2"]
+        }
+       ],
+       "layers": []
+      }
+     ],
+     "shares": {
+      "7b1e6c2a-4d3f-4a8b-9c5d-0e1f2a3b4c5d": ["da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7"]
+     }
+    },
+    "steps": [
+     {
+      "take": "c30116306f71b9ce9ea8021eda9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7024837623165366332612d346433662d346138622d396335642d30653166326133623463356402ac04c3017902d9122a221225c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce04830303030303030312d396530612d343030302d383030302d303030303030303030303031025c72656c6174696f6e732f66316233643561372d326334652d346636302d386131622d33633564376539663061326225addb947073d0109802024866316233643561372d326334652d346636302d386131622d336335643765396630613262166178742e72656c61746564004830623666346133652d386331642d346632372d396535612d32643763343162386530393300246178742e6578616d706c652e76312e506574084d696d692e48657220796561726c792076616363696e6174696f6e2e000000002f675b7752b0b9c474910900b2cdc3eba63c9066abab53ee3c20a934fc6e1a078d7fb1d95169468e3acc206c36d401306f776074510d9805af324efc063c7600",
+      "now_ms": "0",
+      "r": []
+     },
+     {
+      "answer": {
+       "sender": "da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7",
+       "proposal_id": "00000001-9e0a-4000-8000-000000000001",
+       "answer": "ACCEPTED"
+      },
+      "now_ms": "0",
+      "r": [5, 0]
+     },
+     {"query": "7b1e6c2a-4d3f-4a8b-9c5d-0e1f2a3b4c5d"}
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "taken": true,
+      "sent": [
+       {
+        "kind": "FORWARD",
+        "to": "ee08eaa3d8aa507343bc02924fe98d02f9e4471627ace61554f1b49635f24ab2",
+        "record": {"id": "00000001-f0a0-4000-8000-000000000001", "version": "1"},
+        "message_hash": "52ca02ebba6241163b6c1a59a7899c6de1ef564b5bfce7423324007b6b194a48",
+        "schema_hash": null,
+        "position": 0
+       }
+      ],
+      "passed": []
+     },
+     {
+      "made": true,
+      "sent": [
+       {
+        "kind": "PROPOSAL_REPLY",
+        "to": "da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7",
+        "record": {"id": "7b1e6c2a-4d3f-4a8b-9c5d-0e1f2a3b4c5d", "version": "1"},
+        "proposal_id": "00000001-9e0a-4000-8000-000000000001",
+        "answer": "ACCEPTED"
+       },
+       {
+        "kind": "CHANGE",
+        "to": "ee08eaa3d8aa507343bc02924fe98d02f9e4471627ace61554f1b49635f24ab2",
+        "record": {"id": "7b1e6c2a-4d3f-4a8b-9c5d-0e1f2a3b4c5d", "version": "202"},
+        "type": "axt.example.v1.Appointment",
+        "state": "202",
+        "whole": false,
+        "removal": null,
+        "fields": {
+         "relations": {
+          "value": "024866316233643561372d326334652d346636302d386131622d33633564376539663061326200",
+          "schema": "25addb947073d010",
+          "stamp": "201",
+          "device": "c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0"
+         },
+         "relations/f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b": {
+          "value": "024866316233643561372d326334652d346636302d386131622d336335643765396630613262166178742e72656c61746564004830623666346133652d386331642d346632372d396535612d32643763343162386530393300246178742e6578616d706c652e76312e506574084d696d692e48657220796561726c792076616363696e6174696f6e2e000000",
+          "schema": "25addb947073d010",
+          "stamp": "201",
+          "device": "c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0"
+         }
+        }
+       }
+      ],
+      "passed": []
+     },
+     {
+      "record": {
+       "type": "axt.example.v1.Appointment",
+       "state": {
+        "fields": {
+         "title": {
+          "value": "06566574",
+          "schema": "25addb947073d010",
+          "stamp": "100",
+          "device": "c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0"
+         },
+         "start": {
+          "value": "d21f162414000000021a4575726f70652f4265726c696e02a0380280ea89e3d266",
+          "schema": "25addb947073d010",
+          "stamp": "100",
+          "device": "c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0"
+         },
+         "end": {
+          "value": "00",
+          "schema": "25addb947073d010",
+          "stamp": "100",
+          "device": "c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0"
+         },
+         "all_day": {
+          "value": "00",
+          "schema": "25addb947073d010",
+          "stamp": "100",
+          "device": "c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0"
+         },
+         "location": {
+          "value": "00",
+          "schema": "25addb947073d010",
+          "stamp": "100",
+          "device": "c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0"
+         },
+         "notes": {
+          "value": "00",
+          "schema": "25addb947073d010",
+          "stamp": "100",
+          "device": "c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0"
+         },
+         "reminders": {
+          "value": "00",
+          "schema": "25addb947073d010",
+          "stamp": "100",
+          "device": "c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0"
+         },
+         "relations": {
+          "value": "024866316233643561372d326334652d346636302d386131622d33633564376539663061326200",
+          "schema": "25addb947073d010",
+          "stamp": "201",
+          "device": "c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0"
+         },
+         "extensions": {
+          "value": "00",
+          "schema": "25addb947073d010",
+          "stamp": "100",
+          "device": "c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0"
+         },
+         "relations/f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b": {
+          "value": "024866316233643561372d326334652d346636302d386131622d336335643765396630613262166178742e72656c61746564004830623666346133652d386331642d346632372d396535612d32643763343162386530393300246178742e6578616d706c652e76312e506574084d696d692e48657220796561726c792076616363696e6174696f6e2e000000",
+          "schema": "25addb947073d010",
+          "stamp": "201",
+          "device": "c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0"
+         }
+        },
+        "removal": null,
+        "state_stamp": "202"
+       },
+       "sibling_stamp": null,
+       "to_pass": null,
+       "incomplete": false,
+       "held_back": false,
+       "siblings": {
+        "ee08eaa3d8aa507343bc02924fe98d02f9e4471627ace61554f1b49635f24ab2": {
+         "known": true,
+         "delivered": ["all_day", "end", "extensions", "location", "notes", "reminders", "start", "title"],
+         "removal": false
+        }
+       }
+      },
+      "highest": "202",
+      "requests": {}
+     }
+    ]
+   }
+  },
+  {
    "id": "sync/siblings/accepted-is-barred-for-a-forwarded-value-whose-schema-the-device-lacks-a",
    "op": "siblings",
    "description": "ACCEPTED is barred for a forwarded value whose schema the device lacks, and DECLINED is not",
