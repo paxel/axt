@@ -20,7 +20,8 @@ script:
   to by full name after it; no recursion; the schema size and depth limits
   of spec/envelope.md; nested type names unique across the types, the
   published types aside; and the published schema types/axt/Relation.avsc
-  under the same rules, with the attributes of spec/metadata.md;
+  under the same rules, with the attributes of spec/metadata.md, and
+  types/axt/Extension.avsc, a record of a name and bytes;
 - checks that every example datum keeps the rules of the time types
   (spec/time.md, sections 4 to 7) and of the relations, and every check of
   its description (spec/fields.md, section 7), and that each zoned time has
@@ -32,7 +33,9 @@ script:
   encoding; and the same for records with relations (RELATION_VALID and
   RELATION_BREACHES), with the rules of spec/fields.md, section 11.4;
 - computes the Parsing Canonical Form and the CRC-64-AVRO fingerprint, and
-  checks both against fastavro and the Apache avro package;
+  checks both against fastavro and the Apache avro package; and prints
+  the table of spec/types.md, section 7.3, and the bytes of cat-a-log's
+  extension of section 9.1 there;
 - encodes one example datum with fastavro, decodes it back and compares
   it, decodes the same bytes with the Apache avro package and encodes them
   again, and checks that the bytes are the same;
@@ -1325,6 +1328,89 @@ def check_relation() -> tuple[str, int]:
     return pcf, fp
 
 
+def check_extension() -> tuple[str, int]:
+    """The published schema of axt.Extension keeps the rules of spec/types.md, section 5, for a schema of
+    the specification, and the labels and emoji of section 5.9: one record, defining no other named type,
+    whose fields are `name`, a string, and `data`, bytes (spec/fields.md, section 12.1). Encodes cat-a-log's
+    extension with both libraries; returns its canonical form and fingerprint."""
+    where = "types/axt/Extension.avsc"
+    text = (REPO / where).read_text(encoding="utf-8")
+    assert EXTENSION_PUBLISHED["namespace"] == "axt" and "axt.version" not in EXTENSION_PUBLISHED
+    assert len(text.encode("utf-8")) <= MAX_SCHEMA_BYTES and json_depth(EXTENSION_PUBLISHED) <= MAX_JSON_DEPTH
+    defined: list[str] = []
+    check_type(EXTENSION_PUBLISHED, where, EXTENSION_PUBLISHED, set(), defined)
+    assert defined == ["axt.Extension"], defined
+    fields = [(f["name"], f["type"], "default" in f) for f in EXTENSION_PUBLISHED["fields"]]
+    assert fields == [("name", "string", False), ("data", "bytes", False)], fields
+    for here, message in presence_problems(EXTENSION_PUBLISHED):
+        fail(f"{where}.{here}" if here else where, message)
+    pcf = to_parsing_canonical_form(fastavro.parse_schema(EXTENSION_PUBLISHED))
+    fp = crc64_avro(pcf.encode())
+    assert apache_fingerprint(text) == fp.to_bytes(8, "little"), "axt.Extension: avro fingerprint differs"
+    data = extension_bytes(MIMI_CAT)
+    out = io.BytesIO()
+    apache = avro.schema.parse(text)
+    avro.io.DatumWriter(apache).write(MIMI_CAT, avro.io.BinaryEncoder(out))
+    assert out.getvalue() == data, "the two libraries encode an extension in other bytes"
+    back = avro.io.DatumReader(apache).read(avro.io.BinaryDecoder(io.BytesIO(data)))
+    fa_back = fastavro.schemaless_reader(io.BytesIO(data), fastavro.parse_schema(EXTENSION_PUBLISHED))
+    assert back == fa_back == MIMI_CAT, "an extension does not read back"
+    # Its data: the single-object header that names cat-a-log's schema, and the record's encoding.
+    cat = fastavro.parse_schema(CAT_EXTENSION_SCHEMA)
+    header = bytes.fromhex(fa_fingerprint(to_parsing_canonical_form(cat), "CRC-64-AVRO"))
+    assert MIMI_CAT["data"][:10] == b"\xc3\x01" + header
+    record = fastavro.schemaless_reader(io.BytesIO(MIMI_CAT["data"][10:]), cat)
+    assert record == {"tasso_id": "276098100123456", "fur": "tabby"}, record
+    return pcf, fp
+
+
+def extension_bytes(extension: dict[str, Any]) -> bytes:
+    """The Avro binary encoding of an axt.Extension, written with fastavro."""
+    buf = io.BytesIO()
+    fastavro.schemaless_writer(buf, fastavro.parse_schema(EXTENSION_PUBLISHED), extension)
+    return buf.getvalue()
+
+
+def extension_dump(extension: dict[str, Any]) -> str:
+    """Cat-a-log's extension as an item of a list of extensions, in annotated hex in the layout of
+    spec/envelope.md: what spec/types.md, section 9.1, shows."""
+    name, data = extension["name"].encode(), extension["data"]
+    cat = fastavro.parse_schema(CAT_EXTENSION_SCHEMA)
+    record = fastavro.schemaless_reader(io.BytesIO(data[10:]), cat)
+    assert isinstance(record, dict)
+    tasso, fur = (str(record[k]).encode() for k in ("tasso_id", "fur"))
+    parts = [
+        (zigzag(len(name)), f"name: string length {len(name)}"),
+        (name, f'"{extension["name"]}"'),
+        (zigzag(len(data)), f"data: bytes length {len(data)}"),
+        (data[:2], "single-object marker"),
+        (data[2:10], f"fingerprint of {extension['name']}"),
+        (zigzag(len(tasso)), f"tasso_id: string length {len(tasso)}"),
+        (tasso, f'"{tasso.decode()}"'),
+        (zigzag(len(fur)), f"fur: string length {len(fur)}"),
+        (fur, f'"{fur.decode()}"'),
+    ]
+    assert b"".join(p for p, _ in parts) == extension_bytes(extension)
+    offset, lines = 0, []
+    for chunk, meaning in parts:
+        for i in range(0, len(chunk), 8):
+            hexs = chunk[i : i + 8].hex(" ")
+            lines.append(f"{offset:04x}  {hexs:<23}  {meaning}".rstrip() if i == 0 else f"      {hexs}")
+        offset += len(chunk)
+    lines.append(f"{offset:04x}  end")
+    return "\n".join(lines)
+
+
+def zigzag(n: int) -> bytes:
+    """An Avro long in zigzag varint encoding."""
+    z, out = (n << 1) ^ (n >> 63), bytearray()
+    while z > 0x7F:
+        out.append((z & 0x7F) | 0x80)
+        z >>= 7
+    out.append(z)
+    return bytes(out)
+
+
 def text_problems(d: dict[str, Any]) -> list[tuple[str, str]]:
     """What spec/types.md, section 5.9, requires of the description of an example type beyond the rules of
     spec/fields.md: a label and an emoji, and the label and the help in German, on the type and on each
@@ -1372,6 +1458,7 @@ def main() -> None:
     schemas: dict[str, Any] = {}
     pcfs: dict[str, str] = {}
     relation_pcf, relation_fp = check_relation()
+    extension_pcf, extension_fp = check_extension()
     published = {n for t in PUBLISHED.values() for n in inner(t)[0]}
     for path in sorted(EXAMPLES.rglob("*.avsc")):
         text = path.read_text(encoding="utf-8")
@@ -1466,7 +1553,15 @@ def main() -> None:
         f"| `axt.Relation` | | [Relation.avsc](../types/axt/Relation.avsc) | `0x{relation_fp:016x}` | "
         f"`{relation_fp.to_bytes(8, 'little').hex(' ')}` |"
     )
+    print(
+        f"| `axt.Extension` | – | [Extension.avsc](../types/axt/Extension.avsc) | `0x{extension_fp:016x}` | "
+        f"`{extension_fp.to_bytes(8, 'little').hex(' ')}` |"
+    )
     print(f"  axt.Relation canonical form: {relation_pcf}")
+    print(f"  axt.Extension canonical form: {extension_pcf}")
+    print()
+    print(f"cat-a-log's extension of a pet, {len(extension_bytes(MIMI_CAT))} bytes:")
+    print(extension_dump(MIMI_CAT))
     print()
     for title, valid, breaches in (
         ("", VALID, BREACHES),

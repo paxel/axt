@@ -363,7 +363,7 @@ An extension is valid when its `name` is a full name of Avro with a namespace, o
 
 ### 12.4 Carried unchanged
 
-A receiver that does not know an extension's type keeps the extension as it received it: its name and its bytes. It never encodes `data` again, and keeps it through its user's changes of other fields and through the updates it merges ([records.md](records.md), section 6.1, where a list of extensions is merged per element). Between the devices of an owner, extensions merge per element by their name, and within an extension whose schema a device holds, field by field ([sync.md](sync.md), sections 25.1 and 25.9). A proposal of other fields leaves the extensions as they are ([shares.md](shares.md), section 12).
+A receiver that does not know an extension's type keeps the extension as it received it: its name and its bytes. It never encodes `data` again, and keeps it through its user's changes of other fields and through the updates it merges ([records.md](records.md), section 6.1, where a list of extensions is merged per element). A receiver that knows an extension's type merges its user's changes within the extension field by field with the sender's (section 6.1 there). Between the devices of an owner, extensions merge per element by their name, and within an extension whose schema a device holds, field by field ([sync.md](sync.md), sections 25.1 and 25.9). A proposal of other fields leaves the extensions as they are ([shares.md](shares.md), section 12).
 
 ### 12.5 Defined in place
 

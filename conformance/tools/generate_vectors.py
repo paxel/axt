@@ -3780,14 +3780,21 @@ def records_category() -> Category:
         "(spec/records.md).",
     )
 
-    def scenario(label: str, refs: list[str], policy: dict[str, Any], steps: list[Any]) -> None:
+    def scenario(
+        label: str,
+        refs: list[str],
+        policy: dict[str, Any],
+        steps: list[Any],
+        extensions: list[str] | None = None,
+    ) -> None:
         events: list[Any]
         results: list[Any]
         events, results = [], []
         for e, r in steps:
             events.append(e)
             results.append({} if r is None else r)
-        c.add("apply", label, refs, {"policy": policy, "events": events}, {"steps": results})
+        i = {"policy": policy, "events": events, **({} if extensions is None else {"extensions": extensions})}
+        c.add("apply", label, refs, i, {"steps": results})
 
     per_field_delete = {"local_changes": "per_field", "delete_with_local_changes": "delete"}
     per_field_keep = {"local_changes": "per_field", "delete_with_local_changes": "keep"}
@@ -4019,6 +4026,56 @@ def records_category() -> Category:
             ),
         ],
     )
+
+    # The user changes the fur in cat-a-log's extension, the sender the TASSO id and an extension of a type
+    # the receiver does not know (spec/records.md, section 6.1): a receiver that holds cat-a-log's schema
+    # keeps both changes within the extension, one that does not keeps the user's extension whole; the
+    # other extension comes from the message either way.
+    def cat(tasso: str, fur: str) -> dict[str, Any]:
+        e = rules.extension(tasso_id=tasso, fur=fur)
+        return {"name": e["name"], "data": e["data"].hex()}
+
+    vet_2 = dict(vet_ext, data="c3010000000000000000" + "0206" + b"tag".hex())
+    first = dict(v1, extensions=[cat("276098100123456", "tabby"), vet_ext])
+    second = dict(v1, extensions=[cat("276098100654321", "tabby"), vet_2])
+    # A third DATA brings the merged extension: the receiver that knows the type takes it as it came.
+    third = dict(v1, extensions=[cat("276098100654321", "black"), vet_2])
+    for known, label, kept_cat, last in (
+        (
+            [sy.CAT_TEXT],
+            "the user's change within an extension of a known type merges field by field with the sender's",
+            cat("276098100654321", "black"),
+            done("APPLIED", 3, "there", third),
+        ),
+        (
+            [],
+            "the user's change of an extension of a type the receiver does not know keeps the user's "
+            "extension whole",
+            cat("276098100123456", "black"),
+            done(
+                "MERGED",
+                3,
+                "there",
+                dict(v1, extensions=[cat("276098100123456", "black"), vet_2]),
+                ["extensions"],
+            ),
+        ),
+    ):
+        scenario(
+            label,
+            ["records.md 6.1", "fields.md 12.2", "fields.md 12.4", "sync.md 25.9"],
+            per_field_delete,
+            [
+                (data(1, first), done("APPLIED", 1, "there", first)),
+                (change("extensions", [cat("276098100123456", "black"), vet_ext]), None),
+                (
+                    data(2, second),
+                    done("MERGED", 2, "there", dict(v1, extensions=[kept_cat, vet_2]), ["extensions"]),
+                ),
+                (data(3, third), last),
+            ],
+            known,
+        )
 
     # Every value in the sessions is a valid record of its type: it encodes with the type's schema, and its
     # time values and the checks of its schema hold (spec/time.md, section 8; spec/metadata.md, section 6).
@@ -7087,6 +7144,35 @@ def sync_category() -> Category:
             ),
         )
 
+    # The extensions of a received record that a device shows, with the owner's parts within one.
+    for label, layer, extensions, source in sy.SHOWN_WITHIN:
+        got_state, fields = sy.shown(True, sy.SHOWN_EXTENSIONS, sy.SCHEMA_1, layer, texts=sy.SHOWN_TEXTS)
+        want = sy.field_value(sy.APPOINTMENT_JSON, "extensions", extensions)
+        assert got_state == "there" and fields["extensions"] == (
+            want,
+            sy.SCHEMA_1,
+            source,
+        ), label
+        values = {name: H(value) for name, value in sy.SHOWN_EXTENSIONS.items()}
+        c.add(
+            "shown",
+            label,
+            ["sync.md 25.9", "sync.md 25.7", "sync.md 22.1", "records.md 6.1"],
+            {
+                "sender": {"state": "there", "values": values, "schema": H(sy.SCHEMA_1)},
+                "layer": J(layer, True),
+            },
+            accept(
+                {
+                    "record": got_state,
+                    "fields": {
+                        name: {"value": H(value), "schema": H(schema), "from": from_}
+                        for name, (value, schema, from_) in fields.items()
+                    },
+                }
+            ),
+        )
+
     # One device with its siblings: the sessions of the script, which has checked what each step says.
     def wire(v: Any) -> Any:
         """A step as a vector holds it: its messages and values as Bytes."""
@@ -7274,7 +7360,7 @@ COUNTS = {
         {"decode_record": 46},
     ),
     "metadata": ({"describe": 22, "check_record": 200}, {"check_record": 104}),
-    "records": ({"apply": 15, "relations": 4}, {}),
+    "records": ({"apply": 17, "relations": 4}, {}),
     "manifest": ({"check_manifest": 52, "fit": 19}, {"check_manifest": 46}),
     "keys": (
         {
@@ -7319,8 +7405,8 @@ COUNTS = {
             "begin_stamping": 3,
             "stale": 10,
             "pass_version": 5,
-            "shown": 23,
-            "siblings": 485,
+            "shown": 27,
+            "siblings": 487,
             "withdrawal_stamp": 4,
         },
         {},

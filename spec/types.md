@@ -190,7 +190,7 @@ The example types are in [types/axt/example/v1/](../types/axt/example/v1/), each
 | `Measurement` | `quantity`     | `quantity`, `value`, `unit` (UCUM), `measured_at` (`axt.DateTime`, instant), `subject`, `notes`                                                                                  |
 | `Document`    | `title`        | `title`, `file_name`, `media_type`, `content` (bytes), `dated` (`axt.Date`), `notes`                                                                                             |
 
-Each type has, as its last field, `relations`, a field of the relation brick (section 8).
+Each type has, as its last two fields, `relations`, a field of the relation brick (section 8), and `extensions`, a field of the extension brick (section 9).
 
 A Person's `birthday` may leave out the year, as address books often hold birthdays without one; a Pet's `birthday` and a Document's `dated` may give only a month or a year ([time.md](time.md), section 4). Car's `year` is a number rather than an `axt.Date`: a model year names a version of the model, not a date on the calendar.
 
@@ -220,10 +220,10 @@ Note, Task, Appointment, Person and Car are the example types named when the sco
 The fingerprints were computed with [conformance/tools/example_types.py](../conformance/tools/example_types.py). For every example type, the script:
 
 - checks that its description is valid ([fields.md](fields.md), section 6), carries the texts that section 5.9 requires, and derives the schema of its `.avsc` file;
-- checks the rules of section 5 that a program can check on the derived schema, among them each time type and `axt.Relation` defined in place as its published schema with the named types defined before it by their full names, and referred to by its full name after it (section 5.2; [time.md](time.md), section 3.1); and checks the published schema of `axt.Relation` by the same rules, with the code of [conformance/tools/metadata_rules.py](../conformance/tools/metadata_rules.py) for its attributes;
+- checks the rules of section 5 that a program can check on the derived schema, among them each time type and `axt.Relation` defined in place as its published schema with the named types defined before it by their full names, and referred to by its full name after it (section 5.2; [time.md](time.md), section 3.1); and checks the published schema of `axt.Relation` by the same rules, with the code of [conformance/tools/metadata_rules.py](../conformance/tools/metadata_rules.py) for its attributes, and that of `axt.Extension`, a record of a name and bytes that defines no other type;
 - checks that the example datum, which holds relations with both kinds of target, keeps the rules of the time types and of the relations and every check of its description ([fields.md](fields.md), section 7), and that each of its zoned times has the offset of its zone at its instant by the zone rules of Python's `zoneinfo`;
 - checks 10 further records that keep every rule, among them an all-day Appointment, a Task due at a floating time and an Appointment whose offset is not that of its zone at the instant, which a receiver does not reject for it ([time.md](time.md), section 6.2); and 17 records with a value that breaks a rule, such as a phone number with spaces, a country name in place of its code, a VIN with the letter O, a Car of the year 1800, a start whose instant does not match its wall clock and a reminder with parts of both signs, each with the field path and the rule or the check of the first such value in the order of the encoding ([metadata.md](metadata.md), section 7.2); and 6 further records with relations, among them 256 relations, one at every limit of its lengths and a kind it does not know, and 18 records with a relation or a value that breaks a rule, among them 257 relations, two relations with one id, a kind without a namespace and a start that is not valid inside a relation;
-- computes the Parsing Canonical Form and the CRC-64-AVRO fingerprint, and compares them with those of the Python libraries fastavro 1.13.1 and `avro` 1.12.2;
+- computes the Parsing Canonical Form and the CRC-64-AVRO fingerprint, and compares them with those of the Python libraries fastavro 1.13.1 and `avro` 1.12.2, and prints the rows of the table above;
 - encodes one example datum with fastavro, decodes it back, and checks that `avro` decodes the same bytes and encodes them to the same bytes again; both libraries write each target of a relation in its own branch;
 - uses every default once in schema resolution, with both libraries: it writes a datum with the schema without its defaulted fields, and one with the schema whose nested records lack their defaulted fields, and reads both with the full schema;
 - writes, for every enum, a symbol the schema does not have and checks that the full schema reads it as the enum's default symbol. fastavro does so; the `avro` package 1.12.2 raises a schema resolution error instead, against the Avro specification, so a receiver built on it does not get the compatibility of section 3.3 for enum symbols.
@@ -267,6 +267,29 @@ The rule is in [fields.md](fields.md), section 11.6, and applies to the example 
 ## 9. Extensions
 
 Every example type has a field `extensions`, its last, whose brick is `axt.ExtensionField` ([fields.md](fields.md), section 12): a list of records of the apps' own types, such as the `org.example.catalog.CatExtension` with a TASSO registration and the fur that cat-a-log adds to a Pet. An app that takes an example type and needs fields of its own adds them as an extension and does not fork the type, so that every app that takes the type still takes the record, and one that does not know the extension carries it along unchanged. Different apps extend one type differently; mapping the fields of one app's extension to those of another, such as a `tassoId` to a `TASSO_REG`, is the choice of the receiver's user, and AXT defines no format for it. The example data hold no extension; the vectors of the `types` category hold records with extensions of known and of unknown types, and with every rule of [fields.md](fields.md), section 12.3.
+
+### 9.1 Example
+
+Cat-a-log's extension of the pet Mimi holds her TASSO registration `276098100123456` and the fur `tabby`, in a record of `org.example.catalog.CatExtension`, whose schema has the fields `tasso_id` and `fur`, both strings. As an item of a Pet's `extensions`, the `axt.Extension` is 66 bytes: its `name`, then its `data`, the single-object encoding of the record. Its bytes, with offsets in hexadecimal, as [conformance/tools/example_types.py](../conformance/tools/example_types.py) writes them:
+
+```text
+0000  40                       name: string length 32
+0001  6f 72 67 2e 65 78 61 6d  "org.example.catalog.CatExtension"
+      70 6c 65 2e 63 61 74 61
+      6c 6f 67 2e 43 61 74 45
+      78 74 65 6e 73 69 6f 6e
+0021  40                       data: bytes length 32
+0022  c3 01                    single-object marker
+0024  f6 42 4a b2 a3 fa 9f 62  fingerprint of org.example.catalog.CatExtension
+002c  1e                       tasso_id: string length 15
+002d  32 37 36 30 39 38 31 30  "276098100123456"
+      30 31 32 33 34 35 36
+003c  0a                       fur: string length 5
+003d  74 61 62 62 79           "tabby"
+0042  end
+```
+
+A receiver that does not know cat-a-log's schema keeps the 32 bytes of `data` as they are; one that holds it finds the schema by the fingerprint `f6 42 4a b2 a3 fa 9f 62` and decodes the two strings after it.
 
 ## References
 

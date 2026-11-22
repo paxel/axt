@@ -438,6 +438,7 @@
               "axt.help_translations": {
                 "de": "Der Typ dieser Erweiterung."
               },
+              "axt.emoji": "🔖",
               "axt.advanced": true
             },
             {
@@ -452,6 +453,7 @@
               "axt.help_translations": {
                 "de": "Die Werte dieser Erweiterung."
               },
+              "axt.emoji": "📦",
               "axt.advanced": true
             }
           ]

@@ -535,10 +535,14 @@ class Receiver:
     """The records of one sender at a receiver that lets its user change them (spec/records.md, sections 5
     and 6)."""
 
-    def __init__(self, local_changes: str, delete_with_local_changes: str) -> None:
+    def __init__(
+        self, local_changes: str, delete_with_local_changes: str, extensions: Iterable[str] = ()
+    ) -> None:
         # None is the key of an id that is not valid; no record is ever stored under it.
         self.records: dict[int | None, dict[str, Any]]
         self.mode, self.keep_on_delete, self.records = local_changes, delete_with_local_changes == "keep", {}
+        # The schemas of the extension types the receiver knows, by their fingerprints (fields.md 12.2).
+        self.texts = {sy.schema_fingerprint(t): t for t in extensions}
 
     def result(self, outcome: str, r: dict[str, Any], kept: Iterable[str] = ()) -> dict[str, Any]:
         return {
@@ -597,7 +601,11 @@ class Receiver:
             if f in r["value"]:
                 # A list merged per element (records.md, section 6.1).
                 mine = r["value"][f]
-                value[f] = sy.merge_elements(r["taken"].get(f, []), mine, value[f]) if f in lists else mine
+                value[f] = (
+                    sy.merge_elements(r["taken"].get(f, []), mine, value[f], lists[f], self.texts)
+                    if f in lists
+                    else mine
+                )
         kept = [f for f in r["changed"] if f in value and value[f] != m["value"].get(f)]
         r.update(value=value, taken=dict(m["value"]))
         return self.result("MERGED" if kept else "APPLIED", r, kept)
@@ -612,7 +620,9 @@ class Receiver:
 
 
 def op_apply(i: Any) -> dict[str, Any]:
-    receiver = Receiver(i["policy"]["local_changes"], i["policy"]["delete_with_local_changes"])
+    receiver = Receiver(
+        i["policy"]["local_changes"], i["policy"]["delete_with_local_changes"], i.get("extensions", [])
+    )
     steps: list[dict[str, Any]] = []
     for e in i["events"]:
         if "message" in e:
@@ -1345,7 +1355,9 @@ def op_shown(i: Any) -> dict[str, Any]:
         version, b = int(sender["version"]), sender["beside"]
         if b is not None:
             beside = ({name: bytes.fromhex(v) for name, v in b["values"].items()}, bytes.fromhex(b["schema"]))
-    state, fields = sy.shown(there, values, schema, sy.state_of_json(i["layer"]), version, beside)
+    state, fields = sy.shown(
+        there, values, schema, sy.state_of_json(i["layer"]), version, beside, sy.SHOWN_TEXTS
+    )
     shown = {
         name: {"value": value.hex(), "schema": fp.hex(), "from": source}
         for name, (value, fp, source) in fields.items()

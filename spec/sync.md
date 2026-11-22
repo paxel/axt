@@ -1447,10 +1447,10 @@ The `DATA`: 202 bytes, SHA-256 `0d8a75515ca5adcf77e5515431ff9f3e7cebeab98d3af738
 | `record.version`    | 1                                                                                                                                                         |
 | `to`                | the tablet's key                                                                                                                                          |
 | `message`           | the `DATA` above, byte for byte: 201 bytes                                                                                                                |
-| `schema`            | the text of the schema derived from the description that Old Brain Fix offered: 12,783 bytes                                                              |
-| `signature`         | the phone's signature: `49bf5efba56fea30bf1dea10062a049ba0e82ccd5bfcd2bc5050dec2fc74174c3d6e1437b6609d8d7f4f1dfea17f5e73ba3fff287a23db433c948af173c8a905` |
+| `schema`            | the text of the schema derived from the description that Old Brain Fix offered: 12,821 bytes                                                              |
+| `signature`         | the phone's signature: `804f18fdba86ba5dcfcb36717bb65a79df98ccdb6244079b4e29a35a8686063facde5873b9dcaf459afe0f021f4e2dec497585a20103695d8b440d62c6bf0302` |
 
-The `FORWARD`: 13,183 bytes, SHA-256 `59c1f306c0040b0a2a074984a0648ed81c115594d549c827c366af838702160b`. Its bytes, with offsets in hexadecimal; the text of the schema is shown shortened:
+The `FORWARD`: 13,221 bytes, SHA-256 `1ffde137f70d7467d254dc43a8368f6b78f586f7d26900f6f4a0eb96d1900953`. Its bytes, with offsets in hexadecimal; the text of the schema is shown shortened:
 
 ```text
 0000  c3 01                    single-object marker
@@ -1469,7 +1469,7 @@ The `FORWARD`: 13,183 bytes, SHA-256 `59c1f306c0040b0a2a074984a0648ed81c115594d5
       32 63 33 64 34 65 35 66
       36 30 37 31
 0052  02                       record.version: long 1
-0053  d2 cb 01                 body: bytes length 13033
+0053  9e cc 01                 body: bytes length 13071
 0056  c3 01                    body: single-object marker
 0058  ad 3b 05 6b bf 6a 47 57  body: fingerprint of axt.Forward, format 1
 0060  ee 08 ea a3 d8 aa 50 73  body: to: fixed(32), the tablet's test key
@@ -1518,17 +1518,17 @@ The `FORWARD`: 13,183 bytes, SHA-256 `59c1f306c0040b0a2a074984a0648ed81c115594d5
       ef 10 84 54 f3 90 e7 6f
       e8 36 fb e2 4c 03 30 08
 014c  02                       body: schema: union index 1, string
-014d  de c7 01                 body: schema: string length 12783
-0150  7b 22 61 78 ... 22 7d    body: the schema derived from the description Appointment.1.json (12783 bytes of UTF-8 JSON)
-333f  49 bf 5e fb a5 6f ea 30  signature: fixed(64)
-      bf 1d ea 10 06 2a 04 9b
-      a0 e8 2c cd 5b fc d2 bc
-      50 50 de c2 fc 74 17 4c
-      3d 6e 14 37 b6 60 9d 8d
-      7f 4f 1d fe a1 7f 5e 73
-      ba 3f ff 28 7a 23 db 43
-      3c 94 8a f1 73 c8 a9 05
-337f  end
+014d  aa c8 01                 body: schema: string length 12821
+0150  7b 22 61 78 ... 22 7d    body: the schema derived from the description Appointment.1.json (12821 bytes of UTF-8 JSON)
+3365  80 4f 18 fd ba 86 ba 5d  signature: fixed(64)
+      cf cb 36 71 7b b6 5a 79
+      df 98 cc db 62 44 07 9b
+      4e 29 a3 5a 86 86 06 3f
+      ac de 58 73 b9 dc af 45
+      9a fe 0f 02 1f 4e 2d ec
+      49 75 85 a2 01 03 69 5d
+      8b 44 0d 62 c6 bf 03 02
+33a5  end
 ```
 
 The tablet processes it by section 18.3. The inner message is a valid `DATA` of envelope format 1 (steps 7 to 9); the fingerprint of the schema text is the one its body names (step 11); its signature verifies with the key of Old Brain Fix (step 12), which is no key of the tablet's set and no refused key (steps 13 and 14). That key is a current key of a sender the tablet knows, from the forwarded `MANIFEST`. The tablet holds no record under the id from that sender: it takes the record into the sender's layer with the receiver's version 1, keeps the message and the schema text, and shows the appointment (section 19.5). It sends Old Brain Fix nothing. The same bytes are now a kept message of the tablet, so that message is delivered to the phone on the tablet and is not forwarded back (section 20.2).
@@ -2442,6 +2442,7 @@ When the owner changes a list merged per element of a received record, the owner
 
 - **The record a device shows** (section 22.1) has as the list's value the elements of the sender's value in the sender's order, each as the owner's element part of its key has it where the owner's layer holds one, and left out where that part is the removal mark; then the elements that only the owner's layer holds, in the order of the owner's order part and then by their key texts in the order of their code points; at most 256. This is the merge per element of [records.md](records.md), section 6.1, with the owner's parts as the user's changes, so that a set and a receiver on one device show the same list.
 - **The answering device** (section 22.2) counts the field as kept when the list it shows differs from the list of the message, and reports the field by its name in `kept_fields`.
+- **Within an extension** (section 25.9). The owner's change of some fields of an extension of a received record, whose schema the device holds, stamps one part within the extension for each field it changes, with the fingerprint of the device's own writer schema of the extension's type as its `schema`. The record a device shows has as the extension the element of the list above, with the value of each of the owner's parts within it in the place of its field: of every such part where the element is the sender's, and of each part later than the owner's element part where the owner's layer holds one, composed as section 25.9 says. A device that does not hold the extension's schema shows the element as it is. This is the merge field by field within an extension of [records.md](records.md), section 6.1.
 
 ### 25.8 Example
 
@@ -2461,7 +2462,7 @@ A list of extensions ([fields.md](fields.md), section 12) merges per element by 
 
 - **Parts within an extension.** A change of some fields of an extension whose schema the device holds stamps one field state for each field it changes, and not the element part: under the name of the element part, a `/` and the field's name, such as `extensions/org.example.catalog.CatExtension/fur`. Its `value` is the field's value in Avro binary encoding under the type the field has in the extension's writer schema, and its `schema` is the fingerprint of that writer schema, not of the record's. A change that sets the extension whole, by adding it, by replacing it, or by a list of extensions set whole as an accepted proposal sets it (section 25.6), stamps the element part. A device stamps a part within an extension only where its name has at most 512 bytes (section 14); otherwise it sets the extension whole.
 - **In a `CHANGE`.** At step 8 of section 8.3, the schema of such an entry is a schema of a record whose full name is the key in the entry's name, with a top-level field of the last segment of the name; at step 11 the value decodes as that field's type. A device holds the schema because the sibling offered it first (sections 7.2 and 8.5).
-- **The value of the extension.** A device that holds the schema composes the extension from the element part, decoded with its schema, with the value of each part within it that is later than the element part (section 4.1) in the place of that field; it encodes the result again with its own writer schema of the extension's type for a `DATA` to another app. A device that does not hold the schema uses the bytes of the element part as they are.
+- **The value of the extension.** A device that holds the schema composes the extension from the element part, decoded with its schema, with the value of each part within it that is later than the element part (section 4.1) in the place of that field; it encodes the result again with its own writer schema of the extension's type for a `DATA` to another app and wherever it shows the extension, also in a received record (section 25.7). Without such a part, the element is used as it is. A device that does not hold the schema uses the bytes of the element part as they are.
 - **What is merged.** Each part within an extension is a field state of section 3.1 and merges by section 4.1; the element part merges as a whole. Two changes of two fields on two devices so both stay, and an extension set whole later than a change of a field is not overridden by it. A removal mark of the element part removes the extension with every part within it.
 
 A receiver that is not a device of the set, and does not know an extension's type, keeps the extension's bytes as it received them ([fields.md](fields.md), section 12.4).

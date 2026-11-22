@@ -183,7 +183,9 @@ class Receiver:
             if f in r.value:
                 # A list merged per element (spec/records.md, section 6.1).
                 mine = r.value[f]
-                value[f] = sy.merge_elements(r.taken.get(f, []), mine, value[f]) if f in lists else mine
+                value[f] = (
+                    sy.merge_elements(r.taken.get(f, []), mine, value[f], lists[f]) if f in lists else mine
+                )
         kept = [f for f in r.changed if f in value and value[f] != m["value"].get(f)]
         r.value, r.taken = value, dict(m["value"])
         return self.result("MERGED" if kept else "APPLIED", r, kept)

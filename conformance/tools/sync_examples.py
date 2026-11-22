@@ -3212,21 +3212,102 @@ def compose_value(field: str, parts: dict[str, bytes]) -> bytes:
     return bytes(keys.zigzag(len(elements))) + b"".join(item for _, item in elements) + b"\x00"
 
 
-def element_fields(type_name: str) -> set[str]:
-    """The lists merged per element of an example type of version 1, by its full name (section 25.1)."""
+def element_fields(type_name: str) -> dict[str, str]:
+    """The lists merged per element of an example type of version 1, by its full name, each with the
+    member that keys its elements (section 25.1)."""
     short = type_name.rsplit(".", 1)[-1]
     path = REPO / "types" / "axt" / "example" / "v1" / f"{short}.1.avsc"
     if not type_name.startswith("axt.example.v1.") or not path.exists():
-        return set()
+        return {}
     schema = json.loads(path.read_text(encoding="utf-8"))
-    return {f["name"] for f in schema["fields"] if element_member(schema, f["name"]) is not None}
+    return {
+        f["name"]: member
+        for f in schema["fields"]
+        for member in [element_member(schema, f["name"])]
+        if member is not None
+    }
 
 
-def merge_elements(base: list[Any], mine: list[Any], theirs: list[Any], member: str = "id") -> list[Any]:
+# --- extensions whose schema a device or a receiver holds (section 25.9; spec/fields.md, section 12) ----
+
+
+def extension_writer(name: str, data: bytes, texts: dict[bytes, str]) -> dict[str, Any] | None:
+    """The writer schema of an extension, among the schemas `texts` by their fingerprints: the one that the
+    single-object header of `data` names, if its full name is the extension's `name` (spec/fields.md,
+    section 12.2); None for an extension of a type that the holder does not know."""
+    text = texts.get(data[2:10]) if data[:2] == MARKER else None
+    schema = None if text is None else json.loads(text)
+    return schema if schema is not None and full_name(schema) == name else None
+
+
+def own_extension(name: str, texts: dict[bytes, str]) -> tuple[dict[str, Any], bytes] | None:
+    """The holder's own writer schema of the extension's type, with its fingerprint: of the schemas with
+    the full name, the one of the highest `axt.version`, then of the highest fingerprint."""
+    held = [(json.loads(t), fp) for fp, t in sorted(texts.items())]
+    named = [(s, fp) for s, fp in held if full_name(s) == name]
+    return max(named, key=lambda h: (int(h[0].get("axt.version", 0)), h[1])) if named else None
+
+
+def extension_record(writer: dict[str, Any], own: dict[str, Any], data: bytes) -> dict[str, Any]:
+    """The extension's record, decoded with its writer schema and resolved against the own schema."""
+    value = fastavro.schemaless_reader(
+        io.BytesIO(data[10:]),
+        fastavro.parse_schema(writer, _write_hint=False),
+        fastavro.parse_schema(own, _write_hint=False),
+    )
+    assert isinstance(value, dict)
+    return value
+
+
+def extension_data(own: tuple[dict[str, Any], bytes], record: dict[str, Any]) -> bytes:
+    """The single-object encoding of the extension's record with the own schema (spec/envelope.md, 3)."""
+    out = io.BytesIO()
+    fastavro.schemaless_writer(out, fastavro.parse_schema(own[0], _write_hint=False), record)
+    return MARKER + own[1] + out.getvalue()
+
+
+def merge_extension(
+    base: dict[str, Any] | None, mine: dict[str, Any], theirs: dict[str, Any], texts: dict[bytes, str]
+) -> dict[str, Any]:
+    """The merge of one extension that the receiver's user changed and the message holds (spec/records.md,
+    section 6.1): within an extension whose type the receiver knows in all three, field by field, each
+    field that its user changed against the extension it last took, `base`, as its user left it, every
+    other from the message, encoded with its own writer schema; otherwise the user's extension whole. The
+    bytes of `data` are bytes or hexadecimal text, and the result has them as `theirs` has them."""
+
+    def raw(e: dict[str, Any]) -> bytes:
+        d = e["data"]
+        return bytes.fromhex(d) if isinstance(d, str) else bytes(d)
+
+    name = mine["name"]
+    own = own_extension(name, texts)
+    if base is None or own is None:
+        return mine
+    writers = [extension_writer(name, raw(e), texts) for e in (base, mine, theirs)]
+    held = [w for w in writers if w is not None]
+    if len(held) < 3:
+        return mine
+    b, m, t = (extension_record(w, own[0], raw(e)) for w, e in zip(held, (base, mine, theirs), strict=True))
+    merged = {k: (m[k] if m[k] != b[k] else t[k]) for k in t}
+    if merged == t and writers[2] == own[0]:
+        return theirs  # nothing of the user's stays: the message's bytes, not encoded again
+    data = extension_data(own, merged)
+    return {**theirs, "data": data.hex() if isinstance(theirs["data"], str) else data}
+
+
+def merge_elements(
+    base: list[Any],
+    mine: list[Any],
+    theirs: list[Any],
+    member: str = "id",
+    texts: dict[bytes, str] | None = None,
+) -> list[Any]:
     """The merge per element of spec/records.md, section 6.1, at a receiver without stamps: `base` is the
     list it last took from the sender, `mine` its user's list, `theirs` the list of the message. An element
     the user added or changed keeps the user's value, one the user removed stays removed, and every other
-    comes from the message; in the message's order, then the user's additions in the user's order."""
+    comes from the message; in the message's order, then the user's additions in the user's order. An
+    extension that the user changed and the message holds merges field by field where the receiver holds
+    its schema among `texts` (merge_extension)."""
 
     def key(e: Any) -> str:
         return element_key(e[member])
@@ -3234,10 +3315,88 @@ def merge_elements(base: list[Any], mine: list[Any], theirs: list[Any], member: 
     before, own = {key(e): e for e in base}, {key(e): e for e in mine}
     changed = {k for k, e in own.items() if before.get(k) != e}
     removed = {k for k in before if k not in own}
-    out = [own[key(e)] if key(e) in changed else e for e in theirs if key(e) not in removed]
+
+    def kept(e: Any) -> Any:
+        k = key(e)
+        if k not in changed:
+            return e
+        return merge_extension(before.get(k), own[k], e, texts or {}) if member == "name" else own[k]
+
+    out = [kept(e) for e in theirs if key(e) not in removed]
     there = {key(e) for e in theirs}
     out += [e for e in mine if key(e) in changed and key(e) not in there]
     return out[:MAX_ELEMENTS]
+
+
+EXTENSION_ITEM = fastavro.parse_schema(fe.EXTENSION_SCHEMA, _write_hint=False)
+
+
+def extension_item(name: str, data: bytes) -> bytes:
+    """The Avro binary encoding of an axt.Extension: its name and its data."""
+    encoded = name.encode()
+    return bytes(keys.zigzag(len(encoded))) + encoded + bytes(keys.zigzag(len(data))) + data
+
+
+def within_extension(
+    item: bytes, element: FieldState | None, parts: dict[str, FieldState], texts: dict[bytes, str]
+) -> bytes:
+    """The value of an extension, the encoding of an axt.Extension, composed from the element `item` and
+    the parts within it (section 25.9): the parts that hold a value and are later than the element part
+    `element`, or all of them where the element is the sender's, None, each in the place of its field.
+    The holder decodes the element with its writer schema and the value of each part with the field's type
+    in the schema of the part, resolves both against its own writer schema of the extension's type, and
+    encodes the result with it. Without such a part, or for an extension of a type it does not know, the
+    element as it is."""
+    on_top = {
+        name.rsplit("/", 1)[1]: f
+        for name, f in sorted(parts.items())
+        if f.value is not None and (element is None or later(f, element))
+    }
+    if not on_top:
+        return item
+    ext = fastavro.schemaless_reader(io.BytesIO(item), EXTENSION_ITEM, EXTENSION_ITEM)
+    assert isinstance(ext, dict)
+    name, data = str(ext["name"]), bytes(ext["data"])
+    writer, own = extension_writer(name, data, texts), own_extension(name, texts)
+    if writer is None or own is None:
+        return item
+    record = extension_record(writer, own[0], data)
+    for field, f in on_top.items():
+        text = texts.get(f.schema)
+        written = None if text is None else json.loads(text)
+        one = None if written is None or full_name(written) != name else field_schema(written, field)
+        mine = field_schema(own[0], field)
+        if one is None or mine is None or f.value is None:
+            continue  # a part of a schema the holder lacks, or of a field its own schema lacks
+        value = fastavro.schemaless_reader(
+            io.BytesIO(f.value),
+            fastavro.parse_schema(one, _write_hint=False),
+            fastavro.parse_schema(mine, _write_hint=False),
+        )
+        assert isinstance(value, dict)
+        record[field] = value[field]
+    return extension_item(name, extension_data(own, record))
+
+
+def element_within(
+    field: str, key: str, item: bytes, fields: dict[str, FieldState], texts: dict[bytes, str] | None
+) -> bytes:
+    """within_extension for the element of the key in the list `field`, with the element part and the
+    parts within it that `fields` holds; the element as it is for a list of another type, or without
+    `texts`."""
+    if texts is None:
+        return item
+    prefix = f"{field}/{key}/"
+    parts = {n: f for n, f in fields.items() if n.startswith(prefix) and n.count("/") == 2}
+    return within_extension(item, fields.get(f"{field}/{key}"), parts, texts) if parts else item
+
+
+def list_value(field: str, fields: dict[str, FieldState], texts: dict[bytes, str]) -> bytes:
+    """The value of a list merged per element of a record of the set, as a DATA to another app carries
+    it, from its field states: the elements of section 25.4, each extension composed with the parts within
+    it (section 25.9)."""
+    parts = {n: f.value for n, f in fields.items() if f.value is not None and n.count("/") < 2}
+    return list_bytes([element_within(field, k, item, fields, texts) for k, item in composed(field, parts)])
 
 
 def part_mismatch(schema: dict[str, Any], name: str, value: Any) -> str | None:
@@ -3279,17 +3438,24 @@ def record_parts(schema: dict[str, Any], values: dict[str, bytes]) -> dict[str, 
 
 
 def owner_elements(
-    schema: dict[str, Any], field: str, value: bytes, over: dict[str, bytes]
+    schema: dict[str, Any],
+    field: str,
+    value: bytes,
+    over: dict[str, bytes],
+    own: dict[str, FieldState] | None = None,
+    texts: dict[bytes, str] | None = None,
 ) -> tuple[list[bytes], list[bytes]]:
     """The elements of a list merged per element of a received record, as the items' bytes: the sender's,
     from its value, and those the device shows with the owner's parts `over` them (section 25.7, as
     spec/records.md, section 6.1): the sender's elements in the sender's order, each as the owner's part
     has it and left out for a removal mark, then the elements that only the owner's layer holds, in the
-    order of the owner's order part and then by their keys; at most 256."""
+    order of the owner's order part and then by their keys; at most 256. Each extension shown has the
+    owner's parts within it, of the field states `own` of the owner's layer, on top, where the device
+    holds its schema among `texts` (section 25.9)."""
     theirs = split_value(schema, field, value)
     order = [str(k) for k in cast_list(fastavro.schemaless_reader(io.BytesIO(theirs[field]), ORDER, ORDER))]
     sender = [theirs[f"{field}/{k}"][1:] for k in order]
-    shown_parts = [over.get(f"{field}/{k}", theirs[f"{field}/{k}"]) for k in order]
+    shown_parts = [(k, over.get(f"{field}/{k}", theirs[f"{field}/{k}"])) for k in order]
     mine = []
     if field in over:
         mine = [str(k) for k in cast_list(fastavro.schemaless_reader(io.BytesIO(over[field]), ORDER, ORDER))]
@@ -3298,8 +3464,10 @@ def owner_elements(
     )
     for k in dict.fromkeys([*(k for k in mine if k not in order), *added]):
         if f"{field}/{k}" in over:
-            shown_parts.append(over[f"{field}/{k}"])
-    out = [part[1:] for part in shown_parts if part[:1] == b"\x02"][:MAX_ELEMENTS]
+            shown_parts.append((k, over[f"{field}/{k}"]))
+    out = [
+        element_within(field, k, part[1:], own or {}, texts) for k, part in shown_parts if part[:1] == b"\x02"
+    ][:MAX_ELEMENTS]
     return sender, out
 
 
@@ -3621,7 +3789,9 @@ def shown(
         if writer is not None and element_member(writer, name) is not None:
             # A list merged per element: the sender's elements, the owner's parts over them (25.7).
             over = {n: f.value for n, f in own.items() if part_of(n)[0] == name and f.value is not None}
-            sender, items = owner_elements(writer, name, value, over)
+            sender, items = owner_elements(
+                writer, name, value, over, own, SCHEMA_TEXTS if texts is None else texts
+            )
             out[name] = (list_bytes(items), schema, "owner") if items != sender else (value, schema, "sender")
             continue
         mine = own.get(name)
@@ -3656,7 +3826,7 @@ def answered(
         if element_member(written, n) is not None:
             # A list merged per element is kept where the list shown differs from the sender's (25.7).
             over = {p: f.value for p, f in own.items() if part_of(p)[0] == n and f.value is not None}
-            sender, items = owner_elements(written, n, values[n], over)
+            sender, items = owner_elements(written, n, values[n], over, own, texts)
             if items != sender:
                 kept_fields.append(n)
         elif n in own and not same_value(
@@ -5875,7 +6045,7 @@ class SetDevice:
             values = {} if schema is None else record_values(schema, body)
             fp = None if text is None else schema_fingerprint(text)
             layer = self.layers.get(ref)
-            texts = dict(sender.schemas)
+            texts = {**self.schemas, **sender.schemas}  # its own, among them those of extensions (25.9)
             if fp is not None and text is not None:
                 texts[fp] = text
             name = None if schema is None else full_name(schema)
@@ -5962,7 +6132,15 @@ class SetDevice:
             elif rec is not None and rec.beside is not None and rec.beside.schema is not None:
                 fp = schema_fingerprint(rec.beside.schema)
             for name, value in values.items():
-                fields[name] = FieldState(value, first, self.key, fp or fields[name].schema)
+                schema = fp or fields[name].schema
+                if name.count("/") == 2:
+                    # A part within an extension: the device's own writer schema of the extension (25.9).
+                    own = own_extension(part_of(name)[1] or "", self.schemas)
+                    assert own is not None, (
+                        "the owner changes the fields of an extension whose schema it holds"
+                    )
+                    schema = own[1]
+                fields[name] = FieldState(value, first, self.key, schema)
         elif action == "discard":
             for name in values:
                 fields[name] = FieldState(None, first, self.key, fields[name].schema)
@@ -7827,6 +8005,11 @@ class Session:
         self.query()
 
 
+def forwards_of(sent: list[bytes]) -> list[bytes]:
+    """The FORWARD messages among those a device sent."""
+    return [m for m in sent if read_all("Envelope", m[10:])["kind"] == "FORWARD"]
+
+
 def sent_to(sent: list[bytes], sibling: str) -> bytes:
     """The one message among those a device sent that is for the sibling."""
     (m,) = [m for m in sent if meaning(m)[0]["to"] == KEY[sibling].hex()]
@@ -9223,6 +9406,11 @@ def sessions() -> list[Session]:
     s.receive(change_message("tablet", 122, fur), (0,))
     s.acks()
     s.query()
+    # The value of the list for a DATA to another app: the extension with both changes (section 25.9).
+    held = s.model.records[int(RECORD_ID.replace("-", ""), 16)].state.fields
+    assert list_value("extensions", held, s.model.schemas) == field_value(
+        APPOINTMENT_JSON, "extensions", [tm.rules.extension(tasso_id="276098100654321", fur="black")]
+    ), "the extension composed from its element part and the parts within it"
     s = new(
         "an extension under the key of another type, and a part within an extension of a field that is no "
         "list of extensions, are rejected",
@@ -9552,6 +9740,61 @@ TOMBSTONES: list[TombstoneCase] = [
     ),
 ]
 TOMBSTONE_VERSION = 4
+
+# What a device that holds cat-a-log's schema shows of the extensions of a received record (sections 25.7
+# and 25.9): the sender's layer holds cat-a-log's extension and one of a type the device does not know.
+# The label, the owner's layer, the extensions shown, and the layer they come from.
+SHOWN_TEXTS = {**SCHEMA_TEXTS, CAT_FP: CAT_TEXT}
+SHOWN_EXTENSIONS = {
+    **SHOWN_VALUES,
+    "extensions": field_value(APPOINTMENT_JSON, "extensions", [CAT_EXT, VET_EXT]),
+}
+_CAT = f"extensions/{CAT_NAME}"
+ShownExtensionCase = tuple[str, State, list[dict[str, Any]], str]
+SHOWN_WITHIN: list[ShownExtensionCase] = [
+    (
+        "an owner's part within an extension is shown in the place of its field of the sender's extension",
+        State({f"{_CAT}/fur": f("black", 200, TABLET, CAT_FP)}, None, 201),
+        [tm.rules.extension(tasso_id="276098100123456", fur="black"), VET_EXT],
+        "owner",
+    ),
+    (
+        "an owner's part within an extension that is later than the owner's element part is shown in it",
+        State(
+            {
+                _CAT: FieldState(
+                    b"\x02" + extension_item(CAT_NAME, tm.rules.extension(fur="white")["data"]), 200, TABLET
+                ),
+                f"{_CAT}/fur": f("black", 210, TABLET, CAT_FP),
+            },
+            None,
+            211,
+        ),
+        [tm.rules.extension(fur="black"), VET_EXT],
+        "owner",
+    ),
+    (
+        "an owner's part within an extension that is earlier than the owner's element part is not shown",
+        State(
+            {
+                _CAT: FieldState(
+                    b"\x02" + extension_item(CAT_NAME, tm.rules.extension(fur="white")["data"]), 210, TABLET
+                ),
+                f"{_CAT}/fur": f("black", 200, TABLET, CAT_FP),
+            },
+            None,
+            211,
+        ),
+        [tm.rules.extension(fur="white"), VET_EXT],
+        "owner",
+    ),
+    (
+        "an owner's value of another field leaves both extensions as the sender sent them",
+        State({"location": f("Praxis", 200, TABLET)}, None, 201),
+        [CAT_EXT, VET_EXT],
+        "sender",
+    ),
+]
 
 
 def check_layers(out: list[str]) -> None:
@@ -10736,6 +10979,54 @@ def received_sessions() -> list[Session]:
     s.take(other_data(2, relations=[MIMI_RELATION]), text)
     s.acks()
     s.about()
+
+    # --- extensions of a received record (sections 25.7 and 25.9; spec/fields.md, section 12.4) ---
+    s = new(
+        "an extension of a type the device does not know is forwarded and shown as it came, through the "
+        "owner's change of another field",
+        ["fields.md 12.4", "sync.md 25.7", "sync.md 20.1", "sync.md 20.4", "records.md 6.1"],
+        known(),
+    )
+    unknown = other_data(2, extensions=[VET_EXT])
+    sent = s.take(unknown, text)
+    inner = read_all("Forward", read_all("Envelope", sent_to(sent, "tablet")[10:])["body"][10:])["message"]
+    assert inner == unknown, "the DATA is forwarded as it came"
+    s.owner("set", {"location": VALUE_WEBER}, (4, 0))
+    again = s.receive(resync_message("tablet"), (0,))
+    inners = [
+        read_all("Forward", read_all("Envelope", m[10:])["body"][10:])["message"] for m in forwards_of(again)
+    ]
+    assert unknown in inners, "after the owner's change, the DATA is forwarded again as it came"
+    s.acks()
+    s.about()
+    vet_value = field_value(APPOINTMENT_JSON, "extensions", [VET_EXT])
+    assert s.answers[-1]["shown"]["fields"]["extensions"] == {
+        "value": vet_value.hex(),
+        "schema": SCHEMA_1.hex(),
+        "from": "sender",
+    }, "the record shows the extension's bytes as they came"
+    s = new(
+        "the owner's change within an extension of a received record and the sender's change of another "
+        "field of it both show",
+        ["sync.md 25.9", "sync.md 25.7", "sync.md 22.2", "records.md 6.1"],
+        known(
+            record=other_data(1, extensions=[CAT_EXT]),
+            schemas=(APPOINTMENT_1, CAT_TEXT),
+            accepted={"tablet": [SCHEMA_1, CAT_FP]},
+        ),
+    )
+    s.owner("set", {f"extensions/{CAT_NAME}/fur": text_value("black")}, (4, 0))
+    s.take(other_data(2, extensions=[tm.rules.extension(tasso_id="276098100654321", fur="tabby")]), text)
+    s.acks()
+    s.about()
+    both = field_value(
+        APPOINTMENT_JSON, "extensions", [tm.rules.extension(tasso_id="276098100654321", fur="black")]
+    )
+    assert s.answers[-1]["shown"]["fields"]["extensions"] == {
+        "value": both.hex(),
+        "schema": SCHEMA_1.hex(),
+        "from": "owner",
+    }, "the record shows the owner's fur in the sender's extension"
 
     # --- the answer to a RESYNC (section 20.4) ---
     layer = State({"location": weber}, None, 205)  # the phone took it from the tablet, as in section 16.7
@@ -20095,6 +20386,75 @@ SAID: dict[str, list[list[str]]] = {
             ),
             "tablet: not known",
             "shows: there; the owner's value in relations",
+        ],
+    ],
+    (
+        "an extension of a type the device does not know is forwarded and shown as it came, through the "
+        "owner's change of another field"
+    ): [
+        [
+            "outcome: APPLIED",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, extensions changed, with the schema as offered",
+        ],
+        [
+            "made: True",
+            "CHANGE, origin other app, to tablet, version 201, state 201, whole: location@200p",
+        ],
+        [
+            "outcome: None",
+            "CHANGE, origin other app, to tablet, version 202, state 202, whole: location@200p",
+            "FORWARD 00000003 to tablet, #1: DATA version 2, extensions changed, with the schema as offered",
+            "FORWARD 00000002 to tablet, #0: MANIFEST revision 1",
+        ],
+        [
+            "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
+            "ACK to other app: version 2 APPLIED, receiver 2",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 202",
+            "kept: MANIFEST revision 1; delivered to no sibling",
+            "kept: DATA version 2, extensions changed; delivered to no sibling",
+            (
+                "sender's layer: there, version 2, type axt.example.v1.Appointment, from DATA "
+                "version 2, extensions changed"
+            ),
+            "owner's layer: state stamp 202; location@200p; type axt.example.v1.Appointment",
+            "tablet: not known",
+            "shows: there; the owner's value in location",
+        ],
+    ],
+    (
+        "the owner's change within an extension of a received record and the sender's change of another "
+        "field of it both show"
+    ): [
+        [
+            "made: True",
+            (
+                "CHANGE, origin other app, to tablet, version 201, state 201, whole: "
+                "extensions/org.example.catalog.CatExtension/fur@200p"
+            ),
+        ],
+        [
+            "outcome: MERGED, kept ['extensions']",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, extensions changed, with the schema as offered",
+        ],
+        [
+            "ACK to other app: version 2 MERGED, receiver 2, kept ['extensions']",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 201",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2, extensions changed; delivered to no sibling",
+            (
+                "sender's layer: there, version 2, type axt.example.v1.Appointment, from DATA "
+                "version 2, extensions changed"
+            ),
+            (
+                "owner's layer: state stamp 201; extensions/org.example.catalog.CatExtension/fur@200p; "
+                "type axt.example.v1.Appointment"
+            ),
+            "tablet: not known",
+            "shows: there; the owner's value in extensions",
         ],
     ],
     (
