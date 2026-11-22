@@ -2434,7 +2434,7 @@ A device whose schema of the type lacks the field keeps the parts and passes the
 
 ### 25.6 From a whole value
 
-A device that builds field states from a record's whole value splits the list into its parts: an order part with the keys of the elements in their order, and one element part for each element, whose bytes are those of the element in the value, after the byte 2, cut out and not encoded again (section 3.1). It does so for a `DATA` of a file of its own set (section 13.4), and for the values of the sender's layer of a received record wherever it compares them or shows them (section 25.7). A proposal that the owner takes ([shares.md](shares.md), section 15.2) carries a list as its whole value; the device's change stamps every part of that list and the removal mark of each element that the record holds and the proposed list lacks.
+A device that builds field states from a record's whole value splits the list into its parts: an order part with the keys of the elements in their order, and one element part for each element, whose bytes are those of the element in the value, after the byte 2, cut out and not encoded again (section 3.1). It does so for a `DATA` of a file of its own set (section 13.4), and for the values of the sender's layer of a received record wherever it compares them or shows them (section 25.7). A proposal that the owner takes ([shares.md](shares.md), section 15.2) carries a list as its whole value; the device's change stamps every part of that list and the removal mark of each element that the record holds and the proposed list lacks, apart from the elements that the proposer's share left out ([shares.md](shares.md), section 19.3).
 
 ### 25.7 Received records
 

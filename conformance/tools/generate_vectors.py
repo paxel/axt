@@ -4863,8 +4863,64 @@ def shares_category() -> Category:
         )
         assert (held, then, sy.stamp_json(to_pass)) == want, (label, held, then, to_pass)
         c.add("acked", label, refs, full, accept({"outcome": want[0], "then": want[1], "to_pass": want[2]}))
+    shared_values(c)
     proposal_vectors(c)
     return c
+
+
+def shared_values(c: Category) -> None:
+    """What a sender sends one receiver of a record with relations and an extension (spec/shares.md,
+    sections 19.1 and 19.2): the expected values are written out here, from the rules."""
+    mimi, vet, praxis = (se.json_form(r) for r in rules.RELATIONS["Appointment"])
+    cat_ext = se.json_form(rules.MIMI_CAT)
+    value = dict(se.json_form(rules.DATA["Appointment"]), relations=[mimi, vet, praxis], extensions=[cat_ext])
+    own = H(CAT)  # the sender's own key, cat-a-log's
+    other = rules.OTHER_SENDER.hex()  # the sender of the vet's record
+    cases: list[tuple[str, list[str], dict[str, Any], dict[str, Any]]] = [
+        (
+            "a share that leaves out the links sends the relations to shared records of the own set only, "
+            "and no extension",
+            ["shares.md 19.1"],
+            {"own_user": False, "links": False, "shared": [rules.PET_ID], "own_keys": [own]},
+            dict(value, relations=[mimi], extensions=[]),
+        ),
+        (
+            "a relation to a record of the own set that is not shared with the receiver is left out",
+            ["shares.md 19.1", "shares.md 19.2"],
+            {"own_user": False, "links": False, "shared": [], "own_keys": [own]},
+            dict(value, relations=[], extensions=[]),
+        ),
+        (
+            "a relation that names the own set by one of its keys goes along where its target is shared",
+            ["shares.md 19.1", "fields.md 11.3"],
+            {
+                "own_user": False,
+                "links": False,
+                "shared": [rules.PET_ID, rules.VET_ID],
+                "own_keys": [own, other],
+            },
+            dict(value, relations=[mimi, vet], extensions=[]),
+        ),
+        (
+            "a share that lets the links go along sends the record whole",
+            ["shares.md 19.1"],
+            {"own_user": False, "links": True, "shared": [], "own_keys": [own]},
+            value,
+        ),
+        (
+            "an app of the sender's own user gets the record whole, without a share",
+            ["shares.md 19.1", "shares.md 2.3"],
+            {"own_user": True, "links": False, "shared": [], "own_keys": [own]},
+            value,
+        ),
+    ]
+    for label, refs, i, want in cases:
+        full = {"type": se.AP_TYPE, "value": value, **i}
+        got = se.shared_value(
+            se.AP_TYPE, value, i["own_user"], i["links"], set(i["shared"]), set(i["own_keys"])
+        )
+        assert got == want, label
+        c.add("shared_value", label, refs, full, accept({"value": want}))
 
 
 def proposal_vectors(c: Category) -> None:
@@ -6160,6 +6216,43 @@ def proposal_vectors(c: Category) -> None:
         ],
     )
 
+    # A proposal of the relations that a share without links let through: the owner keeps the relations
+    # that the proposer never got (spec/shares.md, section 19.3).
+    to_pet = rules.relation(
+        "f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b", rules.record_target(pet_id, "axt.example.v1.Pet", "Mimi")
+    )
+    _, vet, praxis = rules.RELATIONS["Appointment"]
+    booster = dict(to_pet, note="Booster")
+    linked = dict(v3, relations=se.json_form([to_pet, vet, praxis]))
+    device = owner_device()
+    device["records"][0] = {**device["records"][0], "value": linked}
+    proposed = sy.field_value(se.APPOINTMENT_SCHEMA, "relations", [booster])
+    owner(
+        "a proposal of the relations that the share let through keeps those that it left out",
+        ["shares.md 19.3", "shares.md 19.1", "shares.md 15.2"],
+        device,
+        [
+            ({"receive": P([("relations", fp1, proposed)])}, got("taken")),
+            (
+                {
+                    "answer": {
+                        "receiver": "Old Brain Fix",
+                        "proposal_id": se.PROPOSAL_ID,
+                        "answer": "ACCEPTED",
+                    }
+                },
+                {
+                    "made": True,
+                    "replies": [reply(se.PROPOSAL_ID, "ACCEPTED")],
+                    "update": {
+                        "version": "4",
+                        "value": dict(v3, relations=se.json_form([booster, vet, praxis])),
+                    },
+                },
+            ),
+        ],
+    )
+
 
 # --- file (spec/transports.md, section 2) ---------------------------------------------------
 # The scripts write one file; the files below are built by hand, so that each broken one breaks one rule. The
@@ -7442,7 +7535,8 @@ COUNTS = {
             "pass_withdrawal": 5,
             "join_receivers": 5,
             "offer_types": 2,
-            "owner": 68,
+            "shared_value": 5,
+            "owner": 69,
             "proposer": 33,
         },
         {},

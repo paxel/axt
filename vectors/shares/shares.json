@@ -2834,6 +2834,799 @@
    }
   },
   {
+   "id": "shares/shared_value/a-share-that-leaves-out-the-links-sends-the-relations-to-shared-records",
+   "op": "shared_value",
+   "description": "a share that leaves out the links sends the relations to shared records of the own set only, and no extension",
+   "refs": ["shares.md 19.1"],
+   "input": {
+    "type": "axt.example.v1.Appointment",
+    "value": {
+     "title": "Vet: vaccination",
+     "start": {
+      "year": 2026,
+      "month": 11,
+      "day": 24,
+      "hour": 10,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1795510800000
+     },
+     "end": {
+      "year": 2026,
+      "month": 11,
+      "day": 24,
+      "hour": 10,
+      "minute": 30,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1795512600000
+     },
+     "all_day": false,
+     "location": "Tierarztpraxis, Hauptstraße 1",
+     "notes": "Bring the vaccination certificate.",
+     "reminders": [
+      {"months": 0, "days": -1, "millis": 0},
+      {"months": 0, "days": 0, "millis": -3600000}
+     ],
+     "relations": [
+      {
+       "id": "f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b",
+       "kind": "axt.related",
+       "target": {
+        "id": "0b6f4a3e-8c1d-4f27-9e5a-2d7c41b8e093",
+        "sender": null,
+        "type": "axt.example.v1.Pet",
+        "text": "Mimi"
+       },
+       "note": "Her yearly vaccination.",
+       "start": null,
+       "end": null,
+       "attributes": {}
+      },
+      {
+       "id": "6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60",
+       "kind": "org.example.catalog.vet",
+       "target": {
+        "id": "5d2e9c71-3a4b-4e8f-b6d0-7f1a2c9e4b58",
+        "sender": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+        "type": "axt.example.v1.Person",
+        "text": "Dr. Anna Maria Schmidt"
+       },
+       "note": "",
+       "start": null,
+       "end": null,
+       "attributes": {"org.example.catalog.role": "vet", "org.example.catalog.paid_by": "owner"}
+      },
+      {
+       "id": "a2c4e6f8-0b1d-4e3f-8a5c-7e9f1b3d5a70",
+       "kind": "axt.related",
+       "target": {"uri": "https://tierarzt.example/praxis", "text": "Tierarztpraxis"},
+       "note": "",
+       "start": null,
+       "end": null,
+       "attributes": {}
+      }
+     ],
+     "extensions": [
+      {
+       "name": "org.example.catalog.CatExtension",
+       "data": "c301f6424ab2a3fa9f621e3237363039383130303132333435360a7461626279"
+      }
+     ]
+    },
+    "own_user": false,
+    "links": false,
+    "shared": ["0b6f4a3e-8c1d-4f27-9e5a-2d7c41b8e093"],
+    "own_keys": ["1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a"]
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "title": "Vet: vaccination",
+      "start": {
+       "year": 2026,
+       "month": 11,
+       "day": 24,
+       "hour": 10,
+       "minute": 0,
+       "second": 0,
+       "millisecond": 0,
+       "zone": "Europe/Berlin",
+       "offset_seconds": 3600,
+       "instant_ms": 1795510800000
+      },
+      "end": {
+       "year": 2026,
+       "month": 11,
+       "day": 24,
+       "hour": 10,
+       "minute": 30,
+       "second": 0,
+       "millisecond": 0,
+       "zone": "Europe/Berlin",
+       "offset_seconds": 3600,
+       "instant_ms": 1795512600000
+      },
+      "all_day": false,
+      "location": "Tierarztpraxis, Hauptstraße 1",
+      "notes": "Bring the vaccination certificate.",
+      "reminders": [
+       {"months": 0, "days": -1, "millis": 0},
+       {"months": 0, "days": 0, "millis": -3600000}
+      ],
+      "relations": [
+       {
+        "id": "f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b",
+        "kind": "axt.related",
+        "target": {
+         "id": "0b6f4a3e-8c1d-4f27-9e5a-2d7c41b8e093",
+         "sender": null,
+         "type": "axt.example.v1.Pet",
+         "text": "Mimi"
+        },
+        "note": "Her yearly vaccination.",
+        "start": null,
+        "end": null,
+        "attributes": {}
+       }
+      ],
+      "extensions": []
+     }
+    }
+   }
+  },
+  {
+   "id": "shares/shared_value/a-relation-to-a-record-of-the-own-set-that-is-not-shared-with-the-receiv",
+   "op": "shared_value",
+   "description": "a relation to a record of the own set that is not shared with the receiver is left out",
+   "refs": ["shares.md 19.1", "shares.md 19.2"],
+   "input": {
+    "type": "axt.example.v1.Appointment",
+    "value": {
+     "title": "Vet: vaccination",
+     "start": {
+      "year": 2026,
+      "month": 11,
+      "day": 24,
+      "hour": 10,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1795510800000
+     },
+     "end": {
+      "year": 2026,
+      "month": 11,
+      "day": 24,
+      "hour": 10,
+      "minute": 30,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1795512600000
+     },
+     "all_day": false,
+     "location": "Tierarztpraxis, Hauptstraße 1",
+     "notes": "Bring the vaccination certificate.",
+     "reminders": [
+      {"months": 0, "days": -1, "millis": 0},
+      {"months": 0, "days": 0, "millis": -3600000}
+     ],
+     "relations": [
+      {
+       "id": "f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b",
+       "kind": "axt.related",
+       "target": {
+        "id": "0b6f4a3e-8c1d-4f27-9e5a-2d7c41b8e093",
+        "sender": null,
+        "type": "axt.example.v1.Pet",
+        "text": "Mimi"
+       },
+       "note": "Her yearly vaccination.",
+       "start": null,
+       "end": null,
+       "attributes": {}
+      },
+      {
+       "id": "6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60",
+       "kind": "org.example.catalog.vet",
+       "target": {
+        "id": "5d2e9c71-3a4b-4e8f-b6d0-7f1a2c9e4b58",
+        "sender": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+        "type": "axt.example.v1.Person",
+        "text": "Dr. Anna Maria Schmidt"
+       },
+       "note": "",
+       "start": null,
+       "end": null,
+       "attributes": {"org.example.catalog.role": "vet", "org.example.catalog.paid_by": "owner"}
+      },
+      {
+       "id": "a2c4e6f8-0b1d-4e3f-8a5c-7e9f1b3d5a70",
+       "kind": "axt.related",
+       "target": {"uri": "https://tierarzt.example/praxis", "text": "Tierarztpraxis"},
+       "note": "",
+       "start": null,
+       "end": null,
+       "attributes": {}
+      }
+     ],
+     "extensions": [
+      {
+       "name": "org.example.catalog.CatExtension",
+       "data": "c301f6424ab2a3fa9f621e3237363039383130303132333435360a7461626279"
+      }
+     ]
+    },
+    "own_user": false,
+    "links": false,
+    "shared": [],
+    "own_keys": ["1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a"]
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "title": "Vet: vaccination",
+      "start": {
+       "year": 2026,
+       "month": 11,
+       "day": 24,
+       "hour": 10,
+       "minute": 0,
+       "second": 0,
+       "millisecond": 0,
+       "zone": "Europe/Berlin",
+       "offset_seconds": 3600,
+       "instant_ms": 1795510800000
+      },
+      "end": {
+       "year": 2026,
+       "month": 11,
+       "day": 24,
+       "hour": 10,
+       "minute": 30,
+       "second": 0,
+       "millisecond": 0,
+       "zone": "Europe/Berlin",
+       "offset_seconds": 3600,
+       "instant_ms": 1795512600000
+      },
+      "all_day": false,
+      "location": "Tierarztpraxis, Hauptstraße 1",
+      "notes": "Bring the vaccination certificate.",
+      "reminders": [
+       {"months": 0, "days": -1, "millis": 0},
+       {"months": 0, "days": 0, "millis": -3600000}
+      ],
+      "relations": [],
+      "extensions": []
+     }
+    }
+   }
+  },
+  {
+   "id": "shares/shared_value/a-relation-that-names-the-own-set-by-one-of-its-keys-goes-along-where-it",
+   "op": "shared_value",
+   "description": "a relation that names the own set by one of its keys goes along where its target is shared",
+   "refs": ["shares.md 19.1", "fields.md 11.3"],
+   "input": {
+    "type": "axt.example.v1.Appointment",
+    "value": {
+     "title": "Vet: vaccination",
+     "start": {
+      "year": 2026,
+      "month": 11,
+      "day": 24,
+      "hour": 10,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1795510800000
+     },
+     "end": {
+      "year": 2026,
+      "month": 11,
+      "day": 24,
+      "hour": 10,
+      "minute": 30,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1795512600000
+     },
+     "all_day": false,
+     "location": "Tierarztpraxis, Hauptstraße 1",
+     "notes": "Bring the vaccination certificate.",
+     "reminders": [
+      {"months": 0, "days": -1, "millis": 0},
+      {"months": 0, "days": 0, "millis": -3600000}
+     ],
+     "relations": [
+      {
+       "id": "f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b",
+       "kind": "axt.related",
+       "target": {
+        "id": "0b6f4a3e-8c1d-4f27-9e5a-2d7c41b8e093",
+        "sender": null,
+        "type": "axt.example.v1.Pet",
+        "text": "Mimi"
+       },
+       "note": "Her yearly vaccination.",
+       "start": null,
+       "end": null,
+       "attributes": {}
+      },
+      {
+       "id": "6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60",
+       "kind": "org.example.catalog.vet",
+       "target": {
+        "id": "5d2e9c71-3a4b-4e8f-b6d0-7f1a2c9e4b58",
+        "sender": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+        "type": "axt.example.v1.Person",
+        "text": "Dr. Anna Maria Schmidt"
+       },
+       "note": "",
+       "start": null,
+       "end": null,
+       "attributes": {"org.example.catalog.role": "vet", "org.example.catalog.paid_by": "owner"}
+      },
+      {
+       "id": "a2c4e6f8-0b1d-4e3f-8a5c-7e9f1b3d5a70",
+       "kind": "axt.related",
+       "target": {"uri": "https://tierarzt.example/praxis", "text": "Tierarztpraxis"},
+       "note": "",
+       "start": null,
+       "end": null,
+       "attributes": {}
+      }
+     ],
+     "extensions": [
+      {
+       "name": "org.example.catalog.CatExtension",
+       "data": "c301f6424ab2a3fa9f621e3237363039383130303132333435360a7461626279"
+      }
+     ]
+    },
+    "own_user": false,
+    "links": false,
+    "shared": ["0b6f4a3e-8c1d-4f27-9e5a-2d7c41b8e093", "5d2e9c71-3a4b-4e8f-b6d0-7f1a2c9e4b58"],
+    "own_keys": [
+     "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+     "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a"
+    ]
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "title": "Vet: vaccination",
+      "start": {
+       "year": 2026,
+       "month": 11,
+       "day": 24,
+       "hour": 10,
+       "minute": 0,
+       "second": 0,
+       "millisecond": 0,
+       "zone": "Europe/Berlin",
+       "offset_seconds": 3600,
+       "instant_ms": 1795510800000
+      },
+      "end": {
+       "year": 2026,
+       "month": 11,
+       "day": 24,
+       "hour": 10,
+       "minute": 30,
+       "second": 0,
+       "millisecond": 0,
+       "zone": "Europe/Berlin",
+       "offset_seconds": 3600,
+       "instant_ms": 1795512600000
+      },
+      "all_day": false,
+      "location": "Tierarztpraxis, Hauptstraße 1",
+      "notes": "Bring the vaccination certificate.",
+      "reminders": [
+       {"months": 0, "days": -1, "millis": 0},
+       {"months": 0, "days": 0, "millis": -3600000}
+      ],
+      "relations": [
+       {
+        "id": "f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b",
+        "kind": "axt.related",
+        "target": {
+         "id": "0b6f4a3e-8c1d-4f27-9e5a-2d7c41b8e093",
+         "sender": null,
+         "type": "axt.example.v1.Pet",
+         "text": "Mimi"
+        },
+        "note": "Her yearly vaccination.",
+        "start": null,
+        "end": null,
+        "attributes": {}
+       },
+       {
+        "id": "6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60",
+        "kind": "org.example.catalog.vet",
+        "target": {
+         "id": "5d2e9c71-3a4b-4e8f-b6d0-7f1a2c9e4b58",
+         "sender": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+         "type": "axt.example.v1.Person",
+         "text": "Dr. Anna Maria Schmidt"
+        },
+        "note": "",
+        "start": null,
+        "end": null,
+        "attributes": {"org.example.catalog.role": "vet", "org.example.catalog.paid_by": "owner"}
+       }
+      ],
+      "extensions": []
+     }
+    }
+   }
+  },
+  {
+   "id": "shares/shared_value/a-share-that-lets-the-links-go-along-sends-the-record-whole",
+   "op": "shared_value",
+   "description": "a share that lets the links go along sends the record whole",
+   "refs": ["shares.md 19.1"],
+   "input": {
+    "type": "axt.example.v1.Appointment",
+    "value": {
+     "title": "Vet: vaccination",
+     "start": {
+      "year": 2026,
+      "month": 11,
+      "day": 24,
+      "hour": 10,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1795510800000
+     },
+     "end": {
+      "year": 2026,
+      "month": 11,
+      "day": 24,
+      "hour": 10,
+      "minute": 30,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1795512600000
+     },
+     "all_day": false,
+     "location": "Tierarztpraxis, Hauptstraße 1",
+     "notes": "Bring the vaccination certificate.",
+     "reminders": [
+      {"months": 0, "days": -1, "millis": 0},
+      {"months": 0, "days": 0, "millis": -3600000}
+     ],
+     "relations": [
+      {
+       "id": "f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b",
+       "kind": "axt.related",
+       "target": {
+        "id": "0b6f4a3e-8c1d-4f27-9e5a-2d7c41b8e093",
+        "sender": null,
+        "type": "axt.example.v1.Pet",
+        "text": "Mimi"
+       },
+       "note": "Her yearly vaccination.",
+       "start": null,
+       "end": null,
+       "attributes": {}
+      },
+      {
+       "id": "6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60",
+       "kind": "org.example.catalog.vet",
+       "target": {
+        "id": "5d2e9c71-3a4b-4e8f-b6d0-7f1a2c9e4b58",
+        "sender": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+        "type": "axt.example.v1.Person",
+        "text": "Dr. Anna Maria Schmidt"
+       },
+       "note": "",
+       "start": null,
+       "end": null,
+       "attributes": {"org.example.catalog.role": "vet", "org.example.catalog.paid_by": "owner"}
+      },
+      {
+       "id": "a2c4e6f8-0b1d-4e3f-8a5c-7e9f1b3d5a70",
+       "kind": "axt.related",
+       "target": {"uri": "https://tierarzt.example/praxis", "text": "Tierarztpraxis"},
+       "note": "",
+       "start": null,
+       "end": null,
+       "attributes": {}
+      }
+     ],
+     "extensions": [
+      {
+       "name": "org.example.catalog.CatExtension",
+       "data": "c301f6424ab2a3fa9f621e3237363039383130303132333435360a7461626279"
+      }
+     ]
+    },
+    "own_user": false,
+    "links": true,
+    "shared": [],
+    "own_keys": ["1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a"]
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "title": "Vet: vaccination",
+      "start": {
+       "year": 2026,
+       "month": 11,
+       "day": 24,
+       "hour": 10,
+       "minute": 0,
+       "second": 0,
+       "millisecond": 0,
+       "zone": "Europe/Berlin",
+       "offset_seconds": 3600,
+       "instant_ms": 1795510800000
+      },
+      "end": {
+       "year": 2026,
+       "month": 11,
+       "day": 24,
+       "hour": 10,
+       "minute": 30,
+       "second": 0,
+       "millisecond": 0,
+       "zone": "Europe/Berlin",
+       "offset_seconds": 3600,
+       "instant_ms": 1795512600000
+      },
+      "all_day": false,
+      "location": "Tierarztpraxis, Hauptstraße 1",
+      "notes": "Bring the vaccination certificate.",
+      "reminders": [
+       {"months": 0, "days": -1, "millis": 0},
+       {"months": 0, "days": 0, "millis": -3600000}
+      ],
+      "relations": [
+       {
+        "id": "f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b",
+        "kind": "axt.related",
+        "target": {
+         "id": "0b6f4a3e-8c1d-4f27-9e5a-2d7c41b8e093",
+         "sender": null,
+         "type": "axt.example.v1.Pet",
+         "text": "Mimi"
+        },
+        "note": "Her yearly vaccination.",
+        "start": null,
+        "end": null,
+        "attributes": {}
+       },
+       {
+        "id": "6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60",
+        "kind": "org.example.catalog.vet",
+        "target": {
+         "id": "5d2e9c71-3a4b-4e8f-b6d0-7f1a2c9e4b58",
+         "sender": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+         "type": "axt.example.v1.Person",
+         "text": "Dr. Anna Maria Schmidt"
+        },
+        "note": "",
+        "start": null,
+        "end": null,
+        "attributes": {"org.example.catalog.role": "vet", "org.example.catalog.paid_by": "owner"}
+       },
+       {
+        "id": "a2c4e6f8-0b1d-4e3f-8a5c-7e9f1b3d5a70",
+        "kind": "axt.related",
+        "target": {"uri": "https://tierarzt.example/praxis", "text": "Tierarztpraxis"},
+        "note": "",
+        "start": null,
+        "end": null,
+        "attributes": {}
+       }
+      ],
+      "extensions": [
+       {
+        "name": "org.example.catalog.CatExtension",
+        "data": "c301f6424ab2a3fa9f621e3237363039383130303132333435360a7461626279"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "shares/shared_value/an-app-of-the-sender-s-own-user-gets-the-record-whole-without-a-share",
+   "op": "shared_value",
+   "description": "an app of the sender's own user gets the record whole, without a share",
+   "refs": ["shares.md 19.1", "shares.md 2.3"],
+   "input": {
+    "type": "axt.example.v1.Appointment",
+    "value": {
+     "title": "Vet: vaccination",
+     "start": {
+      "year": 2026,
+      "month": 11,
+      "day": 24,
+      "hour": 10,
+      "minute": 0,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1795510800000
+     },
+     "end": {
+      "year": 2026,
+      "month": 11,
+      "day": 24,
+      "hour": 10,
+      "minute": 30,
+      "second": 0,
+      "millisecond": 0,
+      "zone": "Europe/Berlin",
+      "offset_seconds": 3600,
+      "instant_ms": 1795512600000
+     },
+     "all_day": false,
+     "location": "Tierarztpraxis, Hauptstraße 1",
+     "notes": "Bring the vaccination certificate.",
+     "reminders": [
+      {"months": 0, "days": -1, "millis": 0},
+      {"months": 0, "days": 0, "millis": -3600000}
+     ],
+     "relations": [
+      {
+       "id": "f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b",
+       "kind": "axt.related",
+       "target": {
+        "id": "0b6f4a3e-8c1d-4f27-9e5a-2d7c41b8e093",
+        "sender": null,
+        "type": "axt.example.v1.Pet",
+        "text": "Mimi"
+       },
+       "note": "Her yearly vaccination.",
+       "start": null,
+       "end": null,
+       "attributes": {}
+      },
+      {
+       "id": "6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60",
+       "kind": "org.example.catalog.vet",
+       "target": {
+        "id": "5d2e9c71-3a4b-4e8f-b6d0-7f1a2c9e4b58",
+        "sender": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+        "type": "axt.example.v1.Person",
+        "text": "Dr. Anna Maria Schmidt"
+       },
+       "note": "",
+       "start": null,
+       "end": null,
+       "attributes": {"org.example.catalog.role": "vet", "org.example.catalog.paid_by": "owner"}
+      },
+      {
+       "id": "a2c4e6f8-0b1d-4e3f-8a5c-7e9f1b3d5a70",
+       "kind": "axt.related",
+       "target": {"uri": "https://tierarzt.example/praxis", "text": "Tierarztpraxis"},
+       "note": "",
+       "start": null,
+       "end": null,
+       "attributes": {}
+      }
+     ],
+     "extensions": [
+      {
+       "name": "org.example.catalog.CatExtension",
+       "data": "c301f6424ab2a3fa9f621e3237363039383130303132333435360a7461626279"
+      }
+     ]
+    },
+    "own_user": true,
+    "links": false,
+    "shared": [],
+    "own_keys": ["1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a"]
+   },
+   "expected": {
+    "accept": {
+     "value": {
+      "title": "Vet: vaccination",
+      "start": {
+       "year": 2026,
+       "month": 11,
+       "day": 24,
+       "hour": 10,
+       "minute": 0,
+       "second": 0,
+       "millisecond": 0,
+       "zone": "Europe/Berlin",
+       "offset_seconds": 3600,
+       "instant_ms": 1795510800000
+      },
+      "end": {
+       "year": 2026,
+       "month": 11,
+       "day": 24,
+       "hour": 10,
+       "minute": 30,
+       "second": 0,
+       "millisecond": 0,
+       "zone": "Europe/Berlin",
+       "offset_seconds": 3600,
+       "instant_ms": 1795512600000
+      },
+      "all_day": false,
+      "location": "Tierarztpraxis, Hauptstraße 1",
+      "notes": "Bring the vaccination certificate.",
+      "reminders": [
+       {"months": 0, "days": -1, "millis": 0},
+       {"months": 0, "days": 0, "millis": -3600000}
+      ],
+      "relations": [
+       {
+        "id": "f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b",
+        "kind": "axt.related",
+        "target": {
+         "id": "0b6f4a3e-8c1d-4f27-9e5a-2d7c41b8e093",
+         "sender": null,
+         "type": "axt.example.v1.Pet",
+         "text": "Mimi"
+        },
+        "note": "Her yearly vaccination.",
+        "start": null,
+        "end": null,
+        "attributes": {}
+       },
+       {
+        "id": "6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60",
+        "kind": "org.example.catalog.vet",
+        "target": {
+         "id": "5d2e9c71-3a4b-4e8f-b6d0-7f1a2c9e4b58",
+         "sender": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+         "type": "axt.example.v1.Person",
+         "text": "Dr. Anna Maria Schmidt"
+        },
+        "note": "",
+        "start": null,
+        "end": null,
+        "attributes": {"org.example.catalog.role": "vet", "org.example.catalog.paid_by": "owner"}
+       },
+       {
+        "id": "a2c4e6f8-0b1d-4e3f-8a5c-7e9f1b3d5a70",
+        "kind": "axt.related",
+        "target": {"uri": "https://tierarzt.example/praxis", "text": "Tierarztpraxis"},
+        "note": "",
+        "start": null,
+        "end": null,
+        "attributes": {}
+       }
+      ],
+      "extensions": [
+       {
+        "name": "org.example.catalog.CatExtension",
+        "data": "c301f6424ab2a3fa9f621e3237363039383130303132333435360a7461626279"
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
    "id": "shares/owner/the-example-of-shares-md-section-11-3-a-proposal-taken-a-repeat-the-answ",
    "op": "owner",
    "description": "the example of shares.md, section 11.3: a proposal taken, a repeat, the answer ACCEPTED and the update",
@@ -24346,6 +25139,325 @@
        }
       ],
       "update": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "shares/owner/a-proposal-of-the-relations-that-the-share-let-through-keeps-those-that",
+   "op": "owner",
+   "description": "a proposal of the relations that the share let through keeps those that it left out",
+   "refs": ["shares.md 13.3", "shares.md 19.3", "shares.md 19.1", "shares.md 15.2"],
+   "input": {
+    "device": {
+     "seed": "2b4515a86ea2f9e9948bbb1b38ceb8726df536c021da2c54b91b1288fa2ac24e",
+     "siblings": ["ee08eaa3d8aa507343bc02924fe98d02f9e4471627ace61554f1b49635f24ab2"],
+     "proposals": ["axt.example.v1.Appointment"],
+     "schemas": [
+      "{\"type\":\"record\",\"name\":\"Appointment\",\"namespace\":\"axt.example.v1\",\"doc\":\"An appointment: an event at a time and possibly a place, such as a visit to the vet.\",\"axt.version\":1,\"fields\":[{\"name\":\"title\",\"type\":\"string\",\"default\":\"\",\"doc\":\"What the appointment is, as plain text on one line.\"},{\"name\":\"start\",\"type\":{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]},\"doc\":\"When the appointment starts, as a date and time on the wall clock, in a time zone or floating. For an all-day appointment, 00:00 of its first day, floating.\"},{\"name\":\"end\",\"type\":[\"null\",\"axt.DateTime\"],\"default\":null,\"doc\":\"When the appointment ends: the first moment after it, which is not part of it. It is in a time zone when start is, possibly another one, as for a flight, and floating when start is floating. For an all-day appointment, 00:00 of the day after its last day, floating. Null when no end is given; an all-day appointment without an end takes one day.\"},{\"name\":\"all_day\",\"type\":\"boolean\",\"default\":false,\"doc\":\"True when the appointment takes whole days; start and end are then floating at 00:00, and only their days count.\"},{\"name\":\"location\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Where the appointment takes place, as text, such as an address or a room. Empty when not given.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"reminders\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"Duration\",\"namespace\":\"axt\",\"doc\":\"A length of time in three parts that are not converted into each other: calendar months, calendar days and elapsed milliseconds, as an INTERVAL of SQL. P1M2DT3H is 1 month, 2 days and 10800000 milliseconds; -PT15M is -900000 milliseconds. The parts that are not 0 all have the same sign. Added to a date and time, the months come first, then the days, then the milliseconds. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"months\",\"type\":\"int\",\"doc\":\"The number of calendar months, negative for a length back in time. A year is 12 months.\"},{\"name\":\"days\",\"type\":\"int\",\"doc\":\"The number of calendar days, negative for a length back in time. A day on the wall clock, which may last 23 or 25 hours where the offset changes; a week is 7 days.\"},{\"name\":\"millis\",\"type\":\"long\",\"doc\":\"The number of elapsed milliseconds, negative for a length back in time. Hours, minutes and seconds are carried here: an hour is 3600000 milliseconds, and 24 hours are not converted into a day.\"}]}},\"default\":[],\"doc\":\"When the user wants to be reminded, each as a duration added to start as spec/time.md, section 7.2, says: negative before start, such as -PT15M for 15 minutes before or -P1D for the day before at the same time on the wall clock, 0 at start, and positive after it. Empty when there are no reminders.\"},{\"name\":\"relations\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"Relation\",\"namespace\":\"axt\",\"doc\":\"A relation: a link from the record that holds it to another record or to a thing outside AXT, of a kind, with information about the link. Defined in spec/fields.md, section 11.\",\"axt.label\":\"Relation\",\"axt.label_translations\":{\"de\":\"Verknüpfung\"},\"axt.help\":\"A link to another entry or to something outside, such as the pet an appointment is for.\",\"axt.help_translations\":{\"de\":\"Eine Verknüpfung mit einem anderen Eintrag oder mit etwas außerhalb, etwa mit dem Tier, für das ein Termin ist.\"},\"axt.emoji\":\"🔗\",\"fields\":[{\"name\":\"id\",\"type\":{\"type\":\"string\",\"logicalType\":\"uuid\"},\"doc\":\"The id of the relation, a UUID in lower-case hexadecimal, unique among the relations of the record that holds it and kept for as long as the relation exists.\",\"axt.label\":\"Relation id\",\"axt.label_translations\":{\"de\":\"Verknüpfungs-ID\"},\"axt.help\":\"The id of this relation.\",\"axt.help_translations\":{\"de\":\"Die ID dieser Verknüpfung.\"},\"axt.emoji\":\"🆔\",\"axt.advanced\":true},{\"name\":\"kind\",\"type\":\"string\",\"default\":\"axt.related\",\"doc\":\"The kind of the relation, a name in a namespace, written like the full name of a type, such as org.example.catalog.patient. axt.related, the only kind AXT defines, says only that the two are related. A receiver shows a kind it does not know as a relation of that name.\",\"axt.label\":\"Kind\",\"axt.label_translations\":{\"de\":\"Art\"},\"axt.help\":\"What kind of link this is.\",\"axt.help_translations\":{\"de\":\"Welche Art von Verknüpfung das ist.\"},\"axt.emoji\":\"🔖\"},{\"name\":\"target\",\"type\":[{\"type\":\"record\",\"name\":\"RelationRecordTarget\",\"doc\":\"A record as the target of a relation: by its id and its sender.\",\"axt.label\":\"Entry\",\"axt.label_translations\":{\"de\":\"Eintrag\"},\"axt.help\":\"An entry of this app or of another.\",\"axt.help_translations\":{\"de\":\"Ein Eintrag dieser App oder einer anderen.\"},\"axt.emoji\":\"📄\",\"fields\":[{\"name\":\"id\",\"type\":{\"type\":\"string\",\"logicalType\":\"uuid\"},\"doc\":\"The id of the target record.\",\"axt.label\":\"Entry id\",\"axt.label_translations\":{\"de\":\"Eintrags-ID\"},\"axt.help\":\"The id of the linked entry.\",\"axt.help_translations\":{\"de\":\"Die ID des verknüpften Eintrags.\"},\"axt.emoji\":\"🆔\",\"axt.advanced\":true},{\"name\":\"sender\",\"type\":[\"null\",{\"type\":\"fixed\",\"name\":\"RelationRecordTargetSender\",\"size\":32,\"doc\":\"An Ed25519 public key in the encoding of RFC 8032. Defined in spec/keys.md.\"}],\"default\":null,\"doc\":\"A key of the device set of the target record's sender. Null when the target is a record of the sender of the record that holds the relation.\",\"axt.label\":\"Sender\",\"axt.label_translations\":{\"de\":\"Absender\"},\"axt.help\":\"The app the linked entry comes from.\",\"axt.help_translations\":{\"de\":\"Die App, von der der verknüpfte Eintrag kommt.\"},\"axt.emoji\":\"🔑\",\"axt.advanced\":true},{\"name\":\"type\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The full name of the target record's type, which holds its major version, such as axt.example.v1.Pet. Empty when not known.\",\"axt.label\":\"Type\",\"axt.label_translations\":{\"de\":\"Typ\"},\"axt.help\":\"The type of the linked entry.\",\"axt.help_translations\":{\"de\":\"Der Typ des verknüpften Eintrags.\"},\"axt.emoji\":\"🧩\",\"axt.advanced\":true},{\"name\":\"text\",\"type\":\"string\",\"default\":\"\",\"doc\":\"A text to show for the target while the record itself is not at hand, such as its title. Empty when there is none.\",\"axt.label\":\"Display text\",\"axt.label_translations\":{\"de\":\"Anzeigetext\"},\"axt.help\":\"What to show for the linked entry.\",\"axt.help_translations\":{\"de\":\"Was für den verknüpften Eintrag angezeigt wird.\"},\"axt.emoji\":\"💬\"}]},{\"type\":\"record\",\"name\":\"RelationOutsideTarget\",\"doc\":\"A thing outside AXT as the target of a relation: by a URI.\",\"axt.label\":\"Outside thing\",\"axt.label_translations\":{\"de\":\"Etwas außerhalb\"},\"axt.help\":\"Something that is not an entry, such as a web page.\",\"axt.help_translations\":{\"de\":\"Etwas, das kein Eintrag ist, etwa eine Webseite.\"},\"axt.emoji\":\"🌐\",\"fields\":[{\"name\":\"uri\",\"type\":\"string\",\"doc\":\"A URI of RFC 3986 that names the thing, of any scheme, such as https: or urn:. Not empty.\",\"axt.label\":\"URI\",\"axt.label_translations\":{\"de\":\"URI\"},\"axt.help\":\"The address of the linked thing.\",\"axt.help_translations\":{\"de\":\"Die Adresse des verknüpften Dings.\"},\"axt.emoji\":\"🔗\",\"axt.format\":\"uri\"},{\"name\":\"text\",\"type\":\"string\",\"default\":\"\",\"doc\":\"A text to show for the thing, such as its name. Empty when there is none.\",\"axt.label\":\"Display text\",\"axt.label_translations\":{\"de\":\"Anzeigetext\"},\"axt.help\":\"What to show for the linked thing.\",\"axt.help_translations\":{\"de\":\"Was für das verknüpfte Ding angezeigt wird.\"},\"axt.emoji\":\"💬\"}]}],\"doc\":\"What the relation points at: a record, or a thing outside AXT.\",\"axt.label\":\"Target\",\"axt.label_translations\":{\"de\":\"Ziel\"},\"axt.help\":\"What is linked.\",\"axt.help_translations\":{\"de\":\"Was verknüpft ist.\"},\"axt.emoji\":\"🎯\"},{\"name\":\"note\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free text about the link. Empty when there is none.\",\"axt.label\":\"Note\",\"axt.label_translations\":{\"de\":\"Notiz\"},\"axt.help\":\"Something about this link.\",\"axt.help_translations\":{\"de\":\"Etwas zu dieser Verknüpfung.\"},\"axt.emoji\":\"📝\",\"axt.multiline\":true},{\"name\":\"start\",\"type\":[\"null\",\"axt.DateTime\"],\"default\":null,\"doc\":\"When the link begins, such as the day a pet came to its keeper. Null when it has no beginning or it is not known.\",\"axt.label\":\"From\",\"axt.label_translations\":{\"de\":\"Ab\"},\"axt.help\":\"When the link begins.\",\"axt.help_translations\":{\"de\":\"Wann die Verknüpfung beginnt.\"},\"axt.emoji\":\"▶️\"},{\"name\":\"end\",\"type\":[\"null\",\"axt.DateTime\"],\"default\":null,\"doc\":\"The first moment after the link, as for the end of an appointment. Null when it has no end or it is not known.\",\"axt.label\":\"Until\",\"axt.label_translations\":{\"de\":\"Bis\"},\"axt.help\":\"When the link ends.\",\"axt.help_translations\":{\"de\":\"Wann die Verknüpfung endet.\"},\"axt.emoji\":\"⏹️\"},{\"name\":\"attributes\",\"type\":{\"type\":\"map\",\"values\":\"string\"},\"default\":{},\"doc\":\"Further values that the kind of the relation needs, by names its kind gives them. Empty when there are none.\",\"axt.label\":\"Details\",\"axt.label_translations\":{\"de\":\"Details\"},\"axt.help\":\"Further details of the link.\",\"axt.help_translations\":{\"de\":\"Weitere Angaben zur Verknüpfung.\"},\"axt.emoji\":\"🗂️\",\"axt.advanced\":true}]}},\"default\":[],\"doc\":\"The relations of the record to other records and to things outside AXT (spec/types.md, section 8), in the order the user gave them. Empty when it has none.\"},{\"name\":\"extensions\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"Extension\",\"namespace\":\"axt\",\"doc\":\"An extension: one record of an app's own type that the app adds to a record of another type, such as the fields of its own that a cat-a-log adds to a Pet, held as the bytes of its single-object encoding. Defined in spec/fields.md, section 12.\",\"axt.label\":\"Extension\",\"axt.label_translations\":{\"de\":\"Erweiterung\"},\"axt.help\":\"Further fields that an app adds to this entry.\",\"axt.help_translations\":{\"de\":\"Weitere Felder, die eine App diesem Eintrag hinzufügt.\"},\"axt.emoji\":\"🧩\",\"fields\":[{\"name\":\"name\",\"type\":\"string\",\"doc\":\"The full name of the extension's record type, such as org.example.catalog.CatExtension, which holds its major version, of at most 256 bytes; at most one extension of a name in a list.\",\"axt.label\":\"Extension type\",\"axt.label_translations\":{\"de\":\"Erweiterungstyp\"},\"axt.help\":\"The type of this extension.\",\"axt.help_translations\":{\"de\":\"Der Typ dieser Erweiterung.\"},\"axt.emoji\":\"🔖\",\"axt.advanced\":true},{\"name\":\"data\",\"type\":\"bytes\",\"doc\":\"The extension's record in single-object encoding: the marker C3 01, the fingerprint of its writer schema as 8 bytes in little-endian order, and the record's Avro binary encoding. Passed on unchanged by an app that does not know the type.\",\"axt.label\":\"Extension data\",\"axt.label_translations\":{\"de\":\"Erweiterungsdaten\"},\"axt.help\":\"The values of this extension.\",\"axt.help_translations\":{\"de\":\"Die Werte dieser Erweiterung.\"},\"axt.emoji\":\"📦\",\"axt.advanced\":true}]}},\"default\":[],\"doc\":\"The extensions of the record: records of the apps' own types that add fields of their own to it (spec/fields.md, section 12), at most one of each type. Empty when it has none.\"}]}",
+      "{\"type\":\"record\",\"name\":\"Pet\",\"namespace\":\"axt.example.v1\",\"doc\":\"A pet: an animal the user keeps, such as a cat or a dog.\",\"axt.version\":1,\"fields\":[{\"name\":\"name\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The pet's name. Empty when it has none.\"},{\"name\":\"species\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The kind of animal, as the user wrote it, such as cat or dog. Empty when not given.\"},{\"name\":\"breed\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The breed, as the user wrote it, such as Maine Coon. Empty when not known.\"},{\"name\":\"sex\",\"type\":{\"type\":\"enum\",\"name\":\"PetSex\",\"doc\":\"The pet's sex.\",\"symbols\":[\"UNKNOWN\",\"FEMALE\",\"MALE\"],\"default\":\"UNKNOWN\"},\"default\":\"UNKNOWN\",\"doc\":\"The pet's sex.\"},{\"name\":\"neutered\",\"type\":[\"null\",\"boolean\"],\"default\":null,\"doc\":\"True when the pet is neutered or spayed, false when it is not. Null when not known.\"},{\"name\":\"birthday\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"Date\",\"namespace\":\"axt\",\"doc\":\"A calendar date of the proleptic Gregorian calendar, of which a part may be unknown, such as a birthday without a year (null, 5, 3), a year alone (2019, null, null) or a month of a year (2027, 3, null). At least one part is not null, and a day has its month. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The year, 1 to 9999. Null when the year is not known or does not matter.\"},{\"name\":\"month\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The month of the year, 1 (January) to 12 (December). Null when the month is not known; then day is null as well.\"},{\"name\":\"day\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The day of the month, 1 to the number of days of the month: of that year when the year is known, otherwise of a leap year, so that 29 February is valid without a year. Null when the day is not known.\"}]}],\"default\":null,\"doc\":\"The pet's day of birth, as far as it is known, such as the year alone for an animal from a shelter. Null when not known.\"},{\"name\":\"microchip\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The number of the pet's microchip, as read from it; 15 digits for a chip of ISO 11784. Empty when it has none or it is not known.\"},{\"name\":\"notes\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free notes on the pet, as plain text; lines are separated by LF. Empty when there are none.\"},{\"name\":\"relations\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"Relation\",\"namespace\":\"axt\",\"doc\":\"A relation: a link from the record that holds it to another record or to a thing outside AXT, of a kind, with information about the link. Defined in spec/fields.md, section 11.\",\"axt.label\":\"Relation\",\"axt.label_translations\":{\"de\":\"Verknüpfung\"},\"axt.help\":\"A link to another entry or to something outside, such as the pet an appointment is for.\",\"axt.help_translations\":{\"de\":\"Eine Verknüpfung mit einem anderen Eintrag oder mit etwas außerhalb, etwa mit dem Tier, für das ein Termin ist.\"},\"axt.emoji\":\"🔗\",\"fields\":[{\"name\":\"id\",\"type\":{\"type\":\"string\",\"logicalType\":\"uuid\"},\"doc\":\"The id of the relation, a UUID in lower-case hexadecimal, unique among the relations of the record that holds it and kept for as long as the relation exists.\",\"axt.label\":\"Relation id\",\"axt.label_translations\":{\"de\":\"Verknüpfungs-ID\"},\"axt.help\":\"The id of this relation.\",\"axt.help_translations\":{\"de\":\"Die ID dieser Verknüpfung.\"},\"axt.emoji\":\"🆔\",\"axt.advanced\":true},{\"name\":\"kind\",\"type\":\"string\",\"default\":\"axt.related\",\"doc\":\"The kind of the relation, a name in a namespace, written like the full name of a type, such as org.example.catalog.patient. axt.related, the only kind AXT defines, says only that the two are related. A receiver shows a kind it does not know as a relation of that name.\",\"axt.label\":\"Kind\",\"axt.label_translations\":{\"de\":\"Art\"},\"axt.help\":\"What kind of link this is.\",\"axt.help_translations\":{\"de\":\"Welche Art von Verknüpfung das ist.\"},\"axt.emoji\":\"🔖\"},{\"name\":\"target\",\"type\":[{\"type\":\"record\",\"name\":\"RelationRecordTarget\",\"doc\":\"A record as the target of a relation: by its id and its sender.\",\"axt.label\":\"Entry\",\"axt.label_translations\":{\"de\":\"Eintrag\"},\"axt.help\":\"An entry of this app or of another.\",\"axt.help_translations\":{\"de\":\"Ein Eintrag dieser App oder einer anderen.\"},\"axt.emoji\":\"📄\",\"fields\":[{\"name\":\"id\",\"type\":{\"type\":\"string\",\"logicalType\":\"uuid\"},\"doc\":\"The id of the target record.\",\"axt.label\":\"Entry id\",\"axt.label_translations\":{\"de\":\"Eintrags-ID\"},\"axt.help\":\"The id of the linked entry.\",\"axt.help_translations\":{\"de\":\"Die ID des verknüpften Eintrags.\"},\"axt.emoji\":\"🆔\",\"axt.advanced\":true},{\"name\":\"sender\",\"type\":[\"null\",{\"type\":\"fixed\",\"name\":\"RelationRecordTargetSender\",\"size\":32,\"doc\":\"An Ed25519 public key in the encoding of RFC 8032. Defined in spec/keys.md.\"}],\"default\":null,\"doc\":\"A key of the device set of the target record's sender. Null when the target is a record of the sender of the record that holds the relation.\",\"axt.label\":\"Sender\",\"axt.label_translations\":{\"de\":\"Absender\"},\"axt.help\":\"The app the linked entry comes from.\",\"axt.help_translations\":{\"de\":\"Die App, von der der verknüpfte Eintrag kommt.\"},\"axt.emoji\":\"🔑\",\"axt.advanced\":true},{\"name\":\"type\",\"type\":\"string\",\"default\":\"\",\"doc\":\"The full name of the target record's type, which holds its major version, such as axt.example.v1.Pet. Empty when not known.\",\"axt.label\":\"Type\",\"axt.label_translations\":{\"de\":\"Typ\"},\"axt.help\":\"The type of the linked entry.\",\"axt.help_translations\":{\"de\":\"Der Typ des verknüpften Eintrags.\"},\"axt.emoji\":\"🧩\",\"axt.advanced\":true},{\"name\":\"text\",\"type\":\"string\",\"default\":\"\",\"doc\":\"A text to show for the target while the record itself is not at hand, such as its title. Empty when there is none.\",\"axt.label\":\"Display text\",\"axt.label_translations\":{\"de\":\"Anzeigetext\"},\"axt.help\":\"What to show for the linked entry.\",\"axt.help_translations\":{\"de\":\"Was für den verknüpften Eintrag angezeigt wird.\"},\"axt.emoji\":\"💬\"}]},{\"type\":\"record\",\"name\":\"RelationOutsideTarget\",\"doc\":\"A thing outside AXT as the target of a relation: by a URI.\",\"axt.label\":\"Outside thing\",\"axt.label_translations\":{\"de\":\"Etwas außerhalb\"},\"axt.help\":\"Something that is not an entry, such as a web page.\",\"axt.help_translations\":{\"de\":\"Etwas, das kein Eintrag ist, etwa eine Webseite.\"},\"axt.emoji\":\"🌐\",\"fields\":[{\"name\":\"uri\",\"type\":\"string\",\"doc\":\"A URI of RFC 3986 that names the thing, of any scheme, such as https: or urn:. Not empty.\",\"axt.label\":\"URI\",\"axt.label_translations\":{\"de\":\"URI\"},\"axt.help\":\"The address of the linked thing.\",\"axt.help_translations\":{\"de\":\"Die Adresse des verknüpften Dings.\"},\"axt.emoji\":\"🔗\",\"axt.format\":\"uri\"},{\"name\":\"text\",\"type\":\"string\",\"default\":\"\",\"doc\":\"A text to show for the thing, such as its name. Empty when there is none.\",\"axt.label\":\"Display text\",\"axt.label_translations\":{\"de\":\"Anzeigetext\"},\"axt.help\":\"What to show for the linked thing.\",\"axt.help_translations\":{\"de\":\"Was für das verknüpfte Ding angezeigt wird.\"},\"axt.emoji\":\"💬\"}]}],\"doc\":\"What the relation points at: a record, or a thing outside AXT.\",\"axt.label\":\"Target\",\"axt.label_translations\":{\"de\":\"Ziel\"},\"axt.help\":\"What is linked.\",\"axt.help_translations\":{\"de\":\"Was verknüpft ist.\"},\"axt.emoji\":\"🎯\"},{\"name\":\"note\",\"type\":\"string\",\"default\":\"\",\"doc\":\"Free text about the link. Empty when there is none.\",\"axt.label\":\"Note\",\"axt.label_translations\":{\"de\":\"Notiz\"},\"axt.help\":\"Something about this link.\",\"axt.help_translations\":{\"de\":\"Etwas zu dieser Verknüpfung.\"},\"axt.emoji\":\"📝\",\"axt.multiline\":true},{\"name\":\"start\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"DateTime\",\"namespace\":\"axt\",\"doc\":\"A date and time on the wall clock, to the millisecond, either in a time zone of the IANA time zone database, with the offset from UTC and the instant as the writer's zone rules gave them, or floating, on the wall clock of wherever the user is, without zone, offset and instant. Defined in spec/time.md. Its schema never changes.\",\"fields\":[{\"name\":\"year\",\"type\":\"int\",\"doc\":\"The year of the proleptic Gregorian calendar, 1 to 9999.\"},{\"name\":\"month\",\"type\":\"int\",\"doc\":\"The month, 1 (January) to 12 (December).\"},{\"name\":\"day\",\"type\":\"int\",\"doc\":\"The day of the month, 1 to the number of days of that month in that year.\"},{\"name\":\"hour\",\"type\":\"int\",\"doc\":\"The hour on the wall clock, 0 to 23.\"},{\"name\":\"minute\",\"type\":\"int\",\"doc\":\"The minute, 0 to 59.\"},{\"name\":\"second\",\"type\":\"int\",\"doc\":\"The second, 0 to 59; a leap second is not written as 60.\"},{\"name\":\"millisecond\",\"type\":\"int\",\"doc\":\"The millisecond, 0 to 999.\"},{\"name\":\"zone\",\"type\":[\"null\",\"string\"],\"default\":null,\"doc\":\"The name of the time zone in the IANA time zone database, such as Europe/Berlin. Null for a floating time; then offset_seconds and instant_ms are null as well.\"},{\"name\":\"offset_seconds\",\"type\":[\"null\",\"int\"],\"default\":null,\"doc\":\"The offset of the wall clock from UTC, in seconds, -64800 to 64800, as the writer's rules of the zone gave it at the instant, such as 3600 for 01:00 east of UTC. Null for a floating time, and only then.\"},{\"name\":\"instant_ms\",\"type\":[\"null\",\"long\"],\"default\":null,\"doc\":\"The instant, in milliseconds since 1970-01-01T00:00:00Z without leap seconds: the wall clock read as if it were UTC, minus offset_seconds. Null for a floating time, and only then.\"}]}],\"default\":null,\"doc\":\"When the link begins, such as the day a pet came to its keeper. Null when it has no beginning or it is not known.\",\"axt.label\":\"From\",\"axt.label_translations\":{\"de\":\"Ab\"},\"axt.help\":\"When the link begins.\",\"axt.help_translations\":{\"de\":\"Wann die Verknüpfung beginnt.\"},\"axt.emoji\":\"▶️\"},{\"name\":\"end\",\"type\":[\"null\",\"axt.DateTime\"],\"default\":null,\"doc\":\"The first moment after the link, as for the end of an appointment. Null when it has no end or it is not known.\",\"axt.label\":\"Until\",\"axt.label_translations\":{\"de\":\"Bis\"},\"axt.help\":\"When the link ends.\",\"axt.help_translations\":{\"de\":\"Wann die Verknüpfung endet.\"},\"axt.emoji\":\"⏹️\"},{\"name\":\"attributes\",\"type\":{\"type\":\"map\",\"values\":\"string\"},\"default\":{},\"doc\":\"Further values that the kind of the relation needs, by names its kind gives them. Empty when there are none.\",\"axt.label\":\"Details\",\"axt.label_translations\":{\"de\":\"Details\"},\"axt.help\":\"Further details of the link.\",\"axt.help_translations\":{\"de\":\"Weitere Angaben zur Verknüpfung.\"},\"axt.emoji\":\"🗂️\",\"axt.advanced\":true}]}},\"default\":[],\"doc\":\"The relations of the record to other records and to things outside AXT (spec/types.md, section 8), in the order the user gave them. Empty when it has none.\"},{\"name\":\"extensions\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"Extension\",\"namespace\":\"axt\",\"doc\":\"An extension: one record of an app's own type that the app adds to a record of another type, such as the fields of its own that a cat-a-log adds to a Pet, held as the bytes of its single-object encoding. Defined in spec/fields.md, section 12.\",\"axt.label\":\"Extension\",\"axt.label_translations\":{\"de\":\"Erweiterung\"},\"axt.help\":\"Further fields that an app adds to this entry.\",\"axt.help_translations\":{\"de\":\"Weitere Felder, die eine App diesem Eintrag hinzufügt.\"},\"axt.emoji\":\"🧩\",\"fields\":[{\"name\":\"name\",\"type\":\"string\",\"doc\":\"The full name of the extension's record type, such as org.example.catalog.CatExtension, which holds its major version, of at most 256 bytes; at most one extension of a name in a list.\",\"axt.label\":\"Extension type\",\"axt.label_translations\":{\"de\":\"Erweiterungstyp\"},\"axt.help\":\"The type of this extension.\",\"axt.help_translations\":{\"de\":\"Der Typ dieser Erweiterung.\"},\"axt.emoji\":\"🔖\",\"axt.advanced\":true},{\"name\":\"data\",\"type\":\"bytes\",\"doc\":\"The extension's record in single-object encoding: the marker C3 01, the fingerprint of its writer schema as 8 bytes in little-endian order, and the record's Avro binary encoding. Passed on unchanged by an app that does not know the type.\",\"axt.label\":\"Extension data\",\"axt.label_translations\":{\"de\":\"Erweiterungsdaten\"},\"axt.help\":\"The values of this extension.\",\"axt.help_translations\":{\"de\":\"Die Werte dieser Erweiterung.\"},\"axt.emoji\":\"📦\",\"axt.advanced\":true}]}},\"default\":[],\"doc\":\"The extensions of the record: records of the apps' own types that add fields of their own to it (spec/fields.md, section 12), at most one of each type. Empty when it has none.\"}]}"
+     ],
+     "receivers": [
+      {
+       "name": "Old Brain Fix",
+       "current": ["da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7"],
+       "removed": []
+      },
+      {
+       "name": "second app",
+       "current": ["1580fe1571416b094c9f0c955834e642ce231b4b2271bf5c8a582b15525bcb98"],
+       "removed": []
+      }
+     ],
+     "records": [
+      {
+       "id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80",
+       "type": "axt.example.v1.Appointment",
+       "version": "3",
+       "state": "there",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 30,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763458200000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "Bring the vaccination card",
+        "reminders": [],
+        "relations": [
+         {
+          "id": "f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b",
+          "kind": "axt.related",
+          "target": {
+           "id": "1d2e3f40-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+           "sender": null,
+           "type": "axt.example.v1.Pet",
+           "text": "Mimi"
+          },
+          "note": "",
+          "start": null,
+          "end": null,
+          "attributes": {}
+         },
+         {
+          "id": "6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60",
+          "kind": "org.example.catalog.vet",
+          "target": {
+           "id": "5d2e9c71-3a4b-4e8f-b6d0-7f1a2c9e4b58",
+           "sender": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+           "type": "axt.example.v1.Person",
+           "text": "Dr. Anna Maria Schmidt"
+          },
+          "note": "",
+          "start": null,
+          "end": null,
+          "attributes": {"org.example.catalog.role": "vet", "org.example.catalog.paid_by": "owner"}
+         },
+         {
+          "id": "a2c4e6f8-0b1d-4e3f-8a5c-7e9f1b3d5a70",
+          "kind": "axt.related",
+          "target": {"uri": "https://tierarzt.example/praxis", "text": "Tierarztpraxis"},
+          "note": "",
+          "start": null,
+          "end": null,
+          "attributes": {}
+         }
+        ]
+       },
+       "shared": ["Old Brain Fix"]
+      },
+      {
+       "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+       "type": "axt.example.v1.Appointment",
+       "version": "1",
+       "state": "there",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 30,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763458200000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "Bring the vaccination card",
+        "reminders": []
+       },
+       "shared": ["Old Brain Fix", "second app"]
+      },
+      {
+       "id": "1d2e3f40-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+       "type": "axt.example.v1.Pet",
+       "version": "1",
+       "state": "there",
+       "value": {
+        "name": "Mimi",
+        "species": "cat",
+        "breed": "Maine Coon",
+        "sex": "FEMALE",
+        "neutered": true,
+        "birthday": {"year": 2021, "month": 5, "day": 3},
+        "microchip": "276098100000000",
+        "notes": "",
+        "relations": [
+         {
+          "id": "1a3c5e7f-9b0d-4c2e-8f4a-6c8e0a2c4e13",
+          "kind": "org.example.catalog.vet",
+          "target": {
+           "id": "5d2e9c71-3a4b-4e8f-b6d0-7f1a2c9e4b58",
+           "sender": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+           "type": "axt.example.v1.Person",
+           "text": "Dr. Anna Maria Schmidt"
+          },
+          "note": "",
+          "start": {
+           "year": 2021,
+           "month": 7,
+           "day": 1,
+           "hour": 9,
+           "minute": 0,
+           "second": 0,
+           "millisecond": 0,
+           "zone": "Europe/Berlin",
+           "offset_seconds": 7200,
+           "instant_ms": 1625122800000
+          },
+          "end": null,
+          "attributes": {}
+         }
+        ],
+        "extensions": []
+       },
+       "shared": ["Old Brain Fix"]
+      },
+      {
+       "id": "2e3f4051-6b7c-4d8e-9fa0-1b2c3d4e5f60",
+       "type": "axt.example.v1.Appointment",
+       "version": "2",
+       "state": "deleted",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 30,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763458200000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "Bring the vaccination card",
+        "reminders": []
+       },
+       "shared": ["Old Brain Fix"]
+      },
+      {
+       "id": "3f405162-7c8d-4e9f-a0b1-2c3d4e5f6071",
+       "type": "axt.example.v1.Appointment",
+       "version": "1",
+       "state": "there",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 30,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763458200000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "Bring the vaccination card",
+        "reminders": []
+       },
+       "shared": []
+      }
+     ],
+     "open": [],
+     "answers": []
+    },
+    "steps": [
+     {
+      "receive": "c30116306f71b9ce9ea8021eda9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7024833663263386135652d396231642d346337652d386136662d32643462356336653766383006c403c3017902d9122a2212251b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a4837623365396432312d346338612d346636652d396131622d356432633865346636613730021272656c6174696f6e7325addb947073d010fa01024866316233643561372d326334652d346636302d386131622d336335643765396630613262166178742e72656c61746564004831643265336634302d356136622d346337642d386539662d30613162326333643465356600246178742e6578616d706c652e76312e506574084d696d690e426f6f737465720000000000be1306f2f907878877c52669c33d7255f58e1e76307b992610a1844931fc894e8f6a620d5b4173588bf3889ce9822cc562cafcdf39d26ef03c04111d041cb001"
+     },
+     {
+      "answer": {
+       "receiver": "Old Brain Fix",
+       "proposal_id": "7b3e9d21-4c8a-4f6e-9a1b-5d2c8e4f6a70",
+       "answer": "ACCEPTED"
+      }
+     }
+    ]
+   },
+   "expected": {
+    "steps": [
+     {
+      "result": "taken",
+      "replies": []
+     },
+     {
+      "made": true,
+      "replies": [
+       {
+        "kind": "PROPOSAL_REPLY",
+        "to": "da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7",
+        "record": {"id": "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80", "version": 3},
+        "proposal_id": "7b3e9d21-4c8a-4f6e-9a1b-5d2c8e4f6a70",
+        "answer": "ACCEPTED"
+       }
+      ],
+      "update": {
+       "version": "4",
+       "value": {
+        "title": "Vet",
+        "start": {
+         "year": 2025,
+         "month": 11,
+         "day": 18,
+         "hour": 10,
+         "minute": 30,
+         "second": 0,
+         "millisecond": 0,
+         "zone": "Europe/Berlin",
+         "offset_seconds": 3600,
+         "instant_ms": 1763458200000
+        },
+        "end": null,
+        "all_day": false,
+        "location": "",
+        "notes": "Bring the vaccination card",
+        "reminders": [],
+        "relations": [
+         {
+          "id": "f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b",
+          "kind": "axt.related",
+          "target": {
+           "id": "1d2e3f40-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+           "sender": null,
+           "type": "axt.example.v1.Pet",
+           "text": "Mimi"
+          },
+          "note": "Booster",
+          "start": null,
+          "end": null,
+          "attributes": {}
+         },
+         {
+          "id": "6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60",
+          "kind": "org.example.catalog.vet",
+          "target": {
+           "id": "5d2e9c71-3a4b-4e8f-b6d0-7f1a2c9e4b58",
+           "sender": "1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a",
+           "type": "axt.example.v1.Person",
+           "text": "Dr. Anna Maria Schmidt"
+          },
+          "note": "",
+          "start": null,
+          "end": null,
+          "attributes": {"org.example.catalog.role": "vet", "org.example.catalog.paid_by": "owner"}
+         },
+         {
+          "id": "a2c4e6f8-0b1d-4e3f-8a5c-7e9f1b3d5a70",
+          "kind": "axt.related",
+          "target": {"uri": "https://tierarzt.example/praxis", "text": "Tierarztpraxis"},
+          "note": "",
+          "start": null,
+          "end": null,
+          "attributes": {}
+         }
+        ]
+       }
+      }
      }
     ]
    }

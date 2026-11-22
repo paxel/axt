@@ -1434,6 +1434,13 @@ def op_offer_types(i: Any) -> dict[str, Any]:
     return ok({"types": [{"type": t, "count": n} for t, n in types]})
 
 
+def op_shared_value(i: Any) -> dict[str, Any]:
+    value = se.shared_value(
+        i["type"], i["value"], i["own_user"], i["links"], {r.lower() for r in i["shared"]}, set(i["own_keys"])
+    )
+    return ok({"value": value})
+
+
 def op_acked(i: Any) -> dict[str, Any]:
     held, then, to_pass = se.acked(
         i["sent"],
@@ -1473,6 +1480,7 @@ OPS: dict[str, Callable[[Any], dict[str, Any]]] = {
     "pass_withdrawal": op_pass_withdrawal,
     "join_receivers": op_join_receivers,
     "offer_types": op_offer_types,
+    "shared_value": op_shared_value,
     "acked": op_acked,
     "decode_body": op_decode_body,
     "read_file": op_read_file,

@@ -56,6 +56,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
@@ -305,6 +306,44 @@ def joined(a: tuple[bool, int | None], b: tuple[bool, int | None]) -> tuple[bool
     withdrawals = [w for _, w in (a, b) if w is not None]
     last = max(withdrawals) if withdrawals else None
     return shared, last, shared and last is not None
+
+
+# --- relations and extensions in a share (section 19) ----------------------------------------------------
+
+
+def goes_along(relation: dict[str, Any], shared: set[str], own_keys: set[str]) -> bool:
+    """Whether a relation goes along in a share that leaves out the links (section 19.1): a relation to a
+    record of the sender's own set, its `sender` null or a key of that set as hexadecimal text, that is
+    shared with the receiver; not one to a record of another sender or to a thing outside AXT."""
+    target = relation["target"]
+    if "uri" in target:
+        return False
+    sender = target["sender"]
+    if isinstance(sender, bytes):
+        sender = sender.hex()
+    return (sender is None or sender in own_keys) and str(target["id"]).lower() in shared
+
+
+def shared_value(
+    type_name: str,
+    value: dict[str, Any],
+    own_user: bool,
+    links: bool,
+    shared: set[str],
+    own_keys: set[str],
+) -> dict[str, Any]:
+    """The value of a record as the sender sends it to one receiver (sections 19.1 and 19.2): the record
+    whole to an app of its own user, or where a share that names the record for that receiver lets the
+    links go along (`links`); otherwise each list of relations holds only the relations that go along and
+    each list of extensions none. `shared` holds the ids of the records of the own set shared with the
+    receiver, in lower case; `own_keys` the keys of the own set. The record keeps what it leaves out."""
+    if own_user or links:
+        return dict(value)
+    out = dict(value)
+    for name, member in sy.element_fields(type_name).items():
+        if name in out:
+            out[name] = [] if member == "name" else [r for r in out[name] if goes_along(r, shared, own_keys)]
+    return out
 
 
 def offer(records: list[tuple[str, str, bool]]) -> list[tuple[str, int]]:
@@ -586,6 +625,8 @@ def json_form(value: Any) -> Any:
         return [json_form(v) for v in value]
     if isinstance(value, bytes):
         return value.hex()
+    if isinstance(value, uuid.UUID):
+        return str(value)  # a relation's id, which fastavro gives as a UUID
     return value
 
 
@@ -713,6 +754,8 @@ class Owner:
         self.stopped: list[tuple[str, str | None, str | None]] = []
         # The receivers it holds as apps of its own user: receivers of every record (sections 2.3 and 12.2).
         self.own_user: set[str] = set()
+        # The receivers for which its shares let the links of a record go along (section 19.1).
+        self.links: set[str] = set()
 
     def _receiver(self, key: bytes) -> str | None:
         return next((n for n, ks in self.receivers.items() if key in ks), None)
@@ -870,9 +913,13 @@ class Owner:
         own = self.records[o.rid]
         update = None
         if answer == "ACCEPTED":
+            lists = sy.element_fields(own.type)
             for name, fp, value in o.entries:
                 _, v = sy.read_field(self.schemas[fp], name, io.BytesIO(value))
-                own.value = {**own.value, name: json_form(v[name])}
+                proposed = json_form(v[name])
+                if name in lists:
+                    proposed = proposed + self._left_out(who, own, name, lists[name], proposed)
+                own.value = {**own.value, name: proposed}
             own.version += 1  # the next count (spec/records.md, section 3)
             update = (own.version, dict(own.value))
         del self.open[(who, pid)]
@@ -882,6 +929,20 @@ class Owner:
             body = reply_body(o.signer, pid, answer)
             reply.append(sy.message(self.seed, "PROPOSAL_REPLY", (o.record["id"], o.record["version"]), body))
         return True, reply, update
+
+    def _left_out(self, who: str, own: Own, field: str, member: str, proposed: list[Any]) -> list[Any]:
+        """The elements of the list that the record holds and its share left out for the proposer, which the
+        proposer never saw and its proposal does not remove (section 19.3), in the record's order."""
+        shared = {rid.lower() for rid, r in self.records.items() if who in r.shared}
+        own_keys = {self.key.hex(), *(k.hex() for k in self.siblings)}
+        sent = shared_value(own.type, own.value, who in self.own_user, who in self.links, shared, own_keys)
+        seen = {sy.element_key(e[member]) for e in sent.get(field, [])}
+        named = {sy.element_key(e[member]) for e in proposed}
+        return [
+            e
+            for e in own.value.get(field, [])
+            if sy.element_key(e[member]) not in seen and sy.element_key(e[member]) not in named
+        ]
 
     def record_answer(self, who: str, pid: str, answer: str, record: dict[str, Any]) -> None:
         """An answer comes into the app's records, by this device or from a sibling: of two, ACCEPTED stands
@@ -1174,6 +1235,7 @@ def owner_session(i: dict[str, Any], b_in: Any = bytes.fromhex) -> list[dict[str
             {"id": a["id"], "version": a["version"]},
         )
     owner.own_user = {r["name"] for r in d["receivers"] if r.get("own_user", False)}
+    owner.links = {r["name"] for r in d["receivers"] if r.get("links", False)}
     for s in d.get("stopped", []):
         owner.stopped.append((s["receiver"], s.get("id"), s.get("type")))
     out: list[dict[str, Any]] = []

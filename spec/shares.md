@@ -721,7 +721,7 @@ When the owner's user takes a proposal, the device on which the user takes it, w
 2. records the answer `ACCEPTED` (section 15.1) and sends the proposer the reply (section 14);
 3. sends the change to its siblings by sibling sync, as every change of the record ([sync.md](sync.md), section 10), and the record to every receiver with which it is shared, the proposer included, as an ordinary `DATA` under the new state stamp or count ([sync.md](sync.md), section 5.1; section 5.3).
 
-The order of the reply and the update is free. Wherever this document compares two values, it compares them as the values they decode to, each with the schema it was written with, not by their bytes. A value accepted from an entry whose schema is a later version of the type than the one the device writes with, of a field that its own writer schema lacks, holds the record back from other apps by [sync.md](sync.md), section 5.1: the device does not send the update itself, and leaves it to a sibling whose schema has the field. A device that can take no stamp ([sync.md](sync.md), section 2.3) cannot make the change: it records no answer and sends none until it can. A device on which the record is not there, because it is deleted, cannot take the proposal (section 15.4).
+A list that leaves out links of the record keeps them (section 19.3). The order of the reply and the update is free. Wherever this document compares two values, it compares them as the values they decode to, each with the schema it was written with, not by their bytes. A value accepted from an entry whose schema is a later version of the type than the one the device writes with, of a field that its own writer schema lacks, holds the record back from other apps by [sync.md](sync.md), section 5.1: the device does not send the update itself, and leaves it to a sibling whose schema has the field. A device that can take no stamp ([sync.md](sync.md), section 2.3) cannot make the change: it records no answer and sends none until it can. A device on which the record is not there, because it is deleted, cannot take the proposal (section 15.4).
 
 ### 15.3 A version that the owner left behind
 
@@ -835,6 +835,27 @@ Every receiver of a record of a type for which the owner takes proposals can pro
 - **No user is asked before.** The device takes or rejects a `PROPOSAL` without asking its user; only the answer to a proposal that it took needs the user (section 15.1).
 - **What a proposal tells.** A proposer learns from `PROPOSALS_NOT_TAKEN` nothing of whether the owner holds a record with that id (section 13.3). A receiver learns from the `sends` of the owner's manifest for which types it takes proposals, as every app that holds the manifest does.
 - **A proposal is a request.** A proposal binds no one. The owner's user may refuse it, leave it open, or take only part of it as a change of their own (section 15.1), and an app that does not conform to this specification can apply what it likes. The proposed values reach no other receiver unless the owner's user takes them, and then as the owner's change.
+
+## 19. Relations and extensions in a share
+
+A shared record can link to records that its owner did not share with the receiver, and to things outside AXT, and can carry the extensions of apps ([fields.md](fields.md), sections 11 and 12). Their ids, display texts, URIs and values would reach another user with it. Each share therefore says whether they go along.
+
+### 19.1 What goes along
+
+The **links** of a record are its relations to records that are not shared with the receiver, its relations to things outside AXT and its extensions. Each share says, for its receiver, whether the links of the records it names go along; by default they do not. A record goes to a receiver of another user (section 2.3):
+
+- **with its links**, whole, where at least one share for that receiver that names the record lets them go along;
+- **otherwise without them**: every list of relations holds only the relations to records of the sender's own set that are shared with that receiver, each with a record target whose `sender` is `null` or a key of the sender's set, current or removed ([fields.md](fields.md), section 11.3), and every list of extensions is empty. The other elements are left out, the rest keep their order, and the rules of [fields.md](fields.md), sections 11.4 and 12.3, hold for what remains.
+
+A relation to a record of another sender is never one to a shared record: a share names only records of the sender's own set (section 1). This holds for every relation field and every extension field of the type, also one nested in an object or in a list. An app of the sender's own user, which needs no share (section 2.3), always gets the record whole, its links included, as do the devices of the sender's own set ([sync.md](sync.md), section 7.2).
+
+### 19.2 A link left out is no removal
+
+What a share leaves out stays in the record. The sender takes no stamp and sets no removal mark for it ([sync.md](sync.md), section 25.3): its devices keep the relation or the extension, and every other receiver gets what its own shares let go along. The receiver gets the record without it, as a `DATA` like any other, and merges that list as [records.md](records.md), section 6.1, says. Which links go along is decided for each record message when it is sent: a change of a share, or of whether a target is shared, takes effect with the record's next version. An app MAY send the record under a new state stamp or count for it ([sync.md](sync.md), section 3.3).
+
+### 19.3 Proposals
+
+A proposer proposes a list as it holds it, without the links that it did not get. When the owner takes such a proposal (section 15.2), the proposed list replaces only what the proposer got: every element that the record holds and the share left out for that proposer stays, after the proposed elements in the record's order, unless the proposal holds an element with its key. A device of a set stamps no removal mark for it ([sync.md](sync.md), section 25.6).
 
 ## References
 

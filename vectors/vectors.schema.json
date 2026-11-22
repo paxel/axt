@@ -569,6 +569,20 @@
     {
      "if": {
       "properties": {
+       "op": {"const": "shared_value"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["type", "value", "own_user", "links", "shared", "own_keys"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
        "op": {"const": "open"}
       }
      },
@@ -1287,7 +1301,7 @@
       "items": {
        "properties": {
         "op": {
-         "enum": ["acked", "join_receivers", "offer_types", "owed", "owner", "pass_withdrawal", "proposer", "receive", "take_version"]
+         "enum": ["acked", "join_receivers", "offer_types", "owed", "owner", "pass_withdrawal", "proposer", "receive", "shared_value", "take_version"]
         }
        }
       }
