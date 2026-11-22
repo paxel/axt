@@ -26,7 +26,7 @@
         "string"
       ],
       "default": null,
-      "doc": "For a forwarded DATA, the writer schema of its body as its full JSON text, as the app that sent the DATA offered it or, for a DATA that the device read in a file, as the file's axt.schemas holds it; its fingerprint is the one the body of the DATA names. Null for every other forwarded message."
+      "doc": "For a forwarded DATA, the text of the writer schema of its body, derived from the description with which the app that sent the DATA offered it or, for a DATA that the device read in a file, from the description in the file's axt.schemas (spec/fields.md, section 9.3); its fingerprint is the one the body of the DATA names. Null for every other forwarded message."
     }
   ]
 }

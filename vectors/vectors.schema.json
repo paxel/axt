@@ -19,7 +19,6 @@
     "encoding",
     "types",
     "time",
-    "metadata",
     "records",
     "manifest",
     "keys",
@@ -30,7 +29,8 @@
     "relay",
     "relay-server",
     "sync",
-    "shares"
+    "shares",
+    "bricks"
    ]
   },
   "description": {"type": "string"},
@@ -196,7 +196,7 @@
      "then": {
       "properties": {
        "input": {
-        "required": ["schema", "body"]
+        "required": ["description", "body"]
        }
       }
      }
@@ -330,13 +330,27 @@
     {
      "if": {
       "properties": {
+       "op": {"const": "derive"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["description"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
        "op": {"const": "describe"}
       }
      },
      "then": {
       "properties": {
        "input": {
-        "required": ["schema", "field", "languages"]
+        "required": ["description", "field", "languages"]
        }
       }
      }
@@ -554,6 +568,20 @@
     {
      "if": {
       "properties": {
+       "op": {"const": "shared_value"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["type", "value", "own_user", "links", "shared", "own_keys"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
        "op": {"const": "open"}
       }
      },
@@ -701,6 +729,20 @@
       "properties": {
        "input": {
         "required": ["policy", "events"]
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {"const": "relations"}
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "required": ["own", "senders", "refused", "relations", "steps"]
        }
       }
      }
@@ -1014,26 +1056,6 @@
   {
    "if": {
     "properties": {
-     "category": {"const": "metadata"}
-    }
-   },
-   "then": {
-    "properties": {
-     "vectors": {
-      "items": {
-       "properties": {
-        "op": {
-         "enum": ["check_record", "describe"]
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  {
-   "if": {
-    "properties": {
      "category": {"const": "records"}
     }
    },
@@ -1043,7 +1065,7 @@
       "items": {
        "properties": {
         "op": {
-         "enum": ["apply"]
+         "enum": ["apply", "relations"]
         }
        }
       }
@@ -1258,7 +1280,27 @@
       "items": {
        "properties": {
         "op": {
-         "enum": ["acked", "join_receivers", "offer_types", "owed", "owner", "pass_withdrawal", "proposer", "receive", "take_version"]
+         "enum": ["acked", "join_receivers", "offer_types", "owed", "owner", "pass_withdrawal", "proposer", "receive", "shared_value", "take_version"]
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "if": {
+    "properties": {
+     "category": {"const": "bricks"}
+    }
+   },
+   "then": {
+    "properties": {
+     "vectors": {
+      "items": {
+       "properties": {
+        "op": {
+         "enum": ["check_record", "decode_record", "derive", "describe"]
         }
        }
       }

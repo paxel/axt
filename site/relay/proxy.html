@@ -1,0 +1,95 @@
+<!-- page: title="Put a proxy in front" track="relay" order=2 summary="Run the reference relay behind a reverse proxy that terminates TLS, accepts the largest message, waits for long lists and passes the client address." -->
+<p class="lede">
+  Apps reach a relay only over HTTPS. The reference relay serves plain HTTP, so it runs behind a
+  reverse proxy that terminates TLS, and it must not be reachable by apps without that proxy.
+</p>
+
+<h2>What the proxy does</h2>
+<p>
+  The rules are in <a href="../spec/relay.html#section-7-2">relay.md, section 7.2</a>, built on
+  <a href="../spec/transports.html#section-5-7">transports.md, section 5.7</a>. The proxy:
+</p>
+<ul>
+  <li>
+    serves TLS 1.3 or TLS 1.2 as <a href="https://www.rfc-editor.org/rfc/rfc9325">RFC 9325</a>
+    recommends them, with a certificate that apps can check as for any HTTPS server;
+  </li>
+  <li>
+    accepts request bodies of at least <a href="../spec/limits.html#transports.sealed_message"><code>transports.sealed_message</code></a>, the largest sealed message
+    (<a href="../spec/transports.html#section-5-6">transports.md, section 5.6</a>);
+  </li>
+  <li>passes <code>Content-Length</code> and <code>Authorization</code> to the relay unchanged;</li>
+  <li>
+    waits longer for the relay's response than a list may wait for a message,
+    <a href="../spec/limits.html#transports.list_wait"><code>transports.list_wait</code></a> (<a href="../spec/relay.html#section-3-3">relay.md, section 3.3</a>);
+  </li>
+  <li>
+    never logs <code>Authorization</code>, and keeps no line with a request path and a client
+    address for more than 7 days (<a href="logs.html">Keep the logs within the rules</a>);
+  </li>
+  <li>
+    when the relay takes the client address from a header, sets that header itself. The relay is
+    then reachable only through the proxy, since a client could otherwise set the header.
+  </li>
+</ul>
+<p>
+  The proxy also keeps the relay's own HTTP server, which is not hardened against slow or many
+  clients, away from the network. Where the proxy supports HTTP/2, it offers it to apps; the relay
+  itself speaks HTTP/1.1.
+</p>
+
+<h2>The client address</h2>
+<p>
+  Behind a proxy, every request comes from the proxy's address. The relay keeps its rate limits
+  per client address, so without more, all clients share one limit. Name the header in which the
+  proxy passes the client address with <code>--client-address-header</code>, such as
+  <code>X-Forwarded-For</code>. The relay takes the last value of that header, the one the proxy
+  added (<a href="../spec/relay.html#section-4-3">relay.md, section 4.3</a>).
+</p>
+
+<h2>Example: Caddy</h2>
+<p>
+  The configuration of <a href="https://github.com/paxel/axt/blob/summer/relay/README.md">relay/README.md</a>
+  for <a href="https://caddyserver.com/">Caddy</a>, which obtains the certificate itself and writes
+  no access log unless told to. Replace <code>relay.example.org</code> with your host name:
+</p>
+<pre><code class="language-text">relay.example.org {
+	reverse_proxy /axt/* 127.0.0.1:8080
+}</code></pre>
+
+<h2>Example: nginx</h2>
+<p>The configuration of relay/README.md for <a href="https://nginx.org/">nginx</a>, with the certificate in files of your own:</p>
+<pre><code class="language-text">server {
+    listen 443 ssl;
+    http2 on;                        # nginx 1.25.1 or later
+    server_name relay.example.org;
+    ssl_certificate     /etc/ssl/relay.example.org.crt;
+    ssl_certificate_key /etc/ssl/relay.example.org.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    access_log off;
+
+    location /axt/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        client_max_body_size 17m;
+        proxy_read_timeout 75s;
+    }
+}</code></pre>
+<p>
+  <code>client_max_body_size 17m</code> is 17 MiB, above
+  <a href="../spec/limits.html#transports.sealed_message"><code>transports.sealed_message</code></a>, and <code>proxy_read_timeout 75s</code> is above
+  <a href="../spec/limits.html#transports.list_wait"><code>transports.list_wait</code></a>. <code>access_log off</code> keeps the
+  access log from holding request paths with client addresses.
+</p>
+
+<h2>The relay behind either</h2>
+<p>
+  Both examples send the requests under <code>/axt/</code> to the relay on 127.0.0.1, port 8080,
+  and pass the client address in <code>X-Forwarded-For</code>. Start the relay to match:
+</p>
+<pre><code class="language-text">python3 relay/axt_relay.py --storage /var/lib/axt-relay --base-path /axt/ --client-address-header X-Forwarded-For</code></pre>
+<p>
+  The relay's base URL is then <code>https://relay.example.org/axt/</code>. This is the URL an app
+  names in its manifest (<a href="../spec/manifest.html#section-3-10">manifest.md, section
+  3.10</a>).
+</p>

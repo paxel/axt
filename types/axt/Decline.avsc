@@ -41,11 +41,12 @@
               "type": {
                 "type": "enum",
                 "name": "DeclineReason",
-                "doc": "Why the receiver does not take a type. NOT_WANTED: the receiver or its user chose not to take it. DOES_NOT_FIT: the type, in the offered version, does not fit the receiver's current manifest. DOES_NOT_RESOLVE: the offered schema does not resolve against the receiver's reader schema of the type. The default is for schema resolution only; within one envelope format every symbol is known.",
+                "doc": "Why the receiver does not take a type. NOT_WANTED: the receiver or its user chose not to take it. DOES_NOT_FIT: the type, in the offered version, does not fit the receiver's current manifest. DOES_NOT_RESOLVE: the offered schema does not resolve against the receiver's reader schema of the type. DESCRIPTION_INVALID: the offered description breaks a rule of spec/fields.md, so no schema is derived from it. The default is for schema resolution only; within one envelope format every symbol is known.",
                 "symbols": [
                   "NOT_WANTED",
                   "DOES_NOT_FIT",
-                  "DOES_NOT_RESOLVE"
+                  "DOES_NOT_RESOLVE",
+                  "DESCRIPTION_INVALID"
                 ],
                 "default": "NOT_WANTED"
               },

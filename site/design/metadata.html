@@ -1,0 +1,163 @@
+<!-- page: title="Describe the fields" track="design" order=3 summary="How a type is described by bricks, how its schema is derived, and what the description tells an app that has never seen the type: texts, order, groups, inputs and checks." -->
+<p class="lede">
+  A type is written as its description: typed fields put together, each with one brick. The
+  type's Avro schema is derived from it. An app that gets a type it has never seen still has the
+  description, and its texts and checks tell that app how to show each field, in its user's
+  language, and which values are valid.
+</p>
+
+<h2>A type is its description</h2>
+<p>
+  A <strong>typed field</strong> describes one field: its name, its <code>doc</code>, its texts, a
+  few hints, and in its member <code>kind</code> one <strong>brick</strong>, such as
+  <code>axt.StringField</code> or <code>axt.EmailField</code>. The brick says what kind of value
+  the field holds and carries the checks and hints of that kind
+  (<a href="../spec/fields.html#section-1">fields, section 1</a>). Every brick and its members are
+  on <a href="../spec/bricks.html">Bricks</a>.
+</p>
+<p>
+  The <strong>description</strong> of a type is a typed field whose brick is an
+  <code>axt.ObjectField</code>. At this root it holds the type's full name, its version, its title
+  field and its fields, each a typed field again, down to the values
+  (<a href="../spec/fields.html#section-9-1">section 9.1</a>). Every example type is published as
+  its description; <a href="../spec/example-types.html">Example types</a> shows each one with its
+  texts and bricks.
+</p>
+
+<h2>The kinds of bricks</h2>
+<ul>
+  <li><strong>Value bricks</strong> hold text, numbers, booleans, bytes, an enum, a list, a map, an object of further typed fields, or one of the time types (<a href="../spec/fields.html#section-4">section 4</a>).</li>
+  <li><strong>Semantic bricks</strong> hold text of one form, with its check built in: CommonMark, an email address, a phone number, a web address, a URI, a colour, an IBAN, a BIC, a country, a language, a currency, a media type or a unit (<a href="../spec/fields.html#section-5">section 5</a>).</li>
+  <li><strong>The relation brick</strong> holds links to other records and to things outside AXT, and <strong>the extension brick</strong> holds fields of other apps (<a href="../spec/fields.html#section-11">sections 11</a> and <a href="../spec/fields.html#section-12">12</a>; <a href="links.html">Link records</a>).</li>
+</ul>
+
+<h2>The derived schema</h2>
+<ul>
+  <li>A fixed rule turns a valid description into an Avro schema: each typed field becomes one field of a record, with the type, the default and the union with <code>null</code> that its brick and <code>required</code> give (<a href="../spec/fields.html#section-9-2">section 9.2</a>). Your library applies it; you write the description.</li>
+  <li>The rule gives the forms every type keeps, such as <code>["null", T]</code> with the default <code>null</code> for a value that may be absent (<a href="../spec/types.html#section-5">types, section 5</a>).</li>
+  <li>The derived schema carries none of the type's own texts, hints or checks. Its fingerprint is the type's fingerprint (<a href="../spec/fields.html#section-9-3">fields, section 9.3</a>).</li>
+  <li>An offer carries each type as its description, and a file carries the description and the derived schema of each type in its header (<a href="../spec/fields.html#section-10">section 10</a>).</li>
+</ul>
+
+<h2>Hints and checks</h2>
+<p>
+  Each typed field holds its texts and, in its brick, its hints and checks
+  (<a href="../spec/fields.html#section-1">fields, section 1</a>). There are two kinds:
+</p>
+<ul>
+  <li>A <strong>hint</strong> says how to show a type, a field or a symbol: a label, a help text, an emoji, an order. A value cannot break a hint.</li>
+  <li>A <strong>check</strong> is a rule a value can break: <code>required</code>, the format of a semantic brick such as <code>axt.EmailField</code>, <code>pattern</code>, <code>min_length</code>, <code>max_length</code>, <code>min</code> and <code>max</code>.</li>
+</ul>
+<p>
+  The description travels with the type, and none of its texts, hints or checks is in the derived
+  schema, so none changes the type's fingerprint
+  (<a href="../spec/fields.html#section-9-2">fields, section 9.2</a>). A receiver shows and checks
+  a record by the description that came with its writer schema
+  (<a href="../spec/metadata.html#section-3-4">metadata, section 3.4</a>).
+</p>
+
+<h2>Labels, help and emoji</h2>
+<ul>
+  <li><strong><code>label</code></strong> is the name a receiver shows for the type, a nested type or a field, in English, such as <code>Postal code</code>. <strong><code>help</code></strong> is one or two sentences on what the value is or how to enter it, such as <code>Five digits.</code> Both are one line of plain text, within the limits <a href="../spec/limits.html#metadata.label"><code>metadata.label</code></a> and <a href="../spec/limits.html#metadata.help"><code>metadata.help</code></a> (<a href="../spec/metadata.html#section-4-1">section 4.1</a>).</li>
+  <li>The label and the help text are written for the user. The <code>doc</code> is written for the developer and stays the definition of what the field means.</li>
+  <li><strong><code>label_translations</code></strong> and <strong><code>help_translations</code></strong> give the same texts in other languages, keyed by language tag, such as <code>de</code> or <code>pt-BR</code>, never <code>en</code>. A translation needs its English text. A receiver picks the language from its user's list of languages and falls back to English (<a href="../spec/metadata.html#section-4-2">section 4.2</a>).</li>
+  <li><strong><code>emoji</code></strong> is one emoji a receiver may show next to the label, such as <code>📞</code> for a phone number. It should be one emoji that Unicode recommends for general interchange, and is never shown in place of the label (<a href="../spec/metadata.html#section-4-3">section 4.3</a>).</li>
+  <li>Each symbol of an <code>axt.EnumField</code> has a label, help, emoji and their translations of its own (<a href="../spec/metadata.html#section-4-4">section 4.4</a>).</li>
+</ul>
+<p>
+  Without a label, a receiver shows the field's name with underscores read as spaces
+  (<a href="../spec/types.html#section-6">types, section 6</a>). Every example type carries a label
+  and an emoji on the type and on its fields
+  (<a href="../spec/types.html#section-5-9">types, section 5.9</a>).
+</p>
+
+<h2>Order and groups</h2>
+<ul>
+  <li><strong><code>order</code></strong> of a field puts it before the fields without one, the lowest first. Fields without it keep the order of the description. The order is for display only; the encoding keeps the order of the description, and its range lets a type put a new field before those it already has (<a href="../spec/metadata.html#section-5-1">section 5.1</a>).</li>
+  <li><strong><code>group</code></strong> of a field names a group, such as <code>contact</code>; fields with the same key are shown together. The <strong><code>groups</code></strong> of the <code>axt.ObjectField</code> give each group its label, emoji and translations once (<a href="../spec/metadata.html#section-5-2">section 5.2</a>).</li>
+</ul>
+
+<h2>Inputs</h2>
+<p>For a receiver that lets its user enter or change a value (<a href="../spec/metadata.html#section-5-3">section 5.3</a>, <a href="../spec/metadata.html#section-5-4">5.4</a>):</p>
+<table>
+  <thead>
+    <tr><th>Member</th><th>What it says</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>placeholder</code></td><td>The text an empty input shows, such as <code>+49301234567</code>. It is not translated, so it should be a form any reader understands</td></tr>
+    <tr><td><code>example</code></td><td>An example value as text. In a brick of text it meets the field's checks</td></tr>
+    <tr><td><code>multiline</code></td><td>The value may hold several lines</td></tr>
+    <tr><td><code>preferred_length</code></td><td>How many code points an input should have room for, such as 5 for a postal code. It is not a limit</td></tr>
+    <tr><td><code>sensitive</code></td><td>The value is a secret or personal data that others near the screen should not see, such as an account number</td></tr>
+    <tr><td><code>advanced</code></td><td>Most users need not see or fill in the field</td></tr>
+  </tbody>
+</table>
+<p>
+  <code>sensitive</code> only changes how the value is shown. It does not protect the value
+  beyond what every message has: every message is signed, and sealed through a relay
+  (<a href="../spec/metadata.html#section-8">section 8</a>).
+</p>
+
+<h2>Checks</h2>
+<ul>
+  <li>A <strong>semantic brick</strong> has the form of a text built in: <code>markdown</code>, <code>email</code>, <code>phone</code> (E.164, such as <code>+49301234567</code>), <code>url</code>, <code>uri</code>, <code>colour</code>, <code>iban</code>, <code>bic</code>, <code>country</code>, <code>language</code>, <code>currency</code>, <code>media-type</code> or <code>ucum</code>. A receiver shows and offers inputs as the format suggests. Formats are checked by their syntax only, never against a registry (<a href="../spec/metadata.html#section-6-3">section 6.3</a>).</li>
+  <li><strong><code>pattern</code></strong> of an <code>axt.StringField</code> is a regular expression in the I-Regexp form of RFC 9485 that the whole value matches, such as <code>[0-9]{5}</code>. I-Regexp has no anchors and no <code>\d</code> (<a href="../spec/metadata.html#section-6-4">section 6.4</a>).</li>
+  <li><strong><code>min_length</code></strong> and <strong><code>max_length</code></strong> bound a text in code points, or bytes in bytes. <strong><code>min</code></strong> and <strong><code>max</code></strong> bound a number, in the field's unit (<a href="../spec/metadata.html#section-6-2">section 6.2</a>).</li>
+</ul>
+<p>Three rules decide what a check covers (<a href="../spec/metadata.html#section-6-1">section 6.1</a>):</p>
+<ul>
+  <li><code>null</code> keeps every check but <code>required</code>.</li>
+  <li>The empty string keeps every format and every pattern. A field that needs a value is <code>required</code>.</li>
+  <li>The checks of the items of a list apply to each item, not to the list.</li>
+</ul>
+<p>
+  Dates, times and ids have no formats: they are the time bricks and the logical type
+  <code>uuid</code>.
+</p>
+
+<h2>What a check binds</h2>
+<p>A check binds your app as a sender; it only lets the receiver refuse (<a href="../spec/metadata.html#section-7-1">section 7.1</a>):</p>
+<ul>
+  <li>Your app never sends a record with a value that breaks a check of the description of the type it writes the record with.</li>
+  <li>A receiver may check the values against your description and may reject a record that breaks one with <code>VALUE_INVALID</code>, naming the field, such as <code>address.postal_code</code>, so that your user can correct it.</li>
+  <li>A receiver that takes such a record anyway keeps and shows the value as it came. It never changes the value to meet the check, such as by removing the spaces of a phone number.</li>
+</ul>
+<p>
+  That is why adding or narrowing a check is not a compatible change, while widening or removing
+  one is, and why labels and translations can change in any version
+  (<a href="../spec/types.html#section-3-3">types, section 3.3</a>; <a href="versions.html">Evolve a type</a>).
+</p>
+
+<h2>A description that breaks a rule</h2>
+<p>
+  A description that breaks a rule of the bricks, such as a pattern that is not an I-Regexp, is
+  not valid (<a href="../spec/fields.html#section-6">fields, section 6</a>). Your app never offers
+  one, and a receiver declines its type with <code>DESCRIPTION_INVALID</code>
+  (<a href="../spec/fields.html#section-10-1">section 10.1</a>). The derived schema carries no
+  <code>axt.</code> attribute but <code>axt.version</code> and those of the published schemas of
+  <code>axt.Relation</code> and <code>axt.Extension</code> that it holds
+  (<a href="../spec/fields.html#section-9-2">section 9.2</a>).
+</p>
+
+<h2>An example</h2>
+<p>
+  The illustration <code>com.example.Vet</code> of
+  <a href="../spec/fields.html#section-8">fields, section 8</a>, is described by bricks: a phone,
+  an email address and a website in the group <code>contact</code>, an IBAN that is sensitive and
+  advanced, a number of minutes between 5 and 240, and others.
+  A receiver shows the type as <code>🏥 Vet practice</code> to a user who reads English and as
+  <code>🏥 Tierarztpraxis</code> to one who reads <code>de-AT</code>. The phone number is stored as
+  <code>+49301234567</code>; a receiver should show it grouped, such as <code>+49 30 1234567</code>,
+  but never stores the form it shows. A receiver that checks may reject a record whose number
+  holds spaces, naming the field <code>phone</code>
+  (<a href="../spec/metadata.html#section-6-3">metadata, section 6.3</a>).
+</p>
+
+<div class="callout">
+  <p class="eyebrow">Note</p>
+  <p>
+    A label is the sender's word. A receiver that acts on a field because of its label, rather
+    than because it knows the type, acts on what the sender says
+    (<a href="../spec/metadata.html#section-8">metadata, section 8</a>).
+  </p>
+</div>

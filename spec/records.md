@@ -1,8 +1,8 @@
 # Records
 
-Status: released in 0.1.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md).
+Status: released in 0.1.0, changed in 0.2.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md).
 
-This document defines the stable id and the version every record carries, how a sender sends updates and deletions, how a receiver applies them while keeping what its own user changed, the outcomes a receiver reports for each record, and how one record refers to another.
+This document defines the stable id and the version every record carries, how a sender sends updates and deletions, how a receiver applies them while keeping what its own user changed, the outcomes a receiver reports for each record, how one record refers to another, and how a relation links a record of another sender.
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in BCP 14 ([RFC 2119](https://www.rfc-editor.org/rfc/rfc2119), [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174)) when, and only when, they appear in all capitals, as shown here.
 
@@ -112,12 +112,16 @@ Where the receiver runs on several devices of one owner, the devices of the set 
 
 ### 6.1 Per field
 
-A receiver SHOULD merge per field. The fields are the top-level fields of the record's writer schema; a nested record, an array or a map is one value. For each field of a `DATA` message with a higher version:
+A receiver SHOULD merge per field. The fields are the top-level fields of the record's writer schema; a nested record, an array or a map is one value, apart from a list merged per element, as below. For each field of a `DATA` message with a higher version:
 
 - if the receiver's user has not changed the field, the receiver takes the value from the message;
 - if the user has changed it, the receiver keeps the user's value.
 
 A field counts as changed by the user from the user's first change of it until the user discards that change, for example with an action that takes the sender's value again. A receiver MAY tell changed fields by keeping, for each field, the value it last took from the sender and comparing it with the current value. If a message brings the value the user set, the receiver MAY count the field as no longer changed.
+
+A list merged per element ([sync.md](sync.md), section 25.1), such as the relations of a record, is merged per element, by the key of each element: the receiver keeps every element that its user added or changed, leaves out every element that its user removed, and takes every other element from the message. The elements are in the order of the message, followed by those that the user added and the message does not hold, in the user's order, at most 256 ([fields.md](fields.md), section 11.4). A receiver tells what the user changed by comparing the user's list with the list it last took from the sender. The field counts as kept, for `MERGED` and `kept_fields`, when the merged list differs from the list in the message. A receiver on several devices of one owner merges such a list per element between them as well ([sync.md](sync.md), section 25.7).
+
+An extension ([fields.md](fields.md), section 12) is an element of its list, keyed by its name. Where the user has changed an extension that the message holds, and the receiver knows the extension's type, that is, holds the writer schemas of the extension as the user left it, as the receiver last took it from the sender and as the message has it (section 12.2 there), the receiver merges within the extension field by field, as the devices of an owner do ([sync.md](sync.md), section 25.9): it keeps each field of the extension's record that its user changed and takes every other from the message, compared as decoded values and resolved against its own schema of the extension's type, and encodes the result with that schema. An extension of a type that the receiver does not know is one value: it keeps the user's extension whole, and takes an extension that its user has not changed as the message has it, its bytes not encoded again ([fields.md](fields.md), section 12.4). An extension that the user has changed, also when it changed only fields within it, stays when the message no longer holds it, as every element that the user changed does: the field counts as kept, and the outcome is `MERGED`.
 
 Fields of the writer schema that the receiver does not keep or use are not local changes. A receiver that maps a type into a model of its own, such as an Appointment into a reminder, merges the fields it maps in the same way.
 
@@ -154,7 +158,7 @@ Every record message a receiver processes has one of these outcomes. `WITHDRAWN`
 
 A message the receiver cannot process, such as one with an invalid id or version, a changed type, a body it cannot decode or a value that is not valid, has no outcome; the receiver reports it as an error ([protocol.md](protocol.md), section 8) and does not change its version of the record.
 
-A reader of a file applies the same rules and reaches the same outcomes, but a file has no way back to the sender, so nothing is reported. Which failures reject a whole file, and which only the one message, is in [transports.md](transports.md), section 2.2. In a live connection and through a relay, the receiver reports each outcome in an `ACK` message. [protocol.md](protocol.md), section 7, defines the `ACK`: its body schema `axt.Ack`, when it is sent, and that one `ACK` reports up to 4,096 record messages. For each record message, the `ACK` MUST carry:
+A reader of a file applies the same rules and reaches the same outcomes, but a file has no way back to the sender, so nothing is reported. Which failures reject a whole file, and which only the one message, is in [transports.md](transports.md), section 2.2. In a live connection and through a relay, the receiver reports each outcome in an `ACK` message. [protocol.md](protocol.md), section 7, defines the `ACK`: its body schema `axt.Ack`, when it is sent, and that one `ACK` reports up to `protocol.ack_records` record messages ([types/axt/limits.json](../types/axt/limits.json)). For each record message, the `ACK` MUST carry:
 
 - the record's id and the version of the message it acknowledges. These are the sender's id and version, although the `ACK`'s own `sender` is the receiver: an `ACK` is about a record of the party it goes to;
 - the outcome;
@@ -174,13 +178,13 @@ Toward a receiver from which the record is withdrawn, the versions of its withdr
 
 A reference is a field whose value is the id of another record of the same sender, such as a Measurement that names the Pet it was taken of. Its type is a `string` with the logical type `uuid`, or `["null", that]` where the reference may be absent. The field's `doc` SHOULD name the type or types of the records it refers to. A receiver that does not know the type cannot tell a reference from another `uuid` field; 0.1.0 has no attribute that marks references in a schema.
 
-- A reference MUST name a record of the same sender. A sender MUST NOT put the id of a record it received from another app into a reference. References across senders are not defined in 0.1.0.
+- A reference MUST name a record of the same sender. A sender MUST NOT put the id of a record it received from another app into a reference. A record links to a record of another sender by a relation (section 10).
 - A receiver resolves a reference by the sender of the record that holds it and the id in it, among that sender's records of all types.
 - A reference may be unresolved: the record it names may not have arrived yet, may be of a type the receiver declined ([protocol.md](protocol.md), section 5), or may be deleted. A receiver MUST NOT reject a record, or hold it back, because a reference in it is unresolved. It keeps the id and resolves it when the record arrives or comes back. It MAY show an unresolved reference as missing.
 - The deletion of a record does not change the records that refer to it. If their meaning changes with it, the sender sends new versions of them.
 - A reference is a field like any other when the receiver merges (section 6.1).
 
-The example types of version 1 carry no references; Measurement names what was measured as text in `subject` ([types.md](types.md), section 7.1).
+The example types carry no references; Measurement names what was measured as text in `subject` ([types.md](types.md), section 7.1). Each example type links to other records with relations ([types.md](types.md), section 8).
 
 ## 9. Example
 
@@ -200,6 +204,49 @@ A sender keeps an appointment at the vet as an `axt.example.v1.Appointment` with
 - In step 5 the message comes from a file, so no `ACK` goes back. Through a relay, the same message would be acknowledged as `STALE` with the receiver's version 3, a version the sender has sent itself, so nothing needs to be done.
 - In step 6 this receiver deletes the record although its user had changed `location`. A receiver that keeps it (section 6.4) reports `KEPT`; its version is 4 as well, and in step 7 it would merge version 5 into the kept record and report `MERGED` with the field `location`.
 - In step 7 the record comes back under the same id, as the sender sent it. The user's `location` went with the deletion in step 6.
+
+## 10. Relations across senders
+
+A relation ([fields.md](fields.md), section 11) links the record that holds it to a record of the same sender or of another one, such as an appointment of a calendar app to a pet that cat-a-log sent. This section says how a receiver finds the record a relation points at, and what the record on the other side shows of it. Within one sender, a link that is the type's own meaning MAY instead be a reference (section 8; [fields.md](fields.md), section 11.5).
+
+### 10.1 One way
+
+A relation belongs to the record that holds it: it is part of that record's value, and only that record's sender sends it (section 1). It points one way. The record it points at does not change, nothing is sent to that record's sender for it, and no app writes into the records of another.
+
+The other side learns of a relation by looking: a receiver that holds the target record finds the relations that point at it among the records it holds, as every relation that resolves to that record (section 10.2), of every sender and of its own records. It MAY show them on the target record as "linked from", each with the record that holds it and the relation's kind and note. What it shows is the result of that lookup and not a part of the target record: it changes when a record that holds such a relation arrives, changes or is deleted, and it never travels with the target record.
+
+### 10.2 Resolving a relation
+
+A receiver resolves a relation whose target is a record, an `axt.RelationRecordTarget`, to a sender and a record:
+
+1. **The sender.** With `sender` `null`, the sender of the record that holds the relation. Otherwise the sender of whose device set `sender` is a key, current or removed, among the senders the receiver knows ([keys.md](keys.md), sections 3.3 and 5.5); or the receiver itself, when `sender` is a key of its own set, current or removed. A relation names another sender by any key of that sender's set: a key that the receiver knows only from the sender's chain ([keys.md](keys.md), section 5.4) names it as well as the first key it accepted, and a key removed since still names the set. A key of the set of the holder's sender names that sender, as `null` does.
+2. **The record.** Among the records the receiver holds of that sender, of all types, the one with the target's `id`, compared as 128-bit values, as for a reference (section 8). The target's `type` and `text` are not part of the lookup: they are what the receiver shows while it cannot resolve the relation ([fields.md](fields.md), section 11.3).
+
+The relation is resolved when the receiver holds that record, and not as a tombstone. It is unresolved when:
+
+- `sender` is a key of no sender the receiver knows, such as a key it has never met, a refused key or a forgotten key ([keys.md](keys.md), section 3.4);
+- the receiver does not hold the record: it has not arrived, is of a type the receiver declined ([protocol.md](protocol.md), section 5), or is not shared with it;
+- the receiver holds only a tombstone of the record, of a deletion or of a withdrawal (section 5.3).
+
+Resolving is a lookup, made whenever the receiver shows or uses the relation; a receiver does not keep its result as part of the relation. An unresolved relation therefore resolves once its record arrives or comes back, and once its key becomes a key of a known sender, by a chain or by the join of two senders ([keys.md](keys.md), section 5.5); a relation that names a key removed afterwards stays resolved.
+
+A relation whose target is a thing outside AXT, an `axt.RelationOutsideTarget`, names no record and is not resolved.
+
+### 10.3 Unresolved relations
+
+A receiver MUST NOT reject a record, or hold it back, because a relation in it is unresolved, and its outcome (section 7) is the same as for the record without the relation. It keeps the relation as it received it and resolves it again later (section 10.2). It SHOULD show an unresolved relation with its target's display text ([fields.md](fields.md), section 11.3), and MAY show it as missing, or as deleted where it holds a tombstone of the record.
+
+A key in `sender` is not a contact. A receiver does not ask its user about a key that it meets only in a relation, sends nothing to it, and learns nothing of a sender from it: only a message signed with a key makes it a first contact ([keys.md](keys.md), section 3.2).
+
+### 10.4 Naming the target
+
+A sender names a record of its own with `sender` `null`. It names a record of another sender by that sender's key and the record's id: by a key of that sender's set that it knows, such as the key from which it got the record; every receiver that knows the set resolves any of its keys (section 10.2). It SHOULD give the target's `type` and a `text`, such as the record's title, so that a receiver that does not hold the record can show what the relation points at.
+
+### 10.5 The receiver's own links
+
+A receiver's user links a received record by a relation on a record of the receiver's own, such as a note or an appointment, whose target names the received record by its sender's key and its id. The received record stays its sender's; the link is no change of it. The receiver's record goes, with its relations, to the apps it is sent to as any record of the receiver's own. Where it reaches the sender of the received record, its relation names a key of that sender's own set and resolves to that sender's own record (section 10.2), which it MAY show as linked from the receiver's record (section 10.1).
+
+A relation that the receiver's user adds to the `relations` of a received record is a local change (section 6): it stays in the receiver and never reaches the sender. A user who wants the sender's record itself to hold a relation proposes it to the sender, where the sender takes proposals ([shares.md](shares.md), section 12).
 
 ## References
 

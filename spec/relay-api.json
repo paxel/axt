@@ -1,0 +1,411 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AXT relay interface",
+    "version": "0.2.0",
+    "summary": "The HTTP interface every relay of AXT offers.",
+    "description": "The requests, responses, status codes and headers of a relay, as spec/transports.md, section 5, defines them; that section says what a relay and an app do with them. The paths are appended to the relay's base URL (section 5.2). Limits are named by their keys in types/axt/limits.json. A relay MUST NOT require cookies or any header that this document does not name, and an app MUST NOT send cookies. Only the list and the fetch have a body in their response; an app ignores the body of every other response.",
+    "license": {
+      "name": "CC0 1.0",
+      "identifier": "CC0-1.0"
+    }
+  },
+  "servers": [
+    {
+      "url": "{base}",
+      "description": "The relay's base URL without its last `/`: an absolute URL with the scheme https, a host and a path, of at most `transports.relay_url` bytes with that `/` (spec/transports.md, section 5.2).",
+      "variables": {
+        "base": {
+          "default": "https://relay.example.org/axt"
+        }
+      }
+    }
+  ],
+  "paths": {
+    "/v1/mailboxes/{mailbox}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/mailbox"
+        }
+      ],
+      "put": {
+        "operationId": "create",
+        "summary": "Create a mailbox",
+        "description": "The owner creates its mailbox before it gives the id to any other app, and again whenever an owner request gets 404 for the mailbox itself (section 5.4). Creating a mailbox that exists changes nothing.",
+        "security": [
+          {
+            "owner": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "A new mailbox. No body; an app ignores any body."
+          },
+          "204": {
+            "description": "The mailbox exists already; nothing changed."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "remove",
+        "summary": "Delete a mailbox",
+        "description": "Deletes the mailbox with its messages (section 5.8).",
+        "security": [
+          {
+            "owner": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The mailbox and its messages are gone, also for a mailbox that does not exist: a deletion can be repeated."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/v1/mailboxes/{mailbox}/messages": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/mailbox"
+        }
+      ],
+      "get": {
+        "operationId": "list",
+        "summary": "List the messages held",
+        "description": "With `wait` from 1 to `transports.list_wait` (types/axt/limits.json) and no message in the mailbox, the relay holds the response for up to that many seconds until a message is put, and MAY answer sooner; without `wait`, or with 0, it answers at once (section 5.4).",
+        "security": [
+          {
+            "owner": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/wait"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The messages held, oldest put first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/List"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/v1/mailboxes/{mailbox}/messages/{message}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/mailbox"
+        },
+        {
+          "$ref": "#/components/parameters/message"
+        }
+      ],
+      "put": {
+        "operationId": "put",
+        "summary": "Put a sealed message",
+        "description": "Anyone who knows the mailbox id puts a sealed message (spec/keys.md, section 4.3). The relay checks in this order: `Content-Length` is present (411) and at most `transports.sealed_message` (413), before it reads the body; the mailbox exists (404); the body is not empty and its SHA-256 is `{message}` (400); it holds the message already (204, and nothing changes); the mailbox has room (507). It then holds the message (201). A put is safe to repeat (section 5.3).",
+        "security": [],
+        "parameters": [
+          {
+            "name": "Content-Length",
+            "in": "header",
+            "required": true,
+            "description": "The length of the sealed message in bytes.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "contentMediaType": "application/octet-stream"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The relay holds the message now."
+          },
+          "204": {
+            "description": "The relay held the message already; nothing changed, also not its holding time."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "411": {
+            "$ref": "#/components/responses/LengthRequired"
+          },
+          "413": {
+            "$ref": "#/components/responses/ContentTooLarge"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          },
+          "507": {
+            "$ref": "#/components/responses/InsufficientStorage"
+          }
+        }
+      },
+      "get": {
+        "operationId": "fetch",
+        "summary": "Fetch a sealed message",
+        "description": "The owner fetches each listed message, opens it, processes it and then deletes it (section 5.4).",
+        "security": [
+          {
+            "owner": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The sealed message as it was put.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "contentMediaType": "application/octet-stream"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "delete",
+        "summary": "Delete a message",
+        "description": "The owner deletes a message after it has processed it, and a message that does not open as well (section 5.4).",
+        "security": [
+          {
+            "owner": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The message is gone, also for a message the relay does not hold."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "owner": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "The owner of the mailbox: `Authorization` with `Bearer`, one space and the mailbox secret as 64 lower-case hexadecimal digits (RFC 6750, section 2.1). The mailbox id is the SHA-256 of the ASCII text `AXT-v1 mailbox`, one zero byte and the 32 bytes of the secret (section 5.1)."
+      }
+    },
+    "parameters": {
+      "mailbox": {
+        "name": "mailbox",
+        "in": "path",
+        "required": true,
+        "description": "The mailbox id (section 5.1).",
+        "schema": {
+          "$ref": "#/components/schemas/Hex64"
+        }
+      },
+      "message": {
+        "name": "message",
+        "in": "path",
+        "required": true,
+        "description": "The SHA-256 of the sealed message.",
+        "schema": {
+          "$ref": "#/components/schemas/Hex64"
+        }
+      },
+      "wait": {
+        "name": "wait",
+        "in": "query",
+        "required": false,
+        "description": "Seconds to wait for a message, 0 to `transports.list_wait` (types/axt/limits.json); the only query of the interface.",
+        "schema": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "headers": {
+      "RetryAfter": {
+        "description": "The seconds the app waits before it repeats the request.",
+        "schema": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "A put whose body is empty or whose SHA-256 is not `{message}`; a `wait` that is not 0 to `transports.list_wait` (types/axt/limits.json); a query on another request. The app does not repeat the request: it is a fault of the app."
+      },
+      "Unauthorized": {
+        "description": "An owner request without `Authorization`, or with one that is not `Bearer`, one space and a secret of 64 lower-case hexadecimal digits. The app does not repeat the request."
+      },
+      "Forbidden": {
+        "description": "An owner request whose secret is not the mailbox's; for a creation also a mailbox the relay does not create for this app (spec/transports.md, section 5.6). The app does not repeat the request."
+      },
+      "NotFound": {
+        "description": "A mailbox that does not exist, or a message the mailbox does not hold. After a put the app stops putting into the mailbox (section 5.3); the owner creates its mailbox again (section 5.4)."
+      },
+      "LengthRequired": {
+        "description": "A put without `Content-Length`. The app sends `Content-Length`."
+      },
+      "ContentTooLarge": {
+        "description": "A put whose `Content-Length` is above `transports.sealed_message` (types/axt/limits.json), answered before the body is read (section 5.6). The app does not repeat the request."
+      },
+      "TooManyRequests": {
+        "description": "A request above the relay's rate limits (section 5.6). The app waits as `Retry-After` says, then repeats it.",
+        "headers": {
+          "Retry-After": {
+            "$ref": "#/components/headers/RetryAfter",
+            "required": true
+          }
+        }
+      },
+      "ServiceUnavailable": {
+        "description": "The relay cannot serve the request now. The app waits as `Retry-After` says, or without it as section 5.3 says, then repeats it.",
+        "headers": {
+          "Retry-After": {
+            "$ref": "#/components/headers/RetryAfter"
+          }
+        }
+      },
+      "InsufficientStorage": {
+        "description": "A put into a mailbox that has no room (section 5.6). The app waits as section 5.3 says, then repeats it."
+      }
+    },
+    "schemas": {
+      "Hex64": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "List": {
+        "type": "object",
+        "required": ["messages"],
+        "description": "An app ignores members it does not know.",
+        "properties": {
+          "messages": {
+            "type": "array",
+            "description": "The messages held, oldest put first, at most `transports.list_messages` (types/axt/limits.json).",
+            "items": {
+              "type": "object",
+              "required": ["id", "size"],
+              "description": "One message held; an app ignores members it does not know.",
+              "properties": {
+                "id": {
+                  "$ref": "#/components/schemas/Hex64",
+                  "description": "The message's SHA-256."
+                },
+                "size": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Its length in bytes."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

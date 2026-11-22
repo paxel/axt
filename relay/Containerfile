@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
-# The AXT reference relay (spec/relay.md) as a container image. Build it with relay/ as the context:
+# The AXT reference relay (spec/relay.md) as a container image. Build it with the repository's root as
+# the context, since the relay reads the limits of types/axt/limits.json:
 #
-#   podman build -t axt-relay relay/
-#   docker build -t axt-relay -f relay/Containerfile relay/
+#   podman build -t axt-relay -f relay/Containerfile .
+#   docker build -t axt-relay -f relay/Containerfile .
 #
 # The relay serves plain HTTP on port 8080 and keeps its mailboxes in the volume /data. It runs behind a
 # TLS-terminating reverse proxy (relay/README.md). Further options follow the image name in `run`.
@@ -13,7 +14,8 @@ LABEL org.opencontainers.image.title="AXT reference relay" \
       org.opencontainers.image.licenses="Apache-2.0 OR MIT" \
       org.opencontainers.image.source="https://github.com/paxel/axt"
 
-COPY axt_relay.py /opt/axt-relay/axt_relay.py
+COPY relay/axt_relay.py /opt/axt-relay/relay/axt_relay.py
+COPY types/axt/limits.json /opt/axt-relay/types/axt/limits.json
 RUN mkdir /data && chown 10001:10001 /data
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
@@ -21,4 +23,4 @@ USER 10001:10001
 VOLUME /data
 EXPOSE 8080
 
-ENTRYPOINT ["python3", "/opt/axt-relay/axt_relay.py", "--host", "0.0.0.0", "--port", "8080", "--storage", "/data"]
+ENTRYPOINT ["python3", "/opt/axt-relay/relay/axt_relay.py", "--host", "0.0.0.0", "--port", "8080", "--storage", "/data"]

@@ -1,6 +1,6 @@
 {
  "format": 1,
- "specification": "0.1.0",
+ "specification": "0.2.0",
  "category": "relay-server",
  "description": "The interface of a relay, played as requests against one relay with a clock the test sets (spec/transports.md, section 5). For relays, not for libraries.",
  "vectors": [

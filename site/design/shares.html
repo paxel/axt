@@ -1,0 +1,121 @@
+<!-- page: title="Share records with other users" track="design" order=7 summary="Only the records a user chose beforehand go to another user's app: how shares work, how a record is withdrawn, and what the receiving app decides." -->
+<p class="lede">
+  Records go to the app of another user only through a share: a rule in the sending app that
+  names, for one receiver, the records that go there. When a record leaves the share, the app
+  takes it back from that receiver with a withdrawal.
+</p>
+
+<h2>Only predefined records leave</h2>
+<p>
+  A share names single records, or the records that a rule of the app chooses, such as every
+  Appointment of one pet (<a href="../spec/shares.html#section-1">shares, section 1</a>). An app
+  sends an app of another user only the records shared with it: every first message, update,
+  deletion and resend, in a live connection, through a relay and in a file
+  (<a href="../spec/shares.html#section-2-2">section 2.2</a>).
+</p>
+<ul>
+  <li>A user who wants to send one record to another user puts it into a share for that user's app; a share of a single record allows that. The app sends such a receiver a record in no other way, also not one its user picks at an offer.</li>
+  <li>An export, a file for no particular receiver, holds only the records its user chose for it. That choice is its share.</li>
+  <li>Messages that carry no record, such as the manifest, offers and acknowledgements, leave as before.</li>
+</ul>
+<p>
+  Nothing in the protocol can check this: a receiver sees records, not the rules that chose them.
+  The rule binds the sending app.
+</p>
+
+<h3>Which apps are another user's</h3>
+<p>
+  The protocol knows apps by their keys, not their users. An app learns from its own user which of
+  the apps it exchanges with belong to another user, for example when the user accepts a key at a
+  first contact (<a href="../spec/shares.html#section-2-3">section 2.3</a>). An app may send
+  records to an app of its own user, such as another app on the same phone, without a share, with
+  its user's answer at each offer. An app may treat every receiver as another user's, and one that
+  cannot tell must. The owner's own devices are no receivers: they get every record by sync.
+</p>
+
+<h2>Where the shares live</h2>
+<p>
+  The specification does not say how a share looks, how a user makes one, or how a rule picks
+  records (<a href="../spec/shares.html#section-2-1">section 2.1</a>). It does say where they live:
+</p>
+<ul>
+  <li>The app keeps its shares as records of a type in its own namespace, records of its own set like any other. Sync carries every type, so every device of the owner holds the same shares (<a href="devices.html">Run on several devices</a>).</li>
+  <li>In the same records, the app keeps each withdrawal it made: the record's id, the receiver and the withdrawal's version. Its devices need these to send a withdrawal again and to share a record again.</li>
+  <li>The app may keep these in one type or in several, under names of its choice.</li>
+</ul>
+<p>The receiver sees no share. It gets offers and records as from any sender.</p>
+
+<h2>Withdrawing a record</h2>
+<p>
+  A record leaves the shares for a receiver when its user takes it out of a share, changes or ends
+  a rule so that it no longer names the record, or changes the record so that a rule no longer
+  picks it, such as by removing the tag the rule chose it by
+  (<a href="../spec/shares.html#section-6-1">section 6.1</a>). The app then withdraws it from that
+  receiver: it sends a <code>WITHDRAW</code>, a record message under a version of its own that
+  names the receiver's device (<a href="../spec/shares.html#section-3">section 3</a>).
+</p>
+<ul>
+  <li>The device on which the change is made sends the withdrawal. A sibling that learns of the change by sync sends the same recorded withdrawal, not one of its own.</li>
+  <li>Ending a share withdraws every record it named that no other share for that receiver names, one withdrawal per record (<a href="../spec/shares.html#section-6-4">section 6.4</a>). The two apps stay known to each other.</li>
+  <li>A record whose last message to the receiver was a deletion need not be withdrawn.</li>
+  <li>Putting the record into a share again sends it under a new, higher version, also when it has not changed. The receiver takes it anew under the same id, or merges it into a copy it kept (<a href="../spec/shares.html#section-6-2">section 6.2</a>).</li>
+</ul>
+
+<h2>What the receiver does</h2>
+<p>
+  A receiver handles a withdrawal as it handles a deletion
+  (<a href="../spec/shares.html#section-4">section 4</a>): it removes its copy and keeps a
+  tombstone, and shows the record as it shows one its sender deleted. It may tell its user that
+  the sender no longer shares it.
+</p>
+<p>When the receiver's user has changed the record, the receiving app decides (<a href="../spec/shares.html#section-4-3">section 4.3</a>):</p>
+<ul>
+  <li><strong>Remove it.</strong> The user's changes go with the record. A record shared again later starts without them.</li>
+  <li><strong>Keep it</strong> with the user's changes. It stays a record of its sender under the same id; when it is shared again, the next update is merged into it. The sender can take it no further.</li>
+  <li><strong>Ask the user.</strong> Until the user decides, the receiver keeps it and reports so, and reports again if the user gives it up.</li>
+</ul>
+<p>
+  A record that its user has not changed is always removed. The choice for a withdrawal may differ
+  from the choice for a deletion; the devices of one owner make it alike. The outcome is
+  <code>WITHDRAWN</code>, or <code>KEPT</code> for a kept record
+  (<a href="../spec/shares.html#section-5-1">section 5.1</a>), and the sending app may show its
+  user which it was.
+</p>
+
+<h2>What a withdrawal cannot do</h2>
+<p>A withdrawal has limits a designer should know (<a href="../spec/shares.html#section-9">section 9</a>):</p>
+<ul>
+  <li><strong>It is a request.</strong> It does not reach what the other user saw, copied into a record of their own or passed on outside AXT, and an app that does not conform can keep every record it got.</li>
+  <li><strong>It is bound to its receiver.</strong> A third app that gets it passed on ignores it.</li>
+  <li><strong>It can tell ids.</strong> A withdrawal of a record that never reached the receiver tells the receiver its id, and the withdrawals at the end of a share tell it how many records the share named.</li>
+  <li><strong>It needs an accepted type.</strong> A receiver that no longer takes the record's type gets no withdrawal until it takes the type again, and keeps the record meanwhile.</li>
+</ul>
+
+<h2>The vet appointment, shared</h2>
+<p>
+  cat-a-log shares the vet appointment with a second user's app, which merges per field and keeps
+  a record its user changed (<a href="../spec/shares.html#section-11-1">section 11.1</a>):
+</p>
+<table>
+  <thead>
+    <tr><th>Step</th><th>What happens</th><th>Message</th><th>Outcome</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>1</td><td>cat-a-log's user puts the appointment into a share for the second user's app</td><td><code>DATA</code>, 3</td><td><code>APPLIED</code></td></tr>
+    <tr><td>2</td><td>cat-a-log's user takes it out of the share</td><td><code>WITHDRAW</code>, 4</td><td><code>WITHDRAWN</code></td></tr>
+    <tr><td>3</td><td>The relay delivers the message of step 1 again</td><td><code>DATA</code>, 3</td><td><code>STALE</code></td></tr>
+    <tr><td>4</td><td>cat-a-log's user shares it again, unchanged</td><td><code>DATA</code>, 5</td><td><code>APPLIED</code></td></tr>
+    <tr><td>5</td><td>The second user sets the location</td><td>none</td><td></td></tr>
+    <tr><td>6</td><td>cat-a-log's user ends the share</td><td><code>WITHDRAW</code>, 6</td><td><code>KEPT</code></td></tr>
+    <tr><td>7</td><td>cat-a-log's user moves the start to 11:00</td><td>none: no longer shared</td><td></td></tr>
+    <tr><td>8</td><td>The second user gives up the kept appointment</td><td>none</td><td><code>WITHDRAWN</code>, reported later</td></tr>
+  </tbody>
+</table>
+<p>
+  In step 6 the receiver keeps the appointment of version 5 with its user's location. The change of
+  step 7 reaches only the receivers with which the record is still shared.
+</p>
+<p>
+  A receiver of a shared record can also suggest changes back to its owner:
+  <a href="proposals.html">Proposals</a>.
+</p>

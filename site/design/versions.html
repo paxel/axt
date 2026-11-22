@@ -1,0 +1,111 @@
+<!-- page: title="Evolve a type" track="design" order=2 summary="Which changes keep a type compatible under Avro 1.12 schema resolution, how versions are numbered, and what a change that is not compatible means." -->
+<p class="lede">
+  A type changes over the life of an app. Some changes let every app go on reading every record,
+  old and new; all others make a new type. Knowing which is which decides how you change a type.
+</p>
+
+<h2>How receivers read another version</h2>
+<p>
+  A receiver decodes a record with the writer schema it got with the offer or in the file header,
+  and resolves it against its own schema of the type, by the schema resolution of Avro 1.12
+  (<a href="../spec/envelope.html#section-6">envelope, section 6</a>):
+</p>
+<ul>
+  <li>The full names of the two record schemas match, or the writer's name is one of the reader's aliases.</li>
+  <li>Fields are matched by name. A writer field the reader does not have is ignored. A reader field the writer does not have takes the reader's default; without a default, the schemas do not resolve.</li>
+  <li>An enum symbol the reader does not know takes the default of the reader's enum; without one, the schemas do not resolve.</li>
+</ul>
+<p>
+  If the schemas do not resolve, the receiver declines the type with
+  <code>DOES_NOT_RESOLVE</code>, or leaves the type's records in a file unapplied.
+</p>
+
+<h2>Versions and major versions</h2>
+<p>
+  An example type carries its major version in its namespace: <code>v1</code> in
+  <code>axt.example.v1.Note</code>. Within a major version, the description of each version holds
+  its <code>version</code>, an integer that is 1 for the first and grows by one with each
+  version; the derived schema carries it as <code>axt.version</code>
+  (<a href="../spec/types.html#section-3-1">types, sections 3.1</a> and
+  <a href="../spec/types.html#section-3-2">3.2</a>;
+  <a href="../spec/fields.html#section-9-1">fields, section 9.1</a>).
+</p>
+<ul>
+  <li>Compatible versions keep the full name, so a receiver with one version reads records of every other version of the same major version, in both directions.</li>
+  <li>A change that is not compatible publishes the type under the next major version, such as <code>axt.example.v2.Note</code>. The full names differ, so resolution fails at the name before any field is read, and a receiver can know both and read each with its own schema.</li>
+  <li>The major version belongs to each type, not to the set: Task stays <code>axt.example.v1.Task</code> while Note moves to <code>v2</code>.</li>
+</ul>
+<p>
+  These rules are binding for the example types. The description of a type of your own has a
+  version as well, and it should count its versions in the same way
+  (<a href="../spec/types.html#section-3-2">section 3.2</a>), so that receivers can tell them
+  apart (<a href="../spec/manifest.html#section-3-4">manifest, section 3.4</a>). Resolution works
+  by full name for every type, so the reasons behind the rules hold for yours as well.
+</p>
+
+<h2>Changes that keep a type compatible</h2>
+<p>
+  A new version within the same major version makes only these changes against the version
+  before it, in the type or in one of its nested records
+  (<a href="../spec/types.html#section-3-3">types, section 3.3</a>):
+</p>
+<ol>
+  <li>add a field that has a default, under a name that no earlier version of the major version used;</li>
+  <li>remove a field that had a default in every earlier version; its name is not used again within the major version;</li>
+  <li>add a symbol to an enum, which has a default symbol;</li>
+  <li>change <code>doc</code> texts, or add, change or remove the <code>title</code> or a hint other than <code>unit</code> and <code>anchor</code>, such as a label, a translation or the order of the fields, without changing what any value means;</li>
+  <li>remove a check, or widen it so that every value that kept it still does: a lower <code>min_length</code> or <code>min</code>, a higher <code>max_length</code> or <code>max</code>.</li>
+</ol>
+<p>
+  Each keeps resolution working both ways. A receiver with the new version fills the added fields
+  of old records with their defaults; a receiver with the old version ignores the added fields,
+  fills the removed ones with its defaults, and reads an unknown symbol as the enum's default. A
+  removed name is never used again, because a receiver that still has the old field would read
+  the new one under the old field's type and meaning.
+</p>
+
+<h2>Changes that make a new major version</h2>
+<p>Every other change, among them:</p>
+<ul>
+  <li>changing a field's type, logical type or default;</li>
+  <li>changing <code>unit</code> or <code>anchor</code>;</li>
+  <li>renaming a field, adding a branch to a union, or removing an enum symbol;</li>
+  <li>keeping the encoding but changing what a value means;</li>
+  <li>adding a check or narrowing one, or changing a semantic brick or a <code>pattern</code> other than by removing it: a semantic brick replaced by <code>axt.StringField</code>, or no <code>pattern</code>. A sender never sends a value that breaks a check, so it could not send all its older records under the new version.</li>
+</ul>
+<p>
+  A record keeps the full name of its type for its whole life: every version of it is sent with a
+  writer schema of the same full name, and a receiver rejects a record that comes back under
+  another one with <code>TYPE_CHANGED</code>
+  (<a href="../spec/records.html#section-4-3">records, section 4.3</a>). A type in the next major
+  version is a new type for new records.
+</p>
+
+<h2>One version, one fingerprint</h2>
+<p>
+  In a live connection, a record names its schema by a fingerprint over the schema's Parsing
+  Canonical Form, which
+  drops <code>doc</code>, defaults, logical types and every attribute. The texts, hints and
+  checks stay in the description and are not in the derived schema at all
+  (<a href="../spec/types.html#section-3-4">types, section 3.4</a>). Every published version of a
+  full name must differ from the earlier ones in that form, so that the fingerprint tells them
+  apart. A change of <code>doc</code> texts, texts, hints or checks alone is therefore not a version of its
+  own: it waits for the next version that also adds or removes a field or a symbol.
+</p>
+
+<h2>Versions in the manifest and in what you send</h2>
+<ul>
+  <li><strong>Taking.</strong> A receiver's manifest names the versions it takes. It sets <code>min_version</code> above 1 only when it needs a field that earlier versions lack, and should leave <code>max_version</code> open, since later compatible versions still resolve (<a href="../spec/manifest.html#section-3-3">manifest, section 3.3</a>; <a href="manifest.html">Write the manifest</a>).</li>
+  <li><strong>Sending.</strong> A sender that has several schemas of one full name may write a record with an older one for a receiver that takes only older versions. The fields that version does not have are then not sent (<a href="../spec/manifest.html#section-5-3">manifest, section 5.3</a>; <a href="../spec/records.html#section-3">records, section 3</a>).</li>
+  <li><strong>An owner's devices on different versions.</strong> When one device of an owner sets a field that only a later version has, a device with an older version does not send that record to other apps, since the record it would send drops the value. It leaves the record to a device whose schema has the field (<a href="../spec/sync.html#section-5-1">sync, section 5.1</a>).</li>
+</ul>
+
+<div class="callout">
+  <p class="eyebrow">Note</p>
+  <p>
+    Not every Avro library reads an unknown enum symbol as the enum's default, as Avro 1.12
+    requires. The Python <code>avro</code> package 1.12.2 raises an error instead, so a receiver
+    built on it does not get the compatibility of added symbols
+    (<a href="../spec/types.html#section-7-3">types, section 7.3</a>).
+  </p>
+</div>

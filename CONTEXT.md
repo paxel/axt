@@ -42,7 +42,13 @@ The vocabulary of this repository. The specification in [spec/](spec/README.md) 
 
 **Proposal**: a `PROPOSAL` message, in which a receiver of a shared record suggests new values for some of its fields to the record's sender, the **owner** of the record, if the owner's manifest takes proposals for the type. The owner's user takes or refuses it, the owner answers with a `PROPOSAL_REPLY` that is only a status, and a proposal that is taken becomes the owner's own change and goes out as an ordinary update.
 
-**Type**: an Apache Avro schema with a full name. An **example type** is one of the types this repository brings under `axt.example.v1`, so that apps can exchange without agreeing first.
+**Type**: an Apache Avro schema with a full name, derived from its **description**. An **example type** is one of the types this repository brings under `axt.example.v1`, so that apps can exchange without agreeing first.
+
+**Brick** or **typed field**: an Avro record of `axt.Field` that describes one field of a type: its name, the texts shown for it and the checks its values keep. A **description** is a typed field of an object at the root of a type, from which the type's schema is derived.
+
+**Relation**: a link from the record that holds it to another record, of any sender, or to a thing outside AXT, with a kind and information about the link. It points one way: the record it points at does not change.
+
+**Extension**: fields of an app's own that it adds to a record of another type, as one record of the app's own type inside it. An app that does not know the extension's type carries it along unchanged.
 
 **Envelope**: the signed message every exchange consists of, an `axt.Envelope`. Its body holds the record or the protocol message.
 
@@ -50,7 +56,7 @@ The vocabulary of this repository. The specification in [spec/](spec/README.md) 
 
 **Manifest**: the message in which an app names the types it takes and, in one sentence per type, what it does with them.
 
-**Offer**: the message in which a sender names the types and schemas it wants to send; the receiver answers with accept or decline.
+**Offer**: the message in which a sender names the types it wants to send, each by its description; the receiver answers with accept or decline.
 
 **Outcome**: what a receiver did with a record message: `APPLIED`, `MERGED`, `KEPT`, `DUPLICATE` or `STALE`, and `WITHDRAWN` for a withdrawal. It reports outcomes in an `ACK`.
 

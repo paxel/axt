@@ -80,9 +80,9 @@ Step 3 costs one scalar multiplication for each point. For A it is needed once, 
 
 ### 2.4 The schemas of a connection
 
-A `DATA` message names its writer schema only by fingerprint, and a fingerprint is not collision resistant ([envelope.md](envelope.md), section 5); it also leaves out `doc` and every other attribute a receiver shows its user. The schemas themselves are therefore bound to the sender by a signature. In a live connection and through a relay, the `OFFER` ([protocol.md](protocol.md), section 4) is that signature. This document requires of it:
+A `DATA` message names its writer schema only by fingerprint, and a fingerprint is not collision resistant ([envelope.md](envelope.md), section 5); it also leaves out `doc` and the description whose texts a receiver shows its user. The schemas themselves are therefore bound to the sender by a signature. In a live connection and through a relay, the `OFFER` ([protocol.md](protocol.md), section 4) is that signature. This document requires of it:
 
-- An `OFFER` MUST carry each writer schema as its full JSON text in its body, so that the offer's signature covers every attribute of the schema, its `doc` attributes and `axt.version` included ([envelope.md](envelope.md), section 3).
+- An `OFFER` MUST carry each type as its description in its body, so that the offer's signature covers the writer schema derived from it and everything a receiver shows of the type, its texts, `doc` and version included ([fields.md](fields.md), section 10.1).
 - A receiver MUST keep the schemas it was offered per sender, and MUST decode the body of a `DATA` message only with a schema that the same sender offered. It looks up the body's fingerprint among that sender's schemas alone; a schema with the same fingerprint that another sender offered MUST NOT be used.
 - [protocol.md](protocol.md) MUST NOT let a `DATA` message use a schema that its sender has not offered in a signed `OFFER`, or, in a file, in a signed header (section 2.5).
 - A device takes a schema of another app also from a `FORWARD` of a device of its own set, which carries the text of the schema with the forwarded `DATA`. The forwarding device took that text from a signed `OFFER` or a signed file header of the sender and signs the `FORWARD`; the text counts as a schema that the same sender offered ([sync.md](sync.md), section 19.5).
@@ -207,7 +207,7 @@ Each device of a sender has an encryption key of its own, bound to its signing k
 
 An app MUST reject an encryption key of small order: one for which X25519 gives the all-zero value with every private key. Computing X25519 with any one private key, such as the app's own, and comparing the result with 32 zero bytes detects it. A manifest with such a key is invalid ([manifest.md](manifest.md), section 4).
 
-An installation MAY replace its encryption key, by a manifest with a higher revision. It SHOULD keep the old private key for as long as a relay may hold messages sealed to it: 15 days after it has sent the manifest with the new key ([transports.md](transports.md), section 5.5).
+An installation MAY replace its encryption key, by a manifest with a higher revision. It SHOULD keep the old private key for as long as a relay may hold messages sealed to it: `transports.longest_holding` ([types/axt/limits.json](../types/axt/limits.json)) after it has sent the manifest with the new key ([transports.md](transports.md), section 5.5).
 
 ### 4.3 Sealing
 
@@ -246,7 +246,7 @@ A sender MUST pad to exactly P(n). Some lengths:
 | 100,000               | 100,352       |
 | 16,777,216, the limit | 17,301,504    |
 
-The sealed message is 49 bytes longer than the padded message, so the largest is 17,301,553 bytes; a relay MUST accept sealed messages up to that size ([transports.md](transports.md), section 5.6).
+The sealed message is 49 bytes longer than the padded message, so the largest is `transports.sealed_message` bytes ([types/axt/limits.json](../types/axt/limits.json)); a relay MUST accept sealed messages up to that size ([transports.md](transports.md), section 5.6).
 
 The length is what the relay sees of a message besides its mailbox and its time (section 4.6). The minimum of 1,024 bytes gives the small messages, such as an `ACK`, a `DELETE`, a short `DATA` and most manifests, one length; above it, Padmé leaves only the top bits of the length visible and adds less than a sixteenth of the length, 6.25 %.
 
@@ -567,13 +567,13 @@ The same message with the record id in upper-case digits names the same record (
 
 ### 7.3 The message in a file
 
-The same message in an AXT file with the codec `null` and the sync marker `00 01 … 0f`, as in [envelope.md](envelope.md), section 10.3; 5,020 bytes, SHA-256 `37074c1f86d048a02e906441adc37f41599d1c9776fb2ae594a3f068f257a94c`. The metadata holds, in this order, `axt.schemas` (the Memo schema of [envelope.md](envelope.md), section 10.1, as a JSON array without spaces, 2,014 bytes), `axt.sender`, `axt.signature`, `avro.codec` and `avro.schema`.
+The same message in an AXT file with the codec `null` and the sync marker `00 01 … 0f`, as in [envelope.md](envelope.md), section 10.3; 6,031 bytes, SHA-256 `8fa310e90b630c4e847d96b0781d9802833241e72a11c123f4df9dd55d40d3f8`. The metadata holds, in this order, `axt.schemas` (the Memo schema of [envelope.md](envelope.md), section 10.1, as a JSON array without spaces, 2,014 bytes), `axt.sender`, `axt.signature`, `avro.codec` and `avro.schema`.
 
 | What                     | Value                                                                                                                              |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| SHA-256 of `axt.schemas` | `1108ad5b1f5911e6938b8cdb27db54767aa486d3302ed9c2fea3162b5c8d2385`                                                                 |
+| SHA-256 of `axt.schemas` | `825cadf76414e8c4c34e5ce5c10845425e149adddeaa2b15a4b1d11ecdb2d5b0`                                                                 |
 | `axt.sender`             | `1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a`                                                                 |
-| `axt.signature`          | `89a017b974a85e6d6d4bff3efe19de530fc27767cb2b67848c53cb8fcec4c1df48ca7a8724d588cb9fe5ebcbc78abf710fbd113bda6a170176f59632f3619300` |
+| `axt.signature`          | `8cf5d0e38a8dd90a667c8c0b1310eeae07a312f61be24f73e82ea9c929a604f87e09ba7d00e7e165924921ad2e15bce975cb5eb93519f7cfab03d253cfb88500` |
 
 The header's signed bytes, 83 of them: the prefix `AXT-v1 file header` and its zero byte, the key, and the SHA-256 of `axt.schemas`:
 
@@ -581,9 +581,9 @@ The header's signed bytes, 83 of them: the prefix `AXT-v1 file header` and its z
 41 58 54 2d 76 31 20 66 69 6c 65 20 68 65 61 64
 65 72 00 1b 84 a6 00 f3 50 3e 22 bb cc 99 e6 32
 02 a7 19 4b f6 bd 69 af f1 47 1c ce 64 10 d5 3c
-26 ec 4a 11 08 ad 5b 1f 59 11 e6 93 8b 8c db 27
-db 54 76 7a a4 86 d3 30 2e d9 c2 fe a3 16 2b 5c
-8d 23 85
+26 ec 4a 82 5c ad f7 64 14 e8 c4 c3 4e 5c e5 c1
+08 45 42 5e 14 9a dd de aa 2b 15 a4 b1 d1 1e cd
+b2 d5 b0
 ```
 
 The file's one block holds one datum, the bytes `000a` to `00d1` of the message of section 7.2. A reader finds its end by reading the envelope's fields in turn: `format` and `kind`, one byte each here; 32 bytes of `sender`; the union index `02`, the id with its length `48` and the version; the body with its length `7c`; and 64 bytes of `signature`. It verifies the signature over the prefix and the datum without its last 64 bytes, the same 151 bytes as in section 7.2.
@@ -690,7 +690,7 @@ The two signatures with the neutral element as key verify for every message unde
 
 - [protocol.md](protocol.md): the `OFFER` as section 2.4 requires it (section 4 there); the binding of `ACCEPT`, `DECLINE`, `ACK` and `ERROR` to their receiver, and how every kind is made safe to repeat (section 2.6; section 9 there); how a message whose signature does not verify is reported (section 8.3 there); where the chain stands in a connection, how often it is sent, and the error `DEVICE_REJECTED` (sections 5.3 to 5.5; section 3.3 there); the addressee of a reply, which is the key of one device (section 5.6; section 9.1 there).
 - [sync.md](sync.md): the stamps and the merge of the records of a set, and the messages `CHANGE` and `RESYNC` between its devices, among them what a device does when a device of its set is added, removed or restored (section 5.6; sections 7 to 14 there).
-- [transports.md](transports.md): the QR payload with the signing key, the encryption key, the mailbox and the mark of a join code (sections 3.2 and 5.2; section 3 there); the connection in which a device joins a set (section 5.2; section 4.7 there); the TLS connection on the local network, whose certificate has a key of its own, and the `HELLO` that binds it to the signing key (section 2.2; sections 4.3 and 4.5 there); the chain at the start of a file (section 5.4; section 2.1 there); the mailbox, which is bound to no key (section 4.6; section 5.1 there); the size limit of the relay, which accepts sealed messages up to 17,301,553 bytes (section 4.4; section 5.6 there); the holding time of 14 days (section 4.2; section 5.5 there); and the mailbox of each device of a set (section 5.6; section 5.8 there).
+- [transports.md](transports.md): the QR payload with the signing key, the encryption key, the mailbox and the mark of a join code (sections 3.2 and 5.2; section 3 there); the connection in which a device joins a set (section 5.2; section 4.7 there); the TLS connection on the local network, whose certificate has a key of its own, and the `HELLO` that binds it to the signing key (section 2.2; sections 4.3 and 4.5 there); the chain at the start of a file (section 5.4; section 2.1 there); the mailbox, which is bound to no key (section 4.6; section 5.1 there); the size limit of the relay, which accepts sealed messages up to `transports.sealed_message` bytes (section 4.4; section 5.6 there); the holding time (section 4.2; section 5.5 there); and the mailbox of each device of a set (section 5.6; section 5.8 there).
 
 ## References
 

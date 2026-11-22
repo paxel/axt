@@ -9,8 +9,9 @@ encoding and the schema checks of example_types.py and manifest_examples.py,
 the Ed25519, X25519 and HPKE of keys_examples.py and its model of a receiver
 that follows the devices of its senders, the model of an app of
 protocol_examples.py, the QR code, frames and relay of
-transports_examples.py, the time types of time_examples.py, and the attributes of spec/metadata.md of
-metadata_rules.py, and the stamps, the merge and the model of a device with
+transports_examples.py, the time types of time_examples.py, the bricks of spec/fields.md of
+fields_examples.py, with the texts, formats and field paths of metadata_rules.py, and the stamps,
+the merge and the model of a device with
 its siblings of spec/sync.md of sync_examples.py, and the receiver of withdrawals, the sending
 device, the owner that takes proposals and the proposer of spec/shares.md of shares_examples.py.
 Where those scripts have no model, for a receiver's own changes to records (spec/records.md,
@@ -64,7 +65,6 @@ CATEGORIES = [
     "encoding",
     "types",
     "time",
-    "metadata",
     "records",
     "manifest",
     "keys",
@@ -76,6 +76,7 @@ CATEGORIES = [
     "relay-server",
     "sync",
     "shares",
+    "bricks",
 ]
 OUT_INLINE = 1 << 20  # bytes above which an answer carries raw DEFLATE rather than hex
 
@@ -117,7 +118,7 @@ def no(error: str, note: str | None = None, **members: Any) -> dict[str, Any]:
 
 # --- a strict Avro decoder ----------------------------------------------------------------
 
-MAX_DATA_DEPTH = 32  # spec/types.md, section 5.7
+MAX_DATA_DEPTH: int = pe.LIMITS["types.data_depth"]
 PRIMITIVES = {"null", "boolean", "int", "long", "float", "double", "bytes", "string"}
 
 
@@ -160,6 +161,42 @@ def named(t: dict[str, Any], names: dict[str, Any], namespace: str) -> str:
     return ns
 
 
+def all_named(t: Any, names: dict[str, Any], namespace: str = "") -> dict[str, Any]:
+    """Register every named type that the schema defines, also those in an empty array or map or in a branch
+    a value does not take, which a later reference by name needs."""
+    if isinstance(t, list):
+        for b in t:
+            all_named(b, names, namespace)
+    elif isinstance(t, dict):
+        if t.get("type") in ("record", "enum", "fixed"):
+            namespace = named(t, names, namespace)
+        for f in t.get("fields", []):
+            all_named(f["type"], names, namespace)
+        for member in ("items", "values"):
+            if member in t:
+                all_named(t[member], names, namespace)
+    return names
+
+
+def branch_name(b: Any, namespace: str) -> str:
+    """The full name of a named branch of a union, or "" for another."""
+    if isinstance(b, dict):
+        if b.get("type") not in ("record", "enum", "fixed"):
+            return ""
+        name = b["name"]
+        ns = name.rpartition(".")[0] if "." in name else b.get("namespace", namespace)
+        return name if "." in name else (f"{ns}.{name}" if ns else name)
+    if b in PRIMITIVES:
+        return ""
+    return b if "." in b else (f"{namespace}.{b}" if namespace else b)
+
+
+# The data depth up to which a body is read: 32 for a record (spec/types.md, section 5.7), more for the
+# body of an OFFER, whose descriptions nest deeper (spec/fields.md, section 10.1).
+DEPTH_LIMIT = [MAX_DATA_DEPTH]
+MAX_OFFER_DEPTH: int = pe.LIMITS["fields.offer_data_depth"]
+
+
 def read(t: Any, r: Reader, names: dict[str, Any], namespace: str = "", depth: int = 0) -> Any:
     """Decode one value of the schema t, strictly; return its meaning as JSON (spec/conformance.md,
     section 3.3)."""
@@ -199,12 +236,16 @@ def read(t: Any, r: Reader, names: dict[str, Any], namespace: str = "", depth: i
         i = r.long()
         if not 0 <= i < len(t):
             raise Undecodable("a union index out of range")
-        return read(t[i], r, names, namespace, depth)
+        value = read(t[i], r, names, namespace, depth)
+        if isinstance(t[0], (dict, str)) and branch_name(t[0], namespace) == "axt.StringField":
+            # The union kind of axt.Field: the branch is named (spec/conformance.md, section 3.3).
+            return {branch_name(t[i], namespace): value}
+        return value
     kind = t["type"]
     if kind in ("record", "enum", "fixed"):
         namespace = named(t, names, namespace)
     if kind == "record":
-        if depth + 1 > MAX_DATA_DEPTH:
+        if depth + 1 > DEPTH_LIMIT[0]:
             raise Undecodable("a data depth above 32")
         return {f["name"]: read(f["type"], r, names, namespace, depth + 1) for f in t["fields"]}
     if kind == "enum":
@@ -215,7 +256,7 @@ def read(t: Any, r: Reader, names: dict[str, Any], namespace: str = "", depth: i
     if kind == "fixed":
         return r.take(t["size"]).hex()
     if kind in ("array", "map"):
-        if depth + 1 > MAX_DATA_DEPTH:
+        if depth + 1 > DEPTH_LIMIT[0]:
             raise Undecodable("a data depth above 32")
         out: Any = [] if kind == "array" else {}
         while True:
@@ -238,15 +279,22 @@ def read(t: Any, r: Reader, names: dict[str, Any], namespace: str = "", depth: i
 
 def decode_all(t: Any, data: bytes) -> Any:
     r = Reader(data)
-    value = read(t, r, {})
+    value = read(t, r, all_named(t, {}))
     if r.pos != len(data):
         raise Undecodable("bytes left over")
     return value
 
 
+def record_of(t: Any, names: dict[str, Any], namespace: str) -> Any:
+    """A record of a union, given in place or by its name."""
+    if isinstance(t, str):
+        return names.get(t) or names[f"{namespace}.{t}"]
+    return t
+
+
 def json_of(t: Any, value: Any, names: dict[str, Any] | None = None, namespace: str = "") -> Any:
     """The meaning of a value as fastavro decodes it with logical types removed."""
-    names = {} if names is None else names
+    names = all_named(t, {}) if names is None else names
     if isinstance(t, str):
         if t not in PRIMITIVES:
             return json_of(names.get(t) or names[f"{namespace}.{t}"], value, names, namespace)
@@ -256,7 +304,14 @@ def json_of(t: Any, value: Any, names: dict[str, Any] | None = None, namespace: 
     if isinstance(t, list):
         if value is None:
             return None
-        (branch,) = [b for b in t if b != "null"]
+        branches = [b for b in t if b != "null"]
+        if len(branches) > 1:  # the targets of axt.Relation: the record whose fields the value has
+            branches = [
+                b
+                for b in branches
+                if {f["name"] for f in record_of(b, names, namespace)["fields"]} == set(value)
+            ]
+        (branch,) = branches
         return json_of(branch, value, names, namespace)
     kind = t["type"]
     if kind in ("record", "enum", "fixed"):
@@ -328,10 +383,64 @@ def op_decode_body(i: Any) -> dict[str, Any]:
     body = b_in(i["body"])
     if body[:10] != b"\xc3\x01" + pe.fp8(pe.fingerprints[name][1]):
         return no("INVALID_MESSAGE", f"not an axt.{name}")
+    DEPTH_LIMIT[0] = MAX_OFFER_DEPTH if name == "Offer" else MAX_DATA_DEPTH
     try:
         return ok({"value": decode_all(plain_schema(pe.texts[name]), body[10:])})
     except Undecodable as e:
         return no("INVALID_MESSAGE", str(e))
+    finally:
+        DEPTH_LIMIT[0] = MAX_DATA_DEPTH
+
+
+# --- bricks (spec/fields.md) -----------------------------------------------------------------------
+
+
+def op_derive(i: Any) -> dict[str, Any]:
+    """The schema derived from a description, its canonical form and its fingerprint (sections 9.2, 9.3)."""
+    d, rejected = read_description(b_in(i["description"]))
+    if rejected:
+        return rejected
+    text = pe.fe.derived_text(d)
+    pcf, fp = me.fingerprint(text)
+    return ok({"schema": text, "canonical_form": pcf, "fingerprint": pe.fp8(fp).hex()})
+
+
+def read_description(data: bytes) -> tuple[Any, dict[str, Any] | None]:
+    """A valid description from its Avro encoding; or a rejection."""
+    fe = pe.fe
+    try:
+        d = fe.read(data, fe.PARSED)
+    except Exception as e:
+        return None, no("UNDECODABLE", f"not a datum of axt.Field: {type(e).__name__}")
+    problems = fe.description_problems(d)
+    if problems:
+        where, problem = problems[0]
+        return None, no("DESCRIPTION_INVALID", f"{where or 'the root'}: {problem}")
+    return d, None
+
+
+def op_describe(i: Any) -> dict[str, Any]:
+    """What a receiver shows of the type or of one field (spec/conformance.md, section 5.16)."""
+    d, rejected = read_description(b_in(i["description"]))
+    if rejected:
+        return rejected
+    return ok(pe.fe.describe(d, i["field"], i["languages"]))
+
+
+def op_check_record(i: Any) -> dict[str, Any]:
+    """A receiver that checks the values of a record against its description: the first value, in the order of
+    the encoding, that breaks a check of spec/fields.md, section 7, or a rule that every receiver checks."""
+    d, rejected = read_description(b_in(i["description"]))
+    if rejected:
+        return rejected
+    value, rejected = decode_value(pe.fe.derived_text(d), b_in(i["body"]))
+    if rejected:
+        return rejected
+    broken = pe.fe.breaches(d, value, tm.time_check)
+    if broken:
+        path, rule = broken[0]
+        return no("VALUE_INVALID", rule, field=mr.error_field(path))
+    return ok()
 
 
 def op_fingerprint(i: Any) -> dict[str, Any]:
@@ -382,27 +491,6 @@ def op_decode_record(i: Any) -> dict[str, Any]:
     except Exception as e:
         return no("DOES_NOT_RESOLVE", str(e))
     return ok({"value": json_of(r, resolved)})
-
-
-# --- metadata (spec/metadata.md) ------------------------------------------------------------
-
-
-def op_describe(i: Any) -> dict[str, Any]:
-    return ok(mr.describe(json.loads(i["schema"]), i["field"], i["languages"]))
-
-
-def op_check_record(i: Any) -> dict[str, Any]:
-    """A receiver that checks the attributes: the first value, in the order of the encoding, that breaks a
-    rule, whether a check of an attribute or a rule of a time type (spec/conformance.md, section 5.13)."""
-    value, rejected = decode_value(i["schema"], b_in(i["body"]))
-    if rejected:
-        return rejected
-    writer = pe.without_logical_types(json.loads(i["schema"]))
-    broken = mr.breaches(writer, value, tm.time_check)
-    if broken:
-        path, rule, why = broken[0]
-        return no("VALUE_INVALID", f"{rule}: {why}", field=mr.error_field(path))
-    return ok()
 
 
 # --- manifest (spec/manifest.md) ------------------------------------------------------------
@@ -458,10 +546,14 @@ class Receiver:
     """The records of one sender at a receiver that lets its user change them (spec/records.md, sections 5
     and 6)."""
 
-    def __init__(self, local_changes: str, delete_with_local_changes: str) -> None:
+    def __init__(
+        self, local_changes: str, delete_with_local_changes: str, extensions: Iterable[str] = ()
+    ) -> None:
         # None is the key of an id that is not valid; no record is ever stored under it.
         self.records: dict[int | None, dict[str, Any]]
         self.mode, self.keep_on_delete, self.records = local_changes, delete_with_local_changes == "keep", {}
+        # The schemas of the extension types the receiver knows, by their fingerprints (fields.md 12.2).
+        self.texts = {sy.schema_fingerprint(t): t for t in extensions}
 
     def result(self, outcome: str, r: dict[str, Any], kept: Iterable[str] = ()) -> dict[str, Any]:
         return {
@@ -491,6 +583,7 @@ class Receiver:
                 "state": "there" if is_data else "tombstone",
                 "value": dict(m["value"]) if is_data else None,
                 "changed": set(),
+                "taken": dict(m["value"]) if is_data else {},  # the value last taken from the sender
             }
             return self.result("APPLIED", r)
         r["version"] = m["version"]
@@ -504,21 +597,28 @@ class Receiver:
             return self.result("APPLIED", r)
         r["type"] = m["type"]
         if r["state"] == "tombstone":  # the record comes back as a new record under the same id
-            r.update(state="there", value=dict(m["value"]), changed=set())
+            r.update(state="there", value=dict(m["value"]), changed=set(), taken=dict(m["value"]))
             return self.result("APPLIED", r)
         if r["state"] == "deleted_by_user":
             return self.result("KEPT", r)
         if not r["changed"] or self.mode == "whole_record_take":
-            r.update(value=dict(m["value"]), changed=set())
+            r.update(value=dict(m["value"]), changed=set(), taken=dict(m["value"]))
             return self.result("APPLIED", r)
         if self.mode == "whole_record_keep":
             return self.result("KEPT", r)
-        kept = [f for f in r["changed"] if f in r["value"] and r["value"][f] != m["value"].get(f)]
         value = dict(m["value"])
+        lists = sy.element_fields(m["type"])
         for f in r["changed"]:
             if f in r["value"]:
-                value[f] = r["value"][f]
-        r["value"] = value
+                # A list merged per element (records.md, section 6.1).
+                mine = r["value"][f]
+                value[f] = (
+                    sy.merge_elements(r["taken"].get(f, []), mine, value[f], lists[f], self.texts)
+                    if f in lists
+                    else mine
+                )
+        kept = [f for f in r["changed"] if f in value and value[f] != m["value"].get(f)]
+        r.update(value=value, taken=dict(m["value"]))
         return self.result("MERGED" if kept else "APPLIED", r, kept)
 
     def local_change(self, rid: str, field: str, value: Any) -> None:
@@ -531,7 +631,9 @@ class Receiver:
 
 
 def op_apply(i: Any) -> dict[str, Any]:
-    receiver = Receiver(i["policy"]["local_changes"], i["policy"]["delete_with_local_changes"])
+    receiver = Receiver(
+        i["policy"]["local_changes"], i["policy"]["delete_with_local_changes"], i.get("extensions", [])
+    )
     steps: list[dict[str, Any]] = []
     for e in i["events"]:
         if "message" in e:
@@ -584,7 +686,9 @@ def op_session(i: Any) -> dict[str, Any]:
         elif "offer" in step:
             o = step["offer"]
             _, m = app.offer(
-                o["offer_id"], [(t["schema"], t["count"], None) for t in o["types"]], check=False
+                o["offer_id"],
+                [(pe.fe.from_json_form(t["description"]), t["count"], None) for t in o["types"]],
+                check=False,
             )
             out.append({"message": b_out(m)})
         elif "close" in step:
@@ -607,12 +711,10 @@ def op_session(i: Any) -> dict[str, Any]:
 # --- file (spec/transports.md, section 2) -----------------------------------------------------
 # The scripts write files but have no reader model; this is the adapter's own reader.
 
-MAX_FILE, MAX_META, MAX_BLOCK, MAX_TOTAL = (
-    268435456,
-    8388608,
-    67108864,
-    1073741824,
-)  # spec/envelope.md, section 8
+MAX_FILE: int = pe.LIMITS["envelope.file"]
+MAX_META: int = pe.LIMITS["envelope.file_metadata"]
+MAX_BLOCK: int = pe.LIMITS["envelope.file_block"]
+MAX_TOTAL: int = pe.LIMITS["envelope.file_data"]
 ENVELOPE_PCF = pe.fingerprints["Envelope"][0]
 LOWER_HEX = __import__("re").compile(r"^[0-9a-f]*$")
 CHAIN_SCHEMAS = {"DEVICE_ADD": "DeviceAdd", "DEVICE_REMOVE": "DeviceRemove"}
@@ -734,8 +836,7 @@ def read_file(data: bytes, reader: Any) -> dict[str, Any]:
     schemas: dict[int, str] = {}
     if "axt.schemas" in meta:
         try:
-            for t in json.loads(meta["axt.schemas"]):
-                text = json.dumps(t, separators=(",", ":"), ensure_ascii=False)
+            for text in pe.fe.file_schemas(meta["axt.schemas"]):
                 fp = pe.canonical_fp(text)
                 if fp in schemas:
                     raise FileRejected("two schemas with one fingerprint in axt.schemas")
@@ -743,7 +844,7 @@ def read_file(data: bytes, reader: Any) -> dict[str, Any]:
         except FileRejected:
             raise
         except Exception:
-            raise FileRejected("axt.schemas is not a JSON array of schemas") from None
+            raise FileRejected("axt.schemas is not a JSON array of descriptions and their schemas") from None
     messages: list[tuple[str, Any, bytes]]
     chain: list[tuple[str, bytes, bytes, None]]
     manifests: list[bytes]
@@ -941,7 +1042,9 @@ def op_request(i: Any) -> dict[str, Any]:
 def op_reaction(i: Any) -> dict[str, Any]:
     """What an app does with a response of the relay (spec/transports.md, sections 5.2 to 5.4)."""
     status, retry, attempt, request = i["status"], i["retry_after"], i["attempt"], i["request"]
-    backoff = min(2 ** (attempt - 1), 3600)
+    backoff = min(
+        pe.LIMITS["transports.retry_first"] * 2 ** (attempt - 1), pe.LIMITS["transports.retry_longest"]
+    )
     if status is None:
         return ok({"action": "repeat", "wait": backoff})
     if 200 <= status < 300:
@@ -1068,6 +1171,49 @@ def op_device_sets(i: Any) -> dict[str, Any]:
                 "senders": receiver.state(),
             }
         )
+    return {"steps": steps}
+
+
+def op_relations(i: Any) -> dict[str, Any]:
+    """A receiver that resolves the relations it holds across senders (records.md, section 10), with the
+    model of keys_examples.py, and follows the devices of its known senders as op_device_sets does."""
+
+    def known(s: Any) -> Any:
+        return keys.KnownSender(
+            s["name"],
+            [b_in(k) for k in s["current"]],
+            [b_in(k) for k in s["removed"]],
+            {r["id"].lower(): (r["version"], r["state"]) for r in s["records"]},
+        )
+
+    own, senders = known(i["own"]), [known(s) for s in i["senders"]]
+    first = {s.name: s.current[0] for s in [own, *senders]}
+    receiver = keys.RelationReceiver(
+        own,
+        senders,
+        [b_in(k) for k in i["refused"]],
+        [
+            keys.HeldRelation(
+                r["id"],
+                first[r["holder"]["sender"]],
+                r["holder"]["id"].lower(),
+                None if r["target"]["sender"] is None else b_in(r["target"]["sender"]),
+                r["target"]["id"].lower(),
+            )
+            for r in i["relations"]
+        ],
+    )
+    steps: list[dict[str, Any]] = []
+    for step in i["steps"]:
+        if "chain" in step:
+            messages = []
+            for m in step["chain"]:
+                kind, signer, d, signed, sig = pe.device_parts(b_in(m))
+                problem = keys.device_message_problem(kind, signer, signed, sig, d["device"], d.get("proof"))
+                messages.append((kind, signer, d["device"], problem))
+            steps.append({"results": receiver.chain(messages)})
+        else:
+            steps.append(receiver.lookup())
     return {"steps": steps}
 
 
@@ -1220,7 +1366,9 @@ def op_shown(i: Any) -> dict[str, Any]:
         version, b = int(sender["version"]), sender["beside"]
         if b is not None:
             beside = ({name: bytes.fromhex(v) for name, v in b["values"].items()}, bytes.fromhex(b["schema"]))
-    state, fields = sy.shown(there, values, schema, sy.state_of_json(i["layer"]), version, beside)
+    state, fields = sy.shown(
+        there, values, schema, sy.state_of_json(i["layer"]), version, beside, sy.SHOWN_TEXTS
+    )
     shown = {
         name: {"value": value.hex(), "schema": fp.hex(), "from": source}
         for name, (value, fp, source) in fields.items()
@@ -1297,6 +1445,13 @@ def op_offer_types(i: Any) -> dict[str, Any]:
     return ok({"types": [{"type": t, "count": n} for t, n in types]})
 
 
+def op_shared_value(i: Any) -> dict[str, Any]:
+    value = se.shared_value(
+        i["type"], i["value"], i["own_user"], i["links"], {r.lower() for r in i["shared"]}, set(i["own_keys"])
+    )
+    return ok({"value": value})
+
+
 def op_acked(i: Any) -> dict[str, Any]:
     held, then, to_pass = se.acked(
         i["sent"],
@@ -1336,10 +1491,12 @@ OPS: dict[str, Callable[[Any], dict[str, Any]]] = {
     "pass_withdrawal": op_pass_withdrawal,
     "join_receivers": op_join_receivers,
     "offer_types": op_offer_types,
+    "shared_value": op_shared_value,
     "acked": op_acked,
     "decode_body": op_decode_body,
     "read_file": op_read_file,
     "apply": op_apply,
+    "relations": op_relations,
     "parse_qr": op_parse_qr,
     "qr_text": lambda i: ok({"text": tx.qr_text(b_in(i["payload"]))}),
     "hello_frame": lambda i: ok(
@@ -1381,6 +1538,7 @@ OPS: dict[str, Callable[[Any], dict[str, Any]]] = {
     ),
     "session": op_session,
     "fingerprint": op_fingerprint,
+    "derive": op_derive,
     "decode_message": op_decode_message,
     "encode_message": op_encode_message,
     "decode_record": op_decode_record,
@@ -1422,6 +1580,13 @@ OPS: dict[str, Callable[[Any], dict[str, Any]]] = {
 }
 
 
+def forget_descriptions() -> None:
+    """Each vector stands alone: the models keep no description that an earlier vector gave them, and know
+    only those of their input (spec/fields.md, section 10.1)."""
+    for module in {id(m.fe): m.fe for m in (pe, sy, se) if hasattr(m, "fe")}.values():
+        module.REGISTRY.clear()
+
+
 def main() -> None:
     for line in sys.stdin:
         request = json.loads(line)
@@ -1438,6 +1603,7 @@ def main() -> None:
             answer = {"id": rid, "unsupported": True}
         else:
             try:
+                forget_descriptions()
                 answer = {"id": rid, "output": OPS[op](i)}
             except Exception as e:  # a fault of this adapter, reported as such
                 answer = {"id": rid, "failure": f"{type(e).__name__}: {e}"}

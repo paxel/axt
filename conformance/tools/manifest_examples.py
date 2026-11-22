@@ -76,17 +76,24 @@ _spec.loader.exec_module(keys)
 
 # --- the limits of spec/manifest.md, section 4 --------------------------------
 
-MAX_BODY = 1048576  # bytes of the body, its single-object header included
-MAX_FORMATS = 16
-MAX_TYPES = 256  # entries of takes; entries of sends
-MAX_FULL_NAME = 512  # bytes
-MAX_APP_NAME = 256  # bytes
-MAX_URL = 2048  # bytes
-MAX_RELAY_URL = 256  # bytes
-MAX_SENTENCE = 512  # bytes
-MAX_TRANSLATIONS = 64  # per sentence
-MAX_TAG = 35  # characters
-MAX_MESSAGE = 16777216  # spec/envelope.md, section 8
+LIMITS: dict[str, int] = {  # types/axt/limits.json
+    k: v["value"]
+    for k, v in json.loads((REPO / "types" / "axt" / "limits.json").read_text(encoding="utf-8"))[
+        "limits"
+    ].items()
+}
+MAX_BODY = LIMITS["manifest.body"]  # bytes of the body, its single-object header included
+MAX_FORMATS = LIMITS["manifest.formats"]
+MAX_TAKES = LIMITS["manifest.takes"]  # entries of takes
+MAX_SENDS = LIMITS["manifest.sends"]  # entries of sends
+MAX_FULL_NAME = LIMITS["manifest.full_name"]  # bytes
+MAX_APP_NAME = LIMITS["manifest.app_name"]  # bytes
+MAX_URL = LIMITS["manifest.app_url"]  # bytes
+MAX_RELAY_URL = LIMITS["transports.relay_url"]  # bytes
+MAX_SENTENCE = LIMITS["manifest.purpose"]  # bytes
+MAX_TRANSLATIONS = LIMITS["manifest.purpose_translations"]  # per sentence
+MAX_TAG = LIMITS["manifest.language_tag"]  # characters
+MAX_MESSAGE = LIMITS["envelope.message"]
 
 FULL_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$")
 # The langtag production of RFC 5646, section 2.1, matched without regard to case.
@@ -322,8 +329,9 @@ def check_sentences(where: str, entry: Any, problems: list[str]) -> None:
 
 
 def check_types(where: str, entries: Any, problems: list[str]) -> None:
-    if len(entries) > MAX_TYPES:
-        problems.append(f"{where} has more than {MAX_TYPES} entries")
+    most = MAX_TAKES if where == "takes" else MAX_SENDS
+    if len(entries) > most:
+        problems.append(f"{where} has more than {most} entries")
     names: set[str] = set()
     for i, e in enumerate(entries):
         here = f"{where}[{i}]"

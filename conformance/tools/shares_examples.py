@@ -56,6 +56,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
@@ -110,6 +111,7 @@ class Held:
     value: dict[str, Any] | None
     changed: set[str] = field(default_factory=set)
     kept: str | None = None  # the kind of the DELETE or WITHDRAW it reported KEPT for, at `version`
+    taken: dict[str, Any] = field(default_factory=dict)  # the value it last took from the sender
 
 
 class Receiver:
@@ -148,6 +150,7 @@ class Receiver:
             state = {"DATA": "there", "DELETE": "tombstone", "WITHDRAW": "withdrawn"}[kind]
             value = dict(m["value"]) if kind == "DATA" else None
             r = self.records[key] = Held(m["type"] if kind == "DATA" else None, m["version"], state, value)
+            r.taken = dict(value or {})
             return self.result("WITHDRAWN" if kind == "WITHDRAW" else "APPLIED", r)
         r.version, r.kept = m["version"], None
         if kind != "DATA":
@@ -165,22 +168,27 @@ class Receiver:
             return self.result(taken, r)
         r.type = m["type"]
         if r.state in ("tombstone", "withdrawn"):  # the record comes back as a new record under the same id
-            r.state, r.value, r.changed = "there", dict(m["value"]), set()
+            r.state, r.value, r.changed, r.taken = "there", dict(m["value"]), set(), dict(m["value"])
             return self.result("APPLIED", r)
         if r.state == "deleted_by_user":
             return self.result("KEPT", r)
         assert r.value is not None
         if not r.changed or self.mode == "whole_record_take":
-            r.value, r.changed = dict(m["value"]), set()
+            r.value, r.changed, r.taken = dict(m["value"]), set(), dict(m["value"])
             return self.result("APPLIED", r)
         if self.mode == "whole_record_keep":
             return self.result("KEPT", r)
-        kept = [f for f in r.changed if f in r.value and r.value[f] != m["value"].get(f)]
         value = dict(m["value"])
+        lists = sy.element_fields(m["type"])
         for f in r.changed:
             if f in r.value:
-                value[f] = r.value[f]
-        r.value = value
+                # A list merged per element (spec/records.md, section 6.1).
+                mine = r.value[f]
+                value[f] = (
+                    sy.merge_elements(r.taken.get(f, []), mine, value[f], lists[f]) if f in lists else mine
+                )
+        kept = [f for f in r.changed if f in value and value[f] != m["value"].get(f)]
+        r.value, r.taken = value, dict(m["value"])
         return self.result("MERGED" if kept else "APPLIED", r, kept)
 
     def local_change(self, rid: str, name: str, value: Any) -> None:
@@ -298,6 +306,44 @@ def joined(a: tuple[bool, int | None], b: tuple[bool, int | None]) -> tuple[bool
     withdrawals = [w for _, w in (a, b) if w is not None]
     last = max(withdrawals) if withdrawals else None
     return shared, last, shared and last is not None
+
+
+# --- relations and extensions in a share (section 19) ----------------------------------------------------
+
+
+def goes_along(relation: dict[str, Any], shared: set[str], own_keys: set[str]) -> bool:
+    """Whether a relation goes along in a share that leaves out the links (section 19.1): a relation to a
+    record of the sender's own set, its `sender` null or a key of that set as hexadecimal text, that is
+    shared with the receiver; not one to a record of another sender or to a thing outside AXT."""
+    target = relation["target"]
+    if "uri" in target:
+        return False
+    sender = target["sender"]
+    if isinstance(sender, bytes):
+        sender = sender.hex()
+    return (sender is None or sender in own_keys) and str(target["id"]).lower() in shared
+
+
+def shared_value(
+    type_name: str,
+    value: dict[str, Any],
+    own_user: bool,
+    links: bool,
+    shared: set[str],
+    own_keys: set[str],
+) -> dict[str, Any]:
+    """The value of a record as the sender sends it to one receiver (sections 19.1 and 19.2): the record
+    whole to an app of its own user, or where a share that names the record for that receiver lets the
+    links go along (`links`); otherwise each list of relations holds only the relations that go along and
+    each list of extensions none. `shared` holds the ids of the records of the own set shared with the
+    receiver, in lower case; `own_keys` the keys of the own set. The record keeps what it leaves out."""
+    if own_user or links:
+        return dict(value)
+    out = dict(value)
+    for name, member in sy.element_fields(type_name).items():
+        if name in out:
+            out[name] = [] if member == "name" else [r for r in out[name] if goes_along(r, shared, own_keys)]
+    return out
 
 
 def offer(records: list[tuple[str, str, bool]]) -> list[tuple[str, int]]:
@@ -506,8 +552,10 @@ REPLY_PCF = (
     '{"name":"axt.ProposalReplyAnswer","type":"enum","symbols":["ACCEPTED","DECLINED"]}}]}'
 )
 PROPOSAL_ID = "7b3e9d21-4c8a-4f6e-9a1b-5d2c8e4f6a70"  # the proposal of section 11.4
-MAX_OPEN_RECORD = 16  # open proposals of one proposer for one record, at a device (section 18.3)
-MAX_OPEN = 256  # open proposals of one proposer in all, at a device
+MAX_OPEN_RECORD: int = pe.LIMITS[
+    "shares.open_per_record"
+]  # open proposals of one proposer for one record, at a device
+MAX_OPEN: int = pe.LIMITS["shares.open"]  # open proposals of one proposer in all, at a device
 Entry = tuple[str, bytes, bytes]  # a proposed value: the field's name, the fingerprint, the value bytes
 
 
@@ -579,6 +627,8 @@ def json_form(value: Any) -> Any:
         return [json_form(v) for v in value]
     if isinstance(value, bytes):
         return value.hex()
+    if isinstance(value, uuid.UUID):
+        return str(value)  # a relation's id, which fastavro gives as a UUID
     return value
 
 
@@ -643,8 +693,10 @@ def error_message(seed: bytes, to: bytes, about: bytes, f: Failed, record: dict[
     return cast(bytes, sy.message(seed, "ERROR", None, sy.body_of("Error", d)))
 
 
-MAX_VALUE_BYTES = 65536  # value bytes of one PROPOSAL (section 18.3)
-MAX_OPEN_BYTES = 1048576  # value bytes of the open proposals of one proposer in all, at a device
+MAX_VALUE_BYTES: int = pe.LIMITS["shares.proposal_value_bytes"]  # value bytes of one PROPOSAL
+MAX_OPEN_BYTES: int = pe.LIMITS[
+    "shares.open_value_bytes"
+]  # value bytes of the open proposals of one proposer, at a device
 
 
 def value_bytes(entries: list[Entry]) -> int:
@@ -706,6 +758,8 @@ class Owner:
         self.stopped: list[tuple[str, str | None, str | None]] = []
         # The receivers it holds as apps of its own user: receivers of every record (sections 2.3 and 12.2).
         self.own_user: set[str] = set()
+        # The receivers for which its shares let the links of a record go along (section 19.1).
+        self.links: set[str] = set()
 
     def _receiver(self, key: bytes) -> str | None:
         return next((n for n, ks in self.receivers.items() if key in ks), None)
@@ -776,30 +830,56 @@ class Owner:
             or own.type not in self.takes
             or self.is_stopped(who, rid, own.type)
             or self._beyond(who, rid, pid, entries)
+            or self._unseen(who, own, entries)
         ):
             raise Failed("PROPOSALS_NOT_TAKEN")
         for _, fp, _ in entries:  # step 6
             if fp not in self.schemas:
                 raise Failed("SCHEMA_UNKNOWN", fp)
-        for name, fp, _ in entries:  # step 7
-            schema = self.schemas[fp]
-            if sy.full_name(schema) != own.type or sy.field_schema(schema, name) is None:
+        ones = []
+        whole = {name for name, _, _ in entries if "/" not in name}
+        for name, fp, _ in entries:  # step 7, and a list proposed whole and by element (section 20.1)
+            one = sy.proposal_entry(self.schemas, own.type, name, fp)
+            if one is None or ("/" in name and sy.part_of(name)[0] in whole):
                 raise Failed("INVALID_MESSAGE")
+            ones.append(one)
         decoded = []
-        for name, fp, value in entries:  # step 8
+        for (name, fp, value), one in zip(entries, ones, strict=True):  # step 8
             buf = io.BytesIO(value)
             try:
-                one, v = sy.read_field(self.schemas[fp], name, buf)
+                one, v = sy.read_one(one, name, buf)
             except ValueError:
                 raise Failed("UNDECODABLE") from None
             if buf.tell() != len(value):
                 raise Failed("UNDECODABLE")
-            decoded.append((one, v))
-        for one, v in decoded:  # step 9: the time values; this device checks no attribute
+            decoded.append((name, fp, one, v))
+        for name, fp, one, v in decoded:  # step 9: the time values; this device checks no attribute
             broken = sy.tm.value_breaches(one, v)
             if broken:
                 raise Failed("VALUE_INVALID", field=sy.mr.error_field(broken[0][0]))
+            member = (
+                sy.element_member(self.schemas[fp], sy.part_of(name)[0]) if name.count("/") == 1 else None
+            )
+            if member is not None and sy.part_mismatch(self.schemas[fp], name, v[name]):
+                raise Failed("VALUE_INVALID", field=f"{name}.{member}")  # the key of another element
         return self._take(who, pid, env, rid, entries, m)  # step 10
+
+    def _unseen(self, who: str, own: Own, entries: list[Entry]) -> bool:
+        """Whether an entry names an element of the record that the proposer's share left out, or a part
+        within such an extension: one the proposer could not see (section 20.2)."""
+        shared = {rid.lower() for rid, r in self.records.items() if who in r.shared}
+        own_keys = {self.key.hex(), *(k.hex() for k in self.siblings)}
+        sent = shared_value(own.type, own.value, who in self.own_user, who in self.links, shared, own_keys)
+        lists = sy.element_fields(own.type)
+        for name, _, _ in entries:
+            field, key = sy.part_of(name)
+            if key is None or field not in lists:
+                continue
+            held = {sy.element_key(e[lists[field]]) for e in own.value.get(field, [])}
+            seen = {sy.element_key(e[lists[field]]) for e in sent.get(field, [])}
+            if key in held - seen:
+                return True
+        return False
 
     def _beyond(self, who: str, rid: str, pid: str, entries: list[Entry]) -> bool:
         """Whether a new proposal would be beyond the limits of section 18.3."""
@@ -838,14 +918,17 @@ class Owner:
         own = self.records[o.rid]
         reader = self.readers.get(own.type)
         for name, fp, value in o.entries:
-            if fp not in self.schemas:
+            one = sy.proposal_entry(self.schemas, own.type, name, fp)
+            if one is None:
                 return False
             writer = self.schemas[fp]
-            target = writer if reader is None else reader
-            if sy.field_schema(target, name) is None or not pe.resolves(writer, target):
-                return False
+            if name.count("/") < 2:  # a part within an extension is read with the extension's schema
+                target = writer if reader is None else reader
+                field = sy.part_of(name)[0]
+                if sy.field_schema(target, field) is None or not pe.resolves(writer, target):
+                    return False
             try:
-                sy.read_field(writer, name, io.BytesIO(value))
+                sy.read_one(one, name, io.BytesIO(value))
             except ValueError:
                 return False
         return True
@@ -863,9 +946,20 @@ class Owner:
         own = self.records[o.rid]
         update = None
         if answer == "ACCEPTED":
+            lists = sy.element_fields(own.type)
             for name, fp, value in o.entries:
-                _, v = sy.read_field(self.schemas[fp], name, io.BytesIO(value))
-                own.value = {**own.value, name: json_form(v[name])}
+                one = sy.proposal_entry(self.schemas, own.type, name, fp)
+                assert one is not None
+                _, v = sy.read_one(one, name, io.BytesIO(value))
+                proposed = json_form(v[name])
+                field, key = sy.part_of(name)
+                if key is not None:
+                    # A single element, or a field within an extension (section 20.3).
+                    own.value = {**own.value, field: self._element(own, name, fp, value, proposed, lists)}
+                    continue
+                if name in lists:
+                    proposed = proposed + self._left_out(who, own, name, lists[name], proposed)
+                own.value = {**own.value, name: proposed}
             own.version += 1  # the next count (spec/records.md, section 3)
             update = (own.version, dict(own.value))
         del self.open[(who, pid)]
@@ -875,6 +969,50 @@ class Owner:
             body = reply_body(o.signer, pid, answer)
             reply.append(sy.message(self.seed, "PROPOSAL_REPLY", (o.record["id"], o.record["version"]), body))
         return True, reply, update
+
+    def _element(
+        self, own: Own, name: str, fp: bytes, value: bytes, proposed: Any, lists: dict[str, str]
+    ) -> list[Any]:
+        """The list `field` of the record after one proposed element part or part within an extension
+        (section 20.3): the element in its place, or added at the end; the element left out for its
+        removal mark; within an extension, the field's value in the extension's record, encoded again
+        with the device's own schema of the extension's type. A part within an extension that the record
+        does not hold changes nothing."""
+        field, key = sy.part_of(name)
+        member = lists[field]
+        items = list(own.value.get(field, []))
+        at = next((i for i, e in enumerate(items) if sy.element_key(e[member]) == key), None)
+        if name.count("/") == 1:
+            if proposed is None:
+                return [e for i, e in enumerate(items) if i != at]
+            if at is None:
+                return [*items, proposed]
+            items[at] = proposed
+            return items
+        if at is None:
+            return items
+        texts = {k: json.dumps(v) for k, v in self.schemas.items()}
+        ext = items[at]
+        item = sy.extension_item(ext["name"], bytes.fromhex(ext["data"]))
+        part = sy.FieldState(value, 1, bytes(32), fp)
+        new = sy.within_extension(item, None, {name: part}, texts)
+        decoded = fastavro.schemaless_reader(io.BytesIO(new), sy.EXTENSION_ITEM, sy.EXTENSION_ITEM)
+        items[at] = json_form(decoded)
+        return items
+
+    def _left_out(self, who: str, own: Own, field: str, member: str, proposed: list[Any]) -> list[Any]:
+        """The elements of the list that the record holds and its share left out for the proposer, which the
+        proposer never saw and its proposal does not remove (section 19.3), in the record's order."""
+        shared = {rid.lower() for rid, r in self.records.items() if who in r.shared}
+        own_keys = {self.key.hex(), *(k.hex() for k in self.siblings)}
+        sent = shared_value(own.type, own.value, who in self.own_user, who in self.links, shared, own_keys)
+        seen = {sy.element_key(e[member]) for e in sent.get(field, [])}
+        named = {sy.element_key(e[member]) for e in proposed}
+        return [
+            e
+            for e in own.value.get(field, [])
+            if sy.element_key(e[member]) not in seen and sy.element_key(e[member]) not in named
+        ]
 
     def record_answer(self, who: str, pid: str, answer: str, record: dict[str, Any]) -> None:
         """An answer comes into the app's records, by this device or from a sibling: of two, ACCEPTED stands
@@ -960,6 +1098,8 @@ class Proposer:
         self.blocked: dict[str, tuple[dict[bytes, int], int]] = {}
         # For each record id, after VALUE_INVALID: the top-level field and the value proposed last.
         self.invalid: dict[str, tuple[str, bytes]] = {}
+        # The schemas of the extension types it holds, by their fingerprints (section 20.1).
+        self.texts: dict[bytes, str] = {}
 
     def _takes(self, key: bytes, type_name: str) -> bool:
         manifest = self.manifests.get(key)
@@ -975,25 +1115,48 @@ class Proposer:
         if got is None or got.deleted or got.last != "DATA" or got.schema is None:
             return None
         schema = json.loads(got.schema)
+        fp = sy.schema_fingerprint(got.schema)
         entries = [
-            (n, v)
-            for n, v in sorted(values.items())
-            if v is not None and not (n in got.values and sy.same_value(n, v, schema, got.values[n], schema))
+            (n, v) for n, v in sorted(values.items()) if v is not None and self._differs(schema, got, n, v)
         ]
         if not entries or not self._takes(to, got.type) or rid in self.blocked:
             return None
         if rid in self.invalid:
             name, value = self.invalid[rid]
             mine = dict(entries).get(name)
-            if mine is not None and sy.same_value(name, mine, schema, value, schema):
+            same = mine == value if "/" in name else sy.same_value(name, mine or b"", schema, value, schema)
+            if mine is not None and same:
                 return None
             del self.invalid[rid]
-        fp = sy.schema_fingerprint(got.schema)
         pid = self.ids.pop(0)
-        es = [(n, fp, v) for n, v in entries]
+        es = [(n, self._schema_of(n, fp), v) for n, v in entries]
         m = cast(bytes, sy.message(self.seed, "PROPOSAL", (rid, got.version), proposal_body(to, pid, es)))
         self.sent[pid] = Sent(m, to, rid, got.version, es, relay=relay, day=self.day)
         return m
+
+    def _schema_of(self, name: str, fp: bytes) -> bytes:
+        """The fingerprint of an entry: that of the kept DATA, and for a part within an extension that of
+        the device's own schema of the extension's type (section 20.1)."""
+        if name.count("/") < 2:
+            return fp
+        own = sy.own_extension(sy.part_of(name)[1] or "", self.texts)
+        assert own is not None, "the user changes a field of an extension whose schema the device holds"
+        return bytes(own[1])
+
+    def _differs(self, schema: dict[str, Any], got: Got, name: str, value: bytes) -> bool:
+        """Whether the value of the field, or of the element part or the part within an extension, differs
+        from that of the DATA of the receiver's version (sections 13.1 and 20.1)."""
+        field, key = sy.part_of(name)
+        if key is None:
+            return not (name in got.values and sy.same_value(name, value, schema, got.values[name], schema))
+        parts = sy.split_value(schema, field, got.values[field]) if field in got.values else {}
+        element = parts.get(f"{field}/{key}")
+        if name.count("/") == 1:
+            return value != (element or b"\x00")
+        if element is None:
+            return False  # no extension to change a field of
+        part = sy.FieldState(value, 1, bytes(32), self._schema_of(name, b""))
+        return bool(sy.within_extension(element[1:], None, {name: part}, self.texts) != element[1:])
 
     def receive(self, m: bytes) -> tuple[str, list[bytes]]:
         """A PROPOSAL_REPLY (section 14.2) or an ERROR (section 16.3) of the owner: `taken`, `ignored` or
@@ -1167,6 +1330,7 @@ def owner_session(i: dict[str, Any], b_in: Any = bytes.fromhex) -> list[dict[str
             {"id": a["id"], "version": a["version"]},
         )
     owner.own_user = {r["name"] for r in d["receivers"] if r.get("own_user", False)}
+    owner.links = {r["name"] for r in d["receivers"] if r.get("links", False)}
     for s in d.get("stopped", []):
         owner.stopped.append((s["receiver"], s.get("id"), s.get("type")))
     out: list[dict[str, Any]] = []
@@ -1265,6 +1429,7 @@ def proposer_session(i: dict[str, Any], b_in: Any = bytes.fromhex) -> list[dict[
         records,
         d["proposal_ids"],
     )
+    p.texts = {sy.schema_fingerprint(t): t for t in d.get("schemas", [])}
     out: list[dict[str, Any]] = []
     for step in i["steps"]:
         if "propose" in step:

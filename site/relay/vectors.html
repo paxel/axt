@@ -1,0 +1,143 @@
+<!-- page: title="Run the relay-server vectors" track="relay" order=6 summary="Run the relay-server conformance vectors against the reference relay, and write the adapter that runs them against a relay of your own." -->
+<p class="lede">
+  Every relay passes the <code>relay-server</code> vectors. The conformance runner sends them to an
+  adapter, a small program that plays each vector's requests against the relay and reports the
+  answers. The reference relay has one; a relay of your own needs its own.
+</p>
+
+<h2>The category</h2>
+<p>
+  <code>relay-server</code> tests the interface of a relay, for relays rather than libraries
+  (<a href="../spec/conformance.html#section-2-1">conformance.md, section 2.1</a>). A relay passes
+  it; a library need not implement it
+  (<a href="../spec/conformance.html#section-2-2">section 2.2</a>). In 0.1.0 it holds 2 vectors in
+  <a href="https://github.com/paxel/axt/blob/summer/vectors/relay-server/relay-server.json">vectors/relay-server/relay-server.json</a>:
+  one session of the requests of
+  <a href="../spec/transports.html#section-5-2">transports.md, sections 5.2</a> to 5.6 and of its
+  example of <a href="../spec/transports.html#section-7-5">section 7.5</a>, and one of a mailbox
+  whose room is used up (<a href="../spec/conformance.html#section-7-4">conformance.md, section
+  7.4</a>).
+</p>
+
+<h2>Against the reference relay</h2>
+<p>From the repository root:</p>
+<pre><code class="language-text">python3 conformance/run.py --category relay-server -- python3 relay/adapter.py</code></pre>
+<p>
+  The runner needs Python 3.11 or later with fastavro and cryptography. The repository's
+  <code>pyproject.toml</code> and <code>uv.lock</code> pin them; with
+  <a href="https://docs.astral.sh/uv/">uv</a>, <code>uv sync</code> installs them and
+  <code>uv run</code> starts a script with them
+  (<a href="https://github.com/paxel/axt/blob/summer/conformance/README.md">conformance/README.md</a>).
+</p>
+<p>
+  The relay and its adapter need the standard library only. The runner reports each vector that
+  fails, and for each category how many vectors passed; it exits with 0 only when every vector it
+  ran passed. <code>--verbose</code> names every vector
+  (<a href="../spec/conformance.html#section-7-1">conformance.md, section 7.1</a>).
+</p>
+
+<h2>What a vector asks</h2>
+<p>
+  A <code>relay-server</code> vector is a session of one relay with empty storage and a clock the
+  test sets (<a href="../spec/conformance.html#section-5-11">conformance.md, section 5.11</a>). Its
+  operation is <code>relay</code>, and its input has:
+</p>
+<table>
+  <thead>
+    <tr><th>Member</th><th>Content</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>base_url</code></td><td>The relay's base URL, such as <code>https://relay.example.org/axt/</code></td></tr>
+    <tr><td><code>quota_bytes</code></td><td>The room of a mailbox, for the case of a full mailbox</td></tr>
+    <tr><td><code>requests</code></td><td>The requests, each with <code>method</code>; <code>target</code>, the path after the base URL with its query; <code>headers</code>; <code>body</code>, as Bytes; and <code>now</code>, the relay's clock in seconds</td></tr>
+  </tbody>
+</table>
+<p>
+  The result has one entry for each request: <code>status</code>, and for a successful list
+  <code>messages</code>, for a successful fetch <code>message</code>. A body is Bytes in one of two
+  forms: a string of lower-case hexadecimal digits, or, for a large value, an object with
+  <code>deflate</code>, <code>length</code> and <code>sha256</code>
+  (<a href="../spec/conformance.html#section-3-2">section 3.2</a>). The second vector uses it for a
+  message of <a href="../spec/limits.html#transports.sealed_message"><code>transports.sealed_message</code></a> bytes, the largest a relay accepts.
+</p>
+<p>
+  The <code>now</code> of the requests jumps ahead by days, to test the holding time, and goes back
+  again. The second vector has a <code>quota_bytes</code> of 0: the empty mailbox still takes that
+  largest message, and the next put gets <code>507</code>.
+</p>
+
+<h2>An adapter for your relay</h2>
+<p>
+  An adapter reads one JSON request per line on its standard input and writes one JSON answer per
+  line on its standard output, and nothing else there
+  (<a href="../spec/conformance.html#section-6">conformance.md, section 6</a>):
+</p>
+<ol>
+  <li>
+    To <code>{"id": "hello", "op": "hello", "input": {"format": 1}}</code> it answers with its name
+    and the category it implements, <code>"categories": ["relay-server"]</code>.
+  </li>
+  <li>
+    To each vector, <code>{"id": …, "op": "relay", "input": …}</code>, it answers
+    <code>{"id": the same id, "output": {"steps": [...]}}</code>.
+  </li>
+  <li>
+    An operation it cannot perform it answers with <code>"unsupported": true</code>, and a fault of
+    its own with <code>"failure"</code> and a text. Both fail the vector.
+  </li>
+  <li>It ends when the runner closes its standard input.</li>
+</ol>
+<p>
+  For each vector, the adapter needs a relay with empty storage, the vector's room, and a clock it
+  can set to each request's <code>now</code>. How your relay offers this is yours to choose; the
+  specification defines a test clock only for the reference relay. A vector expects no
+  <code>429</code>; the reference adapter turns the relay's rate limits off, so that its own
+  requests to set the clock do not count.
+</p>
+<p>
+  Then run the suite with your adapter's command:
+</p>
+<pre><code class="language-text">python3 conformance/run.py --category relay-server -- &lt;your adapter's command&gt;</code></pre>
+
+<p>
+  The vectors are made from a model of a relay that answers each request with the first check that
+  fails, in the order of <a href="../spec/relay.html#section-3-1">relay.md, section 3.1</a>, the order
+  of the reference relay. For a put, that order is the one of transports.md, section 5.3.
+</p>
+
+<h3>The reference adapter as a model</h3>
+<p>
+  <a href="https://github.com/paxel/axt/blob/summer/relay/adapter.py">relay/adapter.py</a> needs the
+  standard library only. For each vector it
+  (<a href="../spec/relay.html#section-8">relay.md, section 8</a>):
+</p>
+<ul>
+  <li>
+    starts the relay as a process of its own, on 127.0.0.1 with a port the system picks, with an
+    empty temporary storage directory, the vector's quota, no rate limits and
+    <code>--test</code>;
+  </li>
+  <li>sets the relay's clock with <code>PUT /_test/now</code> before each request;</li>
+  <li>
+    sends each request with exactly the vector's headers and a <code>Host</code>; a request without
+    <code>Content-Length</code> is sent without a body, since in HTTP/1.1 it has none;
+  </li>
+  <li>returns the status, the list's <code>messages</code> or the fetched message as hexadecimal;</li>
+  <li>stops the relay and deletes its storage.</li>
+</ul>
+<p>
+  The test hook belongs to the reference relay's test mode, which never runs in production
+  (<a href="run.html">Run the reference relay</a>).
+</p>
+
+<h2>What the vectors leave out</h2>
+<p>
+  For the reference relay,
+  <a href="https://github.com/paxel/axt/blob/summer/relay/test_axt_relay.py">relay/test_axt_relay.py</a>
+  tests what the vectors do not: a list that waits until a put and one whose wait ends, a restart on
+  the same storage, the sweep and the removal of an idle mailbox, the test hook without
+  <code>--test</code>, the log, early answers before a body, <code>Expect: 100-continue</code>,
+  several requests on one connection, the rate limits and the room. It runs with the standard
+  library only:
+</p>
+<pre><code class="language-text">python3 -m unittest relay/test_axt_relay.py</code></pre>

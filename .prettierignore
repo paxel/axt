@@ -1,0 +1,22 @@
+# Prettier checks the JavaScript, the JSON and the configuration files of the documentation
+# site. It also skips what .gitignore names.
+
+package-lock.json
+# Written by the coverage ratchet of paxel/gates.
+.github/badges/
+
+# The schemas, the test vectors and the data of the conformance suite: a published schema is
+# never edited in place, and the vectors' bytes are what the libraries compare against, so no
+# formatter touches them.
+types/
+vectors/
+conformance/
+
+# Markdown and YAML keep the layout they are written in: the tables with aligned pipes and the
+# aligned comments, which prettier would rewrite.
+*.md
+*.yml
+*.yaml
+
+# The page fragments in site/: reformatting them would change every line.
+*.html

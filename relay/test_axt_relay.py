@@ -184,6 +184,20 @@ class RelayTest(unittest.TestCase):
         self.assertEqual(r.list(wait=30), (200, []))
         self.assertLess(time.monotonic() - start, 5)
 
+    def test_a_start_deletes_only_the_relays_own_temporary_entries(self) -> None:
+        storage = Path(self.dir)
+        tmp = storage / ".axt-relay-tmp"
+        tmp.mkdir()
+        (tmp / ("a" * 32)).write_bytes(b"left by a put")
+        (tmp / ("b" * 32)).mkdir()
+        (tmp / ("b" * 32) / sha(message(1))).write_bytes(b"a removed mailbox")
+        (tmp / "notes.txt").write_text("not the relay's", encoding="ascii")
+        (storage / "tmp").mkdir()
+        (storage / "tmp" / ("c" * 32)).write_bytes(b"not in the relay's directory")
+        self.relay().stop()
+        self.assertEqual(sorted(p.name for p in tmp.iterdir()), ["notes.txt"])
+        self.assertTrue((storage / "tmp" / ("c" * 32)).exists())
+
     def test_a_restart_keeps_messages_their_order_and_their_put_times(self) -> None:
         r = self.relay()
         r.create()
@@ -454,6 +468,187 @@ class EndToEndTest(unittest.TestCase):
             hashlib.sha256(b"AXT test key, not for use: cat-a-log, old phone, Ed25519").digest()
         )
         self.assertIsNone(keys.verify_problem(cat, keys.MESSAGE_PREFIX + opened[10:-64], opened[-64:]))
+
+
+# --- the interface of spec/relay-api.json ---------------------------------------------------------
+
+API = json.loads((REPO / "spec" / "relay-api.json").read_text(encoding="utf-8"))
+
+
+def resolve(node: Any) -> Any:
+    """A node of the OpenAPI document with its local $ref followed."""
+    while isinstance(node, dict) and "$ref" in node:
+        target: Any = API
+        for part in node["$ref"].removeprefix("#/").split("/"):
+            target = target[part]
+        node = target
+    return node
+
+
+def schema_problems(value: Any, schema: Any, path: str = "$") -> list[str]:
+    """The subset of JSON Schema that the document's schemas use."""
+    schema = resolve(schema)
+    kinds = {"object": dict, "array": list, "string": str}
+    t = schema.get("type")
+    if t == "integer":
+        if not isinstance(value, int) or isinstance(value, bool):
+            return [f"{path}: not an integer"]
+    elif t is not None and not isinstance(value, kinds[t]):
+        return [f"{path}: not of type {t}"]
+    problems = []
+    if "pattern" in schema and not re.search(schema["pattern"], value):
+        problems.append(f"{path}: does not match {schema['pattern']}")
+    if "minimum" in schema and value < schema["minimum"]:
+        problems.append(f"{path}: below {schema['minimum']}")
+    if isinstance(value, dict):
+        problems += [f"{path}: lacks {k}" for k in schema.get("required", []) if k not in value]
+        for k, sub in schema.get("properties", {}).items():
+            if k in value:
+                problems += schema_problems(value[k], sub, f"{path}.{k}")
+    if isinstance(value, list) and "items" in schema:
+        for i, item in enumerate(value):
+            problems += schema_problems(item, schema["items"], f"{path}[{i}]")
+    return problems
+
+
+def parse_raw(out: bytes) -> tuple[int, dict[str, str], bytes]:
+    head, _, body = out.partition(b"\r\n\r\n")
+    lines = head.decode("latin-1").split("\r\n")
+    while lines[0].startswith("HTTP/1.1 100 "):  # an interim answer
+        lines = lines[lines.index("") + 1 :] if "" in lines else lines[1:]
+    headers = dict(line.split(": ", 1) for line in lines[1:])
+    return int(lines[0].split(" ")[1]), headers, body
+
+
+OPERATIONS = {
+    "create": ("PUT", "/v1/mailboxes/{mailbox}"),
+    "remove": ("DELETE", "/v1/mailboxes/{mailbox}"),
+    "list": ("GET", "/v1/mailboxes/{mailbox}/messages"),
+    "put": ("PUT", "/v1/mailboxes/{mailbox}/messages/{message}"),
+    "fetch": ("GET", "/v1/mailboxes/{mailbox}/messages/{message}"),
+    "delete": ("DELETE", "/v1/mailboxes/{mailbox}/messages/{message}"),
+}
+
+
+class InterfaceTest(unittest.TestCase):
+    """The reference relay answers every operation of spec/relay-api.json as the document says, and gives
+    every response the document lists."""
+
+    def setUp(self) -> None:
+        self.dir = tempfile.mkdtemp(prefix="axt-relay-api-")
+        self.addCleanup(shutil.rmtree, self.dir, True)
+        self.seen: set[tuple[str, str]] = set()
+
+    def relay(self, **kw: Any) -> Relay:
+        r = Relay(tempfile.mkdtemp(dir=self.dir), **kw)
+        self.addCleanup(r.stop)
+        return r
+
+    def check(self, op: str, want: int, answer: tuple[int, dict[str, str], bytes]) -> None:
+        status, headers, body = answer
+        self.assertEqual(status, want, op)
+        method, path = OPERATIONS[op]
+        operation = API["paths"][path][method.lower()]
+        self.assertIn(str(status), operation["responses"], f"{op}: {status} is not in the document")
+        response = resolve(operation["responses"][str(status)])
+        for name, header in response.get("headers", {}).items():
+            if header.get("required"):
+                self.assertIn(name, headers, f"{op} {status}")
+                self.assertEqual(schema_problems(int(headers[name]), resolve(header)["schema"]), [])
+        content = response.get("content")
+        if content is None:
+            self.assertEqual(body, b"", f"{op} {status} has a body")
+        else:
+            ((media, spec),) = content.items()
+            self.assertEqual(headers.get("Content-Type"), media, f"{op} {status}")
+            if media == "application/json":
+                self.assertEqual(schema_problems(json.loads(body), spec["schema"]), [], f"{op} {status}")
+        self.seen.add((op, str(status)))
+
+    def test_the_document_names_the_operations_of_the_relay(self) -> None:
+        self.assertEqual(API["openapi"], "3.1.0")
+        found = {
+            o["operationId"]: (m.upper(), path)
+            for path, item in API["paths"].items()
+            for m, o in item.items()
+            if m != "parameters"
+        }
+        self.assertEqual(found, OPERATIONS)
+
+    def test_the_relay_gives_every_response_of_the_document(self) -> None:
+        wrong_box = axt_relay.mailbox_id(bytes.fromhex(WRONG))
+        wrong = {"Authorization": "Bearer " + WRONG}
+        bad = {"Authorization": "Basic " + SECRET}
+        data = message(1)
+        box, msg = f"v1/mailboxes/{BOX}", f"v1/mailboxes/{BOX}/messages/{sha(data)}"
+        r = self.relay(quota_bytes=1500)
+        self.check("create", 201, r.request("PUT", box, OWNER))
+        self.check("create", 204, r.request("PUT", box, OWNER))
+        self.check("put", 201, r.request("PUT", msg, {}, data))
+        self.check("put", 204, r.request("PUT", msg, {}, data))
+        self.check("put", 507, r.request("PUT", f"{box}/messages/{sha(message(600))}", {}, message(600)))
+        self.check("put", 400, r.request("PUT", msg, {"Content-Length": "0"}))
+        self.check("put", 404, r.request("PUT", f"v1/mailboxes/{wrong_box}/messages/{sha(data)}", {}, data))
+        chunked = f"PUT {BASE}{msg} HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n"
+        self.check("put", 411, parse_raw(r.raw(chunked.encode())))
+        large = f"PUT {BASE}{msg} HTTP/1.1\r\nHost: x\r\nContent-Length: {axt_relay.MAX_SEALED + 1}\r\n\r\n"
+        self.check("put", 413, parse_raw(r.raw(large.encode())))
+        self.check("list", 200, r.request("GET", f"{box}/messages", OWNER))
+        self.check("list", 200, r.request("GET", f"{box}/messages?wait=1", OWNER))
+        self.check("fetch", 200, r.request("GET", msg, OWNER))
+        self.check("fetch", 404, r.request("GET", f"{box}/messages/{'0' * 64}", OWNER))
+        self.check("delete", 204, r.request("DELETE", msg, OWNER))
+        self.check("delete", 204, r.request("DELETE", msg, OWNER))
+        self.check("list", 404, r.request("GET", f"v1/mailboxes/{wrong_box}/messages", wrong))
+        self.check(
+            "delete", 404, r.request("DELETE", f"v1/mailboxes/{wrong_box}/messages/{sha(data)}", wrong)
+        )
+        self.check("list", 400, r.request("GET", f"{box}/messages?wait=61", OWNER))
+        for op, target in [("create", box), ("remove", box), ("fetch", msg), ("delete", msg)]:
+            method = OPERATIONS[op][0]
+            self.check(op, 400, r.request(method, target + "?x", OWNER))
+        for op, target in [
+            ("create", box),
+            ("remove", box),
+            ("list", f"{box}/messages"),
+            ("fetch", msg),
+            ("delete", msg),
+        ]:
+            method = OPERATIONS[op][0]
+            self.check(op, 401, r.request(method, target, {}))
+            self.check(op, 401, r.request(method, target, bad))
+            self.check(op, 403, r.request(method, target, wrong))
+        self.check("remove", 204, r.request("DELETE", box, OWNER))
+        self.check("remove", 204, r.request("DELETE", f"v1/mailboxes/{wrong_box}", wrong))  # none: repeatable
+        calls = [
+            ("create", box, OWNER, b""),
+            ("remove", box, OWNER, b""),
+            ("list", f"{box}/messages", OWNER, b""),
+            ("put", msg, {}, data),
+            ("fetch", msg, OWNER, b""),
+            ("delete", msg, OWNER, b""),
+        ]
+        limited = self.relay(requests_per_minute=1)
+        self.assertEqual(limited.create(), 201)
+        for op, target, headers, body in calls:
+            self.check(op, 429, limited.request(OPERATIONS[op][0], target, headers, body))
+        failing = self.relay()
+
+        def fail(*_: Any, **__: Any) -> Any:
+            raise axt_relay.StorageError(OSError("the test's storage fails"))
+
+        for name in ("exists", "create", "remove", "list", "open", "delete"):
+            setattr(failing.store, name, fail)
+        for op, target, headers, body in calls:
+            self.check(op, 503, failing.request(OPERATIONS[op][0], target, headers, body))
+        documented = {
+            (o["operationId"], status)
+            for item in API["paths"].values()
+            for m, o in item.items()
+            if m != "parameters"
+            for status in o["responses"]
+        }
+        self.assertEqual(documented - self.seen, set())
 
 
 if __name__ == "__main__":

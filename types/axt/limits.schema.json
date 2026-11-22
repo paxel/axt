@@ -1,0 +1,383 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/paxel/axt/blob/summer/types/axt/limits.schema.json",
+ "title": "AXT limits",
+ "description": "The file of the limits of AXT, types/axt/limits.json: one member for each limit the specification sets. CC0 1.0.",
+ "type": "object",
+ "required": [
+  "format",
+  "specification",
+  "description",
+  "limits"
+ ],
+ "additionalProperties": false,
+ "properties": {
+  "format": {
+   "description": "The version of this file format.",
+   "const": 1
+  },
+  "specification": {
+   "description": "The version of the specification the limits are of.",
+   "type": "string",
+   "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+  },
+  "description": {
+   "description": "What the file holds.",
+   "type": "string"
+  },
+  "limits": {
+   "description": "Each limit by its name: the document that sets it, a dot, and the limit's name within it.",
+   "type": "object",
+   "required": [
+    "envelope.message",
+    "envelope.schema",
+    "envelope.schema_depth",
+    "envelope.file_metadata",
+    "envelope.file",
+    "envelope.file_block",
+    "envelope.file_data",
+    "types.data_depth",
+    "time.zone",
+    "metadata.label",
+    "metadata.help",
+    "metadata.placeholder",
+    "metadata.example",
+    "metadata.translations",
+    "metadata.emoji",
+    "metadata.pattern",
+    "metadata.pattern_quantifier",
+    "metadata.group_key",
+    "manifest.body",
+    "manifest.formats",
+    "manifest.takes",
+    "manifest.sends",
+    "manifest.full_name",
+    "manifest.app_name",
+    "manifest.app_url",
+    "manifest.purpose",
+    "manifest.purpose_translations",
+    "manifest.language_tag",
+    "protocol.offer_types",
+    "protocol.ack_records",
+    "protocol.error_detail",
+    "protocol.error_record_id",
+    "protocol.error_field",
+    "protocol.manifest_wait",
+    "protocol.ack_wait",
+    "protocol.answer_wait",
+    "protocol.idle_wait",
+    "sync.change_type",
+    "sync.change_fields",
+    "sync.change_field_name",
+    "shares.proposal_fields",
+    "shares.proposal_field_name",
+    "shares.proposal_value_bytes",
+    "shares.open_value_bytes",
+    "shares.open_per_record",
+    "shares.open",
+    "fields.depth",
+    "fields.long_default",
+    "fields.offer_data_depth",
+    "fields.relations",
+    "fields.relation_name",
+    "fields.relation_uri",
+    "fields.relation_text",
+    "fields.relation_note",
+    "fields.relation_attributes",
+    "fields.relation_attribute_name",
+    "fields.relation_attribute_value",
+    "fields.extensions",
+    "fields.extension_name",
+    "fields.extension_data",
+    "transports.qr_addresses",
+    "transports.qr_payload",
+    "transports.qr_text",
+    "transports.open_wait",
+    "transports.ping_interval",
+    "transports.idle_wait",
+    "transports.relay_url",
+    "transports.retry_first",
+    "transports.retry_longest",
+    "transports.list_messages",
+    "transports.list_wait",
+    "transports.list_interval",
+    "transports.holding",
+    "transports.longest_holding",
+    "transports.mailbox_idle",
+    "transports.sealed_message"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "envelope.message": {
+     "$ref": "#/$defs/limit"
+    },
+    "envelope.schema": {
+     "$ref": "#/$defs/limit"
+    },
+    "envelope.schema_depth": {
+     "$ref": "#/$defs/limit"
+    },
+    "envelope.file_metadata": {
+     "$ref": "#/$defs/limit"
+    },
+    "envelope.file": {
+     "$ref": "#/$defs/limit"
+    },
+    "envelope.file_block": {
+     "$ref": "#/$defs/limit"
+    },
+    "envelope.file_data": {
+     "$ref": "#/$defs/limit"
+    },
+    "types.data_depth": {
+     "$ref": "#/$defs/limit"
+    },
+    "time.zone": {
+     "$ref": "#/$defs/limit"
+    },
+    "metadata.label": {
+     "$ref": "#/$defs/limit"
+    },
+    "metadata.help": {
+     "$ref": "#/$defs/limit"
+    },
+    "metadata.placeholder": {
+     "$ref": "#/$defs/limit"
+    },
+    "metadata.example": {
+     "$ref": "#/$defs/limit"
+    },
+    "metadata.translations": {
+     "$ref": "#/$defs/limit"
+    },
+    "metadata.emoji": {
+     "$ref": "#/$defs/limit"
+    },
+    "metadata.pattern": {
+     "$ref": "#/$defs/limit"
+    },
+    "metadata.pattern_quantifier": {
+     "$ref": "#/$defs/limit"
+    },
+    "metadata.group_key": {
+     "$ref": "#/$defs/limit"
+    },
+    "manifest.body": {
+     "$ref": "#/$defs/limit"
+    },
+    "manifest.formats": {
+     "$ref": "#/$defs/limit"
+    },
+    "manifest.takes": {
+     "$ref": "#/$defs/limit"
+    },
+    "manifest.sends": {
+     "$ref": "#/$defs/limit"
+    },
+    "manifest.full_name": {
+     "$ref": "#/$defs/limit"
+    },
+    "manifest.app_name": {
+     "$ref": "#/$defs/limit"
+    },
+    "manifest.app_url": {
+     "$ref": "#/$defs/limit"
+    },
+    "manifest.purpose": {
+     "$ref": "#/$defs/limit"
+    },
+    "manifest.purpose_translations": {
+     "$ref": "#/$defs/limit"
+    },
+    "manifest.language_tag": {
+     "$ref": "#/$defs/limit"
+    },
+    "protocol.offer_types": {
+     "$ref": "#/$defs/limit"
+    },
+    "protocol.ack_records": {
+     "$ref": "#/$defs/limit"
+    },
+    "protocol.error_detail": {
+     "$ref": "#/$defs/limit"
+    },
+    "protocol.error_record_id": {
+     "$ref": "#/$defs/limit"
+    },
+    "protocol.error_field": {
+     "$ref": "#/$defs/limit"
+    },
+    "protocol.manifest_wait": {
+     "$ref": "#/$defs/limit"
+    },
+    "protocol.ack_wait": {
+     "$ref": "#/$defs/limit"
+    },
+    "protocol.answer_wait": {
+     "$ref": "#/$defs/limit"
+    },
+    "protocol.idle_wait": {
+     "$ref": "#/$defs/limit"
+    },
+    "sync.change_type": {
+     "$ref": "#/$defs/limit"
+    },
+    "sync.change_fields": {
+     "$ref": "#/$defs/limit"
+    },
+    "sync.change_field_name": {
+     "$ref": "#/$defs/limit"
+    },
+    "shares.proposal_fields": {
+     "$ref": "#/$defs/limit"
+    },
+    "shares.proposal_field_name": {
+     "$ref": "#/$defs/limit"
+    },
+    "shares.proposal_value_bytes": {
+     "$ref": "#/$defs/limit"
+    },
+    "shares.open_value_bytes": {
+     "$ref": "#/$defs/limit"
+    },
+    "shares.open_per_record": {
+     "$ref": "#/$defs/limit"
+    },
+    "shares.open": {
+     "$ref": "#/$defs/limit"
+    },
+    "fields.depth": {
+     "$ref": "#/$defs/limit"
+    },
+    "fields.long_default": {
+     "$ref": "#/$defs/limit"
+    },
+    "fields.offer_data_depth": {
+     "$ref": "#/$defs/limit"
+    },
+    "fields.relations": {
+     "$ref": "#/$defs/limit"
+    },
+    "fields.relation_name": {
+     "$ref": "#/$defs/limit"
+    },
+    "fields.relation_uri": {
+     "$ref": "#/$defs/limit"
+    },
+    "fields.relation_text": {
+     "$ref": "#/$defs/limit"
+    },
+    "fields.relation_note": {
+     "$ref": "#/$defs/limit"
+    },
+    "fields.relation_attributes": {
+     "$ref": "#/$defs/limit"
+    },
+    "fields.relation_attribute_name": {
+     "$ref": "#/$defs/limit"
+    },
+    "fields.relation_attribute_value": {
+     "$ref": "#/$defs/limit"
+    },
+    "fields.extensions": {
+     "$ref": "#/$defs/limit"
+    },
+    "fields.extension_name": {
+     "$ref": "#/$defs/limit"
+    },
+    "fields.extension_data": {
+     "$ref": "#/$defs/limit"
+    },
+    "transports.qr_addresses": {
+     "$ref": "#/$defs/limit"
+    },
+    "transports.qr_payload": {
+     "$ref": "#/$defs/limit"
+    },
+    "transports.qr_text": {
+     "$ref": "#/$defs/limit"
+    },
+    "transports.open_wait": {
+     "$ref": "#/$defs/limit"
+    },
+    "transports.ping_interval": {
+     "$ref": "#/$defs/limit"
+    },
+    "transports.idle_wait": {
+     "$ref": "#/$defs/limit"
+    },
+    "transports.relay_url": {
+     "$ref": "#/$defs/limit"
+    },
+    "transports.retry_first": {
+     "$ref": "#/$defs/limit"
+    },
+    "transports.retry_longest": {
+     "$ref": "#/$defs/limit"
+    },
+    "transports.list_messages": {
+     "$ref": "#/$defs/limit"
+    },
+    "transports.list_wait": {
+     "$ref": "#/$defs/limit"
+    },
+    "transports.list_interval": {
+     "$ref": "#/$defs/limit"
+    },
+    "transports.holding": {
+     "$ref": "#/$defs/limit"
+    },
+    "transports.longest_holding": {
+     "$ref": "#/$defs/limit"
+    },
+    "transports.mailbox_idle": {
+     "$ref": "#/$defs/limit"
+    },
+    "transports.sealed_message": {
+     "$ref": "#/$defs/limit"
+    }
+   }
+  }
+ },
+ "$defs": {
+  "limit": {
+   "description": "One limit.",
+   "type": "object",
+   "required": [
+    "value",
+    "unit",
+    "what",
+    "section"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "value": {
+     "description": "The limit, in its unit: the largest value allowed, or for a time the time it names.",
+     "type": "integer",
+     "minimum": 1
+    },
+    "unit": {
+     "description": "What value counts.",
+     "enum": [
+      "bytes",
+      "characters",
+      "code points",
+      "entries",
+      "depth",
+      "number",
+      "seconds"
+     ]
+    },
+    "what": {
+     "description": "What the limit applies to.",
+     "type": "string"
+    },
+    "section": {
+     "description": "The section of the specification that sets the limit and says what happens above it.",
+     "type": "string",
+     "pattern": "^[a-z]+\\.md, section [0-9]+(\\.[0-9]+)*$"
+    }
+   }
+  }
+ }
+}

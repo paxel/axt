@@ -64,6 +64,11 @@ if _spec is None or _spec.loader is None:
     raise ImportError(f"cannot load {HERE / 'example_types.py'}")
 rules = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(rules)  # runs none of the checks of the example types
+_spec = importlib.util.spec_from_file_location("fields_examples", HERE / "fields_examples.py")
+if _spec is None or _spec.loader is None:
+    raise ImportError(f"cannot load {HERE / 'fields_examples.py'}")
+fe = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(fe)  # for the rules of the relations of spec/fields.md, section 11.4
 
 NAMES = ["Date", "Time", "DateTime", "Duration"]
 FULL = {f"axt.{n}": n for n in NAMES}
@@ -73,7 +78,13 @@ DAY_MS = 86400000
 INT_MIN, INT_MAX = -(1 << 31), (1 << 31) - 1
 LONG_MIN, LONG_MAX = -(1 << 63), (1 << 63) - 1
 ZONE_NAME = re.compile(r"^[A-Za-z0-9._+-]+(/[A-Za-z0-9._+-]+)*$")
-MAX_ZONE_BYTES = 64
+LIMITS: dict[str, int] = {  # types/axt/limits.json
+    k: v["value"]
+    for k, v in json.loads((REPO / "types" / "axt" / "limits.json").read_text(encoding="utf-8"))[
+        "limits"
+    ].items()
+}
+MAX_ZONE_BYTES = LIMITS["time.zone"]
 ANCHORS = ("local", "instant")
 
 texts = {n: (AXT / f"{n}.avsc").read_text(encoding="utf-8") for n in NAMES}
@@ -249,9 +260,10 @@ def time_check(full: str, v: dict[str, Any]) -> str | None:
 
 
 def value_breaches(schema: Any, value: Any) -> list[tuple[str, str, str]]:
-    """The time values inside a value of the schema that are not valid, as (field path, time type, rule), in
-    the order of the encoding: what a receiver reports with VALUE_INVALID (spec/time.md, section 8)."""
-    found: list[tuple[str, str, str]] = mr.breaches(schema, value, time_check, attributes=False)
+    """The time values and relations inside a value of the schema that are not valid, as (field path, rule,
+    why), in the order of the encoding: what a receiver reports with VALUE_INVALID (spec/time.md, section 8;
+    spec/fields.md, section 11.4)."""
+    found: list[tuple[str, str, str]] = mr.breaches(schema, value, time_check, relations=fe)
     return found
 
 
@@ -796,14 +808,12 @@ HOST_TEXT = json.dumps(
                 "name": "start",
                 "type": jsons["DateTime"],
                 "doc": "When the visit starts.",
-                "axt.anchor": "local",
             },
             {
                 "name": "end",
                 "type": ["null", "axt.DateTime"],
                 "default": None,
                 "doc": "When the visit ends; null when open.",
-                "axt.anchor": "local",
             },
             {"name": "booked", "type": jsons["Date"], "doc": "The day the visit was booked."},
             {
@@ -1030,16 +1040,6 @@ def check() -> tuple[str, int, bytes]:
     assert value_breaches(host, broken) == [
         ("end", "axt.DateTime", "instant_ms is not the wall clock minus offset_seconds")
     ]
-    # axt.anchor (section 6.4; spec/metadata.md, section 2): on a field that holds axt.DateTime, local or
-    # instant.
-    assert mr.schema_problems(host) == []
-    other = json.loads(HOST_TEXT)
-    other["fields"][0]["axt.anchor"] = "utc"
-    other["fields"][2]["axt.anchor"] = "instant"
-    assert mr.schema_problems(other) == [
-        ("start", "axt.anchor: neither local nor instant"),
-        ("booked", "axt.anchor: on a field that holds no axt.DateTime"),
-    ], mr.schema_problems(other)
     late = dict(HOST_VALUE, remind=[duration(days=-1), duration(days=1, millis=-HOUR)])
     assert value_breaches(host, late) == [("remind[1]", "axt.Duration", "parts of both signs")]
     for label, n, v, rule in INVALID:

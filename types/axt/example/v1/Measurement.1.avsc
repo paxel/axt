@@ -4,64 +4,23 @@
   "namespace": "axt.example.v1",
   "doc": "One measured value or count at a point in time, such as a weight, a blood pressure reading or a tally of glasses of water.",
   "axt.version": 1,
-  "axt.title": "quantity",
-  "axt.label": "Measurement",
-  "axt.label_translations": {
-    "de": "Messung"
-  },
-  "axt.help": "A measured value or a count at a point in time, such as a weight.",
-  "axt.help_translations": {
-    "de": "Ein gemessener Wert oder eine Zählung zu einem Zeitpunkt, etwa ein Gewicht."
-  },
-  "axt.emoji": "📈",
   "fields": [
     {
       "name": "quantity",
       "type": "string",
       "default": "",
-      "doc": "What was measured or counted, as the user calls it, such as Weight or Glasses of water.",
-      "axt.label": "Quantity",
-      "axt.label_translations": {
-        "de": "Messgröße"
-      },
-      "axt.help": "What was measured or counted, such as Weight or Glasses of water.",
-      "axt.help_translations": {
-        "de": "Was gemessen oder gezählt wurde, etwa Gewicht oder Gläser Wasser."
-      },
-      "axt.emoji": "📋"
+      "doc": "What was measured or counted, as the user calls it, such as Weight or Glasses of water."
     },
     {
       "name": "value",
       "type": "double",
-      "doc": "The measured value or the count, in unit.",
-      "axt.label": "Value",
-      "axt.label_translations": {
-        "de": "Wert"
-      },
-      "axt.help": "The measured value or the count.",
-      "axt.help_translations": {
-        "de": "Der gemessene Wert oder die Anzahl."
-      },
-      "axt.emoji": "🔢"
+      "doc": "The measured value or the count, in unit."
     },
     {
       "name": "unit",
       "type": "string",
       "default": "1",
-      "doc": "The unit of value as a case-sensitive code of UCUM, such as kg, Cel or mm[Hg]. A count is 1, or an annotation in braces alone that names what is counted, such as {glass}.",
-      "axt.label": "Unit",
-      "axt.label_translations": {
-        "de": "Einheit"
-      },
-      "axt.help": "The unit as a code of UCUM, such as kg; 1 for a count.",
-      "axt.help_translations": {
-        "de": "Die Einheit als Code von UCUM, etwa kg; 1 für eine Anzahl."
-      },
-      "axt.emoji": "📐",
-      "axt.format": "ucum",
-      "axt.placeholder": "kg",
-      "axt.example": "mm[Hg]",
-      "axt.preferred_length": 10
+      "doc": "The unit of value as a case-sensitive code of UCUM, such as kg, Cel or mm[Hg]. A count is 1, or an annotation in braces alone that names what is counted, such as {glass}."
     },
     {
       "name": "measured_at",
@@ -135,48 +94,353 @@
           }
         ]
       },
-      "doc": "When the value was measured or counted.",
-      "axt.label": "Measured at",
-      "axt.label_translations": {
-        "de": "Gemessen am"
-      },
-      "axt.help": "When the value was measured or counted.",
-      "axt.help_translations": {
-        "de": "Wann der Wert gemessen oder gezählt wurde."
-      },
-      "axt.emoji": "🕒",
-      "axt.anchor": "instant"
+      "doc": "When the value was measured or counted."
     },
     {
       "name": "subject",
       "type": "string",
       "default": "",
-      "doc": "Who or what was measured, as text, such as the name of a pet. Empty when it is the user.",
-      "axt.label": "Subject",
-      "axt.label_translations": {
-        "de": "Gemessen an"
-      },
-      "axt.help": "Who or what was measured, such as the name of a pet; empty for the user.",
-      "axt.help_translations": {
-        "de": "Wer oder was gemessen wurde, etwa der Name eines Tiers; leer für den Nutzer selbst."
-      },
-      "axt.emoji": "🎯"
+      "doc": "Who or what was measured, as text, such as the name of a pet. Empty when it is the user."
     },
     {
       "name": "notes",
       "type": "string",
       "default": "",
-      "doc": "Free notes on the measurement, as plain text; lines are separated by LF. Empty when there are none.",
-      "axt.label": "Notes",
-      "axt.label_translations": {
-        "de": "Notizen"
+      "doc": "Free notes on the measurement, as plain text; lines are separated by LF. Empty when there are none."
+    },
+    {
+      "name": "relations",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "Relation",
+          "namespace": "axt",
+          "doc": "A relation: a link from the record that holds it to another record or to a thing outside AXT, of a kind, with information about the link. Defined in spec/fields.md, section 11.",
+          "axt.label": "Relation",
+          "axt.label_translations": {
+            "de": "Verknüpfung"
+          },
+          "axt.help": "A link to another entry or to something outside, such as the pet an appointment is for.",
+          "axt.help_translations": {
+            "de": "Eine Verknüpfung mit einem anderen Eintrag oder mit etwas außerhalb, etwa mit dem Tier, für das ein Termin ist."
+          },
+          "axt.emoji": "🔗",
+          "fields": [
+            {
+              "name": "id",
+              "type": {
+                "type": "string",
+                "logicalType": "uuid"
+              },
+              "doc": "The id of the relation, a UUID in lower-case hexadecimal, unique among the relations of the record that holds it and kept for as long as the relation exists.",
+              "axt.label": "Relation id",
+              "axt.label_translations": {
+                "de": "Verknüpfungs-ID"
+              },
+              "axt.help": "The id of this relation.",
+              "axt.help_translations": {
+                "de": "Die ID dieser Verknüpfung."
+              },
+              "axt.emoji": "🆔",
+              "axt.advanced": true
+            },
+            {
+              "name": "kind",
+              "type": "string",
+              "default": "axt.related",
+              "doc": "The kind of the relation, a name in a namespace, written like the full name of a type, such as org.example.catalog.patient. axt.related, the only kind AXT defines, says only that the two are related. A receiver shows a kind it does not know as a relation of that name.",
+              "axt.label": "Kind",
+              "axt.label_translations": {
+                "de": "Art"
+              },
+              "axt.help": "What kind of link this is.",
+              "axt.help_translations": {
+                "de": "Welche Art von Verknüpfung das ist."
+              },
+              "axt.emoji": "🔖"
+            },
+            {
+              "name": "target",
+              "type": [
+                {
+                  "type": "record",
+                  "name": "RelationRecordTarget",
+                  "doc": "A record as the target of a relation: by its id and its sender.",
+                  "axt.label": "Entry",
+                  "axt.label_translations": {
+                    "de": "Eintrag"
+                  },
+                  "axt.help": "An entry of this app or of another.",
+                  "axt.help_translations": {
+                    "de": "Ein Eintrag dieser App oder einer anderen."
+                  },
+                  "axt.emoji": "📄",
+                  "fields": [
+                    {
+                      "name": "id",
+                      "type": {
+                        "type": "string",
+                        "logicalType": "uuid"
+                      },
+                      "doc": "The id of the target record.",
+                      "axt.label": "Entry id",
+                      "axt.label_translations": {
+                        "de": "Eintrags-ID"
+                      },
+                      "axt.help": "The id of the linked entry.",
+                      "axt.help_translations": {
+                        "de": "Die ID des verknüpften Eintrags."
+                      },
+                      "axt.emoji": "🆔",
+                      "axt.advanced": true
+                    },
+                    {
+                      "name": "sender",
+                      "type": [
+                        "null",
+                        {
+                          "type": "fixed",
+                          "name": "RelationRecordTargetSender",
+                          "size": 32,
+                          "doc": "An Ed25519 public key in the encoding of RFC 8032. Defined in spec/keys.md."
+                        }
+                      ],
+                      "default": null,
+                      "doc": "A key of the device set of the target record's sender. Null when the target is a record of the sender of the record that holds the relation.",
+                      "axt.label": "Sender",
+                      "axt.label_translations": {
+                        "de": "Absender"
+                      },
+                      "axt.help": "The app the linked entry comes from.",
+                      "axt.help_translations": {
+                        "de": "Die App, von der der verknüpfte Eintrag kommt."
+                      },
+                      "axt.emoji": "🔑",
+                      "axt.advanced": true
+                    },
+                    {
+                      "name": "type",
+                      "type": "string",
+                      "default": "",
+                      "doc": "The full name of the target record's type, which holds its major version, such as axt.example.v1.Pet. Empty when not known.",
+                      "axt.label": "Type",
+                      "axt.label_translations": {
+                        "de": "Typ"
+                      },
+                      "axt.help": "The type of the linked entry.",
+                      "axt.help_translations": {
+                        "de": "Der Typ des verknüpften Eintrags."
+                      },
+                      "axt.emoji": "🧩",
+                      "axt.advanced": true
+                    },
+                    {
+                      "name": "text",
+                      "type": "string",
+                      "default": "",
+                      "doc": "A text to show for the target while the record itself is not at hand, such as its title. Empty when there is none.",
+                      "axt.label": "Display text",
+                      "axt.label_translations": {
+                        "de": "Anzeigetext"
+                      },
+                      "axt.help": "What to show for the linked entry.",
+                      "axt.help_translations": {
+                        "de": "Was für den verknüpften Eintrag angezeigt wird."
+                      },
+                      "axt.emoji": "💬"
+                    }
+                  ]
+                },
+                {
+                  "type": "record",
+                  "name": "RelationOutsideTarget",
+                  "doc": "A thing outside AXT as the target of a relation: by a URI.",
+                  "axt.label": "Outside thing",
+                  "axt.label_translations": {
+                    "de": "Etwas außerhalb"
+                  },
+                  "axt.help": "Something that is not an entry, such as a web page.",
+                  "axt.help_translations": {
+                    "de": "Etwas, das kein Eintrag ist, etwa eine Webseite."
+                  },
+                  "axt.emoji": "🌐",
+                  "fields": [
+                    {
+                      "name": "uri",
+                      "type": "string",
+                      "doc": "A URI of RFC 3986 that names the thing, of any scheme, such as https: or urn:. Not empty.",
+                      "axt.label": "URI",
+                      "axt.label_translations": {
+                        "de": "URI"
+                      },
+                      "axt.help": "The address of the linked thing.",
+                      "axt.help_translations": {
+                        "de": "Die Adresse des verknüpften Dings."
+                      },
+                      "axt.emoji": "🔗",
+                      "axt.format": "uri"
+                    },
+                    {
+                      "name": "text",
+                      "type": "string",
+                      "default": "",
+                      "doc": "A text to show for the thing, such as its name. Empty when there is none.",
+                      "axt.label": "Display text",
+                      "axt.label_translations": {
+                        "de": "Anzeigetext"
+                      },
+                      "axt.help": "What to show for the linked thing.",
+                      "axt.help_translations": {
+                        "de": "Was für das verknüpfte Ding angezeigt wird."
+                      },
+                      "axt.emoji": "💬"
+                    }
+                  ]
+                }
+              ],
+              "doc": "What the relation points at: a record, or a thing outside AXT.",
+              "axt.label": "Target",
+              "axt.label_translations": {
+                "de": "Ziel"
+              },
+              "axt.help": "What is linked.",
+              "axt.help_translations": {
+                "de": "Was verknüpft ist."
+              },
+              "axt.emoji": "🎯"
+            },
+            {
+              "name": "note",
+              "type": "string",
+              "default": "",
+              "doc": "Free text about the link. Empty when there is none.",
+              "axt.label": "Note",
+              "axt.label_translations": {
+                "de": "Notiz"
+              },
+              "axt.help": "Something about this link.",
+              "axt.help_translations": {
+                "de": "Etwas zu dieser Verknüpfung."
+              },
+              "axt.emoji": "📝",
+              "axt.multiline": true
+            },
+            {
+              "name": "start",
+              "type": [
+                "null",
+                "axt.DateTime"
+              ],
+              "default": null,
+              "doc": "When the link begins, such as the day a pet came to its keeper. Null when it has no beginning or it is not known.",
+              "axt.label": "From",
+              "axt.label_translations": {
+                "de": "Ab"
+              },
+              "axt.help": "When the link begins.",
+              "axt.help_translations": {
+                "de": "Wann die Verknüpfung beginnt."
+              },
+              "axt.emoji": "▶️"
+            },
+            {
+              "name": "end",
+              "type": [
+                "null",
+                "axt.DateTime"
+              ],
+              "default": null,
+              "doc": "The first moment after the link, as for the end of an appointment. Null when it has no end or it is not known.",
+              "axt.label": "Until",
+              "axt.label_translations": {
+                "de": "Bis"
+              },
+              "axt.help": "When the link ends.",
+              "axt.help_translations": {
+                "de": "Wann die Verknüpfung endet."
+              },
+              "axt.emoji": "⏹️"
+            },
+            {
+              "name": "attributes",
+              "type": {
+                "type": "map",
+                "values": "string"
+              },
+              "default": {},
+              "doc": "Further values that the kind of the relation needs, by names its kind gives them. Empty when there are none.",
+              "axt.label": "Details",
+              "axt.label_translations": {
+                "de": "Details"
+              },
+              "axt.help": "Further details of the link.",
+              "axt.help_translations": {
+                "de": "Weitere Angaben zur Verknüpfung."
+              },
+              "axt.emoji": "🗂️",
+              "axt.advanced": true
+            }
+          ]
+        }
       },
-      "axt.help": "Anything else about the measurement.",
-      "axt.help_translations": {
-        "de": "Alles Weitere zur Messung."
+      "default": [],
+      "doc": "The relations of the record to other records and to things outside AXT (spec/types.md, section 8), in the order the user gave them. Empty when it has none."
+    },
+    {
+      "name": "extensions",
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "Extension",
+          "namespace": "axt",
+          "doc": "An extension: one record of an app's own type that the app adds to a record of another type, such as the fields of its own that a cat-a-log adds to a Pet, held as the bytes of its single-object encoding. Defined in spec/fields.md, section 12.",
+          "axt.label": "Extension",
+          "axt.label_translations": {
+            "de": "Erweiterung"
+          },
+          "axt.help": "Further fields that an app adds to this entry.",
+          "axt.help_translations": {
+            "de": "Weitere Felder, die eine App diesem Eintrag hinzufügt."
+          },
+          "axt.emoji": "🧩",
+          "fields": [
+            {
+              "name": "name",
+              "type": "string",
+              "doc": "The full name of the extension's record type, such as org.example.catalog.CatExtension, which holds its major version, of at most 256 bytes; at most one extension of a name in a list.",
+              "axt.label": "Extension type",
+              "axt.label_translations": {
+                "de": "Erweiterungstyp"
+              },
+              "axt.help": "The type of this extension.",
+              "axt.help_translations": {
+                "de": "Der Typ dieser Erweiterung."
+              },
+              "axt.emoji": "🔖",
+              "axt.advanced": true
+            },
+            {
+              "name": "data",
+              "type": "bytes",
+              "doc": "The extension's record in single-object encoding: the marker C3 01, the fingerprint of its writer schema as 8 bytes in little-endian order, and the record's Avro binary encoding. Passed on unchanged by an app that does not know the type.",
+              "axt.label": "Extension data",
+              "axt.label_translations": {
+                "de": "Erweiterungsdaten"
+              },
+              "axt.help": "The values of this extension.",
+              "axt.help_translations": {
+                "de": "Die Werte dieser Erweiterung."
+              },
+              "axt.emoji": "📦",
+              "axt.advanced": true
+            }
+          ]
+        }
       },
-      "axt.emoji": "📝",
-      "axt.multiline": true
+      "default": [],
+      "doc": "The extensions of the record: records of the apps' own types that add fields of their own to it (spec/fields.md, section 12), at most one of each type. Empty when it has none."
     }
   ]
 }

@@ -1,0 +1,60 @@
+<!-- page: title="Libraries" track="start" order=4 summary="The AXT libraries, each in a repository of its own, with the AXT version each conforms to and what conforming means." -->
+<p class="lede">
+  An app uses AXT through a library for its language. Each library lives in a repository of its
+  own, is versioned on its own, is published to its language's registry, and states the AXT
+  version it conforms to.
+</p>
+
+<h2>The libraries</h2>
+<table>
+  <thead>
+    <tr><th>Language</th><th>Repository</th><th>Package</th><th>Conforms to</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Dart</td>
+      <td><a href="https://github.com/paxel/axt-dart">paxel/axt-dart</a></td>
+      <td><code>axt_protocol</code> on pub.dev</td>
+      <td>in progress</td>
+    </tr>
+  </tbody>
+</table>
+<p>
+  The list is the one in the
+  <a href="https://github.com/paxel/axt/blob/summer/README.md#libraries">README</a>. If you
+  write an app with a library, the library's own site documents its API; this site documents the
+  standard.
+</p>
+
+<h2>What conforming means</h2>
+<p>
+  A library's CI pins an AXT release and the SHA-256 of its archive, checks the release's
+  attestation, and runs that release's conformance suite against the library's own adapter
+  (<a href="https://github.com/paxel/axt/blob/summer/conformance/README.md">conformance/README.md</a>).
+  Moving to a new AXT version is a deliberate change of that pin.
+</p>
+<p>
+  The suite is split into categories. Every library implements nine of them:
+  <code>encoding</code>, <code>types</code>, <code>time</code>, <code>records</code>,
+  <code>manifest</code>, <code>keys</code>, <code>protocol</code>, <code>shares</code> and
+  <code>bricks</code>. The
+  others depend on what the library offers: <code>file</code>, <code>local</code>,
+  <code>qr</code> and <code>relay</code> for the transports it supports, <code>sync</code> if it
+  offers more than one device for an
+  owner. A category passes only as a whole. A library that conforms to AXT 0.2.0 passes at least
+  the nine categories every library implements, and states the others it implements
+  (<a href="../spec/conformance.html#section-2">Conformance, section 2</a>).
+</p>
+
+<h2>Why each library has its own repository</h2>
+<p>
+  A library is only useful to an app when it is maintained, versioned, tagged and published where
+  its language looks for packages. A directory in the specification's repository gives none of
+  that, and several libraries in one repository would tie their release cycles together. This
+  repository therefore holds the specification, the types, the test vectors, the conformance suite
+  and the reference relay, and no library
+  (<a href="https://github.com/paxel/axt/blob/summer/docs/adr/0002-libraries-in-their-own-repositories.md">ADR 2</a>).
+</p>
+<p>
+  To write a library, follow the <a href="../library/index.html">Implement a library</a> track.
+</p>

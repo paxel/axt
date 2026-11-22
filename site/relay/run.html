@@ -1,0 +1,123 @@
+<!-- page: title="Run the reference relay" track="relay" order=1 summary="Start the reference relay with Python or in a container, choose its options, and stop it." -->
+<p class="lede">
+  The reference relay is one Python program, <code>relay/axt_relay.py</code>, with no dependency
+  beyond the standard library; it reads the limits of the specification from
+  <code>types/axt/limits.json</code>. You start it with a storage directory and a few options, directly
+  or in a container, and put a TLS proxy in front of it.
+</p>
+
+<div class="callout">
+  <p class="eyebrow">Note</p>
+  <p>
+    The reference relay is a reference and a test oracle, not a production server. Its own HTTP
+    server is not hardened against slow or many clients; the proxy in front keeps it away from the
+    network (<a href="../spec/relay.html#section-7-2">relay.md, section 7.2</a>). Anyone can run a
+    relay: AXT has no default relay operator, and each app chooses its relay
+    (<a href="../spec/transports.html#section-5">transports.md, section 5</a>).
+  </p>
+</div>
+
+<h2>What you need</h2>
+<ul>
+  <li>Python 3.11 or later, or a container engine such as Podman or Docker.</li>
+  <li>
+    A directory for the relay's storage. The relay creates it if it is missing.
+  </li>
+  <li>
+    A host name with a certificate, served by a reverse proxy that terminates TLS. Apps reach a
+    relay only over HTTPS. See <a href="proxy.html">Put a proxy in front</a>.
+  </li>
+</ul>
+
+<h2>Start it with Python</h2>
+<p>The command of <a href="https://github.com/paxel/axt/blob/summer/relay/README.md">relay/README.md</a>:</p>
+<pre><code class="language-text">python3 relay/axt_relay.py --storage /var/lib/axt-relay --base-path /axt/ --client-address-header X-Forwarded-For</code></pre>
+<p>
+  The relay listens on 127.0.0.1, port 8080, and serves plain HTTP to the proxy. At start it logs
+  one line with the address, the port and the base path it listens on. With the base path
+  <code>/axt/</code> and a proxy for <code>relay.example.org</code>, the relay's base URL is
+  <code>https://relay.example.org/axt/</code>; apps append the paths of
+  <a href="../spec/transports.html#section-5-2">transports.md, section 5.2</a> to it.
+</p>
+<p>
+  <code>--client-address-header</code> takes each client's address from the header the proxy sets.
+  Without it, every client has the proxy's address and all of them share one rate limit.
+</p>
+
+<h2>The options</h2>
+<p>
+  <code>python3 relay/axt_relay.py --help</code> lists them;
+  <a href="../spec/relay.html#section-7-1">relay.md, section 7.1</a> explains them.
+</p>
+<table>
+  <thead>
+    <tr><th>Option</th><th>Default</th><th>Meaning</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>--storage DIR</code></td><td>(required)</td><td>The storage directory; created if missing</td></tr>
+    <tr><td><code>--host HOST</code></td><td>127.0.0.1</td><td>The address to listen on</td></tr>
+    <tr><td><code>--port PORT</code></td><td>8080</td><td>The port to listen on; <code>0</code> for one the system picks, which the start line names</td></tr>
+    <tr><td><code>--base-path PATH</code></td><td><code>/</code></td><td>The path of the base URL, beginning and ending with <code>/</code>, such as <code>/axt/</code></td></tr>
+    <tr><td><code>--quota-bytes N</code></td><td>67108864</td><td>The room of a mailbox, 64 MiB; an empty mailbox always takes one message</td></tr>
+    <tr><td><code>--max-waiting N</code></td><td>1000</td><td>Lists that may wait at the same time; beyond it a list answers at once</td></tr>
+    <tr><td><code>--rate-requests N</code></td><td>600</td><td>Requests per minute per client address; <code>0</code> for no limit</td></tr>
+    <tr><td><code>--rate-creations N</code></td><td>20</td><td>Mailboxes created per hour per client address; <code>0</code> for no limit</td></tr>
+    <tr><td><code>--client-address-header NAME</code></td><td>none</td><td>Take the client address from the last value of this header, set by the proxy, such as <code>X-Forwarded-For</code></td></tr>
+    <tr><td><code>--no-access-log</code></td><td>off</td><td>Log no line per request</td></tr>
+    <tr><td><code>--test</code></td><td>off</td><td>Test mode; never in production</td></tr>
+  </tbody>
+</table>
+<p>
+  The limits behind <code>--quota-bytes</code>, <code>--max-waiting</code> and the rate options are
+  on <a href="limits.html">Limits and storage</a>; the log is on <a href="logs.html">Keep the logs
+  within the rules</a>.
+</p>
+
+<h3>Never in test mode</h3>
+<p>
+  With <code>--test</code>, the relay has a clock that starts at 0 and that anyone can set with
+  <code>PUT /_test/now</code>. Whoever sets it far ahead has the relay delete every message. Test
+  mode is for the conformance vectors and the relay's tests only
+  (<a href="../spec/relay.html#section-8">relay.md, section 8</a>). Without it, the relay uses the
+  system's clock and <code>/_test/now</code> answers <code>404</code>.
+</p>
+
+<h2>Start it in a container</h2>
+<p>
+  <a href="https://github.com/paxel/axt/blob/summer/relay/Containerfile">relay/Containerfile</a>
+  builds an image with the repository's root as the context, since the relay reads the limits of
+  <code>types/axt/limits.json</code>. With Podman:
+</p>
+<pre><code class="language-text">podman build -t axt-relay -f relay/Containerfile .
+podman run -d --name axt-relay -p 127.0.0.1:8080:8080 -v axt-relay:/data \
+    axt-relay --base-path /axt/ --client-address-header X-Forwarded-For</code></pre>
+<p>With Docker, build with:</p>
+<pre><code class="language-text">docker build -t axt-relay -f relay/Containerfile .</code></pre>
+<p>What the image does (<a href="../spec/relay.html#section-7-3">relay.md, section 7.3</a>):</p>
+<ul>
+  <li>It is based on <code>python:3.13.18-slim-trixie</code>, pinned by its digest.</li>
+  <li>
+    It always starts the relay with <code>--host 0.0.0.0 --port 8080 --storage /data</code>: the
+    relay listens on port 8080 on every address of the container. Options after the image name are
+    passed to the relay as well.
+  </li>
+  <li>
+    The relay runs as the user 10001 and keeps its mailboxes in the volume <code>/data</code>. A
+    directory mounted at <code>/data</code> instead of a volume must be writable by the user 10001.
+  </li>
+</ul>
+<p>
+  <code>-p 127.0.0.1:8080:8080</code> publishes the port on the host's loopback address only, so
+  that only a proxy on the same host reaches the relay. This matters: when the relay takes the
+  client address from a header, it must be reachable only through the proxy, since a client could
+  otherwise set the header itself (<a href="../spec/relay.html#section-7-2">relay.md, section
+  7.2</a>).
+</p>
+
+<h2>Stop it</h2>
+<p>
+  The relay stops on <code>SIGTERM</code> and <code>SIGINT</code>. Every write is atomic, so it can
+  be stopped at any time, also by a crash or a full disk: a message is either held whole or not at
+  all (<a href="../spec/relay.html#section-5-3">relay.md, section 5.3</a>). At the next start it
+  reads its index of mailboxes and messages from the storage again.
+</p>

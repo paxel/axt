@@ -126,12 +126,12 @@
         "items": {
           "type": "record",
           "name": "ChangeField",
-          "doc": "The state of one top-level field of the record: its value as the changing device wrote it, with the stamp of that change and the device that made it. Defined in spec/sync.md, section 3.1.",
+          "doc": "The state of one top-level field of the record, or of one part of a list merged per element: its value as the changing device wrote it, with the stamp of that change and the device that made it. Defined in spec/sync.md, section 3.1.",
           "fields": [
             {
               "name": "name",
               "type": "string",
-              "doc": "The name of the field, as the writer schema named in schema has it."
+              "doc": "The name of the field, as the writer schema named in schema has it; or the name of a part of a list merged per element, such as relations or relations/ followed by the key of one relation. Defined in spec/sync.md, section 25.2."
             },
             {
               "name": "schema",
@@ -150,7 +150,7 @@
                 "bytes"
               ],
               "default": null,
-              "doc": "The value of the field: the bytes the changing device wrote, in Avro binary encoding under the type the field has in the schema named in schema. They are passed on unchanged. Null only in a message whose origin is a key: the owner discarded a change of the field of a received record, and the sender's value shows again. A device never writes null here while origin is null."
+              "doc": "The value of the field: the bytes the changing device wrote, in Avro binary encoding under the type the field has in the schema named in schema. For a part of a list merged per element, the bytes of the type spec/sync.md, section 25.2, gives the part. They are passed on unchanged. Null only in a message whose origin is a key: the owner discarded a change of the field of a received record, and the sender's value shows again. A device never writes null here while origin is null."
             },
             {
               "name": "stamp",

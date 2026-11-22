@@ -1,6 +1,6 @@
 # Time
 
-Status: released in 0.1.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md). Section 3.3 applies to the time types.
+Status: released in 0.1.0, changed in 0.2.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md). Section 3.3 applies to the time types.
 
 This document defines the four time types of AXT, `axt.Date`, `axt.Time`, `axt.DateTime` and `axt.Duration`: their fields and the rules a value keeps, how a type that holds a time value carries them, what a receiver does when its time zone rules differ from the writer's, and how a duration is added to a date and time.
 
@@ -39,9 +39,9 @@ The time types are records rather than strings or the numeric time types of Avro
 
 A host type MUST define each time type it holds in place, at its first occurrence in the schema in the order in which Avro parses it, as a record with the full name of the time type, such as `axt.DateTime`, and with exactly the fields of the published schema: its Parsing Canonical Form MUST be that of the published schema (section 9.1). Every later occurrence of the same time type in the schema MUST refer to it by its full name, such as `"axt.DateTime"`, not by the name alone, which Avro would read in the namespace of the host type. The definition SHOULD carry the `doc` texts of the published schema.
 
-This is the one case in which a type defines a named type in the namespace `axt` and refers to a named type by its name; [types.md](types.md), sections 2 and 5.2, make the exception for it. Every schema then still parses on its own, and a receiver recognises a time value by the full name of its record, wherever it occurs. Section 9.3 shows a host type with two `axt.DateTime` fields.
+This, and `axt.Relation`, which a type defines in place by the same rule ([fields.md](fields.md), section 11.6), are the cases in which a type defines a named type in the namespace `axt` and refers to a named type by its name; [types.md](types.md), sections 2 and 5.2, make the exception for them. Every schema then still parses on its own, and a receiver recognises a time value by the full name of its record, wherever it occurs. Section 9.3 shows a host type with two `axt.DateTime` fields.
 
-A receiver MUST decline a type whose schema defines a record with the full name of a time type whose Parsing Canonical Form is not that of the published schema, or defines any other named type in the namespace `axt`, with `DOES_NOT_RESOLVE` ([protocol.md](protocol.md), section 5.2): it cannot read such a value as this document defines it. An app that reads several schemas into one set of names finds a time type defined in each schema that holds it, each time with the same canonical form. Some Avro parsers reject a second definition of a name in one set: fastavro 1.13.1 takes it, the Python `avro` 1.12.2 package raises an error. An app MUST NOT reject a schema because another schema it holds defines the same time type; it parses each schema with a set of names of its own, or takes a repeated definition of a time type with the published canonical form as the same type.
+A receiver MUST decline a type whose schema defines a record with the full name of a time type whose Parsing Canonical Form is not that of the published schema, or defines any other named type in the namespace `axt` than `axt.Relation` and its nested types as [fields.md](fields.md), section 11.6, defines them, with `DOES_NOT_RESOLVE` ([protocol.md](protocol.md), section 5.2): it cannot read such a value as this document defines it. An app that reads several schemas into one set of names finds a time type defined in each schema that holds it, each time with the same canonical form. Some Avro parsers reject a second definition of a name in one set: fastavro 1.13.1 takes it, the Python `avro` 1.12.2 package raises an error. An app MUST NOT reject a schema because another schema it holds defines the same time type; it parses each schema with a set of names of its own, or takes a repeated definition of a time type with the published canonical form as the same type.
 
 ### 3.2 Which types use them
 
@@ -106,7 +106,7 @@ A value of `axt.Time` is valid when each field is within its range. 24:00 is not
 
 The first seven fields are the wall clock. They are full: a date and time on the wall clock has every part, and its date and time of day keep the rules of sections 4 and 5. A date or a time of day alone is an `axt.Date` or an `axt.Time`.
 
-`zone` is the name of a zone of the IANA time zone database, as the database spells it, such as `Europe/Berlin`, `America/Argentina/Buenos_Aires` or `Etc/UTC`, or a link name of the database, such as `UTC`. Its syntax is checked without the database: one or more parts separated by `/`, each of ASCII letters, digits, `.`, `_`, `+` and `-`, neither `.` nor `..` and not beginning with `-`; at most 64 bytes in all. Every name of the database has this form.
+`zone` is the name of a zone of the IANA time zone database, as the database spells it, such as `Europe/Berlin`, `America/Argentina/Buenos_Aires` or `Etc/UTC`, or a link name of the database, such as `UTC`. Its syntax is checked without the database: one or more parts separated by `/`, each of ASCII letters, digits, `.`, `_`, `+` and `-`, neither `.` nor `..` and not beginning with `-`; at most `time.zone` bytes in all ([types/axt/limits.json](../types/axt/limits.json)). Every name of the database has this form.
 
 The offset is in seconds because the zone rules have offsets that are not whole minutes: before 1893, the database gives `Europe/Berlin` the local mean time of Berlin, +00:53:28. An offset of whole minutes could not give such a wall clock its instant. 18 hours either side, the range of `java.time.ZoneOffset`, holds every offset the database has.
 
@@ -135,14 +135,14 @@ A writer MUST write `offset_seconds` as its own zone rules give the zone at `ins
 
 ### 6.4 Zone rules that differ: the anchor
 
-A receiver's zone rules can give a zone another offset at an instant than the writer's did, because one of the two has an older copy of the database, or because the rules of the zone changed between writing and reading. The wall clock and the instant then no longer agree, and the receiver has to keep one of them. Which one depends on what the field means, and so the host type says it, with the attribute `axt.anchor` on the field ([types.md](types.md), section 6):
+A receiver's zone rules can give a zone another offset at an instant than the writer's did, because one of the two has an older copy of the database, or because the rules of the zone changed between writing and reading. The wall clock and the instant then no longer agree, and the receiver has to keep one of them. Which one depends on what the field means, and so the host type says it, with the `anchor` of the field's `axt.DateTimeField` ([fields.md](fields.md), section 4.7):
 
-| `axt.anchor` | Kept                    | For                                                                                                                 |
-| ------------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `local`      | The wall clock and zone | A time agreed on the wall clock, mostly in the future: an appointment at 10:00 stays at 10:00 when the rules change |
-| `instant`    | The instant and zone    | A time at which something happened, mostly in the past: a measurement, the time a note was written                  |
+| `anchor`  | Kept                    | For                                                                                                                 |
+| --------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `LOCAL`   | The wall clock and zone | A time agreed on the wall clock, mostly in the future: an appointment at 10:00 stays at 10:00 when the rules change |
+| `INSTANT` | The instant and zone    | A time at which something happened, mostly in the past: a measurement, the time a note was written                  |
 
-The attribute sits on a field whose type is `axt.DateTime`, `["null", axt.DateTime]`, or an array of either, and applies to every `axt.DateTime` in the field's value. A field without the attribute, or with another value, has the anchor `local`: a receiver ignores attributes it does not know, and a wall clock that moves under its user misses an appointment, while an instant that moves by an hour on the wall clock is still the same instant.
+The anchor applies to every `axt.DateTime` in the field's value, also to each item of a list of them. Its default is `LOCAL`: a wall clock that moves under its user misses an appointment, while an instant that moves by an hour on the wall clock is still the same instant. Below, the anchors are named `local` and `instant`.
 
 A receiver that takes a zoned time:
 
@@ -262,7 +262,7 @@ A value written with rules that gave Berlin no summer time in 2026, 2026-07-01 1
 `com.example.Visit` is an illustration only, not an example type. Its field `start` defines `axt.DateTime` in place, `end` refers to it by its full name, and `booked` and `remind` define `axt.Date` and `axt.Duration`:
 
 ```json
-{"type":"record","name":"Visit","namespace":"com.example","doc":"An illustration for spec/time.md; not an AXT example type.","fields":[{"name":"start","type":{"type":"record","name":"DateTime","namespace":"axt","doc":"…","fields":[…]},"doc":"When the visit starts.","axt.anchor":"local"},{"name":"end","type":["null","axt.DateTime"],"default":null,"doc":"When the visit ends; null when open.","axt.anchor":"local"},{"name":"booked","type":{"type":"record","name":"Date","namespace":"axt","doc":"…","fields":[…]},"doc":"The day the visit was booked."},{"name":"remind","type":{"type":"array","items":{"type":"record","name":"Duration","namespace":"axt","doc":"…","fields":[…]}},"default":[],"doc":"When to remind, each before start."}]}
+{"type":"record","name":"Visit","namespace":"com.example","doc":"An illustration for spec/time.md; not an AXT example type.","fields":[{"name":"start","type":{"type":"record","name":"DateTime","namespace":"axt","doc":"…","fields":[…]},"doc":"When the visit starts."},{"name":"end","type":["null","axt.DateTime"],"default":null,"doc":"When the visit ends; null when open."},{"name":"booked","type":{"type":"record","name":"Date","namespace":"axt","doc":"…","fields":[…]},"doc":"The day the visit was booked."},{"name":"remind","type":{"type":"array","items":{"type":"record","name":"Duration","namespace":"axt","doc":"…","fields":[…]}},"default":[],"doc":"When to remind, each before start."}]}
 ```
 
 The `…` stand for the `doc` and the fields of the published schemas. Its Parsing Canonical Form holds the canonical form of `axt.DateTime` of section 9.1 once, at `start`, and `"axt.DateTime"` at `end`; its CRC-64-AVRO is `0x0e3e5cd48bbba990`.

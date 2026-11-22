@@ -2,15 +2,18 @@
 
 AXT uses two licensing schemes: one for the standard itself and one for code.
 
-| Path           | Content                                                                          | Licence                                   | SPDX                |
-| -------------- | -------------------------------------------------------------------------------- | ----------------------------------------- | ------------------- |
-| `spec/`        | The specification                                                                | CC0 1.0 Universal                         | `CC0-1.0`           |
-| `types/`       | The example types                                                                | CC0 1.0 Universal                         | `CC0-1.0`           |
-| `vectors/`     | The test vectors                                                                 | CC0 1.0 Universal                         | `CC0-1.0`           |
-| `docs/logo/`   | The AXT symbol, favicon and wordmark                                             | CC0 1.0 Universal                         | `CC0-1.0`           |
-| `conformance/` | The conformance suite, and the scripts that produce the vectors and the examples | Apache License 2.0 or MIT, at your option | `Apache-2.0 OR MIT` |
-| `tools/`       | The repository's own checks, such as the changelog check                         | Apache License 2.0 or MIT, at your option | `Apache-2.0 OR MIT` |
-| `relay/`       | The reference relay                                                              | Apache License 2.0 or MIT, at your option | `Apache-2.0 OR MIT` |
+| Path           | Content                                                                                | Licence                                   | SPDX                |
+| -------------- | -------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------- |
+| `spec/`        | The specification                                                                      | CC0 1.0 Universal                         | `CC0-1.0`           |
+| `types/`       | The example types                                                                      | CC0 1.0 Universal                         | `CC0-1.0`           |
+| `vectors/`     | The test vectors                                                                       | CC0 1.0 Universal                         | `CC0-1.0`           |
+| `docs/logo/`   | The AXT symbol, favicon and wordmark                                                   | CC0 1.0 Universal                         | `CC0-1.0`           |
+| `conformance/` | The conformance suite, and the scripts that produce the vectors and the examples       | Apache License 2.0 or MIT, at your option | `Apache-2.0 OR MIT` |
+| `tools/`       | The repository's own checks, such as the changelog check                               | Apache License 2.0 or MIT, at your option | `Apache-2.0 OR MIT` |
+| `relay/`       | The reference relay                                                                    | Apache License 2.0 or MIT, at your option | `Apache-2.0 OR MIT` |
+| `site/`        | The pages of the documentation site                                                    | CC0 1.0 Universal                         | `CC0-1.0`           |
+| `site/assets/` | The style sheet and the script of the site; its favicon is the CC0 one of `docs/logo/` | Apache License 2.0 or MIT, at your option | `Apache-2.0 OR MIT` |
+| `scripts/`     | The build of the documentation site, tested by `tests/site/`                           | Apache License 2.0 or MIT, at your option | `Apache-2.0 OR MIT` |
 
 The licence texts:
 

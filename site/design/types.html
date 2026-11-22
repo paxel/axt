@@ -1,0 +1,101 @@
+<!-- page: title="Choose a type" track="design" order=1 summary="Decide whether your app exchanges an example type or a type of its own, and how to name and shape a type of your own." -->
+<p class="lede">
+  Every record an app exchanges has a type, named by its full name. A type is written as its
+  description, from which its Avro schema is derived (<a href="metadata.html">Describe the
+  fields</a>). The first decision is whether a record of your app is one of the example types or
+  a type of your own.
+</p>
+
+<h2>The example types</h2>
+<p>
+  The repository brings example types under the namespace <code>axt.example.v1</code>, so that
+  apps can exchange records without agreeing on a format first
+  (<a href="../spec/types.html#section-1">types, section 1</a>). There are eight:
+</p>
+<table>
+  <thead>
+    <tr><th>Type</th><th>What one record is</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><a href="../spec/axt.example.v1.Note.1.html"><code>Note</code></a></td><td>A text with a title, in plain text or CommonMark, with tags</td></tr>
+    <tr><td><a href="../spec/axt.example.v1.Task.1.html"><code>Task</code></a></td><td>Something to do, with a due time, a repetition, a priority and whether it is done</td></tr>
+    <tr><td><a href="../spec/axt.example.v1.Appointment.1.html"><code>Appointment</code></a></td><td>An event with a start, an end, a place and reminders</td></tr>
+    <tr><td><a href="../spec/axt.example.v1.Person.1.html"><code>Person</code></a></td><td>A contact: names, birthday, phone numbers, email addresses and postal addresses</td></tr>
+    <tr><td><a href="../spec/axt.example.v1.Car.1.html"><code>Car</code></a></td><td>A vehicle: make, model, year, plate, VIN and odometer</td></tr>
+    <tr><td><a href="../spec/axt.example.v1.Pet.1.html"><code>Pet</code></a></td><td>An animal the user keeps, such as a cat or a dog</td></tr>
+    <tr><td><a href="../spec/axt.example.v1.Measurement.1.html"><code>Measurement</code></a></td><td>One value at a point in time, with a UCUM unit, such as a pet's weight</td></tr>
+    <tr><td><a href="../spec/axt.example.v1.Document.1.html"><code>Document</code></a></td><td>A file with a title and a date, such as a scanned vet invoice</td></tr>
+  </tbody>
+</table>
+<p>
+  The table of <a href="../spec/types.html#section-7-1">types, section 7.1</a>, lists their
+  fields, and <a href="../spec/example-types.html">Example types</a> shows each description and
+  its derived schema. If a
+  record of your app is one of these things, the example type is the one that other apps already
+  know: Old Brain Fix can take cat-a-log's vet appointment because both use
+  <code>axt.example.v1.Appointment</code>.
+</p>
+
+<h2>A type of your own</h2>
+<p>
+  An app may use a type of its own for the same thing as an example type, or for a thing no
+  example type covers (<a href="../spec/types.html#section-4">types, section 4</a>):
+</p>
+<ul>
+  <li>It lives under a namespace of the app. The namespace <code>axt</code> and every namespace beginning with <code>axt.</code> are reserved for the AXT repository (<a href="../spec/types.html#section-2">section 2</a>).</li>
+  <li>The namespace should be a domain that you control, in reverse order, such as <code>org.example.catalog</code>, so that two apps do not pick the same full name by accident.</li>
+  <li>You may start from a copy of an example type. The copy is then a type of your app, with its own full name and its own version from 1 on, and no longer the example type.</li>
+  <li>A type that only your app uses stays under your namespace; it is not added to the repository.</li>
+</ul>
+
+<div class="callout">
+  <p class="eyebrow">The full name is the type</p>
+  <p>
+    A receiver knows a type by its full name alone. <code>org.example.catalog.Pet</code> is not
+    <code>axt.example.v1.Pet</code>, even with the same fields. A receiver that wants to take your
+    type as one it knows maps it on purpose: with your full name among the aliases of its own
+    schema, or with code that converts the records. Without a mapping it declines your type, or
+    shows the records from their schema if it takes any type
+    (<a href="../spec/types.html#section-4">types, section 4</a>).
+  </p>
+</div>
+
+<p>
+  So the cost of a type of your own is that other apps have to know it, or map it, before they
+  can do more with it than show it.
+</p>
+
+<h2>Shaping a type</h2>
+<p>
+  Every example type keeps the rules of <a href="../spec/types.html#section-5">types,
+  section 5</a>, and a type of your own should keep them too, so that receivers can show and map
+  it. The derivation already gives the forms of optional values and defaults
+  (<a href="../spec/fields.html#section-9-2">fields, section 9.2</a>). In short:
+</p>
+<ul>
+  <li><strong>Documentation.</strong> The record, every nested type and every field carry a <code>doc</code> in English. A field's <code>doc</code> says what its value is and what an empty string, an empty array or <code>null</code> means in it (<a href="../spec/types.html#section-5-1">5.1</a>).</li>
+  <li><strong>Names.</strong> Records, enums and fixed types in UpperCamelCase, fields in snake_case, enum symbols in UPPER_SNAKE_CASE. A nested type is defined in place, and its name begins with the name of its type, such as <code>PersonPhone</code> in <code>Person</code> (<a href="../spec/types.html#section-5-2">5.2</a>).</li>
+  <li><strong>Optional values.</strong> A value that may be absent is <code>["null", T]</code>, with <code>null</code> first and the default <code>null</code>. A text that may be empty is a <code>string</code> with the default <code>""</code>; a list is an array with the default <code>[]</code> (<a href="../spec/types.html#section-5-3">5.3</a>).</li>
+  <li><strong>Defaults.</strong> Give every field a default unless a record has no meaning without it, as an Appointment has none without its <code>start</code>. A field without a default can never be removed within the major version. Every enum has a default symbol; where reading an unknown symbol as a known one would change a value, as with a unit, that default is <code>UNKNOWN</code> (<a href="../spec/types.html#section-5-4">5.4</a>).</li>
+  <li><strong>Times.</strong> Dates, times of day, dates and times, and lengths of time are the time types <code>axt.Date</code>, <code>axt.Time</code>, <code>axt.DateTime</code> and <code>axt.Duration</code>, not Avro's logical types (<a href="../spec/types.html#section-5-5">5.5</a>; <a href="../spec/time.html#section-3-2">time, section 3.2</a>). The zone belongs into the <code>axt.DateTime</code>, not into a field of its own (<a href="../spec/types.html#section-5-6">5.6</a>).</li>
+  <li><strong>No id or version fields.</strong> The envelope carries the id and the version of every record (<a href="../spec/types.html#section-5-8">5.8</a>).</li>
+  <li><strong>Depth.</strong> A description is a tree of typed fields, so no type is recursive. No record nests deeper in records, arrays and maps than <a href="../spec/limits.html#types.data_depth"><code>types.data_depth</code></a>, which keeps a small message from exhausting a decoder's stack (<a href="../spec/types.html#section-5-7">5.7</a>).</li>
+  <li><strong>Labels and checks.</strong> Labels, help texts, emoji, formats and limits are in the type's description: <a href="metadata.html">Describe the fields</a>.</li>
+</ul>
+<p>
+  A copy of an example type keeps these rules already, which makes it a good start for a type of
+  your own.
+</p>
+
+<h2>One record that names another</h2>
+<p>
+  A record can refer to another record of the same sender, such as a Measurement to the Pet it
+  was taken of (<a href="../spec/records.html#section-8">records, section 8</a>):
+</p>
+<ul>
+  <li>The reference is a field of the type <code>string</code> with the logical type <code>uuid</code>, or <code>["null", that]</code> where it may be absent. It holds the id of the other record.</li>
+  <li>Its <code>doc</code> should name the type or types it refers to. No attribute marks a reference, so a receiver that does not know your type cannot tell it from another <code>uuid</code> field.</li>
+  <li>It names a record of your own app only, never one your app received from another app. A link to a record of another app is a relation (<a href="../spec/records.html#section-10">records, section 10</a>).</li>
+  <li>The receiver may not have the other record yet, or may have declined its type. It keeps the reference and resolves it when the record arrives; it never rejects a record for it.</li>
+</ul>
+<p>The example types of version 1 carry no references; Measurement names what was measured as text in <code>subject</code>.</p>

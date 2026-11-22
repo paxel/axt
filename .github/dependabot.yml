@@ -2,7 +2,8 @@
 # only after it has been out for 14 days (cooldown), so early fixes are in; security updates
 # are not held back. Every action is pinned to a full commit SHA with its version in a comment;
 # Dependabot moves the SHA and the comment together. uv keeps the packages the conformance
-# scripts need and the tools that check them. Renovate is not used.
+# scripts need and the tools that check them; npm keeps the lint and type tooling of the
+# documentation site. Renovate is not used.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -22,4 +23,13 @@ updates:
       default-days: 14
     groups:
       uv:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 14
+    groups:
+      npm:
         patterns: ["*"]

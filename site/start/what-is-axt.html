@@ -1,0 +1,100 @@
+<!-- page: title="What AXT is" track="start" order=1 summary="What AXT does for small apps, what a record is made of, and the three ways two apps exchange: a file, the local network and a relay." -->
+<p class="lede">
+  AXT, Avro eXchange Transfer, is an open standard that lets small, independent apps exchange
+  typed records with each other. Version 0.1.0 is released; below 1.0 a later version may still
+  change things in incompatible ways.
+</p>
+
+<h2>The problem it solves</h2>
+<p>
+  Most small apps keep their data in their own format. To move it into another app, the user
+  types it again, or someone writes a converter for that one pair of apps. AXT gives such apps a
+  common way to hand records to each other.
+</p>
+<p>
+  The example the specification uses throughout: cat-a-log, a pet log, keeps a vet appointment
+  for Mimi, a pet. It sends the appointment to Old Brain Fix, which turns it into a reminder.
+  Neither app needs to know the other's internals. They only agree on the record's type, here
+  the example type <a href="../spec/axt.example.v1.Appointment.1.html"><code>axt.example.v1.Appointment</code></a>.
+</p>
+
+<h2>What travels</h2>
+<ul>
+  <li>
+    <strong>Typed records.</strong> Every record type is described by bricks, typed fields put
+    together, from which its Apache Avro schema is derived
+    (<a href="../spec/fields.html#section-9">Typed fields, section 9</a>). A record is one
+    datum of a type, with a stable id and a rising version
+    (<a href="../spec/records.html#section-1">Records, section 1</a>). Avro 1.12 schema
+    resolution applies, so two apps can hold different versions of a type
+    (<a href="../spec/envelope.html#section-6">Envelope, section 6</a>).
+  </li>
+  <li>
+    <strong>Signed messages.</strong> Every message is an
+    <a href="../spec/axt.Envelope.html"><code>axt.Envelope</code></a>, signed with the sending
+    installation's Ed25519 key (<a href="../spec/envelope.html#section-2">Envelope, section 2</a>;
+    <a href="../spec/keys.html#section-2">Keys, section 2</a>).
+  </li>
+  <li>
+    <strong>Example types.</strong> The standard brings eight
+    <a href="../spec/example-types.html">example types</a>, such as Note, Task, Appointment and
+    Person, so that apps can exchange without agreeing on types first
+    (<a href="../spec/types.html#section-7">Types, section 7</a>).
+  </li>
+</ul>
+
+<h2>Three ways to exchange</h2>
+<p>
+  AXT defines three transports. An app need not support all of them
+  (<a href="../spec/transports.html#section-1">Transports, section 1</a>).
+</p>
+<table>
+  <thead>
+    <tr><th>Transport</th><th>How it works</th><th>Spec</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>File</td>
+      <td>
+        An AXT file, an Avro object container file of signed messages, sent through any
+        messenger, mail or file share. A file has no way back to its sender, so nothing
+        acknowledges it.
+      </td>
+      <td><a href="../spec/transports.html#section-2">Transports, section 2</a></td>
+    </tr>
+    <tr>
+      <td>Local network</td>
+      <td>
+        One app shows a QR code with its key and address, the other scans it and connects. The
+        connection is TLS 1.3, and a <code>HELLO</code> message binds it to the scanned key.
+      </td>
+      <td>
+        <a href="../spec/transports.html#section-3">Transports, section 3</a> and
+        <a href="../spec/transports.html#section-4">section 4</a>
+      </td>
+    </tr>
+    <tr>
+      <td>Relay</td>
+      <td>
+        A sealed mailbox: it holds end-to-end encrypted messages until their owner fetches them,
+        and holds each for the holding time <a href="../spec/limits.html#transports.holding"><code>transports.holding</code></a>. It sees neither their content nor their type. There is no default
+        operator: each app chooses its relay, and anyone can run the reference relay.
+      </td>
+      <td>
+        <a href="../spec/transports.html#section-5">Transports, section 5</a>;
+        <a href="../spec/relay.html">Relay</a>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Who this documentation is for</h2>
+<p>
+  This site is for the people who build on the standard itself: those who design what an app
+  exchanges, those who write an AXT library, and those who run a relay. If you write an app and
+  use an existing library, the library's own site is the place to start; the
+  <a href="libraries.html">Libraries</a> page lists them.
+</p>
+<p>
+  Next: <a href="exchange.html">How an exchange goes</a>, step by step.
+</p>

@@ -1,0 +1,295 @@
+{
+  "name": "note",
+  "doc": "A note: a piece of text the user wrote down, with a title and tags.",
+  "texts": {
+    "label": "Note",
+    "label_translations": {
+      "de": "Notiz"
+    },
+    "help": "A piece of text written down, with a title and tags.",
+    "help_translations": {
+      "de": "Ein aufgeschriebener Text mit Titel und Schlagwörtern."
+    },
+    "emoji": "🗒️"
+  },
+  "required": false,
+  "order": null,
+  "group": "",
+  "sensitive": false,
+  "advanced": false,
+  "kind": {
+    "axt.ObjectField": {
+      "name": "axt.example.v1.Note",
+      "fields": [
+        {
+          "name": "title",
+          "doc": "The note's title, as plain text on one line. Empty when the note has none.",
+          "texts": {
+            "label": "Title",
+            "label_translations": {
+              "de": "Titel"
+            },
+            "help": "The note's title, on one line.",
+            "help_translations": {
+              "de": "Der Titel der Notiz, in einer Zeile."
+            },
+            "emoji": "🏷️"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "text",
+          "doc": "The note's content, written in the format named by the field format. Empty when the note has only a title.",
+          "texts": {
+            "label": "Text",
+            "label_translations": {
+              "de": "Text"
+            },
+            "help": "The content, as plain text or Markdown, as Format says.",
+            "help_translations": {
+              "de": "Der Inhalt, als einfacher Text oder Markdown, wie unter Format angegeben."
+            },
+            "emoji": "📝"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": true,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "format",
+          "doc": "How the field text is written.",
+          "texts": {
+            "label": "Format",
+            "label_translations": {
+              "de": "Format"
+            },
+            "help": "How the text is written.",
+            "help_translations": {
+              "de": "Wie der Text geschrieben ist."
+            },
+            "emoji": "🔤"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.EnumField": {
+              "name": "NoteFormat",
+              "symbols": [
+                {
+                  "symbol": "PLAIN",
+                  "texts": {
+                    "label": "Plain text",
+                    "label_translations": {
+                      "de": "Einfacher Text"
+                    },
+                    "help": "",
+                    "help_translations": {},
+                    "emoji": "📄"
+                  }
+                },
+                {
+                  "symbol": "MARKDOWN",
+                  "texts": {
+                    "label": "Markdown",
+                    "label_translations": {
+                      "de": "Markdown"
+                    },
+                    "help": "",
+                    "help_translations": {},
+                    "emoji": "Ⓜ️"
+                  }
+                }
+              ],
+              "fallback": "PLAIN",
+              "default": "PLAIN"
+            }
+          }
+        },
+        {
+          "name": "created",
+          "doc": "When the note was written. Null when not known.",
+          "texts": {
+            "label": "Created",
+            "label_translations": {
+              "de": "Erstellt"
+            },
+            "help": "When the note was written.",
+            "help_translations": {
+              "de": "Wann die Notiz geschrieben wurde."
+            },
+            "emoji": "🆕"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": true,
+          "kind": {
+            "axt.DateTimeField": {
+              "anchor": "INSTANT"
+            }
+          }
+        },
+        {
+          "name": "updated",
+          "doc": "When the note's content last changed. Null when not known.",
+          "texts": {
+            "label": "Updated",
+            "label_translations": {
+              "de": "Geändert"
+            },
+            "help": "When the note's content last changed.",
+            "help_translations": {
+              "de": "Wann der Inhalt der Notiz zuletzt geändert wurde."
+            },
+            "emoji": "🔄"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": true,
+          "kind": {
+            "axt.DateTimeField": {
+              "anchor": "INSTANT"
+            }
+          }
+        },
+        {
+          "name": "tags",
+          "doc": "Tags the user gave the note, in the user's order and without duplicates; each a word or short phrase without a leading #. Empty when there are none.",
+          "texts": {
+            "label": "Tags",
+            "label_translations": {
+              "de": "Schlagwörter"
+            },
+            "help": "Words or short phrases to find the note by, without a leading #.",
+            "help_translations": {
+              "de": "Wörter oder kurze Ausdrücke, über die sich die Notiz finden lässt, ohne führendes #."
+            },
+            "emoji": "🔖"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.ListField": {
+              "items": {
+                "name": "tags",
+                "doc": "Tags the user gave the note, in the user's order and without duplicates; each a word or short phrase without a leading #. Empty when there are none.",
+                "texts": {
+                  "label": "",
+                  "label_translations": {},
+                  "help": "",
+                  "help_translations": {},
+                  "emoji": ""
+                },
+                "required": false,
+                "order": null,
+                "group": "",
+                "sensitive": false,
+                "advanced": false,
+                "kind": {
+                  "axt.StringField": {
+                    "default": "",
+                    "min_length": null,
+                    "max_length": null,
+                    "pattern": null,
+                    "multiline": false,
+                    "preferred_length": 20,
+                    "placeholder": "",
+                    "example": ""
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "relations",
+          "doc": "The relations of the record to other records and to things outside AXT (spec/types.md, section 8), in the order the user gave them. Empty when it has none.",
+          "texts": {
+            "label": "Relations",
+            "label_translations": {
+              "de": "Verknüpfungen"
+            },
+            "help": "Entries and other things this one is linked to, such as the pets an appointment is for.",
+            "help_translations": {
+              "de": "Einträge und anderes, mit denen dieser verknüpft ist, etwa die Tiere, für die ein Termin ist."
+            },
+            "emoji": "🔗"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.RelationField": {}
+          }
+        },
+        {
+          "name": "extensions",
+          "doc": "The extensions of the record: records of the apps' own types that add fields of their own to it (spec/fields.md, section 12), at most one of each type. Empty when it has none.",
+          "texts": {
+            "label": "Extensions",
+            "label_translations": {
+              "de": "Erweiterungen"
+            },
+            "help": "Further fields that apps add to this entry.",
+            "help_translations": {
+              "de": "Weitere Felder, die Apps diesem Eintrag hinzufügen."
+            },
+            "emoji": "🧩"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": true,
+          "kind": {
+            "axt.ExtensionField": {}
+          }
+        }
+      ],
+      "groups": [],
+      "version": 1,
+      "title": "title"
+    }
+  }
+}
