@@ -14,7 +14,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 - **Connection key**: the signing key that the other app proved with its `HELLO` (section 4.5).
 - **Relay**: an HTTP service that holds sealed messages ([keys.md](keys.md), section 4) in mailboxes until their owners fetch them. It is a channel in the sense of [protocol.md](protocol.md), section 1.
 - **Mailbox**: the place at a relay where the messages for one installation, its **owner**, wait (section 5.1).
-- **Holding time**: how long a relay holds a message, 14 days (section 5.5).
+- **Holding time**: how long a relay holds a message, `transports.holding` (section 5.5).
 
 AXT does not require an app to support every transport. An app that exchanges on the local network shows or scans the QR code of section 3; an app that takes messages through a relay names its relay in its manifest ([manifest.md](manifest.md), section 3.10).
 
@@ -77,17 +77,17 @@ An app shows a QR code so that another app can learn its signing key in person, 
 
 The payload is the byte `01`, the payload version, followed by one datum of the record `axt.QrPayload` in Avro binary encoding, with the schema [types/axt/QrPayload.avsc](../types/axt/QrPayload.avsc):
 
-| Field             | Avro type                                                   | Content                                                                                                                |
-| ----------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `signing_key`     | `fixed` of 32 bytes, `axt.QrPayloadSigningKey`              | The Ed25519 public key of the installation that shows the code ([keys.md](keys.md), section 2.1)                       |
-| `encryption_key`  | `null` or `fixed` of 32 bytes, `axt.QrPayloadEncryptionKey` | Its X25519 public key for messages through a relay ([keys.md](keys.md), section 4.2), or `null`                        |
-| `local`           | `null` or `axt.QrPayloadLocal`                              | Where it listens on the local network while it shows the code (section 4.1), or `null`                                 |
-| `local.addresses` | array of `bytes`                                            | One to four IP addresses, 4 bytes for IPv4 or 16 bytes for IPv6, in network byte order, in the order to try            |
-| `local.port`      | `int`                                                       | The TCP port, 1 to 65535                                                                                               |
-| `relay`           | `null` or `axt.QrPayloadRelay`                              | The relay and the mailbox for messages to it (section 5.1), as in the manifest's `relay`, or `null`                    |
-| `relay.url`       | `string`                                                    | The base URL of the relay (section 5.2), at most 256 bytes                                                             |
-| `relay.mailbox`   | `fixed` of 32 bytes, `axt.QrPayloadRelayMailbox`            | The mailbox id (section 5.1)                                                                                           |
-| `join`            | `boolean`                                                   | `true` for a join code, shown to a new device of the same owner (section 4.7); `false` for a code shown to another app |
+| Field             | Avro type                                                   | Content                                                                                                                          |
+| ----------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `signing_key`     | `fixed` of 32 bytes, `axt.QrPayloadSigningKey`              | The Ed25519 public key of the installation that shows the code ([keys.md](keys.md), section 2.1)                                 |
+| `encryption_key`  | `null` or `fixed` of 32 bytes, `axt.QrPayloadEncryptionKey` | Its X25519 public key for messages through a relay ([keys.md](keys.md), section 4.2), or `null`                                  |
+| `local`           | `null` or `axt.QrPayloadLocal`                              | Where it listens on the local network while it shows the code (section 4.1), or `null`                                           |
+| `local.addresses` | array of `bytes`                                            | One to `transports.qr_addresses` IP addresses, 4 bytes for IPv4 or 16 bytes for IPv6, in network byte order, in the order to try |
+| `local.port`      | `int`                                                       | The TCP port, 1 to 65535                                                                                                         |
+| `relay`           | `null` or `axt.QrPayloadRelay`                              | The relay and the mailbox for messages to it (section 5.1), as in the manifest's `relay`, or `null`                              |
+| `relay.url`       | `string`                                                    | The base URL of the relay (section 5.2), at most `transports.relay_url` bytes                                                    |
+| `relay.mailbox`   | `fixed` of 32 bytes, `axt.QrPayloadRelayMailbox`            | The mailbox id (section 5.1)                                                                                                     |
+| `join`            | `boolean`                                                   | `true` for a join code, shown to a new device of the same owner (section 4.7); `false` for a code shown to another app           |
 
 A payload is valid when:
 
@@ -98,7 +98,7 @@ A payload is valid when:
 - `local`, if present, has 1 to 4 addresses of 4 or 16 bytes each and a port from 1 to 65535;
 - `relay.url`, if present, meets the rule of section 5.2;
 - `local` is present if `join` is `true`: a device joins on the local network (section 4.7);
-- the payload has at most 432 bytes, the length of a payload with every field present and at its largest and its array in one block; the length limit of the text (section 3.2) ensures it. Avro lets an array be written in several blocks, so a payload of valid fields could otherwise be longer.
+- the payload has at most `transports.qr_payload` bytes ([types/axt/limits.json](../types/axt/limits.json)), the length of a payload with every field present and at its largest and its array in one block; the length limit of the text (section 3.2) ensures it. Avro lets an array be written in several blocks, so a payload of valid fields could otherwise be longer.
 
 A code with the signing key alone, without `local` and `relay`, is valid: it serves to compare a key in person.
 
@@ -114,7 +114,7 @@ A scanner:
 
 - MUST accept the scheme and the letters of base32 in either case, since URI schemes are case-insensitive ([RFC 3986, section 3.1](https://www.rfc-editor.org/rfc/rfc3986#section-3.1));
 - MUST reject a text with any other character, with padding, with a length that base32 cannot produce, or whose last character carries bits that are not zero, so that every payload has exactly one text;
-- MUST reject a text longer than 696 characters, the text of the largest valid payload, before it decodes it.
+- MUST reject a text longer than `transports.qr_text` characters, the text of the largest valid payload, before it decodes it.
 
 The text is a URI with the scheme `axt`, so that a phone's camera can hand it to the app registered for the scheme. [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986) recommends lower-case schemes; `AXT:` is written in upper case because lower-case letters are not in the alphanumeric mode. Base32 in alphanumeric mode takes 8.8 bits of the code for each byte of the payload; base64 would need the byte mode and 10.7 bits. The payload of section 7.2 gives a text of 232 characters, which fits a code of version 9. The scheme `axt` is not registered with IANA ([RFC 7595](https://www.rfc-editor.org/rfc/rfc7595)) yet; apps use it as defined here until it is.
 
@@ -170,14 +170,14 @@ The connection is TLS 1.3 ([RFC 8446](https://www.rfc-editor.org/rfc/rfc8446)) o
 
 After the TLS handshake, each direction of the connection is a sequence of frames. A frame is a type of one byte, a length of 4 bytes as an unsigned integer in big-endian order, and a payload of that length:
 
-| Type | Name      | Payload                                                                         |
-| ---- | --------- | ------------------------------------------------------------------------------- |
-| `01` | `HELLO`   | 96 bytes: a signing key and a signature (section 4.5)                           |
-| `02` | `MESSAGE` | One live message ([envelope.md](envelope.md), section 3), 1 to 16,777,216 bytes |
-| `03` | `PING`    | Empty (section 4.6)                                                             |
+| Type | Name      | Payload                                                                                 |
+| ---- | --------- | --------------------------------------------------------------------------------------- |
+| `01` | `HELLO`   | 96 bytes: a signing key and a signature (section 4.5)                                   |
+| `02` | `MESSAGE` | One live message ([envelope.md](envelope.md), section 3), 1 to `envelope.message` bytes |
+| `03` | `PING`    | Empty (section 4.6)                                                                     |
 
 - An app MUST close the connection when it gets a frame of another type, a `HELLO` whose length is not 96, a `PING` with a payload, or a `MESSAGE` of length 0.
-- A `MESSAGE` whose length is above the message limit of 16 MiB ([envelope.md](envelope.md), section 8) is not held in memory. The receiver either discards its payload as it arrives and reports it with `TOO_LARGE` ([protocol.md](protocol.md), section 8.2), whose `message_hash` is the SHA-256 of the discarded payload, or closes the connection.
+- A `MESSAGE` whose length is above the message limit, `envelope.message` ([envelope.md](envelope.md), section 8), is not held in memory. The receiver either discards its payload as it arrives and reports it with `TOO_LARGE` ([protocol.md](protocol.md), section 8.2), whose `message_hash` is the SHA-256 of the discarded payload, or closes the connection.
 - The frame is what [envelope.md](envelope.md), section 3, leaves to the transport: the boundaries of each message. A `MESSAGE` carries exactly one message.
 - Frames are not messages. They are not signed, have no envelope, and are never answered. TLS protects them.
 
@@ -209,8 +209,8 @@ Every message the other app sends in the connection MUST have the connection key
 
 ### 4.6 Opening, liveness and closing
 
-- **Opening.** A connection is open when both `HELLO` frames have been verified. The steps of [protocol.md](protocol.md), section 3.1, start then. An app SHOULD close a connection that is not open within 10 seconds of the TCP connection.
-- **Liveness.** An app MUST send a `PING` whenever it has sent no frame for 30 seconds, and SHOULD close a connection on which it has received no frame for 90 seconds. `PING` frames are the only sign of life; a connection in which an answer waits for the user ([protocol.md](protocol.md), section 12) stays open by them.
+- **Opening.** A connection is open when both `HELLO` frames have been verified. The steps of [protocol.md](protocol.md), section 3.1, start then. An app SHOULD close a connection that is not open within `transports.open_wait` of the TCP connection ([types/axt/limits.json](../types/axt/limits.json)).
+- **Liveness.** An app MUST send a `PING` whenever it has sent no frame for `transports.ping_interval`, and SHOULD close a connection on which it has received no frame for `transports.idle_wait`. `PING` frames are the only sign of life; a connection in which an answer waits for the user ([protocol.md](protocol.md), section 12) stays open by them.
 - **Closing.** An app closes a connection by sending the TLS alert `close_notify` ([RFC 8446, section 6.1](https://www.rfc-editor.org/rfc/rfc8446#section-6.1)) and then closing the TCP connection. An app that gets `close_notify` processes no further frame, sends its own `close_notify`, and closes. Before it closes a connection of its own accord, an app SHOULD send the acknowledgements it owes ([protocol.md](protocol.md), section 7.2).
 - **The end.** A connection ends when either app sends or gets `close_notify`, when the TCP connection is closed or reset, on a TLS alert, and when the liveness time runs out. A frame cut short by the end is discarded, and the message in it is not processed. The connection is then in the phase Closed of [protocol.md](protocol.md), section 14, in which the offers made in it end.
 
@@ -228,7 +228,7 @@ A device adds a new device of its owner to its device set in a live connection t
 
 - **Only by the code.** The member acts on a `DEVICE_JOIN` only in a connection that was opened to the address and port of the join code while it showed the code, and for one new device for each code it shows ([keys.md](keys.md), section 5.2). It SHOULD stop showing the code when it has a `DEVICE_JOIN`. A `DEVICE_JOIN` in a connection found by discovery (section 4.2), in any other connection, or through a relay is ignored without an error, before the `MANIFEST` and after it.
 - **Two confirmations.** The scan confirms the member's key to the new installation, and the member's user confirms the new installation's key by the question. Whoever photographs a join code and reaches the local network can send a `DEVICE_JOIN`; the question, with the short fingerprint, keeps a stranger out. A member SHOULD show a join code only while its user asks for it.
-- **Before the answer.** Neither device sends its chain or its `MANIFEST` before the member has answered the `DEVICE_JOIN`, and the 30 seconds of [protocol.md](protocol.md), section 12, do not run while the member's user decides.
+- **Before the answer.** Neither device sends its chain or its `MANIFEST` before the member has answered the `DEVICE_JOIN`, and the time `protocol.manifest_wait` of [protocol.md](protocol.md), section 12, does not run while the member's user decides.
 - **Afterwards.** After an answer with the chain, the connection goes on as a live connection between two devices of one set, with the first messages of [protocol.md](protocol.md), section 3.1. A sent `DEVICE_JOIN` binds the new installation whatever the answer, also when the connection breaks off ([keys.md](keys.md), section 5.2). What the devices of a set exchange then is in [sync.md](sync.md), sections 7 and 12.3.
 
 ## 5. Relay
@@ -251,7 +251,7 @@ An installation has one mailbox at a time, the same for every app that sends to 
 
 The relay is an HTTP service ([RFC 9110](https://www.rfc-editor.org/rfc/rfc9110)), reached over HTTP/1.1 ([RFC 9112](https://www.rfc-editor.org/rfc/rfc9112)) or HTTP/2 ([RFC 9113](https://www.rfc-editor.org/rfc/rfc9113)) with TLS (section 5.7).
 
-**The base URL.** A relay is named by its base URL: an absolute URL with the scheme `https`, a host, and a path that ends with `/`, without user information, query, fragment, spaces or control characters, at most 256 bytes, such as `https://relay.example.org/axt/`. The paths of the table below are appended to it.
+**The base URL.** A relay is named by its base URL: an absolute URL with the scheme `https`, a host, and a path that ends with `/`, without user information, query, fragment, spaces or control characters, of at most `transports.relay_url` bytes ([types/axt/limits.json](../types/axt/limits.json)), such as `https://relay.example.org/axt/`. The paths of the table below are appended to it.
 
 In the paths, `{mailbox}` is a mailbox id and `{message}` the SHA-256 of a sealed message, each as 64 lower-case hexadecimal digits. "Owner" means that the request carries the header `Authorization`, with the value `Bearer`, one space and the mailbox secret as 64 lower-case hexadecimal digits, in the syntax of [RFC 6750, section 2.1](https://www.rfc-editor.org/rfc/rfc6750#section-2.1).
 
@@ -273,7 +273,7 @@ The relay answers a request that fails with one of these codes:
 | `403 Forbidden`            | An owner request whose secret is not the mailbox's; a mailbox the relay does not create for this app (section 5.6)      | Does not repeat the request                                  |
 | `404 Not Found`            | A mailbox that does not exist; a message the mailbox does not hold                                                      | As section 5.3 says for a put, and section 5.4 for the owner |
 | `411 Length Required`      | A put without `Content-Length`                                                                                          | Sends `Content-Length`                                       |
-| `413 Content Too Large`    | A put above 17,301,553 bytes (section 5.6)                                                                              | Does not repeat the request                                  |
+| `413 Content Too Large`    | A put above `transports.sealed_message` bytes (section 5.6)                                                             | Does not repeat the request                                  |
 | `429 Too Many Requests`    | A request above the relay's rate limits (section 5.6)                                                                   | Waits as `Retry-After` says, then repeats it                 |
 | `503 Service Unavailable`  | The relay cannot serve the request now                                                                                  | Waits as `Retry-After` or section 5.3 says, then repeats it  |
 | `507 Insufficient Storage` | A put into a mailbox that has no room (section 5.6)                                                                     | Waits as section 5.3 says, then repeats it                   |
@@ -284,38 +284,38 @@ Only the list and the fetch have a body in their response. An app MUST ignore th
 
 To send a message through the relay, an app seals it for the receiver ([keys.md](keys.md), section 4.3), computes the SHA-256 of the sealed message, and puts it into the receiver's mailbox, the one in the receiver's manifest or QR code, with the headers `Content-Type: application/octet-stream` and `Content-Length`. A message sealed for two receivers is two sealed messages with two ids.
 
-The relay checks a put in this order: `Content-Length` is present (`411`) and at most 17,301,553 (`413`), which it knows before it reads the body; the mailbox exists (`404`); the body is not empty and its SHA-256 is `{message}` (`400`); it holds the message already (`204`, and nothing changes); the mailbox has room (`507`). It then holds the message (`201`).
+The relay checks a put in this order: `Content-Length` is present (`411`) and at most `transports.sealed_message` (`413`) ([types/axt/limits.json](../types/axt/limits.json)), which it knows before it reads the body; the mailbox exists (`404`); the body is not empty and its SHA-256 is `{message}` (`400`); it holds the message already (`204`, and nothing changes); the mailbox has room (`507`). It then holds the message (`201`).
 
 - **Repeats.** A put is safe to repeat: the relay holds a message once, however often it is put. An app that gets no response, such as after a network failure, repeats the same put.
-- **Waiting.** After `429` or `503` with `Retry-After`, the app waits as long as it says. After a network failure, a `503` without `Retry-After`, a `507` or another `5xx` code, it waits 1 second before the first repeat and doubles the wait for each further one, up to 1 hour.
+- **Waiting.** After `429` or `503` with `Retry-After`, the app waits as long as it says. After a network failure, a `503` without `Retry-After`, a `507` or another `5xx` code, it waits `transports.retry_first` before the first repeat and doubles the wait for each further one, up to `transports.retry_longest`.
 - **A mailbox that is gone.** After `404`, the app stops putting into the mailbox. The receiver has moved to another mailbox, or its mailbox was removed (section 5.5). The app puts again when a manifest of the receiver names a mailbox that exists, and its messages without an outcome are then sent again ([protocol.md](protocol.md), section 11).
 
 ### 5.4 Fetching and deleting
 
 - **Creating.** The owner creates its mailbox before it gives the id to any other app, and creates it again whenever an owner request gets `404` for the mailbox itself. Creating a mailbox that exists changes nothing.
-- **Listing.** The response to a list is a JSON object ([RFC 8259](https://www.rfc-editor.org/rfc/rfc8259)) with the media type `application/json`. Its member `messages` is an array of the messages held, oldest put first, at most 1,000, each an object with the members `id`, the message's SHA-256 as 64 lower-case hexadecimal digits, and `size`, its length in bytes. An app MUST ignore members it does not know.
-- **Waiting for messages.** With `wait` from 1 to 60 and no message in the mailbox, the relay holds the response for up to that many seconds until a message is put, and then answers with the list. It MAY answer sooner. Without `wait`, or with 0, it answers at once.
-- **Fetching and deleting.** The owner fetches each listed message, opens it and processes it ([keys.md](keys.md), section 4.5), and then deletes it. It deletes a message that does not open as well. A message it fetched but did not delete, for example because the app stopped, is fetched again and processed as a repeat ([protocol.md](protocol.md), section 9.2). After a list of 1,000 messages, it lists again.
-- **How often.** An app SHOULD have at most one list of a mailbox waiting at a time, and SHOULD NOT list a mailbox more than once a minute without `wait`. It lists when it starts and while it runs; 0.1.0 has no push notification. An app away for longer than the holding time loses the messages put before; their senders send them again ([protocol.md](protocol.md), section 11).
+- **Listing.** The response to a list is a JSON object ([RFC 8259](https://www.rfc-editor.org/rfc/rfc8259)) with the media type `application/json`. Its member `messages` is an array of the messages held, oldest put first, at most `transports.list_messages` ([types/axt/limits.json](../types/axt/limits.json)), each an object with the members `id`, the message's SHA-256 as 64 lower-case hexadecimal digits, and `size`, its length in bytes. An app MUST ignore members it does not know.
+- **Waiting for messages.** With `wait` from 1 to `transports.list_wait` and no message in the mailbox, the relay holds the response for up to that many seconds until a message is put, and then answers with the list. It MAY answer sooner. Without `wait`, or with 0, it answers at once.
+- **Fetching and deleting.** The owner fetches each listed message, opens it and processes it ([keys.md](keys.md), section 4.5), and then deletes it. It deletes a message that does not open as well. A message it fetched but did not delete, for example because the app stopped, is fetched again and processed as a repeat ([protocol.md](protocol.md), section 9.2). After a list of `transports.list_messages` messages, it lists again.
+- **How often.** An app SHOULD have at most one list of a mailbox waiting at a time, and SHOULD NOT list a mailbox more than once in `transports.list_interval` without `wait`. It lists when it starts and while it runs; 0.1.0 has no push notification. An app away for longer than the holding time loses the messages put before; their senders send them again ([protocol.md](protocol.md), section 11).
 
 ### 5.5 Holding time
 
-The holding time is 14 days.
+The holding time is `transports.holding`, a limit of [types/axt/limits.json](../types/axt/limits.json).
 
-- A relay MUST hold each message for 14 days after its put, unless the owner deletes it first, and MUST delete it within one day after that. A repeated put of a message it holds does not extend the time.
-- A relay MAY remove a mailbox, with its messages, when its owner has made no request for 90 days, and MUST NOT remove it before. Its owner creates it again (section 5.4).
+- A relay MUST hold each message for the holding time after its put, unless the owner deletes it first, and MUST have deleted it once `transports.longest_holding` has passed since its put. A repeated put of a message it holds does not extend the time.
+- A relay MAY remove a mailbox, with its messages, when its owner has made no request for `transports.mailbox_idle`, and MUST NOT remove it before. Its owner creates it again (section 5.4).
 
 The holding time is the same for every relay, because the protocol depends on it and a sender cannot ask a relay for it:
 
 - a sender sends a message without an outcome again after the holding time, not before ([protocol.md](protocol.md), section 11), and MAY offer again after it when an offer has no answer ([protocol.md](protocol.md), section 12);
-- a receiver keeps the ids of the offers it answered through the relay, with their answers, for at least 15 days, the longest a relay holds a message ([protocol.md](protocol.md), section 4.3);
-- an app keeps its old encryption private key for 15 days after it has sent the manifest with the new one ([keys.md](keys.md), section 4.2).
+- a receiver keeps the ids of the offers it answered through the relay, with their answers, for at least `transports.longest_holding`, the longest a relay holds a message ([protocol.md](protocol.md), section 4.3);
+- an app keeps its old encryption private key for `transports.longest_holding` after it has sent the manifest with the new one ([keys.md](keys.md), section 4.2).
 
-A longer holding time would let an app stay away longer without losing messages, at the cost of more storage at the relay and of a later resend of a message that was lost: a lost message waits for the holding time before its sender sends it again. 14 days cover two weeks without the app, such as a holiday, and keep what a relay stores to two weeks of messages.
+A longer holding time would let an app stay away longer without losing messages, at the cost of more storage at the relay and of a later resend of a message that was lost: a lost message waits for the holding time before its sender sends it again. The holding time covers two weeks without the app, such as a holiday, and keeps what a relay stores to two weeks of messages.
 
 ### 5.6 Limits and unwanted messages
 
-- **Size.** A relay MUST accept sealed messages up to 17,301,553 bytes, the largest message sealed and padded ([keys.md](keys.md), section 4.4), and MUST reject a larger one with `413`.
+- **Size.** A relay MUST accept sealed messages up to `transports.sealed_message` bytes ([types/axt/limits.json](../types/axt/limits.json)), the largest message sealed and padded ([keys.md](keys.md), section 4.4), and MUST reject a larger one with `413`.
 - **Room.** A relay MAY limit the number and the bytes of the messages a mailbox holds, and answers a put above its limit with `507`. It MUST accept a message of any size it accepts into an empty mailbox.
 - **Rates.** A relay MAY limit the requests per client address and per mailbox, and the mailboxes created per client address, and answers a request above a limit with `429` and `Retry-After`.
 - **Who may have a mailbox.** A relay MAY create mailboxes only for the apps it serves, such as the users of one operator, and answers other creations with `403`. How it tells them apart is not defined here.

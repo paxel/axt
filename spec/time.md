@@ -106,7 +106,7 @@ A value of `axt.Time` is valid when each field is within its range. 24:00 is not
 
 The first seven fields are the wall clock. They are full: a date and time on the wall clock has every part, and its date and time of day keep the rules of sections 4 and 5. A date or a time of day alone is an `axt.Date` or an `axt.Time`.
 
-`zone` is the name of a zone of the IANA time zone database, as the database spells it, such as `Europe/Berlin`, `America/Argentina/Buenos_Aires` or `Etc/UTC`, or a link name of the database, such as `UTC`. Its syntax is checked without the database: one or more parts separated by `/`, each of ASCII letters, digits, `.`, `_`, `+` and `-`, neither `.` nor `..` and not beginning with `-`; at most 64 bytes in all. Every name of the database has this form.
+`zone` is the name of a zone of the IANA time zone database, as the database spells it, such as `Europe/Berlin`, `America/Argentina/Buenos_Aires` or `Etc/UTC`, or a link name of the database, such as `UTC`. Its syntax is checked without the database: one or more parts separated by `/`, each of ASCII letters, digits, `.`, `_`, `+` and `-`, neither `.` nor `..` and not beginning with `-`; at most `time.zone` bytes in all ([types/axt/limits.json](../types/axt/limits.json)). Every name of the database has this form.
 
 The offset is in seconds because the zone rules have offsets that are not whole minutes: before 1893, the database gives `Europe/Berlin` the local mean time of Berlin, +00:53:28. An offset of whole minutes could not give such a wall clock its instant. 18 hours either side, the range of `java.time.ZoneOffset`, holds every offset the database has.
 

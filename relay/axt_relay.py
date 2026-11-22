@@ -40,11 +40,16 @@ from typing import Any, BinaryIO, cast
 
 # --- what spec/transports.md, section 5, fixes ------------------------------------
 
-HOLDING = 14 * 86400  # seconds a message is held after its put (section 5.5)
-MAILBOX_IDLE = 90 * 86400  # a mailbox may be removed after 90 days without an owner request (section 5.5)
-MAX_SEALED = 17_301_553  # the largest sealed message (section 5.6)
-MAX_WAIT = 60  # the longest wait of a list (section 5.4)
-MAX_LISTED = 1000  # the most messages in one list (section 5.4)
+# The limits of the specification, from types/axt/limits.json in the repository's layout.
+LIMITS_FILE = Path(__file__).resolve().parent.parent / "types" / "axt" / "limits.json"
+LIMITS: dict[str, int] = {
+    k: v["value"] for k, v in json.loads(LIMITS_FILE.read_text(encoding="utf-8"))["limits"].items()
+}
+HOLDING = LIMITS["transports.holding"]  # seconds a message is held after its put (section 5.5)
+MAILBOX_IDLE = LIMITS["transports.mailbox_idle"]  # seconds without an owner request (section 5.5)
+MAX_SEALED = LIMITS["transports.sealed_message"]  # the largest sealed message (section 5.6)
+MAX_WAIT = LIMITS["transports.list_wait"]  # the longest wait of a list (section 5.4)
+MAX_LISTED = LIMITS["transports.list_messages"]  # the most messages in one list (section 5.4)
 MAILBOX_PREFIX = b"AXT-v1 mailbox\x00"  # the id is the SHA-256 of this and the secret (section 5.1)
 
 # --- what this relay chooses (spec/relay.md) ----------------------------------------

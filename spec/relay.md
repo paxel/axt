@@ -19,7 +19,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 ## 2. Design
 
-- One program, [relay/axt_relay.py](../relay/axt_relay.py), with no dependency beyond the Python standard library. It serves HTTP/1.1 with `http.server`, one thread per connection.
+- One program, [relay/axt_relay.py](../relay/axt_relay.py), with no dependency beyond the Python standard library. It reads the limits of the specification from [types/axt/limits.json](../types/axt/limits.json), at its place in the repository. It serves HTTP/1.1 with `http.server`, one thread per connection.
 - It serves plain HTTP and relies on a proxy for TLS (section 7.2). The proxy also offers HTTP/2 to apps where it supports it.
 - It keeps every message in a file of its own, named by the message's SHA-256, in a directory per mailbox (section 5). An index of the mailboxes and their messages is kept in memory and read again from disk at each start.
 - It sees, of each message, only what [transports.md](transports.md), section 5.7, says a relay learns. It never decodes a message and does not check that a body is a sealed message: it holds any body of 1 byte or more whose SHA-256 is its id.
@@ -187,7 +187,7 @@ The relay stops on `SIGTERM` and `SIGINT`. Since every write is atomic (section 
 
 ### 7.3 Container
 
-[relay/Containerfile](../relay/Containerfile) builds an image from `python:3.13.18-slim-trixie`, pinned by its digest. The relay runs as the user 10001, listens on port 8080 on every address of the container, and keeps its storage in the volume `/data`. Further options follow the image name.
+[relay/Containerfile](../relay/Containerfile) builds an image from `python:3.13.18-slim-trixie`, pinned by its digest, with the repository's root as the context, so that the image holds the relay and the file of limits. The relay runs as the user 10001, listens on port 8080 on every address of the container, and keeps its storage in the volume `/data`. Further options follow the image name.
 
 ## 8. Test mode and conformance
 

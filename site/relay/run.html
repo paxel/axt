@@ -1,7 +1,8 @@
 <!-- page: title="Run the reference relay" track="relay" order=1 summary="Start the reference relay with Python or in a container, choose its options, and stop it." -->
 <p class="lede">
   The reference relay is one Python program, <code>relay/axt_relay.py</code>, with no dependency
-  beyond the standard library. You start it with a storage directory and a few options, directly
+  beyond the standard library; it reads the limits of the specification from
+  <code>types/axt/limits.json</code>. You start it with a storage directory and a few options, directly
   or in a container, and put a TLS proxy in front of it.
 </p>
 
@@ -84,13 +85,14 @@
 <h2>Start it in a container</h2>
 <p>
   <a href="https://github.com/paxel/axt/blob/summer/relay/Containerfile">relay/Containerfile</a>
-  builds an image with <code>relay/</code> as the context. With Podman:
+  builds an image with the repository's root as the context, since the relay reads the limits of
+  <code>types/axt/limits.json</code>. With Podman:
 </p>
-<pre><code class="language-text">podman build -t axt-relay relay/
+<pre><code class="language-text">podman build -t axt-relay -f relay/Containerfile .
 podman run -d --name axt-relay -p 127.0.0.1:8080:8080 -v axt-relay:/data \
     axt-relay --base-path /axt/ --client-address-header X-Forwarded-For</code></pre>
 <p>With Docker, build with:</p>
-<pre><code class="language-text">docker build -t axt-relay -f relay/Containerfile relay/</code></pre>
+<pre><code class="language-text">docker build -t axt-relay -f relay/Containerfile .</code></pre>
 <p>What the image does (<a href="../spec/relay.html#section-7-3">relay.md, section 7.3</a>):</p>
 <ul>
   <li>It is based on <code>python:3.13.18-slim-trixie</code>, pinned by its digest.</li>

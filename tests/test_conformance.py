@@ -4,18 +4,24 @@
 Each test starts a script as a process of its own, the way a reader of the READMEs does:
 the conformance suite against the reference adapter and against the reference relay, the
 vector generator's comparison with the committed vectors, every example script of the
-specification, and the changelog check.
+specification, and the changelog check. The file of limits is checked in the process of the tests.
 """
 
+import importlib.util
+import json
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 TOOLS = REPO / "conformance" / "tools"
 RUNNER = REPO / "conformance" / "run.py"
+LIMITS = REPO / "types" / "axt" / "limits.json"
 EXAMPLE_SCRIPTS = [
     "envelope_examples",
     "example_types",
@@ -78,3 +84,39 @@ def test_the_examples_of_the_specification_hold(name: str) -> None:
 def test_the_changelog_keeps_its_rule() -> None:
     done = run(REPO / "tools" / "changelog_check.py", "CHANGELOG.md")
     assert done.returncode == 0, done.stdout + done.stderr
+
+
+def load(path: Path) -> ModuleType:
+    """Load a script of this repository as a module, as the scripts load each other."""
+    spec = importlib.util.spec_from_file_location(path.stem, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_limits_file_is_valid_and_named_by_the_specification() -> None:
+    doc: dict[str, Any] = json.loads(LIMITS.read_text(encoding="utf-8"))
+    schema = json.loads(LIMITS.with_name("limits.schema.json").read_text(encoding="utf-8"))
+    assert load(RUNNER).validate(doc, schema, schema) == []
+    assert set(schema["properties"]["limits"]["required"]) == set(doc["limits"])
+    project = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    assert doc["specification"] == project["version"]
+    spec = "".join(p.read_text(encoding="utf-8") for p in sorted((REPO / "spec").glob("*.md")))
+    assert [k for k in doc["limits"] if f"`{k}`" not in spec] == []
+
+
+def test_the_code_reads_the_limits_it_derives_from() -> None:
+    limits = {k: v["value"] for k, v in json.loads(LIMITS.read_text(encoding="utf-8"))["limits"].items()}
+    keys = load(TOOLS / "keys_examples.py")
+    sealed = 1 + 32 + keys.padded_length(limits["envelope.message"]) + 16
+    assert limits["transports.sealed_message"] == sealed
+    assert limits["transports.longest_holding"] - limits["transports.holding"] == 86400
+    relay = load(REPO / "relay" / "axt_relay.py")
+    assert relay.LIMITS == limits
+    assert (relay.HOLDING, relay.MAX_SEALED, relay.MAX_WAIT, relay.MAX_LISTED) == (
+        limits["transports.holding"],
+        sealed,
+        limits["transports.list_wait"],
+        limits["transports.list_messages"],
+    )

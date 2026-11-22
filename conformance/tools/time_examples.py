@@ -78,7 +78,13 @@ DAY_MS = 86400000
 INT_MIN, INT_MAX = -(1 << 31), (1 << 31) - 1
 LONG_MIN, LONG_MAX = -(1 << 63), (1 << 63) - 1
 ZONE_NAME = re.compile(r"^[A-Za-z0-9._+-]+(/[A-Za-z0-9._+-]+)*$")
-MAX_ZONE_BYTES = 64
+LIMITS: dict[str, int] = {  # types/axt/limits.json
+    k: v["value"]
+    for k, v in json.loads((REPO / "types" / "axt" / "limits.json").read_text(encoding="utf-8"))[
+        "limits"
+    ].items()
+}
+MAX_ZONE_BYTES = LIMITS["time.zone"]
 ANCHORS = ("local", "instant")
 
 texts = {n: (AXT / f"{n}.avsc").read_text(encoding="utf-8") for n in NAMES}

@@ -10,7 +10,7 @@ The reference relay is written in Python 3.11 or later with the standard library
 
 | Path                                   | Content                                                                       |
 | -------------------------------------- | ----------------------------------------------------------------------------- |
-| [axt_relay.py](axt_relay.py)           | The relay, one program                                                        |
+| [axt_relay.py](axt_relay.py)           | The relay, one program, which reads `../types/axt/limits.json`                |
 | [adapter.py](adapter.py)               | Its adapter for the conformance runner, which drives the relay over HTTP      |
 | [test_axt_relay.py](test_axt_relay.py) | Its tests beyond the vectors, with an end-to-end exchange of a sealed message |
 | [Containerfile](Containerfile)         | A container image of the relay                                                |
@@ -26,12 +26,12 @@ The relay listens on 127.0.0.1, port 8080, and serves plain HTTP to the proxy in
 ### In a container
 
 ```text
-podman build -t axt-relay relay/
+podman build -t axt-relay -f relay/Containerfile .
 podman run -d --name axt-relay -p 127.0.0.1:8080:8080 -v axt-relay:/data \
     axt-relay --base-path /axt/ --client-address-header X-Forwarded-For
 ```
 
-With Docker, build with `docker build -t axt-relay -f relay/Containerfile relay/`. The image is based on `python:3.13.18-slim-trixie`, pinned by its digest; the relay runs as the user 10001 and keeps its mailboxes in the volume `/data`. A directory mounted at `/data` instead of a volume must be writable by the user 10001. Options after the image name are passed to the relay.
+With Docker, build with `docker build -t axt-relay -f relay/Containerfile .`. The image is built from the repository's root, since the relay reads the limits of the specification from [types/axt/limits.json](../types/axt/limits.json). The image is based on `python:3.13.18-slim-trixie`, pinned by its digest; the relay runs as the user 10001 and keeps its mailboxes in the volume `/data`. A directory mounted at `/data` instead of a volume must be writable by the user 10001. Options after the image name are passed to the relay.
 
 ### TLS
 

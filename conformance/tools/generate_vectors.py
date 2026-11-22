@@ -3297,7 +3297,8 @@ def qr_category() -> Category:
     ]:
         assert tx.qr_text(payload) == t and len(t) <= tx.MAX_QR_TEXT
         c.add("qr_text", label, ["transports.md 3.2"], {"payload": B(payload)}, accept({"text": t}))
-    assert len(text) == 232 and tx.MAX_QR_TEXT == 696 and tx.MAX_QR_PAYLOAD == 432
+    assert len(text) == 232 and tx.MAX_QR_TEXT == tx.pe.LIMITS["transports.qr_text"]
+    assert tx.MAX_QR_PAYLOAD == tx.pe.LIMITS["transports.qr_payload"]
     return c
 
 
@@ -3556,7 +3557,8 @@ def relay_category() -> Category:
         )
 
     def backoff(attempt: int) -> int:
-        return cast(int, min(2 ** (attempt - 1), 3600))
+        first, longest = tx.pe.LIMITS["transports.retry_first"], tx.pe.LIMITS["transports.retry_longest"]
+        return cast(int, min(first * 2 ** (attempt - 1), longest))
 
     reactions = [
         ("put", 201, None, 1, "done", None),

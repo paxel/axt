@@ -130,7 +130,7 @@ These hints of the common part, and the members `placeholder` and `example` of t
 
 - `name` is the name of the object, an Avro name in UpperCamelCase such as `VetAddress`. At the root of a description it is the full name of the type, with its namespace ([types.md](types.md), section 2).
 - `version` and `title` are those of the type, at the root (section 9.1).
-- `groups` gives the texts of each group of the object's fields; a group without a label is shown by its key. A key is a group key of [metadata.md](metadata.md), section 5.2, of at most 64 bytes, each key is given once, and each is used by at least one field of the object.
+- `groups` gives the texts of each group of the object's fields; a group without a label is shown by its key. A key is a group key of [metadata.md](metadata.md), section 5.2, within `metadata.group_key`, each key is given once, and each is used by at least one field of the object.
 - A field of a nested object is named by the path of the object, a `.`, and its name, such as `address.postal_code`.
 
 ### 4.7 Times
@@ -220,9 +220,9 @@ A description describes one type. In addition to the rules of sections 3 to 6, a
 
 - **The root.** Its brick is `axt.ObjectField`. Its `name` is the full name of the type, with a namespace ([types.md](types.md), section 2), its `version` the version of the type within its major version, at least 1 ([types.md](types.md), section 3.2), and its `title`, if not empty, the name of one of its fields whose brick is `axt.StringField` or a semantic brick: the field whose value a receiver MAY show as the name of a record, as `axt.title` of [types.md](types.md), section 6, says. The root's `doc` and `texts` are those of the type. Its own `name` is not used. It is not `required`, and has no `order`, no `group`, and neither `sensitive` nor `advanced`.
 - **Nested objects and enums.** Their names have no namespace; they take the namespace of the root. No two of the objects and enums of a description, the root among them, have the same full name, and none has the name of a time type or of a named type that `axt.Relation` defines (section 11.6). A nested object has the `version` `null`; its `title`, if not empty, names one of its own fields of text, which a receiver MAY show as the name of each of its values.
-- **Depth.** Typed fields nest at most 64 deep: the root is at depth 1, and a field of an object, the items of a list and the values of a map are one deeper than the typed field that holds them. The derived schema nests at most 64 deep as JSON, as every schema does ([envelope.md](envelope.md), section 8).
-- **Numbers.** A default of `axt.DoubleField` is finite, and a default of `axt.LongField` is at most 2^53 in magnitude, so that the text of section 9.3 writes it exactly.
-- **Size.** A description in its Avro encoding, and the text of its derived schema (section 9.3), each have at most 256 KiB, the limit of a schema ([envelope.md](envelope.md), section 8).
+- **Depth.** Typed fields nest at most `fields.depth` deep ([types/axt/limits.json](../types/axt/limits.json)): the root is at depth 1, and a field of an object, the items of a list and the values of a map are one deeper than the typed field that holds them. The derived schema nests within `envelope.schema_depth` as JSON, as every schema does ([envelope.md](envelope.md), section 8).
+- **Numbers.** A default of `axt.DoubleField` is finite, and a default of `axt.LongField` is at most `fields.long_default` in magnitude, so that the text of section 9.3 writes it exactly.
+- **Size.** A description in its Avro encoding, and the text of its derived schema (section 9.3), each stay within `envelope.schema`, the limit of a schema ([envelope.md](envelope.md), section 8).
 
 A type is a tree of typed fields, so no type is recursive ([types.md](types.md), section 5.7).
 
@@ -267,7 +267,7 @@ An `OFFER` carries each type as its description ([protocol.md](protocol.md), sec
 - An offer with a description whose root is not an `axt.ObjectField` names no type: the offer is not valid ([protocol.md](protocol.md), section 4.2).
 - A receiver MUST decline a type whose description is not valid with `DESCRIPTION_INVALID` ([protocol.md](protocol.md), section 5.2), as it declines a type whose schema does not resolve. The offer stays valid, and its other types are answered as they would be without it.
 - A receiver that keeps the writer schema of a type, to read its records and to show them, keeps the description it got with it. A device that passes an offer of a schema on to the other devices of its set offers the description it got, unchanged ([sync.md](sync.md), section 7.2).
-- The data depth limit of 32 ([types.md](types.md), section 5.7) is that of records. A description nests deeper in the body of an `OFFER`: a receiver MUST decode the body of an `OFFER` up to a data depth of 256, which every description within the limits of section 9.1 keeps.
+- The data depth limit `types.data_depth` ([types.md](types.md), section 5.7) is that of records. A description nests deeper in the body of an `OFFER`: a receiver MUST decode the body of an `OFFER` up to the data depth `fields.offer_data_depth` ([types/axt/limits.json](../types/axt/limits.json)), which every description within the limits of section 9.1 keeps.
 
 ### 10.2 Files
 
@@ -317,16 +317,16 @@ A receiver resolves a record target to the record it names, also of another send
 A relation is valid when:
 
 1. its `id` is a UUID in text form, neither the nil UUID nor the max UUID ([records.md](records.md), section 2), and no earlier relation in the same list has the same id, compared as 128-bit values;
-2. its `kind` is a full name of Avro with a namespace, of at most 256 bytes;
-3. the `id` of a record target is a UUID in text form, neither the nil UUID nor the max UUID, and its `type` is empty or a full name of Avro of at most 256 bytes;
-4. the `uri` of an outside target has 1 to 2,048 bytes;
-5. the display text `text` of a target has at most 256 bytes, and the `note` at most 4,096 bytes;
-6. it has at most 32 `attributes`, each name of 1 to 256 bytes and each value of at most 1,024 bytes;
+2. its `kind` is a full name of Avro with a namespace, of at most `fields.relation_name` bytes;
+3. the `id` of a record target is a UUID in text form, neither the nil UUID nor the max UUID, and its `type` is empty or a full name of Avro of at most `fields.relation_name` bytes;
+4. the `uri` of an outside target has 1 to `fields.relation_uri` bytes;
+5. the display text `text` of a target has at most `fields.relation_text` bytes, and the `note` at most `fields.relation_note` bytes;
+6. it has at most `fields.relation_attributes` `attributes`, each name of 1 to `fields.relation_attribute_name` bytes and each value of at most `fields.relation_attribute_value` bytes;
 7. its `start` and its `end` are valid time values ([time.md](time.md), section 8).
 
-A list of relations holds at most 256 relations. Lengths are in bytes of UTF-8; a full name of Avro consists of names of an ASCII letter or `_` followed by ASCII letters, digits and `_`, separated by `.`.
+A list of relations holds at most `fields.relations` relations. The limits named are those of [types/axt/limits.json](../types/axt/limits.json). Lengths are in bytes of UTF-8; a full name of Avro consists of names of an ASCII letter or `_` followed by ASCII letters, digits and `_`, separated by `.`.
 
-A sender MUST NOT send a record with more than 256 relations in a list or with a relation that is not valid. A receiver MUST reject such a record with the error `VALUE_INVALID`, whose `field` names the first value that breaks a rule in the order of the encoding ([metadata.md](metadata.md), section 7.2): a list of more than 256 relations by its own path, such as `relations`; the second of two relations with one id by its id, such as `relations[1].id`; attributes beyond a limit by the map, such as `relations[0].attributes`; and every other value by its path, such as `relations[0].kind`. As with a time value, these are rules that every receiver checks, not checks of section 7: the only check of a relation field is `required`, which an empty list breaks (section 3.3).
+A sender MUST NOT send a record with more than `fields.relations` relations in a list or with a relation that is not valid. A receiver MUST reject such a record with the error `VALUE_INVALID`, whose `field` names the first value that breaks a rule in the order of the encoding ([metadata.md](metadata.md), section 7.2): a list of more than `fields.relations` relations by its own path, such as `relations`; the second of two relations with one id by its id, such as `relations[1].id`; attributes beyond a limit by the map, such as `relations[0].attributes`; and every other value by its path, such as `relations[0].kind`. As with a time value, these are rules that every receiver checks, not checks of section 7: the only check of a relation field is `required`, which an empty list breaks (section 3.3).
 
 The limits keep what a receiver stores and shows for the links of one record within the bounds of a list on a phone: a long text about a link belongs into a record of its own, to which the relation points. The rule on ids lets a receiver tell the relations of a list apart.
 
@@ -359,7 +359,7 @@ The writer schema of an extension travels with the offer as the schema of every 
 
 ### 12.3 Rules and limits
 
-An extension is valid when its `name` is a full name of Avro with a namespace, of at most 256 bytes, and its `data` has 10 to 65,536 bytes and begins with `C3 01`. A list of extensions holds at most 32 extensions, and no two with the same `name`, compared as text. A sender MUST NOT send a record that breaks these rules, and a receiver MUST reject it with the error `VALUE_INVALID`, whose `field` names the first value that breaks a rule, as section 11.4 says of relations: a list of more than 32 extensions by its own path, such as `extensions`; the second of two extensions with one name by its name, such as `extensions[1].name`; and every other value by its path, such as `extensions[0].data`. A receiver does not check `data` beyond its first two bytes: it need not hold the extension's schema. The only check of an extension field is `required`, as for a relation field (section 3.3).
+An extension is valid when its `name` is a full name of Avro with a namespace, of at most `fields.extension_name` bytes, and its `data` has 10 to `fields.extension_data` bytes and begins with `C3 01`. A list of extensions holds at most `fields.extensions` extensions ([types/axt/limits.json](../types/axt/limits.json)), and no two with the same `name`, compared as text. A sender MUST NOT send a record that breaks these rules, and a receiver MUST reject it with the error `VALUE_INVALID`, whose `field` names the first value that breaks a rule, as section 11.4 says of relations: a list of more than `fields.extensions` extensions by its own path, such as `extensions`; the second of two extensions with one name by its name, such as `extensions[1].name`; and every other value by its path, such as `extensions[0].data`. A receiver does not check `data` beyond its first two bytes: it need not hold the extension's schema. The only check of an extension field is `required`, as for a relation field (section 3.3).
 
 ### 12.4 Carried unchanged
 

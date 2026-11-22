@@ -552,8 +552,10 @@ REPLY_PCF = (
     '{"name":"axt.ProposalReplyAnswer","type":"enum","symbols":["ACCEPTED","DECLINED"]}}]}'
 )
 PROPOSAL_ID = "7b3e9d21-4c8a-4f6e-9a1b-5d2c8e4f6a70"  # the proposal of section 11.4
-MAX_OPEN_RECORD = 16  # open proposals of one proposer for one record, at a device (section 18.3)
-MAX_OPEN = 256  # open proposals of one proposer in all, at a device
+MAX_OPEN_RECORD: int = pe.LIMITS[
+    "shares.open_per_record"
+]  # open proposals of one proposer for one record, at a device
+MAX_OPEN: int = pe.LIMITS["shares.open"]  # open proposals of one proposer in all, at a device
 Entry = tuple[str, bytes, bytes]  # a proposed value: the field's name, the fingerprint, the value bytes
 
 
@@ -691,8 +693,10 @@ def error_message(seed: bytes, to: bytes, about: bytes, f: Failed, record: dict[
     return cast(bytes, sy.message(seed, "ERROR", None, sy.body_of("Error", d)))
 
 
-MAX_VALUE_BYTES = 65536  # value bytes of one PROPOSAL (section 18.3)
-MAX_OPEN_BYTES = 1048576  # value bytes of the open proposals of one proposer in all, at a device
+MAX_VALUE_BYTES: int = pe.LIMITS["shares.proposal_value_bytes"]  # value bytes of one PROPOSAL
+MAX_OPEN_BYTES: int = pe.LIMITS[
+    "shares.open_value_bytes"
+]  # value bytes of the open proposals of one proposer, at a device
 
 
 def value_bytes(entries: list[Entry]) -> int:

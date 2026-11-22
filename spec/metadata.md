@@ -51,22 +51,22 @@ Sender, receiver and type have the meaning of [records.md](records.md), section 
 
 "Record" is the type's own record or a record nested in it; "field of strings" is a field whose value type (section 3.2) is `string`, and so on. Every attribute is optional. When an attribute is absent, a receiver behaves as the section of the attribute says, mostly as it would for a schema without attributes ([types.md](types.md), section 6).
 
-The limits of the attributes:
+The limits of the attributes, by the names of [types/axt/limits.json](../types/axt/limits.json):
 
-| What                                                               | Maximum                                      |
-| ------------------------------------------------------------------ | -------------------------------------------- |
-| `axt.label` and each value of `axt.label_translations`             | 256 bytes                                    |
-| `axt.help` and each value of `axt.help_translations`               | 1,024 bytes                                  |
-| `axt.placeholder`                                                  | 256 bytes                                    |
-| `axt.example`                                                      | 1,024 bytes                                  |
-| Entries of one `axt.label_translations` or `axt.help_translations` | 64                                           |
-| A language tag                                                     | 35 characters                                |
-| `axt.emoji`                                                        | 10 code points                               |
-| `axt.pattern`                                                      | 1,024 bytes; each number in it at most 1,000 |
-| A group key                                                        | 64 bytes                                     |
-| `axt.order`                                                        | −2,147,483,648 to 2,147,483,647              |
+| What                                                               | Maximum                                                                     |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `axt.label` and each value of `axt.label_translations`             | `metadata.label`                                                            |
+| `axt.help` and each value of `axt.help_translations`               | `metadata.help`                                                             |
+| `axt.placeholder`                                                  | `metadata.placeholder`                                                      |
+| `axt.example`                                                      | `metadata.example`                                                          |
+| Entries of one `axt.label_translations` or `axt.help_translations` | `metadata.translations`                                                     |
+| A language tag                                                     | `manifest.language_tag`                                                     |
+| `axt.emoji`                                                        | `metadata.emoji`                                                            |
+| `axt.pattern`                                                      | `metadata.pattern`; each number in it at most `metadata.pattern_quantifier` |
+| A group key                                                        | `metadata.group_key`                                                        |
+| `axt.order`                                                        | −2,147,483,648 to 2,147,483,647                                             |
 
-Lengths of texts are in bytes of UTF-8. The limits of a schema as a whole, 256 KiB and a nesting depth of 64, are those of [envelope.md](envelope.md), section 8.
+Lengths of texts are in bytes of UTF-8. The limits of a schema as a whole, `envelope.schema` and `envelope.schema_depth`, are those of [envelope.md](envelope.md), section 8.
 
 ## 3. Rules for every attribute
 
@@ -111,7 +111,7 @@ Which changes of attributes a new version of a type may make is in [types.md](ty
 
 `axt.label` is the name a receiver shows for a type, a nested type or a field, in English, such as `Postal code`. `axt.help` is one or two sentences in English that say what the value is or how to enter it, such as `Five digits.`, shown next to the field or on request.
 
-- Both are one line of plain text: not empty, without control characters (Unicode general category Cc, which includes LF and CR), and without the line and paragraph separators U+2028 and U+2029, as the purpose sentences of [manifest.md](manifest.md), section 4. A label is at most 256 bytes, a help text at most 1,024 bytes.
+- Both are one line of plain text: not empty, without control characters (Unicode general category Cc, which includes LF and CR), and without the line and paragraph separators U+2028 and U+2029, as the purpose sentences of [manifest.md](manifest.md), section 4. A label is within `metadata.label`, a help text within `metadata.help` (section 3).
 - A receiver MUST show them as text and MUST NOT interpret markup in them.
 - Without a label, a receiver shows the name, with underscores read as spaces for a field ([types.md](types.md), section 6). Without a help text, it shows none, or the `doc`.
 
@@ -121,7 +121,7 @@ A label and a help text are written for the user; the `doc` is written for the d
 
 `axt.label_translations` and `axt.help_translations` give the label and the help text in other languages. They follow the rules of the purpose sentence and its translations of [manifest.md](manifest.md), section 3.6:
 
-- Each key is a language tag of [BCP 47](https://www.rfc-editor.org/info/bcp47) in the `langtag` form of [RFC 5646, section 2.1](https://www.rfc-editor.org/rfc/rfc5646#section-2.1), of at most 35 characters, such as `de` or `pt-BR`. A key MUST NOT be `en`, in any case, and two keys MUST NOT be equal when compared without regard to case. A map has at most 64 entries.
+- Each key is a language tag of [BCP 47](https://www.rfc-editor.org/info/bcp47) in the `langtag` form of [RFC 5646, section 2.1](https://www.rfc-editor.org/rfc/rfc5646#section-2.1), of at most `manifest.language_tag` characters, such as `de` or `pt-BR`. A key MUST NOT be `en`, in any case, and two keys MUST NOT be equal when compared without regard to case. A map has at most `metadata.translations` entries.
 - Each value is the label or the help text in that language, with the rules of section 4.1.
 - A translation needs its English text: `axt.label_translations` without a valid `axt.label`, and `axt.help_translations` without a valid `axt.help`, break their rules.
 
@@ -133,7 +133,7 @@ The English text is an attribute of its own, not an entry of the map, so that ev
 
 `axt.emoji` is an emoji that a receiver MAY show next to the label, such as `📞` for a phone number or `🏥` for a type of vet practices.
 
-- It is a string of 1 to 10 code points without control characters (U+0000 to U+001F, U+007F to U+009F) and without white space or separators (U+0020, U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000). It holds an ASCII character only as the first of a keycap sequence: a digit, `#` or `*`, an optional U+FE0F, then U+20E3, such as `1️⃣`.
+- It is a string of 1 to `metadata.emoji` code points (section 3) without control characters (U+0000 to U+001F, U+007F to U+009F) and without white space or separators (U+0020, U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000). It holds an ASCII character only as the first of a keycap sequence: a digit, `#` or `*`, an optional U+FE0F, then U+20E3, such as `1️⃣`.
 - It SHOULD be one emoji that [UTS #51](https://www.unicode.org/reports/tr51/) recommends for general interchange (an RGI emoji), and so one grapheme cluster.
 - A receiver that cannot show it shows nothing in its place. It MUST NOT show it in place of the label.
 
@@ -167,14 +167,14 @@ Then the fields of each group are brought together (section 5.2). The order is f
 
 ### 5.2 Groups
 
-`axt.group` on a field is a group key: a name of the form of a field name, lower-case ASCII letters, digits and single underscores that starts with a letter ([types.md](types.md), section 5.2), of at most 64 bytes. Fields of one record with the same key form a group, shown together under the group's label. In the order of section 5.1, a group stands where its first field stands, and its fields follow each other in that order; a field without a group keeps its place.
+`axt.group` on a field is a group key: a name of the form of a field name, lower-case ASCII letters, digits and single underscores that starts with a letter ([types.md](types.md), section 5.2), within `metadata.group_key` (section 3). Fields of one record with the same key form a group, shown together under the group's label. In the order of section 5.1, a group stands where its first field stands, and its fields follow each other in that order; a field without a group keeps its place.
 
 `axt.groups` on the record gives the label of each group: an object from group key to an entry with the members of section 4.4. The label of a group is thus a key, with its own translations, rather than a text repeated on each field: the fields of a group cannot carry different texts for it, and a group is translated once. A group key without an entry is shown by its key, with underscores read as spaces. A sender MUST NOT name a key in `axt.groups` that no field of the record uses. Groups belong to one record; a nested record has groups of its own.
 
 ### 5.3 Inputs
 
-- **`axt.placeholder`**: a text that an empty input for the field shows, such as `+49301234567`, as one line of plain text of at most 256 bytes. It is not translated; it SHOULD be a form of the value that a reader of any language understands, such as digits, a sample address or a mask. A text that needs translation belongs into the help text.
-- **`axt.example`**: an example value as text, at most 1,024 bytes without control characters other than LF, such as `DE89370400440532013000`. A receiver MAY show it in the help. On a field of strings, a sender's example MUST meet the field's checks.
+- **`axt.placeholder`**: a text that an empty input for the field shows, such as `+49301234567`, as one line of plain text within `metadata.placeholder` (section 3). It is not translated; it SHOULD be a form of the value that a reader of any language understands, such as digits, a sample address or a mask. A text that needs translation belongs into the help text.
+- **`axt.example`**: an example value as text, within `metadata.example` (section 3), without control characters other than LF, such as `DE89370400440532013000`. A receiver MAY show it in the help. On a field of strings, a sender's example MUST meet the field's checks.
 - **`axt.multiline`**: `true` when the value may hold several lines, separated by LF ([types.md](types.md), section 5.6), so that a receiver offers an input of several lines. Absent or `false`, a receiver SHOULD offer an input of one line. It is a hint, not a check: a receiver MUST show the line breaks of a value it received and MUST NOT reject a value because it has some.
 - **`axt.preferred_length`**: the number of code points an input for the field SHOULD have room for, such as 5 for a postal code, at least 1. It is not a limit. A sender MUST NOT make it larger than `axt.max_length`.
 
@@ -234,7 +234,7 @@ The limits are in the field's unit: a field with `axt.unit` `min` and `axt.max` 
 
 - **Whole value.** A value keeps the pattern when the whole value is in the language of the expression, not a part of it: `[0-9]{5}` takes `10115`, not `10115 Berlin` and not `10115` followed by LF. I-Regexp has no anchors: `^` and `$` are ordinary characters, and `^[0-9]+$` takes `^12$`, not `12`. `.` matches any code point except LF and CR. The empty string keeps every pattern (section 6.1).
 - **The subset.** The grammar has no `\d`, `\w`, `\s` and other multi-character escapes, no groups of the form `(?…)`, no lazy or possessive quantifiers, no back references, no class subtraction and no Unicode blocks. It has `\p{…}` and `\P{…}` for the general categories of Unicode, such as `\p{Lu}`, and `[^]` is not allowed. A pattern outside the grammar breaks the rules of `axt.pattern` (section 3.3).
-- **Limits.** A pattern is at most 1,024 bytes of UTF-8, and each number of a range quantifier, as in `{2,4}`, is at most 1,000. Some engines refuse larger repeats, RE2 among them, and every engine spends more time on them.
+- **Limits.** A pattern is within `metadata.pattern`, and each number of a range quantifier, as in `{2,4}`, is at most `metadata.pattern_quantifier` ([types/axt/limits.json](../types/axt/limits.json)). Some engines refuse larger repeats, RE2 among them, and every engine spends more time on them.
 - **Validity.** A receiver decides whether a pattern is an I-Regexp with a parser of the grammar of RFC 9485, section 3, and its limits, not by whether its own engine compiles it: most engines take patterns outside the subset, such as `\d`, with a meaning of their own.
 - **Unicode version.** `\p{…}` refers to the general categories of the receiver's version of Unicode. A code point that a later version assigns is in `Cn` for a receiver with an earlier one. A sender SHOULD NOT depend on categories of code points assigned in the last few years.
 
@@ -271,7 +271,7 @@ A field path names one value in a record by the field names of the writer schema
 - a value of a map is named by the path of the map and the key as a JSON string ([RFC 8259](https://www.rfc-editor.org/rfc/rfc8259)) in brackets, such as `due["tax"]`;
 - a union adds nothing to the path.
 
-When several values break a rule, the error names the first in the order of the encoding: the fields in the order of the schema, depth first, and the items and values in the order in which they are encoded. A time value is named as a whole, such as `end` for an `axt.DateTime` whose instant does not match its wall clock, not by one of its fields. The `field` of an `ERROR` holds at most 1,024 bytes; a receiver whose path is longer reports `null` instead ([protocol.md](protocol.md), section 8.1).
+When several values break a rule, the error names the first in the order of the encoding: the fields in the order of the schema, depth first, and the items and values in the order in which they are encoded. A time value is named as a whole, such as `end` for an `axt.DateTime` whose instant does not match its wall clock, not by one of its fields. The `field` of an `ERROR` holds at most `protocol.error_field` bytes; a receiver whose path is longer reports `null` instead ([protocol.md](protocol.md), section 8.1).
 
 ### 7.3 `VALUE_INVALID` and `UNDECODABLE`
 

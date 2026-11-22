@@ -138,7 +138,7 @@ These rules hold for every example type that has the fields named:
 The data depth of a value counts the records, arrays and maps it is nested in: the record itself is at depth 1, an array in one of its fields at depth 2, and a record inside that array at depth 3.
 
 - An example type MUST NOT be recursive, that is, it MUST NOT contain itself or one of its nested types inside itself. Every example type reaches depth 4, with the target, the times and the attributes of a relation ([fields.md](fields.md), section 11).
-- A type is described by a tree of typed fields ([fields.md](fields.md), section 9.1), so no type is recursive. A sender MUST NOT send a record whose data depth exceeds 32. A receiver MUST decode records up to depth 32 and MUST stop decoding and reject a record that goes deeper, with the error `UNDECODABLE` ([protocol.md](protocol.md), section 8.2). Without this rule a small message of a deeply nested type could exhaust a decoder's stack.
+- A type is described by a tree of typed fields ([fields.md](fields.md), section 9.1), so no type is recursive. A sender MUST NOT send a record whose data depth exceeds `types.data_depth` ([types/axt/limits.json](../types/axt/limits.json)). A receiver MUST decode records up to that depth and MUST stop decoding and reject a record that goes deeper, with the error `UNDECODABLE` ([protocol.md](protocol.md), section 8.2). Without this rule a small message of a deeply nested type could exhaust a decoder's stack.
 
 The schema itself also stays within the size and nesting limits of [envelope.md](envelope.md), section 8.
 

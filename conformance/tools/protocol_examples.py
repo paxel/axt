@@ -111,12 +111,18 @@ ALL_SPEC = ["Envelope", "Manifest"] + DEVICES + PROTOCOL + SYNC + SHARES
 
 # --- the limits of spec/protocol.md -------------------------------------------
 
-MAX_OFFER_TYPES = 256  # types of one offer; types of one ACCEPT or DECLINE
-MAX_ACK_RECORDS = 4096
-MAX_DETAIL = 1024  # bytes
-MAX_ERROR_RECORD_ID = 64  # bytes
-MAX_MESSAGE = 16777216  # spec/envelope.md, section 8
-MAX_DATA_DEPTH = 32  # spec/types.md, section 5.7
+LIMITS: dict[str, int] = {  # types/axt/limits.json
+    k: v["value"]
+    for k, v in json.loads((REPO / "types" / "axt" / "limits.json").read_text(encoding="utf-8"))[
+        "limits"
+    ].items()
+}
+MAX_OFFER_TYPES = LIMITS["protocol.offer_types"]  # types of one offer; types of one ACCEPT or DECLINE
+MAX_ACK_RECORDS = LIMITS["protocol.ack_records"]
+MAX_DETAIL = LIMITS["protocol.error_detail"]  # bytes
+MAX_ERROR_RECORD_ID = LIMITS["protocol.error_record_id"]  # bytes
+MAX_MESSAGE = LIMITS["envelope.message"]
+MAX_DATA_DEPTH = LIMITS["types.data_depth"]
 UUID_TEXT = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 NIL_UUID, MAX_UUID = "0" * 32, "f" * 32
 
@@ -537,8 +543,8 @@ def uuid_problem(text: str) -> bool:
     return False
 
 
-MAX_PROPOSAL_FIELDS = 4096  # entries of `fields` in one PROPOSAL (spec/shares.md, section 13.2)
-MAX_PROPOSAL_NAME = 512  # bytes of one field name in a PROPOSAL
+MAX_PROPOSAL_FIELDS = LIMITS["shares.proposal_fields"]  # entries of `fields` in one PROPOSAL
+MAX_PROPOSAL_NAME = LIMITS["shares.proposal_field_name"]  # bytes of one field name in a PROPOSAL
 
 
 def proposal_problem(d: dict[str, Any]) -> str | None:

@@ -582,12 +582,12 @@ A `CHANGE` message carries field states, the removal, or both, of one record of 
 The body of a `CHANGE` is valid when:
 
 - `origin` is `null`, or a key (section 21.4);
-- `type` is an Avro full name, names of the form `[A-Za-z_][A-Za-z0-9_]*` joined by dots, of at most 512 bytes;
+- `type` is an Avro full name, names of the form `[A-Za-z_][A-Za-z0-9_]*` joined by dots, of at most `sync.change_type` bytes ([types/axt/limits.json](../types/axt/limits.json));
 - `state` is at least 1;
 - `removal` is `null`, or its `stamp` is at least 1;
 - `keep` is `null`, unless `origin` is a key (section 21.4);
-- `fields` has 0 to 4,096 entries;
-- each `name` is 1 to 512 bytes of UTF-8, and no name appears twice; names are compared as sequences of Unicode code points (section 3.1);
+- `fields` has 0 to `sync.change_fields` entries;
+- each `name` is 1 to `sync.change_field_name` bytes of UTF-8, and no name appears twice; names are compared as sequences of Unicode code points (section 3.1);
 - each `value` is not `null`, unless `origin` is a key;
 - each `fields[].stamp` is at least −1;
 - `whole` is `true`, or the message carries something: `fields` is not empty, `removal` is not `null` or `keep` is not `null`;
@@ -597,7 +597,7 @@ A device MUST reject a `CHANGE` whose body is not valid with the error `INVALID_
 
 - **No stamp is refused.** Every stamp up to the largest `long`, 2^63 − 1, is valid in `state`, in a removal and in a field state (section 2.3). The lowest value of a field state's `stamp` is −1; a device counts neither −1 nor 0 as a stamp seen.
 - **Device keys are not checked.** `removal.device`, `keep.device` and `fields[].device` are 32 bytes that the merge compares (sections 4.1 and 21.1) and nothing else. A device MUST NOT reject a `CHANGE` because such a key is not a key of its set, is a removed key, or is no valid Ed25519 public key: a field state that a removed device wrote stays in the state of its record, and a `CHANGE` can carry the field state of a device whose addition the receiving device has not applied yet.
-- **Size.** A `CHANGE` is a message of at most 16 MiB ([envelope.md](envelope.md), section 8); section 10.2 says what a device does with a record that does not fit.
+- **Size.** A `CHANGE` is a message of at most `envelope.message` ([envelope.md](envelope.md), section 8); section 10.2 says what a device does with a record that does not fit.
 
 ### 8.3 Processing
 

@@ -2826,13 +2826,20 @@ BODY_OF = {
     "PROPOSAL_REPLY": "ProposalReply",
 }
 MARKER = b"\xc3\x01"  # the marker of a single-object encoding (spec/envelope.md, section 3)
-MAX_MESSAGE = 16777216  # spec/envelope.md, section 8
-MAX_FIELDS = 4096  # entries of `fields` in one CHANGE (section 14)
-MAX_NAME = 512  # bytes of `type` and of one `name` (section 14)
-MAX_ACK_RECORDS = 4096
-MAX_OFFER_TYPES = 256  # spec/protocol.md, section 4.2
-MAX_DATA_DEPTH = 32  # spec/types.md, section 5.7
-MAX_ERROR_RECORD_ID = 64  # bytes of the id in the record of an ERROR (spec/protocol.md, section 8.1)
+LIMITS: dict[str, int] = {  # types/axt/limits.json
+    k: v["value"]
+    for k, v in json.loads((REPO / "types" / "axt" / "limits.json").read_text(encoding="utf-8"))[
+        "limits"
+    ].items()
+}
+MAX_MESSAGE = LIMITS["envelope.message"]
+MAX_FIELDS = LIMITS["sync.change_fields"]  # entries of `fields` in one CHANGE
+MAX_NAME = LIMITS["sync.change_field_name"]  # bytes of one `name` in a CHANGE
+MAX_TYPE = LIMITS["sync.change_type"]  # bytes of `type` in a CHANGE
+MAX_ACK_RECORDS = LIMITS["protocol.ack_records"]
+MAX_OFFER_TYPES = LIMITS["protocol.offer_types"]
+MAX_DATA_DEPTH = LIMITS["types.data_depth"]
+MAX_ERROR_RECORD_ID = LIMITS["protocol.error_record_id"]  # bytes of the id in the record of an ERROR
 UUID_TEXT = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 FULL_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$")
 CHANGE_OUTCOMES = ("APPLIED", "DUPLICATE", "STALE")
@@ -2897,10 +2904,10 @@ def proposal_problem(d: dict[str, Any]) -> str | None:
     """Why the body of a PROPOSAL, decoded, is not valid (spec/shares.md, section 13.2), or None."""
     if uuid_key(d["proposal_id"]) is None:
         return "proposal_id is no UUID in text form, or the nil or the max UUID"
-    if not 1 <= len(d["fields"]) <= MAX_FIELDS:
+    if not 1 <= len(d["fields"]) <= LIMITS["shares.proposal_fields"]:
         return "not 1 to 4,096 entries in fields"
     names = [f["name"] for f in d["fields"]]
-    if any(not 1 <= len(n.encode("utf-8")) <= MAX_NAME for n in names):
+    if any(not 1 <= len(n.encode("utf-8")) <= LIMITS["shares.proposal_field_name"] for n in names):
         return "a field name that is not 1 to 512 bytes of UTF-8"
     if len(set(names)) != len(names):
         return "a field name twice"
@@ -3058,7 +3065,9 @@ KEY_TEXTS = {
     "name": re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+$"),
 }
 UUIDISH = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-MAX_ELEMENTS = 256  # the elements a value of the field holds (spec/fields.md, section 11.4)
+MAX_ELEMENTS = LIMITS[
+    "fields.relations"
+]  # the elements a value of the field holds (spec/fields.md, section 11.4)
 
 
 def element_member(schema: dict[str, Any], name: str) -> str | None:
@@ -3543,7 +3552,7 @@ def change_version(d: dict[str, Any]) -> int:
 def change_problem(d: dict[str, Any], version: int) -> str | None:
     """The rule of section 8.2 that the body of a CHANGE breaks, or None for a valid body. A key in
     `origin` is valid, and only with one a value may be null (section 21.4)."""
-    if not FULL_NAME.match(d["type"]) or len(d["type"].encode()) > MAX_NAME:
+    if not FULL_NAME.match(d["type"]) or len(d["type"].encode()) > MAX_TYPE:
         return "type is not a full name of at most 512 bytes"
     if d["state"] < 1:
         return "state is below 1"
@@ -3594,8 +3603,11 @@ def ack_problem(d: dict[str, Any]) -> str | None:
 
 # --- one device of a set and its siblings (sections 7 to 13) --------------------------------------------
 
-KEEP_DAYS = 15  # how long a device keeps a CHANGE it sent, for its outcome (section 10.1)
-HOLDING_DAYS = 14  # the holding time of a relay (spec/transports.md, section 5.5)
+DAY = 86400  # seconds
+KEEP_DAYS = (
+    LIMITS["transports.longest_holding"] // DAY
+)  # how long a device keeps a CHANGE it sent (section 10.1)
+HOLDING_DAYS = LIMITS["transports.holding"] // DAY  # the holding time of a relay
 
 
 @dataclass(frozen=True)
@@ -3691,7 +3703,9 @@ INNER_BODY = {
 }
 # A PROPOSAL and a PROPOSAL_REPLY carry `record` and are no record messages (spec/shares.md, section 12.1).
 WITH_RECORD = ("DATA", "DELETE", "WITHDRAW", "PROPOSAL", "PROPOSAL_REPLY")
-PROPOSAL_DAYS = 14  # how long a device keeps a proposal it does not show (spec/shares.md, section 17.1)
+PROPOSAL_DAYS = (
+    HOLDING_DAYS  # how long a device keeps a proposal it does not show (spec/shares.md, section 17.1)
+)
 RECORD_MESSAGES = ("DATA", "DELETE", "WITHDRAW")  # spec/records.md, section 1
 # A record of the set by its id as a 128-bit value; an owner's layer by its sender and that id.
 Ref = int | tuple[int, int]

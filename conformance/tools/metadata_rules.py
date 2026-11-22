@@ -30,20 +30,31 @@ import math
 import re
 import unicodedata
 from collections.abc import Callable, Iterable, Sequence
+from pathlib import Path
 from typing import Any, TypeGuard, cast
 
 # --- limits (spec/metadata.md) ------------------------------------------------------------------
 
-MAX_LABEL = 256  # bytes of UTF-8
-MAX_HELP = 1024
-MAX_PLACEHOLDER = 256
-MAX_EXAMPLE = 1024
-MAX_PATTERN = 1024  # bytes of UTF-8 of an I-Regexp
-MAX_QUANTIFIER = 1000  # the largest number in a range quantifier, RE2's limit
-MAX_TRANSLATIONS = 64
-MAX_TAG = 35
-MAX_EMOJI_CODE_POINTS = 10
-MAX_PATH = 1024  # bytes of a field path in an ERROR (spec/protocol.md, section 8.1)
+LIMITS: dict[str, int] = {  # types/axt/limits.json
+    k: v["value"]
+    for k, v in json.loads(
+        (Path(__file__).resolve().parents[2] / "types" / "axt" / "limits.json").read_text(encoding="utf-8")
+    )["limits"].items()
+}
+
+MAX_LABEL = LIMITS["metadata.label"]  # bytes of UTF-8
+MAX_HELP = LIMITS["metadata.help"]
+MAX_PLACEHOLDER = LIMITS["metadata.placeholder"]
+MAX_EXAMPLE = LIMITS["metadata.example"]
+MAX_PATTERN = LIMITS["metadata.pattern"]  # bytes of UTF-8 of an I-Regexp
+MAX_QUANTIFIER = LIMITS[
+    "metadata.pattern_quantifier"
+]  # the largest number in a range quantifier, RE2's limit
+MAX_TRANSLATIONS = LIMITS["metadata.translations"]
+MAX_TAG = LIMITS["manifest.language_tag"]
+MAX_EMOJI_CODE_POINTS = LIMITS["metadata.emoji"]
+MAX_GROUP_KEY = LIMITS["metadata.group_key"]  # bytes
+MAX_PATH = LIMITS["protocol.error_field"]  # bytes of a field path in an ERROR (spec/protocol.md, section 8.1)
 MIN_INT, MAX_INT = -(2**31), 2**31 - 1
 
 NUMBERS = {"int", "long", "float", "double"}
@@ -751,7 +762,7 @@ def field_attribute_problem(
     if name == "axt.group":
         return (
             None
-            if isinstance(value, str) and KEY.match(value) and len(value) <= 64
+            if isinstance(value, str) and KEY.match(value) and len(value) <= MAX_GROUP_KEY
             else "not a key of the form of a field name"
         )
     raise ValueError(name)
@@ -779,7 +790,7 @@ def record_attribute_problem(
         if not isinstance(value, dict):
             return "not an object"
         for key, entry in value.items():
-            if not KEY.match(key) or len(key.encode("utf-8")) > 64:
+            if not KEY.match(key) or len(key.encode("utf-8")) > MAX_GROUP_KEY:
                 return f"the key {key!r} is not of the form of a field name"
             if not isinstance(entry, dict):
                 return f"{key}: not an object"

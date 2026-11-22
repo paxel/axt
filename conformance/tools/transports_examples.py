@@ -178,8 +178,8 @@ QR: dict[str, Any] = {
     "relay": {"url": RELAY_URL, "mailbox": MAILBOX},
     "join": False,
 }
-MAX_ADDRESSES = 4
-MAX_RELAY_URL = 256
+MAX_ADDRESSES: int = pe.LIMITS["transports.qr_addresses"]
+MAX_RELAY_URL: int = pe.LIMITS["transports.relay_url"]
 rules.DATA["QrPayload"] = QR
 required, defaults_resolved = rules.check_defaults("QrPayload", qr_json, qr_schema)
 assert defaults_resolved == 4 and required == ["signing_key"]
@@ -321,7 +321,10 @@ LARGEST: dict[str, Any] = {
 assert not qr_problems(LARGEST) and len(LARGEST["relay"]["url"]) == MAX_RELAY_URL
 MAX_QR_PAYLOAD = len(encode_qr(LARGEST))
 MAX_QR_TEXT = len(QR_SCHEME) + -(-MAX_QR_PAYLOAD * 8 // 5)
-assert (MAX_QR_PAYLOAD, MAX_QR_TEXT) == (432, 696), "not the limits of sections 3.1 and 3.2"
+assert (MAX_QR_PAYLOAD, MAX_QR_TEXT) == (
+    pe.LIMITS["transports.qr_payload"],
+    pe.LIMITS["transports.qr_text"],
+), "not the limits of sections 3.1 and 3.2"
 
 
 def parse_qr(text: str) -> dict[str, Any] | str:
@@ -855,14 +858,14 @@ assert (
     len(SEALED) == 1073 and SEALED_HASH == "64a9988bd3e1e8210d592e29115d5b3252d2e75be5c219ca67583608cfdb878a"
 ), "not the sealed message of spec/keys.md, section 7.4"
 MAX_SEALED = 1 + 32 + keys.padded_length(MAX_MESSAGE) + 16
-assert MAX_SEALED == 17301553
+assert MAX_SEALED == pe.LIMITS["transports.sealed_message"]
 
 # --- the relay (section 5) ----------------------------------------------------
 
-HOLDING = 14 * 86400  # seconds
-GRACE = 86400  # a relay deletes a message within a day after its holding time
-MAX_WAIT = 60
-MAX_LISTED = 1000
+HOLDING: int = pe.LIMITS["transports.holding"]  # seconds
+GRACE: int = pe.LIMITS["transports.longest_holding"] - HOLDING  # by which a relay has deleted a held message
+MAX_WAIT: int = pe.LIMITS["transports.list_wait"]
+MAX_LISTED: int = pe.LIMITS["transports.list_messages"]
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 PATH = re.compile(r"^v1/mailboxes/([0-9a-f]{64})(?:/messages(?:/([0-9a-f]{64}))?)?$")
 

@@ -207,7 +207,7 @@ Each device of a sender has an encryption key of its own, bound to its signing k
 
 An app MUST reject an encryption key of small order: one for which X25519 gives the all-zero value with every private key. Computing X25519 with any one private key, such as the app's own, and comparing the result with 32 zero bytes detects it. A manifest with such a key is invalid ([manifest.md](manifest.md), section 4).
 
-An installation MAY replace its encryption key, by a manifest with a higher revision. It SHOULD keep the old private key for as long as a relay may hold messages sealed to it: 15 days after it has sent the manifest with the new key ([transports.md](transports.md), section 5.5).
+An installation MAY replace its encryption key, by a manifest with a higher revision. It SHOULD keep the old private key for as long as a relay may hold messages sealed to it: `transports.longest_holding` ([types/axt/limits.json](../types/axt/limits.json)) after it has sent the manifest with the new key ([transports.md](transports.md), section 5.5).
 
 ### 4.3 Sealing
 

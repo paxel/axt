@@ -136,21 +136,21 @@ A manifest is the same for every receiver, so every app that holds it, or a file
 
 ## 4. Validity and limits
 
-A manifest is valid when it meets the rules of sections 2 and 3 and these limits:
+A manifest is valid when it meets the rules of sections 2 and 3 and these limits, by the names of [types/axt/limits.json](../types/axt/limits.json):
 
-| What                                                            | Maximum                 |
-| --------------------------------------------------------------- | ----------------------- |
-| The body of a `MANIFEST` message, single-object header included | 1 MiB (1,048,576 bytes) |
-| Entries of `formats`                                            | 16                      |
-| Entries of `takes`                                              | 256                     |
-| Entries of `sends`                                              | 256                     |
-| A full name in `takes` or `sends`                               | 512 bytes               |
-| `app_name`                                                      | 256 bytes               |
-| `app_url`                                                       | 2,048 bytes             |
-| `relay.url`                                                     | 256 bytes               |
-| One purpose sentence, in English or another language            | 512 bytes               |
-| Entries of one `purpose_translations`                           | 64                      |
-| A language tag                                                  | 35 characters           |
+| What                                                            | Maximum                         |
+| --------------------------------------------------------------- | ------------------------------- |
+| The body of a `MANIFEST` message, single-object header included | `manifest.body`                 |
+| Entries of `formats`                                            | `manifest.formats`              |
+| Entries of `takes`                                              | `manifest.takes`                |
+| Entries of `sends`                                              | `manifest.sends`                |
+| A full name in `takes` or `sends`                               | `manifest.full_name`            |
+| `app_name`                                                      | `manifest.app_name`             |
+| `app_url`                                                       | `manifest.app_url`              |
+| `relay.url`                                                     | `transports.relay_url`          |
+| One purpose sentence, in English or another language            | `manifest.purpose`              |
+| Entries of one `purpose_translations`                           | `manifest.purpose_translations` |
+| A language tag                                                  | `manifest.language_tag`         |
 
 The limits of lengths are in bytes of UTF-8, except the language tag, which is ASCII. In addition:
 
@@ -166,7 +166,7 @@ The limits of lengths are in bytes of UTF-8, except the language tag, which is A
 
 An app MUST reject an invalid manifest it receives, with the error `MANIFEST_INVALID` ([protocol.md](protocol.md), section 8.2), and MUST NOT use any part of it. It keeps the manifest it had of the other app before, if any. It MAY check the length of the body before it decodes the body.
 
-The limits are rules of a manifest's content. [envelope.md](envelope.md), section 8, sets the size up to which every message is received and decoded, 16 MiB; this section sets which manifests are valid. A sentence is shown in a list, so 512 bytes are enough for one sentence in any script. The body limit keeps what an app holds of the other apps' manifests small; the manifests of section 10 have bodies of 204 and 438 bytes, and 256 types with ten translations of 100 bytes each come to about 300 KB.
+The limits are rules of a manifest's content. [envelope.md](envelope.md), section 8, sets the size up to which every message is received and decoded; this section sets which manifests are valid. A sentence is shown in a list, so `manifest.purpose` is enough for one sentence in any script. The body limit keeps what an app holds of the other apps' manifests small; the manifests of section 10 have bodies of 204 and 438 bytes, and 256 types with ten translations of 100 bytes each come to about 300 KB.
 
 ## 5. Using a manifest
 

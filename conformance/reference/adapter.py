@@ -118,7 +118,7 @@ def no(error: str, note: str | None = None, **members: Any) -> dict[str, Any]:
 
 # --- a strict Avro decoder ----------------------------------------------------------------
 
-MAX_DATA_DEPTH = 32  # spec/types.md, section 5.7
+MAX_DATA_DEPTH: int = pe.LIMITS["types.data_depth"]
 PRIMITIVES = {"null", "boolean", "int", "long", "float", "double", "bytes", "string"}
 
 
@@ -194,7 +194,7 @@ def branch_name(b: Any, namespace: str) -> str:
 # The data depth up to which a body is read: 32 for a record (spec/types.md, section 5.7), more for the
 # body of an OFFER, whose descriptions nest deeper (spec/fields.md, section 10.1).
 DEPTH_LIMIT = [MAX_DATA_DEPTH]
-MAX_OFFER_DEPTH = 256
+MAX_OFFER_DEPTH: int = pe.LIMITS["fields.offer_data_depth"]
 
 
 def read(t: Any, r: Reader, names: dict[str, Any], namespace: str = "", depth: int = 0) -> Any:
@@ -700,12 +700,10 @@ def op_session(i: Any) -> dict[str, Any]:
 # --- file (spec/transports.md, section 2) -----------------------------------------------------
 # The scripts write files but have no reader model; this is the adapter's own reader.
 
-MAX_FILE, MAX_META, MAX_BLOCK, MAX_TOTAL = (
-    268435456,
-    8388608,
-    67108864,
-    1073741824,
-)  # spec/envelope.md, section 8
+MAX_FILE: int = pe.LIMITS["envelope.file"]
+MAX_META: int = pe.LIMITS["envelope.file_metadata"]
+MAX_BLOCK: int = pe.LIMITS["envelope.file_block"]
+MAX_TOTAL: int = pe.LIMITS["envelope.file_data"]
 ENVELOPE_PCF = pe.fingerprints["Envelope"][0]
 LOWER_HEX = __import__("re").compile(r"^[0-9a-f]*$")
 CHAIN_SCHEMAS = {"DEVICE_ADD": "DeviceAdd", "DEVICE_REMOVE": "DeviceRemove"}
@@ -1033,7 +1031,9 @@ def op_request(i: Any) -> dict[str, Any]:
 def op_reaction(i: Any) -> dict[str, Any]:
     """What an app does with a response of the relay (spec/transports.md, sections 5.2 to 5.4)."""
     status, retry, attempt, request = i["status"], i["retry_after"], i["attempt"], i["request"]
-    backoff = min(2 ** (attempt - 1), 3600)
+    backoff = min(
+        pe.LIMITS["transports.retry_first"] * 2 ** (attempt - 1), pe.LIMITS["transports.retry_longest"]
+    )
     if status is None:
         return ok({"action": "repeat", "wait": backoff})
     if 200 <= status < 300:

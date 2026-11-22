@@ -269,15 +269,17 @@ A file MAY hold a `WITHDRAW` among its record messages ([transports.md](transpor
 
 ## 9. Limits
 
-| What                                                  | Limit                                                                                              |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| The body of a `WITHDRAW`                              | One `axt.Withdraw`: the single-object header and the 32 bytes of `to`                              |
-| One `WITHDRAW`, a live message                        | The envelope with `record` and that body, far below 16 MiB ([envelope.md](envelope.md), section 8) |
-| Entries of one `ACK`                                  | 4,096 ([protocol.md](protocol.md), section 7.1)                                                    |
-| The `ACK` after processing a `WITHDRAW`               | Within 5 seconds (section 5.1)                                                                     |
-| A resend of a `WITHDRAW` through a relay              | After the holding time of 14 days, not before ([protocol.md](protocol.md), section 11)             |
-| How long a receiver keeps a tombstone of a withdrawal | As long as it keeps the sender ([records.md](records.md), section 5.3)                             |
-| Withdrawals when a share ends                         | One `WITHDRAW` for each record that leaves the shares for that receiver (section 6.4)              |
+The names in the table are those of the limits of [types/axt/limits.json](../types/axt/limits.json).
+
+| What                                                  | Limit                                                                                                          |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| The body of a `WITHDRAW`                              | One `axt.Withdraw`: the single-object header and the 32 bytes of `to`                                          |
+| One `WITHDRAW`, a live message                        | The envelope with `record` and that body, far below `envelope.message` ([envelope.md](envelope.md), section 8) |
+| Entries of one `ACK`                                  | `protocol.ack_records` ([protocol.md](protocol.md), section 7.1)                                               |
+| The `ACK` after processing a `WITHDRAW`               | Within `protocol.ack_wait` (section 5.1)                                                                       |
+| A resend of a `WITHDRAW` through a relay              | After the holding time, `transports.holding`, not before ([protocol.md](protocol.md), section 11)              |
+| How long a receiver keeps a tombstone of a withdrawal | As long as it keeps the sender ([records.md](records.md), section 5.3)                                         |
+| Withdrawals when a share ends                         | One `WITHDRAW` for each record that leaves the shares for that receiver (section 6.4)                          |
 
 What a withdrawal cannot do:
 
@@ -620,8 +622,8 @@ Each side judges by a manifest of its own:
 A `PROPOSAL` is valid when it is a valid message ([protocol.md](protocol.md), section 8.2), it carries `record`, its body is one `axt.Proposal` in single-object encoding, the two bytes `C3 01`, the fingerprint of `axt.Proposal` in its envelope format (section 10) and the datum, with no bytes left over, and the body is valid:
 
 - `proposal_id` is a UUID in text form, neither the nil UUID nor the max UUID;
-- `fields` has 1 to 4,096 entries;
-- each `name` is 1 to 512 bytes of UTF-8, and no name appears twice; names are compared as sequences of Unicode code points, as in [sync.md](sync.md), section 8.2.
+- `fields` has 1 to `shares.proposal_fields` entries ([types/axt/limits.json](../types/axt/limits.json));
+- each `name` is 1 to `shares.proposal_field_name` bytes of UTF-8, and no name appears twice; names are compared as sequences of Unicode code points, as in [sync.md](sync.md), section 8.2.
 
 A `PROPOSAL` without `record`, and one whose body is not one `axt.Proposal`, the empty body included, is rejected with `INVALID_MESSAGE` ([protocol.md](protocol.md), section 2), as is one whose body is not valid. One whose `to` is not the receiver's own key is ignored without a report ([protocol.md](protocol.md), section 9.1).
 
@@ -710,7 +712,7 @@ The owner's app shows each open proposal to its user: the proposer, as the app k
 
 - **Nothing without the user.** The app MUST NOT take a proposed value into a record unless its user takes the proposal. A device MUST NOT answer `ACCEPTED` unless it has shown its user every proposed value, decoded with the schema of its entry and resolved against its reader schema of the type. A value that it cannot show so, such as one of a field that its reader schema lacks, one that does not decode, or one whose schema does not resolve against its own, bars `ACCEPTED` on that device; its user can still decline there, or take the proposal on a device that can show every value. It MUST NOT answer `ACCEPTED` on its own, and answers `DECLINED` only by its user's decision. A proposal that no one answers stays open; no timer ends it.
 - **The answer.** `ACCEPTED` when the user takes the proposal whole, every value as proposed. `DECLINED` when the user refuses it. An app that lets its user take only some of the proposed values, or other values, answers `DECLINED` and makes what its user takes a change of its user like any other, which reaches the proposer as an update.
-- **Recording the answer.** The app keeps, for each proposal it answered, the key of the proposer stored with the proposal (section 13.4), the `proposal_id`, the proposal's `record`, its id and version, which the reply to a repeat carries, and the answer, as records of a type in its own namespace, as it keeps its shares (section 2.1). So every device of the owner's set comes to hold the answer once it has merged with its siblings (section 17.1). It MUST keep an answer for as long as the record is shared with the proposer, and at least for the 15 days for which a relay may deliver the proposal again ([transports.md](transports.md), section 5.5). Of two answers to one proposal that the records hold, `ACCEPTED` stands. A device that no longer holds the answer takes a repeat of the proposal as a new proposal (section 13.4).
+- **Recording the answer.** The app keeps, for each proposal it answered, the key of the proposer stored with the proposal (section 13.4), the `proposal_id`, the proposal's `record`, its id and version, which the reply to a repeat carries, and the answer, as records of a type in its own namespace, as it keeps its shares (section 2.1). So every device of the owner's set comes to hold the answer once it has merged with its siblings (section 17.1). It MUST keep an answer for as long as the record is shared with the proposer, and at least for `transports.longest_holding`, for which a relay may deliver the proposal again ([transports.md](transports.md), section 5.5). Of two answers to one proposal that the records hold, `ACCEPTED` stands. A device that no longer holds the answer takes a repeat of the proposal as a new proposal (section 13.4).
 - **What the device holds.** To show and answer a proposal, a device holds the `PROPOSAL` message as the proposer sent it (section 17.1), and keeps the text of the schema of each entry with it. The app also keeps the text of the writer schema of every `DATA` that any device of its set sent to a receiver, for as long as the record is shared with that receiver, as records of a type in its own namespace, as it keeps its shares (section 2.1), so that every device of the set holds it and can read a proposal written against that schema ([sync.md](sync.md), section 7.3). A device that does not hold the schema of an entry, such as a sibling that got the proposal in a forward (section 17.1), shows that value once it holds the schema, and MUST NOT answer `ACCEPTED` before it holds the schema of every entry.
 
 ### 15.2 An accepted proposal
@@ -811,20 +813,22 @@ No file holds a `PROPOSAL` or a `PROPOSAL_REPLY`. A proposal needs a way back fo
 
 ### 18.3 Limits
 
-| What                                                                  | Limit                                                                                        |
-| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Entries of `fields` in one `PROPOSAL`                                 | 1 to 4,096 (section 13.2)                                                                    |
-| A field name in a `PROPOSAL`                                          | 1 to 512 bytes of UTF-8 (section 13.2)                                                       |
-| One `PROPOSAL` or `PROPOSAL_REPLY`                                    | 16 MiB, as every message ([envelope.md](envelope.md), section 8)                             |
-| Data depth of a proposed value                                        | 32, the record counted as depth 1 (section 13.3, step 8)                                     |
-| Value bytes of one `PROPOSAL`, the `value` of every entry together    | 64 KiB (65,536 bytes)                                                                        |
-| Value bytes of the open proposals of one proposer in all, at a device | 1 MiB (1,048,576 bytes)                                                                      |
-| Open proposals of one proposer for one record, at a device            | 16                                                                                           |
-| Open proposals of one proposer in all, at a device                    | 256                                                                                          |
-| Sending a proposal again through a relay                              | After the holding time of 14 days, not before (section 16.2)                                 |
-| How long the owner's app keeps an answer                              | MUST: as long as the record is shared with the proposer, and at least 15 days (section 15.1) |
+The names in the table are those of the limits of [types/axt/limits.json](../types/axt/limits.json).
 
-- **Open proposals.** A device of the owner MUST NOT take more open proposals of one proposer than the two count limits of the table, nor a `PROPOSAL` whose value bytes are above 64 KiB, nor one that would bring the value bytes of the open proposals of that proposer that it holds above 1 MiB. A `PROPOSAL` that the device gets from the proposer itself and would take as a new proposal beyond one of these limits fails step 5 of section 13.3 with `PROPOSALS_NOT_TAKEN`. A device MAY set lower limits. The limits hold for the proposals that a device takes from the proposer itself, counted over every open proposal of that proposer that it holds, those it took itself and those forwarded to it. A device keeps every forwarded `PROPOSAL` whatever the limits (section 17.1), so a device can hold more than a limit, and devices that have not yet merged can together hold more than a limit for a while.
+| What                                                                  | Limit                                                                                                             |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Entries of `fields` in one `PROPOSAL`                                 | 1 to `shares.proposal_fields` (section 13.2)                                                                      |
+| A field name in a `PROPOSAL`                                          | 1 to `shares.proposal_field_name` bytes of UTF-8 (section 13.2)                                                   |
+| One `PROPOSAL` or `PROPOSAL_REPLY`                                    | `envelope.message`, as every message ([envelope.md](envelope.md), section 8)                                      |
+| Data depth of a proposed value                                        | `types.data_depth`, the record counted as depth 1 (section 13.3, step 8)                                          |
+| Value bytes of one `PROPOSAL`, the `value` of every entry together    | `shares.proposal_value_bytes`                                                                                     |
+| Value bytes of the open proposals of one proposer in all, at a device | `shares.open_value_bytes`                                                                                         |
+| Open proposals of one proposer for one record, at a device            | `shares.open_per_record`                                                                                          |
+| Open proposals of one proposer in all, at a device                    | `shares.open`                                                                                                     |
+| Sending a proposal again through a relay                              | After the holding time, `transports.holding`, not before (section 16.2)                                           |
+| How long the owner's app keeps an answer                              | MUST: as long as the record is shared with the proposer, and at least `transports.longest_holding` (section 15.1) |
+
+- **Open proposals.** A device of the owner MUST NOT take more open proposals of one proposer than the two count limits of the table, nor a `PROPOSAL` whose value bytes are above `shares.proposal_value_bytes`, nor one that would bring the value bytes of the open proposals of that proposer that it holds above `shares.open_value_bytes`. A `PROPOSAL` that the device gets from the proposer itself and would take as a new proposal beyond one of these limits fails step 5 of section 13.3 with `PROPOSALS_NOT_TAKEN`. A device MAY set lower limits. The limits hold for the proposals that a device takes from the proposer itself, counted over every open proposal of that proposer that it holds, those it took itself and those forwarded to it. A device keeps every forwarded `PROPOSAL` whatever the limits (section 17.1), so a device can hold more than a limit, and devices that have not yet merged can together hold more than a limit for a while.
 
 ### 18.4 Unwanted proposals
 

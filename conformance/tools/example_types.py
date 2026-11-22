@@ -112,9 +112,15 @@ PUBLISHED: dict[str, Any] = dict(
     TIME_TYPES, **{"axt.Relation": RELATION, "axt.Extension": EXTENSION_PUBLISHED}
 )
 NUMBERS = {"int", "long", "float", "double"}
-MAX_SCHEMA_BYTES = 262144  # spec/envelope.md, section 8
-MAX_JSON_DEPTH = 64  # spec/envelope.md, section 8
-MAX_DATA_DEPTH = 32  # spec/types.md, section 5.7
+LIMITS: dict[str, int] = {  # types/axt/limits.json
+    k: v["value"]
+    for k, v in json.loads((REPO / "types" / "axt" / "limits.json").read_text(encoding="utf-8"))[
+        "limits"
+    ].items()
+}
+MAX_SCHEMA_BYTES = LIMITS["envelope.schema"]
+MAX_JSON_DEPTH = LIMITS["envelope.schema_depth"]
+MAX_DATA_DEPTH = LIMITS["types.data_depth"]
 SNAKE = re.compile(r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$")
 CAMEL = re.compile(r"^[A-Z][A-Za-z0-9]*$")
 UPPER = re.compile(r"^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$")

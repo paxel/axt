@@ -57,13 +57,17 @@ FINGERPRINT = "0xe50fe3675c626251"  # CRC-64-AVRO of axt.Field, shown in spec/fi
 SNAKE = re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*")
 CAMEL = re.compile(r"[A-Z][A-Za-z0-9]*")
 UPPER = re.compile(r"[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*")
-MAX_GROUP_KEY = 64
-MAX_EXACT = 2**53  # the largest magnitude of a default of a number that JSON writes exactly (section 9.1)
-MAX_TYPED_DEPTH = 64  # spec/fields.md, section 9.1
-MAX_JSON_DEPTH = 64  # of a schema, spec/envelope.md, section 8
-MAX_DESCRIPTION = (
-    262144  # bytes of the encoding of a description, as of a schema (spec/envelope.md, section 8)
-)
+LIMITS: dict[str, int] = {  # types/axt/limits.json
+    k: v["value"]
+    for k, v in json.loads((REPO / "types" / "axt" / "limits.json").read_text(encoding="utf-8"))[
+        "limits"
+    ].items()
+}
+MAX_GROUP_KEY = LIMITS["metadata.group_key"]
+MAX_EXACT = LIMITS["fields.long_default"]  # the largest magnitude of a default of axt.LongField
+MAX_TYPED_DEPTH = LIMITS["fields.depth"]
+MAX_JSON_DEPTH = LIMITS["envelope.schema_depth"]
+MAX_DESCRIPTION = LIMITS["envelope.schema"]  # bytes of the encoding of a description, as of a schema
 TIME_NAMES = ("Date", "Time", "DateTime", "Duration")
 TIME_SCHEMAS: dict[str, Any] = {
     f"axt.{n}": json.loads((REPO / "types" / "axt" / f"{n}.avsc").read_text(encoding="utf-8"))
@@ -500,14 +504,14 @@ TARGETS = ("axt.RelationRecordTarget", "axt.RelationOutsideTarget")
 # The named types that axt.Relation defines besides axt.DateTime; no object or enum of a description has one.
 RELATION_NAMES = (RELATION, *TARGETS, "axt.RelationRecordTargetSender")
 # The limits of section 11.4, in bytes of UTF-8.
-MAX_RELATIONS = 256  # items of a list of relations
-MAX_RELATION_ATTRIBUTES = 32  # entries of attributes
-MAX_RELATION_NAME = 256  # kind, and the type of a record target
-MAX_RELATION_TEXT = 256  # the display text of a target
-MAX_RELATION_URI = 2048
-MAX_RELATION_NOTE = 4096
-MAX_RELATION_KEY = 256  # a name in attributes
-MAX_RELATION_VALUE = 1024  # a value in attributes
+MAX_RELATIONS = LIMITS["fields.relations"]  # items of a list of relations
+MAX_RELATION_ATTRIBUTES = LIMITS["fields.relation_attributes"]  # entries of attributes
+MAX_RELATION_NAME = LIMITS["fields.relation_name"]  # kind, and the type of a record target
+MAX_RELATION_TEXT = LIMITS["fields.relation_text"]  # the display text of a target
+MAX_RELATION_URI = LIMITS["fields.relation_uri"]
+MAX_RELATION_NOTE = LIMITS["fields.relation_note"]
+MAX_RELATION_KEY = LIMITS["fields.relation_attribute_name"]  # a name in attributes
+MAX_RELATION_VALUE = LIMITS["fields.relation_attribute_value"]  # a value in attributes
 
 # --- extensions (spec/fields.md, section 12) ----------------------------------------------------
 
@@ -515,9 +519,9 @@ EXTENSION = "axt.Extension"
 EXTENSION_SCHEMA: dict[str, Any] = json.loads(
     (REPO / "types" / "axt" / "Extension.avsc").read_text(encoding="utf-8")
 )
-MAX_EXTENSIONS = 32  # items of a list of extensions
-MAX_EXTENSION_NAME = 256  # the full name of an extension's type
-MAX_EXTENSION_DATA = 65536  # the bytes of an extension, its single-object header included
+MAX_EXTENSIONS = LIMITS["fields.extensions"]  # items of a list of extensions
+MAX_EXTENSION_NAME = LIMITS["fields.extension_name"]  # the full name of an extension's type
+MAX_EXTENSION_DATA = LIMITS["fields.extension_data"]  # the bytes of an extension, its header included
 # The lists whose items have a key, by the full name of the items: the member a repeated key is reported by.
 LISTS = {RELATION: "id", EXTENSION: "name"}
 FULL_NAME = re.compile(rf"{mr.AVRO_NAME}(?:\.{mr.AVRO_NAME})*")  # a full name of Avro 1.12, Names

@@ -159,15 +159,17 @@ A receiver SHOULD resolve the schemas once, when it gets the writer schema, rath
 
 ## 8. Size limits
 
-| What                                                    | Maximum                     |
-| ------------------------------------------------------- | --------------------------- |
-| One message, including its single-object header         | 16 MiB (16,777,216 bytes)   |
-| One schema as JSON text                                 | 256 KiB (262,144 bytes)     |
-| Nesting depth of a schema's JSON text                   | 64                          |
-| The metadata of a file, keys and values together        | 8 MiB (8,388,608 bytes)     |
-| One file as stored                                      | 256 MiB (268,435,456 bytes) |
-| One data block of a file, after decompression           | 64 MiB (67,108,864 bytes)   |
-| All data blocks of a file together, after decompression | 1 GiB (1,073,741,824 bytes) |
+The maximum of each size is the limit of [types/axt/limits.json](../types/axt/limits.json) that the table names.
+
+| What                                                    | Maximum                  |
+| ------------------------------------------------------- | ------------------------ |
+| One message, including its single-object header         | `envelope.message`       |
+| One schema as JSON text                                 | `envelope.schema`        |
+| Nesting depth of a schema's JSON text                   | `envelope.schema_depth`  |
+| The metadata of a file, keys and values together        | `envelope.file_metadata` |
+| One file as stored                                      | `envelope.file`          |
+| One data block of a file, after decompression           | `envelope.file_block`    |
+| All data blocks of a file together, after decompression | `envelope.file_data`     |
 
 A sender MUST NOT produce a message, a schema or a file above these limits. A receiver MUST NOT reject a message, a schema or a file for its size while it is within them.
 
