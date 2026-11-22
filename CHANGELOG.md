@@ -24,6 +24,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - Extensions on every example type: an app adds fields of its own as `axt.Extension` records, which others carry unchanged or merge field by field. ([axt-1052](https://github.com/paxel/axt/issues/60))
 - Each share says whether a record's relations to unshared targets, outside things and extensions go along; by default they stay out. ([axt-1040](https://github.com/paxel/axt/issues/48))
 - A proposal can add, change or remove single relations and set single fields within an extension, element by element. ([axt-1041](https://github.com/paxel/axt/issues/49))
+- The Design an app track explains relations and extensions on the page Link records, and the library's build order names them. ([axt-1042](https://github.com/paxel/axt/issues/50))
 - The limits of the specification are published as data in `types/axt/limits.json`, which the documents name instead of stating the numbers. ([axt-1047](https://github.com/paxel/axt/issues/55))
 - The adapter protocol is published as the JSON Schema `vectors/adapter.schema.json`, and the runner checks every request and answer against it. ([axt-1049](https://github.com/paxel/axt/issues/57))
 - The relay interface is published as the OpenAPI 3.1 document `spec/relay-api.json`, and the relay tests check the reference relay against it. ([axt-1048](https://github.com/paxel/axt/issues/56))

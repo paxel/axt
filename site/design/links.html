@@ -1,0 +1,167 @@
+<!-- page: title="Link records" track="design" order=9 summary="How a record links to other records and to things outside AXT with relations, and how an app adds fields of its own to a record of another type with extensions." -->
+<p class="lede">
+  A record can point at other records, also of other apps, and at things outside AXT. It does so
+  with <a href="../spec/glossary.html#term-relation">relations</a>. An app can also add fields of
+  its own to a record of a type it does not own. It does so with
+  <a href="../spec/glossary.html#term-extension">extensions</a>. Every example type has both, in
+  its fields <code>relations</code> and <code>extensions</code>
+  (<a href="../spec/types.html#section-8">types, sections 8</a> and
+  <a href="../spec/types.html#section-9">9</a>).
+</p>
+
+<h2>Relations</h2>
+<h3>What a relation holds</h3>
+<p>
+  A type has relations through a field of the relation brick. Its value is a list of
+  <a href="../spec/axt.Relation.html"><code>axt.Relation</code></a> records
+  (<a href="../spec/fields.html#section-11">fields, section 11</a>). Each relation holds
+  (<a href="../spec/fields.html#section-11-1">section 11.1</a>):
+</p>
+<ul>
+  <li><strong>An id</strong> of its own, which tells it apart from the other relations of the list.</li>
+  <li><strong>A kind</strong>, which says what kind of link it is.</li>
+  <li><strong>A target</strong>: a record, or a thing outside AXT.</li>
+  <li><strong>Information about the link</strong>: a note, a start and an end, and attributes that the kind names.</li>
+</ul>
+<p>
+  How long the texts may be and how many relations a list holds are limits of the specification,
+  and every receiver checks them (<a href="../spec/fields.html#section-11-4">section 11.4</a>). A
+  record that breaks them is rejected.
+</p>
+
+<h3>Kinds</h3>
+<ul>
+  <li>A kind is named like a type, in your app's own namespace, such as <code>org.example.catalog.vet</code>. Your app gives each kind its meaning, what its start and end mean, and its attributes (<a href="../spec/fields.html#section-11-2">section 11.2</a>).</li>
+  <li>The one kind AXT defines is <code>axt.related</code>, the default. It says only that the two are related; the note can say how (<a href="../spec/fields.html#section-11-2">section 11.2</a>).</li>
+  <li>A receiver never rejects a relation for a kind it does not know. It keeps the relation and shows it plainly: its kind's name, its target, its note, its times and its attributes (<a href="../spec/fields.html#section-11-2">section 11.2</a>).</li>
+</ul>
+
+<h3>Targets</h3>
+<ul>
+  <li><strong>A record</strong> is named by its id and by a key of its sender. A record of your own app leaves the key out (<a href="../spec/fields.html#section-11-3">section 11.3</a>).</li>
+  <li><strong>A thing outside AXT</strong> is named by a URI, such as a web page (<a href="../spec/fields.html#section-11-3">section 11.3</a>).</li>
+  <li>Give each target a display text, such as the record's title, and a record target its type. A receiver that does not hold the record can then still show what the relation points at (<a href="../spec/records.html#section-10-4">records, section 10.4</a>).</li>
+</ul>
+
+<h3>Relation or reference</h3>
+<p>
+  A link without which a record of the type is not understood can be a reference instead: a field
+  that holds the id of another record of the same sender. Every other link is a relation, and a
+  record can hold any number of them, of any kind
+  (<a href="../spec/fields.html#section-11-5">fields, section 11.5</a>). The example types use
+  relations only (<a href="../spec/types.html#section-5-8">types, section 5.8</a>).
+</p>
+
+<h3>One way</h3>
+<p>
+  A relation belongs to the record that holds it, and only that record's sender sends it. The
+  record it points at does not change, and nothing is sent to that record's sender
+  (<a href="../spec/records.html#section-10-1">records, section 10.1</a>). An app that holds the
+  target may show the relations that point at it, as "linked from". It finds them by looking
+  through the records it holds; what it shows never travels with the target.
+</p>
+
+<h3>Across senders</h3>
+<ul>
+  <li>A relation can point at a record of another app, such as an appointment of a calendar app at a pet that cat-a-log sent. It names that app by any key of its device set, also a key removed since (<a href="../spec/records.html#section-10-2">section 10.2</a>).</li>
+  <li>A relation whose record the receiver does not hold is unresolved. The receiver keeps the record and the relation all the same, shows the target's display text, and resolves the relation once the record arrives (<a href="../spec/records.html#section-10-3">section 10.3</a>).</li>
+  <li>A key in a relation is no contact. A receiver does not ask its user about it and sends nothing to it (<a href="../spec/records.html#section-10-3">section 10.3</a>).</li>
+</ul>
+
+<h3>Your user's links to received records</h3>
+<p>
+  To link a received record, your user adds a relation to a record of your app's own, such as a
+  note. That record goes out with its relations like any other record of your app
+  (<a href="../spec/records.html#section-10-5">section 10.5</a>). A relation your user adds to the
+  received record itself is a local change: it stays in your app and never reaches the sender. To
+  have the sender's record hold it, your user proposes it.
+</p>
+
+<h3>Changes that meet</h3>
+<p>
+  The relations of a record are merged one relation at a time, by their ids, where the list is a
+  top-level field of the type. A relation field nested in an object or a list is part of that
+  field's value (<a href="../spec/sync.html#section-25-1">sync, section 25.1</a>).
+</p>
+<ul>
+  <li><strong>At a receiver.</strong> It keeps every relation its user added or changed, leaves out every one its user removed, and takes the others from the sender (<a href="../spec/records.html#section-6-1">records, section 6.1</a>).</li>
+  <li><strong>Between the devices of one owner.</strong> Relations added on two devices both stay, and a relation removed on one stays removed (<a href="../spec/sync.html#section-25">sync, section 25</a>).</li>
+</ul>
+<p>
+  In the example of the specification, the phone links an appointment to the pet Mimi while
+  the tablet links it to the vet (<a href="../spec/sync.html#section-25-8">section 25.8</a>):
+</p>
+<table>
+  <thead>
+    <tr><th>Device</th><th>The user's change</th><th>After the merge, on both</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Phone</td><td>Links the appointment to Mimi</td><td rowspan="2">Both relations, the vet's first, as the tablet's later order has it</td></tr>
+    <tr><td>Tablet</td><td>Links the appointment to the vet</td></tr>
+  </tbody>
+</table>
+
+<h3>In shares</h3>
+<p>
+  A record's <strong>links</strong> are its relations to records the receiver does not get, its
+  relations to things outside AXT, and its extensions. They could tell another user more than the
+  record does, so each share says whether they go along. By default they do not
+  (<a href="../spec/shares.html#section-19-1">shares, section 19.1</a>).
+</p>
+<ul>
+  <li>Without its links, a record keeps only its relations to records of your own that are shared with the same receiver, and no extensions.</li>
+  <li>Apps of your own user and your user's other devices always get the record whole.</li>
+  <li>A link left out stays in the record. Which links go along is decided each time the record is sent, so a change of a share takes effect with the record's next version (<a href="../spec/shares.html#section-19-2">section 19.2</a>).</li>
+</ul>
+
+<h3>In proposals</h3>
+<ul>
+  <li>A receiver can propose single relations: one added, changed or removed (<a href="../spec/shares.html#section-20-1">shares, section 20.1</a>). A receiver that only moves relations proposes the whole list.</li>
+  <li>It can only name relations it got. A proposal that names one its share left out is refused (<a href="../spec/shares.html#section-20-2">section 20.2</a>).</li>
+  <li>When the owner takes a proposed list, the relations the share left out stay in the record (<a href="../spec/shares.html#section-19-3">section 19.3</a>).</li>
+</ul>
+<p>How the owner's user decides is on <a href="proposals.html">Proposals</a>.</p>
+
+<h2>Extensions</h2>
+<h3>When to use them</h3>
+<p>
+  An extension adds fields of your app's own to a record of another type, without forking that
+  type. cat-a-log, for example, adds the TASSO registration and the fur of a cat to an
+  <code>axt.example.v1.Pet</code>. Every app that takes the type still takes the record
+  (<a href="../spec/fields.html#section-12">fields, section 12</a>). An app that does not know
+  the extension carries it along.
+</p>
+<ul>
+  <li>An extension is an <a href="../spec/axt.Extension.html"><code>axt.Extension</code></a>: the full name of a record type of your app's own, in your namespace, and that record's bytes (<a href="../spec/fields.html#section-12-1">section 12.1</a>).</li>
+  <li>A list holds at most one extension of each name: your app keeps all its fields for the record in that one extension (<a href="../spec/fields.html#section-12-1">section 12.1</a>).</li>
+  <li>The extension's type keeps the rules of every type for its fields (<a href="../spec/types.html#section-5">types, section 5</a>), and its name holds its major version, as a type's name does (<a href="versions.html">Evolve a type</a>).</li>
+</ul>
+
+<h3>How they travel</h3>
+<ul>
+  <li>Your app offers the extension's type beside the type it extends, with its description. It can offer it with a count of 0, since its records travel inside the other records (<a href="../spec/fields.html#section-12-2">section 12.2</a>).</li>
+  <li>A receiver that accepts the extension's type reads the extension and shows its fields (<a href="../spec/fields.html#section-12-2">section 12.2</a>).</li>
+  <li>A receiver that declines it, or does not know it, keeps the extension as it got it, and never encodes it again. The extension survives its user's changes of other fields and the updates it merges (<a href="../spec/fields.html#section-12-4">section 12.4</a>).</li>
+</ul>
+
+<h3>How they merge</h3>
+<ul>
+  <li><strong>At a receiver.</strong> Extensions are merged one at a time, by their names. Where the receiver knows the extension's type, it merges within the extension field by field; where it does not, it keeps its user's extension whole. An extension its user changed stays when the sender removes it (<a href="../spec/records.html#section-6-1">records, section 6.1</a>).</li>
+  <li><strong>Between the devices of one owner.</strong> Extensions added on two devices both stay. Within one extension whose type a device knows, two changes of two fields both stay (<a href="../spec/sync.html#section-25-9">sync, section 25.9</a>).</li>
+</ul>
+
+<h3>In shares and proposals</h3>
+<ul>
+  <li>Extensions are links: they go to a receiver of another user only where a share lets the links go along (<a href="../spec/shares.html#section-19-1">shares, section 19.1</a>).</li>
+  <li>A receiver can propose single fields within an extension (<a href="../spec/shares.html#section-20-1">section 20.1</a>). A proposal of other fields leaves the extensions as they are (<a href="../spec/fields.html#section-12-4">fields, section 12.4</a>).</li>
+</ul>
+
+<div class="callout">
+  <p class="eyebrow">Note</p>
+  <p>
+    No app writes into the records of another. A relation points one way, and a receiver whose
+    user wants the sender's record changed proposes the change
+    (<a href="../spec/records.html#section-10-1">records, section 10.1</a>;
+    <a href="proposals.html">Proposals</a>).
+  </p>
+</div>

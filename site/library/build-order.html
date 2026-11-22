@@ -11,9 +11,9 @@
     <tr><th>Part</th><th>Specification</th><th>Categories</th></tr>
   </thead>
   <tbody>
-    <tr><td>1. Avro, fingerprints and the types</td><td><a href="../spec/envelope.html#section-1">envelope.md</a> 1 and 5 to 8; <a href="../spec/types.html">types.md</a>; <a href="../spec/time.html">time.md</a>; <a href="../spec/metadata.html">metadata.md</a></td><td><code>encoding</code>, <code>types</code>, <code>time</code>; <code>describe</code> and <code>check_record</code> of <code>bricks</code></td></tr>
+    <tr><td>1. Avro, fingerprints and the types</td><td><a href="../spec/envelope.html#section-1">envelope.md</a> 1 and 5 to 8; <a href="../spec/types.html">types.md</a>; <a href="../spec/time.html">time.md</a>; <a href="../spec/metadata.html">metadata.md</a>; <a href="../spec/fields.html#section-11">fields.md</a> 11 and 12</td><td><code>encoding</code>, <code>types</code>, <code>time</code>; <code>describe</code> and <code>check_record</code> of <code>bricks</code></td></tr>
     <tr><td>2. The envelope and signatures</td><td><a href="../spec/envelope.html#section-2">envelope.md</a> 2 to 4; <a href="../spec/keys.html#section-2">keys.md</a> 2</td><td><code>encoding</code>, <code>keys</code></td></tr>
-    <tr><td>3. Records</td><td><a href="../spec/records.html">records.md</a></td><td><code>records</code></td></tr>
+    <tr><td>3. Records</td><td><a href="../spec/records.html">records.md</a>; <a href="../spec/fields.html#section-12-4">fields.md</a> 12.4</td><td><code>records</code></td></tr>
     <tr><td>4. The manifest and the protocol</td><td><a href="../spec/manifest.html">manifest.md</a>; <a href="../spec/protocol.html">protocol.md</a></td><td><code>manifest</code>, <code>protocol</code></td></tr>
     <tr><td>5. Trust, sealing and device sets</td><td><a href="../spec/keys.html#section-3">keys.md</a> 3 to 5</td><td><code>keys</code></td></tr>
     <tr><td>6. Shares</td><td><a href="../spec/shares.html">shares.md</a></td><td><code>shares</code></td></tr>
@@ -81,13 +81,23 @@
     <strong>Metadata.</strong> What a receiver shows of a type and checks of its values, by its
     description (<a href="../spec/metadata.html">metadata.md</a>).
   </li>
+  <li>
+    <strong>Relations and extensions.</strong> The fields of the relation brick and of the
+    extension brick hold lists of <a href="../spec/axt.Relation.html"><code>axt.Relation</code></a>
+    and <a href="../spec/axt.Extension.html"><code>axt.Extension</code></a>, each defined in place
+    as published, with rules that every receiver checks
+    (<a href="../spec/fields.html#section-11">fields.md, sections 11</a> and
+    <a href="../spec/fields.html#section-12">12</a>).
+  </li>
 </ul>
 <p>
   Tested by: <code>encoding</code> (<code>fingerprint</code>), <code>types</code>
   (<code>fingerprint</code>, <code>decode_record</code>), <code>time</code>
   (<code>fingerprint</code>, <code>decode_record</code>, <code>resolve_date_time</code>,
   <code>add_duration</code>) and <code>bricks</code> (<code>describe</code>,
-  <code>check_record</code>). The example types are listed on
+  <code>check_record</code>); the relations by <code>decode_record</code> of <code>types</code>
+  and of <code>bricks</code>, the extensions by <code>decode_record</code> of
+  <code>types</code>. The example types are listed on
   <a href="../spec/example-types.html">Example types</a>.
 </p>
 
@@ -121,6 +131,12 @@
   rule, keeps tombstones of deletions, keeps what its own user changed, and reports an outcome for
   each record (<a href="../spec/records.html#section-5">records.md, sections 5</a> to
   <a href="../spec/records.html#section-7">7</a>).
+</p>
+<p>
+  Relations and extensions are merged one element at a time, by their keys, and an extension of a
+  type the receiver does not know is kept as its bytes
+  (<a href="../spec/records.html#section-6-1">records.md, section 6.1</a>;
+  <a href="../spec/fields.html#section-12-4">fields.md, section 12.4</a>).
 </p>
 <p>
   Tested by: <code>records</code> (<code>apply</code>), a session of one receiver and one sender.
@@ -194,10 +210,14 @@
   <a href="../spec/shares.html#section-6">6</a>). The receiver's user can propose a change with a
   <code>PROPOSAL</code>, which the owner takes or refuses with a <code>PROPOSAL_REPLY</code>
   (<a href="../spec/shares.html#section-12">sections 12</a> to
-  <a href="../spec/shares.html#section-16">16</a>).
+  <a href="../spec/shares.html#section-16">16</a>). Each share says whether a record's links, its
+  relations to records not shared and to things outside AXT and its extensions, go along
+  (<a href="../spec/shares.html#section-19">section 19</a>), and a proposal can name single
+  relations and single fields within an extension
+  (<a href="../spec/shares.html#section-20">section 20</a>).
 </p>
 <p>
-  Tested by: <code>shares</code> (<code>receive</code>, <code>take_version</code>,
+  Tested by: <code>shares</code> (<code>receive</code>, <code>shared_value</code>, <code>take_version</code>,
   <code>owed</code>, <code>pass_withdrawal</code>, <code>join_receivers</code>,
   <code>offer_types</code>, <code>acked</code>, <code>owner</code>, <code>proposer</code>). That a
   sender sends nothing beyond its shares cannot be seen by a receiver, so no vector tests it
@@ -233,7 +253,9 @@
   <a href="../spec/sync.html#section-16">16</a>), and what the set does with what it got from other
   apps, with <code>FORWARD</code> and the owner's changes of received records
   (<a href="../spec/sync.html#section-17">sections 17</a> to
-  <a href="../spec/sync.html#section-24">24</a>).
+  <a href="../spec/sync.html#section-24">24</a>). Relations and extensions are lists merged per
+  element between the devices: each element is a part of its own, and within an extension each
+  field (<a href="../spec/sync.html#section-25">section 25</a>).
 </p>
 <p>
   Tested by: <code>sync</code> (<code>next_stamp</code>, <code>change</code>, <code>merge</code>,

@@ -46,6 +46,10 @@ The vocabulary of this repository. The specification in [spec/](spec/README.md) 
 
 **Brick** or **typed field**: an Avro record of `axt.Field` that describes one field of a type: its name, the texts shown for it and the checks its values keep. A **description** is a typed field of an object at the root of a type, from which the type's schema is derived.
 
+**Relation**: a link from the record that holds it to another record, of any sender, or to a thing outside AXT, with a kind and information about the link. It points one way: the record it points at does not change.
+
+**Extension**: fields of an app's own that it adds to a record of another type, as one record of the app's own type inside it. An app that does not know the extension's type carries it along unchanged.
+
 **Envelope**: the signed message every exchange consists of, an `axt.Envelope`. Its body holds the record or the protocol message.
 
 **Fingerprint**: the CRC-64-AVRO of a schema's canonical form, by which a live message names its schema.
