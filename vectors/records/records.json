@@ -36,7 +36,8 @@
         "all_day": false,
         "location": "",
         "notes": "",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -71,7 +72,8 @@
         "all_day": false,
         "location": "",
         "notes": "Bring the vaccination card",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -99,7 +101,8 @@
         "all_day": false,
         "location": "",
         "notes": "Bring the vaccination card",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -127,7 +130,8 @@
         "all_day": false,
         "location": "",
         "notes": "",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -158,7 +162,8 @@
         "all_day": false,
         "location": "",
         "notes": "Bring the vaccination card",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      }
@@ -189,7 +194,8 @@
        "all_day": false,
        "location": "",
        "notes": "",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {},
@@ -216,7 +222,8 @@
        "all_day": false,
        "location": "Dr. Weber, Hauptstr. 5",
        "notes": "Bring the vaccination card",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {
@@ -242,7 +249,8 @@
        "all_day": false,
        "location": "Dr. Weber, Hauptstr. 5",
        "notes": "Bring the vaccination card",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {
@@ -268,7 +276,8 @@
        "all_day": false,
        "location": "Dr. Weber, Hauptstr. 5",
        "notes": "Bring the vaccination card",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {
@@ -301,7 +310,8 @@
        "all_day": false,
        "location": "",
        "notes": "Bring the vaccination card",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      }
     ]
@@ -339,7 +349,8 @@
         "all_day": false,
         "location": "",
         "notes": "",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -374,7 +385,8 @@
         "all_day": false,
         "location": "",
         "notes": "Bring the vaccination card",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -402,7 +414,8 @@
         "all_day": false,
         "location": "",
         "notes": "Bring the vaccination card",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -430,7 +443,8 @@
         "all_day": false,
         "location": "",
         "notes": "",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -461,7 +475,8 @@
         "all_day": false,
         "location": "",
         "notes": "Bring the vaccination card",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      }
@@ -492,7 +507,8 @@
        "all_day": false,
        "location": "",
        "notes": "",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {},
@@ -519,7 +535,8 @@
        "all_day": false,
        "location": "Dr. Weber, Hauptstr. 5",
        "notes": "Bring the vaccination card",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {
@@ -545,7 +562,8 @@
        "all_day": false,
        "location": "Dr. Weber, Hauptstr. 5",
        "notes": "Bring the vaccination card",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {
@@ -571,7 +589,8 @@
        "all_day": false,
        "location": "Dr. Weber, Hauptstr. 5",
        "notes": "Bring the vaccination card",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {
@@ -597,7 +616,8 @@
        "all_day": false,
        "location": "Dr. Weber, Hauptstr. 5",
        "notes": "Bring the vaccination card",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {
@@ -623,7 +643,8 @@
        "all_day": false,
        "location": "Dr. Weber, Hauptstr. 5",
        "notes": "Bring the vaccination card",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      }
     ]
@@ -661,7 +682,8 @@
         "all_day": false,
         "location": "",
         "notes": "",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -695,7 +717,8 @@
        "all_day": false,
        "location": "",
        "notes": "",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {
@@ -743,7 +766,8 @@
         "all_day": false,
         "location": "",
         "notes": "",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -771,7 +795,8 @@
         "all_day": false,
         "location": "",
         "notes": "",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -800,7 +825,23 @@
         "repeat": "FREQ=MONTHLY;INTERVAL=3",
         "done": false,
         "done_at": null,
-        "priority": "HIGH"
+        "priority": "HIGH",
+        "relations": [
+         {
+          "id": "c47d2e90-1f5a-4b38-9d6c-e2a8b0f31c75",
+          "kind": "axt.related",
+          "target": {
+           "id": "0b6f4a3e-8c1d-4f27-9e5a-2d7c41b8e093",
+           "sender": null,
+           "type": "axt.example.v1.Pet",
+           "text": "Mimi"
+          },
+          "note": "",
+          "start": null,
+          "end": null,
+          "attributes": {}
+         }
+        ]
        }
       }
      }
@@ -853,7 +894,23 @@
        "repeat": "FREQ=MONTHLY;INTERVAL=3",
        "done": false,
        "done_at": null,
-       "priority": "HIGH"
+       "priority": "HIGH",
+       "relations": [
+        {
+         "id": "c47d2e90-1f5a-4b38-9d6c-e2a8b0f31c75",
+         "kind": "axt.related",
+         "target": {
+          "id": "0b6f4a3e-8c1d-4f27-9e5a-2d7c41b8e093",
+          "sender": null,
+          "type": "axt.example.v1.Pet",
+          "text": "Mimi"
+         },
+         "note": "",
+         "start": null,
+         "end": null,
+         "attributes": {}
+        }
+       ]
       }
      }
     ]
@@ -891,7 +948,8 @@
         "all_day": false,
         "location": "",
         "notes": "",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -922,7 +980,8 @@
         "all_day": false,
         "location": "",
         "notes": "Bring the vaccination card",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -950,7 +1009,8 @@
         "all_day": false,
         "location": "",
         "notes": "",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -981,7 +1041,8 @@
         "all_day": false,
         "location": "",
         "notes": "Bring the vaccination card",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      }
@@ -1012,7 +1073,8 @@
        "all_day": false,
        "location": "",
        "notes": "",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {},
@@ -1079,7 +1141,8 @@
         "all_day": false,
         "location": "",
         "notes": "",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -1107,7 +1170,8 @@
         "all_day": false,
         "location": "",
         "notes": "",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -1142,7 +1206,8 @@
         "all_day": false,
         "location": "",
         "notes": "Bring the vaccination card",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      }
@@ -1173,7 +1238,8 @@
        "all_day": false,
        "location": "",
        "notes": "",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {
@@ -1199,7 +1265,8 @@
        "all_day": false,
        "location": "",
        "notes": "",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {},
@@ -1226,7 +1293,8 @@
        "all_day": false,
        "location": "Dr. Weber, Hauptstr. 5",
        "notes": "",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      }
     ]
@@ -1264,7 +1332,8 @@
         "all_day": false,
         "location": "",
         "notes": "",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -1292,7 +1361,8 @@
         "all_day": false,
         "location": "",
         "notes": "",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -1327,7 +1397,8 @@
         "all_day": false,
         "location": "",
         "notes": "Bring the vaccination card",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      }
@@ -1358,7 +1429,8 @@
        "all_day": false,
        "location": "",
        "notes": "",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {
@@ -1384,7 +1456,8 @@
        "all_day": false,
        "location": "",
        "notes": "",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {},
@@ -1411,7 +1484,8 @@
        "all_day": false,
        "location": "",
        "notes": "Bring the vaccination card",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      }
     ]
@@ -1449,7 +1523,8 @@
         "all_day": false,
         "location": "",
         "notes": "",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -1491,7 +1566,8 @@
         "all_day": false,
         "location": "",
         "notes": "Bring the vaccination card",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      }
@@ -1522,7 +1598,8 @@
        "all_day": false,
        "location": "",
        "notes": "",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {},
@@ -1550,7 +1627,8 @@
        "all_day": false,
        "location": "Dr. Weber, Hauptstr. 5",
        "notes": "Bring the vaccination card",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      }
     ]
@@ -1588,7 +1666,8 @@
         "all_day": false,
         "location": "",
         "notes": "",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -1634,7 +1713,8 @@
         "all_day": false,
         "location": "",
         "notes": "Bring the vaccination card",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      }
@@ -1665,7 +1745,8 @@
        "all_day": false,
        "location": "",
        "notes": "",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {},
@@ -1692,7 +1773,8 @@
        "all_day": false,
        "location": "",
        "notes": "Bring the vaccination card",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      }
     ]
@@ -1730,7 +1812,8 @@
         "all_day": false,
         "location": "",
         "notes": "",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -1765,7 +1848,8 @@
         "all_day": false,
         "location": "Dr. Weber, Hauptstr. 5",
         "notes": "Bring the vaccination card",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      }
@@ -1796,7 +1880,8 @@
        "all_day": false,
        "location": "",
        "notes": "",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {},
@@ -1823,7 +1908,8 @@
        "all_day": false,
        "location": "Dr. Weber, Hauptstr. 5",
        "notes": "Bring the vaccination card",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      }
     ]
@@ -1861,7 +1947,8 @@
         "all_day": false,
         "location": "",
         "notes": "",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -1889,7 +1976,8 @@
         "all_day": false,
         "location": "",
         "notes": "Bring the vaccination card",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -1917,7 +2005,8 @@
         "all_day": false,
         "location": "",
         "notes": "Bring the vaccination card",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      }
@@ -1948,7 +2037,8 @@
        "all_day": false,
        "location": "",
        "notes": "",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {
@@ -1974,7 +2064,8 @@
        "all_day": false,
        "location": "",
        "notes": "Bring the vaccination card",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {
@@ -2000,7 +2091,8 @@
        "all_day": false,
        "location": "",
        "notes": "Bring the vaccination card",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      }
     ]
@@ -2038,7 +2130,8 @@
         "all_day": false,
         "location": "",
         "notes": "",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -2066,7 +2159,8 @@
         "all_day": false,
         "location": "",
         "notes": "Bring the vaccination card",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -2094,7 +2188,8 @@
         "all_day": false,
         "location": "",
         "notes": "Bring the vaccination card",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -2122,7 +2217,8 @@
         "all_day": false,
         "location": "",
         "notes": "Bring the vaccination card",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -2150,7 +2246,8 @@
         "all_day": false,
         "location": "",
         "notes": "Bring the vaccination card",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -2178,7 +2275,8 @@
         "all_day": false,
         "location": "",
         "notes": "Bring the vaccination card",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -2206,7 +2304,8 @@
         "all_day": false,
         "location": "",
         "notes": "Bring the vaccination card",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -2237,7 +2336,8 @@
         "all_day": false,
         "location": "",
         "notes": "",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      }
@@ -2268,7 +2368,8 @@
        "all_day": false,
        "location": "",
        "notes": "",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {"error": "RECORD_ID_INVALID"},
@@ -2301,7 +2402,8 @@
        "all_day": false,
        "location": "",
        "notes": "",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      }
     ]
@@ -2339,7 +2441,8 @@
         "all_day": false,
         "location": "",
         "notes": "",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      },
@@ -2368,7 +2471,23 @@
         "repeat": "FREQ=MONTHLY;INTERVAL=3",
         "done": false,
         "done_at": null,
-        "priority": "HIGH"
+        "priority": "HIGH",
+        "relations": [
+         {
+          "id": "c47d2e90-1f5a-4b38-9d6c-e2a8b0f31c75",
+          "kind": "axt.related",
+          "target": {
+           "id": "0b6f4a3e-8c1d-4f27-9e5a-2d7c41b8e093",
+           "sender": null,
+           "type": "axt.example.v1.Pet",
+           "text": "Mimi"
+          },
+          "note": "",
+          "start": null,
+          "end": null,
+          "attributes": {}
+         }
+        ]
        }
       }
      },
@@ -2400,7 +2519,23 @@
         "repeat": "FREQ=MONTHLY;INTERVAL=3",
         "done": false,
         "done_at": null,
-        "priority": "HIGH"
+        "priority": "HIGH",
+        "relations": [
+         {
+          "id": "c47d2e90-1f5a-4b38-9d6c-e2a8b0f31c75",
+          "kind": "axt.related",
+          "target": {
+           "id": "0b6f4a3e-8c1d-4f27-9e5a-2d7c41b8e093",
+           "sender": null,
+           "type": "axt.example.v1.Pet",
+           "text": "Mimi"
+          },
+          "note": "",
+          "start": null,
+          "end": null,
+          "attributes": {}
+         }
+        ]
        }
       }
      },
@@ -2428,7 +2563,8 @@
         "all_day": false,
         "location": "",
         "notes": "",
-        "reminders": []
+        "reminders": [],
+        "relations": []
        }
       }
      }
@@ -2459,7 +2595,8 @@
        "all_day": false,
        "location": "",
        "notes": "",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      },
      {"error": "TYPE_CHANGED"},
@@ -2494,7 +2631,8 @@
        "all_day": false,
        "location": "",
        "notes": "",
-       "reminders": []
+       "reminders": [],
+       "relations": []
       }
      }
     ]

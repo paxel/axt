@@ -33,6 +33,7 @@ import json
 import math
 import re
 import types
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -426,36 +427,63 @@ def value_breach(f: dict[str, Any], value: Any) -> str | None:
     return None  # booleans, enums and the time types have no check of their own
 
 
-def walk(f: dict[str, Any], value: Any, path: str, out: list[tuple[str, str]]) -> None:
+def walk(
+    f: dict[str, Any], value: Any, path: str, out: list[tuple[str, str]], time_check: Any = None
+) -> None:
     name, b = kind_of(f)
     if name == "axt.RelationField":
         # The check required; the rules of section 11.4 are rules every receiver checks, not checks.
         if f["required"] and (value is None or len(value) == 0):
             out.append((path, "required"))
+        elif time_check is not None and value is not None:
+            out.extend(relation_breaches(value, path, time_check))
         return
     if name in {"axt.ListField", "axt.MapField", "axt.ObjectField"} and value is not None:
         if name == "axt.ObjectField":
             for sub in b["fields"]:
-                walk(sub, value.get(sub["name"]), mr.path_join(path, sub["name"]), out)
+                walk(sub, value.get(sub["name"]), mr.path_join(path, sub["name"]), out, time_check)
             return
         if f["required"] and len(value) == 0:
             out.append((path, "required"))
         if name == "axt.ListField":
             for i, item in enumerate(value):
-                walk(b["items"], item, mr.path_join(path, i), out)
+                walk(b["items"], item, mr.path_join(path, i), out, time_check)
         else:
             for key, item in value.items():
-                walk(b["values"], item, mr.path_join(path, (key,)), out)
+                walk(b["values"], item, mr.path_join(path, (key,)), out, time_check)
         return
     check = value_breach(f, value)
     if check is not None:
         out.append((path, check))
+    elif (
+        name in TIME_BRICKS
+        and time_check is not None
+        and value is not None
+        and time_check(TIME_BRICKS[name], value)
+    ):
+        out.append((path, TIME_BRICKS[name]))
 
 
-def breaches(f: dict[str, Any], value: Any) -> list[tuple[str, str]]:
-    """The values that break a check, as (field path, check), in the order of the encoding (section 7)."""
+def relation_breaches(value: list[Any], path: str, time_check: Any) -> list[tuple[str, str]]:
+    """The values of a list of relations that break a rule of section 11.4, as (field path, axt.Relation), or
+    a time value in it that is not valid, or the URI of a target that does not have the format uri, which the
+    published schema of axt.Relation gives it, as (field path, format)."""
+    schema = {"type": "array", "items": RELATION_SCHEMA}
+    found = mr.breaches(schema, value, time_check, True, RELATION_RULES)
+    out = []
+    for where, rule, _why in found:
+        here = path + where if where.startswith("[") or not where else mr.path_join(path, where)
+        out.append((here, "format" if rule == "axt.format" else rule))
+    return out
+
+
+def breaches(f: dict[str, Any], value: Any, time_check: Any = None) -> list[tuple[str, str]]:
+    """The values that break a check, as (field path, check), in the order of the encoding (section 7). With
+    time_check, as time_examples.py has it, also the values that break a rule that every receiver checks: a
+    time value that is not valid, as (field path, its time type), and a relation that breaks a rule of section
+    11.4, as (field path, axt.Relation)."""
     out: list[tuple[str, str]] = []
-    walk(f, value, "", out)
+    walk(f, value, "", out, time_check)
     return out
 
 
@@ -483,7 +511,9 @@ UUID_TEXT = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F
 
 
 def uuid_problem(v: Any) -> bool:
-    """Not a UUID in text form, or the nil or the max UUID (spec/records.md, section 2)."""
+    """Not a UUID in text form, or the nil or the max UUID (spec/records.md, section 2); a value that a
+    library decoded with the logical type uuid is taken as its text."""
+    v = str(v) if isinstance(v, uuid.UUID) else v
     return (
         not isinstance(v, str)
         or not UUID_TEXT.fullmatch(v)
@@ -536,6 +566,7 @@ def repeated_ids(relations: list[Any]) -> set[int]:
     found: set[int] = set()
     for i, item in enumerate(relations):
         rid = item.get("id") if isinstance(item, dict) else None
+        rid = str(rid) if isinstance(rid, uuid.UUID) else rid
         if isinstance(rid, str) and not uuid_problem(rid):
             if rid.lower() in seen:
                 found.add(i)
@@ -734,6 +765,20 @@ def description_of(text: str) -> dict[str, Any]:
     return REGISTRY[text]
 
 
+# The example types of spec/types.md, section 7, published as their descriptions (section 10.3), by full name.
+EXAMPLES = REPO / "types" / "axt" / "example" / "v1"
+EXAMPLE_DESCRIPTIONS: dict[str, dict[str, Any]] = {}
+
+
+def load_examples() -> None:
+    """Read the published descriptions and register each for its derived text, so that a model that holds
+    the schema of an example type offers its published description."""
+    for path in sorted(EXAMPLES.glob("*.json")):
+        d = from_json_form(json.loads(path.read_text(encoding="utf-8")))
+        EXAMPLE_DESCRIPTIONS[type_of(d)[0]] = d
+        register(d)
+
+
 def canonical(schema: Any) -> tuple[str, bytes]:
     """The Parsing Canonical Form and the CRC-64-AVRO, as its 8 bytes in little-endian order."""
     pcf = to_parsing_canonical_form(schema)
@@ -855,7 +900,6 @@ def describe_field(x: dict[str, Any], names: dict[str, Any]) -> dict[str, Any]:
         member = "items" if t["type"] == "array" else "values"
         which = "axt.ListField" if t["type"] == "array" else "axt.MapField"
         kind, required = {which: complete(which, {member: item})}, False
-        attrs = {}
     else:
         kind = kind_from(t, attrs, x.get("default"), names)
         required = "default" not in x
@@ -1674,18 +1718,14 @@ def vector_descriptions() -> tuple[list[tuple[str, dict[str, Any]]], list[tuple[
         ("one field of each other brick, each required", kinds_description()),
         ("defaults of numbers, bytes and texts", numbers_description()),
     ]
-    for path in sorted((REPO / "types" / "axt" / "example" / "v1").glob("*.1.avsc")):
-        schema = json.loads(path.read_text(encoding="utf-8"))
-        valid.append((f"the description of {path.name}", describe_schema(schema)))
+    for name, d in EXAMPLE_DESCRIPTIONS.items():
+        valid.append((f"the example type {name}, {name.rpartition('.')[2]}.1.json", d))
     valid.append(
         (
             "relation fields first, after a date and time, twice, in a list and in an object",
             links_description(),
         )
     )
-    for path in sorted((REPO / "types" / "axt" / "example" / "v1").glob("*.2.avsc")):
-        schema = json.loads(path.read_text(encoding="utf-8"))
-        valid.append((f"the description of {path.name}, with a relation field", describe_schema(schema)))
     invalid = [(what, mutate(path, new), where) for what, path, new, where in DESCRIPTION_CASES]
     deep = field("v", "Lists in lists.", brick("LongField"), texts())
     for _ in range(MAX_TYPED_DEPTH - 1):
@@ -1709,6 +1749,9 @@ def vector_descriptions() -> tuple[list[tuple[str, dict[str, Any]]], list[tuple[
     for what, d, where in invalid:
         assert [w for w, _ in description_problems(d)] == [where], what
     return valid, invalid
+
+
+load_examples()
 
 
 def main() -> None:
@@ -1759,16 +1802,15 @@ def main() -> None:
     assert typed_depth(at_limit) == MAX_TYPED_DEPTH
     assert [w for w, _ in description_problems(at_limit)] == [""]  # the derived schema nests deeper than 64
 
-    for avsc in sorted((REPO / "types" / "axt" / "example" / "v1").glob("*.1.avsc")):
+    for name, d in EXAMPLE_DESCRIPTIONS.items():
+        avsc = EXAMPLES / f"{name.rpartition('.')[2]}.{type_of(d)[1]}.avsc"
         schema = json.loads(avsc.read_text(encoding="utf-8"))
-        d = describe_schema(schema)
-        assert description_problems(d) == [], (avsc.name, description_problems(d))
-        assert canonical(derive(d)) == canonical(schema), avsc.name
+        assert description_problems(d) == [], (name, description_problems(d))
+        assert derive(d) == schema, avsc.name  # example_schemas.py writes it
         assert derive(describe_schema(derive(d))) == derive(d), avsc.name
-        print(
-            f"{type_of(d)[0]} version {type_of(d)[1]}: a description of {round_trip(d)} bytes "
-            f"derives {avsc.name}"
-        )
+        assert kind_of(kind_of(d)[1]["fields"][-1])[0] == "axt.RelationField", name
+        assert description_of(derived_text(d)) is d, name  # the registry holds the published description
+        print(f"{name} version {type_of(d)[1]}: a description of {round_trip(d)} bytes derives {avsc.name}")
     links = links_description()
     assert description_problems(links) == [], description_problems(links)
     round_trip(links)
@@ -1817,17 +1859,7 @@ def main() -> None:
         "sources",
         *[f"sources[{i}].id" for i in range(1, 257)],
     ]
-    for avsc in sorted((REPO / "types" / "axt" / "example" / "v1").glob("*.2.avsc")):
-        schema = json.loads(avsc.read_text(encoding="utf-8"))
-        d = describe_schema(schema)
-        assert (
-            description_problems(d) == [] and kind_of(kind_of(d)[1]["fields"][-1])[0] == "axt.RelationField"
-        )
-        assert derive(d)["fields"][-1]["type"] == schema["fields"][-1]["type"], avsc.name
-    print(
-        f"com.example.Links and the 8 example types of version 2: relation fields derived, "
-        f"{round_trip(links)} bytes"
-    )
+    print(f"com.example.Links: relation fields derived, a description of {round_trip(links)} bytes")
 
     vet_schema = derive(description)
     assert describe_schema(vet_schema) is not None and canonical(

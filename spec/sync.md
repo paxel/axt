@@ -1003,7 +1003,7 @@ The phone and the tablet of section 6.2 are the two devices; their device keys a
 | `cat-a-log, phone, Ed25519`  | public key | `c338de9e8bc4ca4a886f9daefc0a4f476bd7c5fccf0d0a430574d0fdb8508ce0` |
 | `cat-a-log, tablet, Ed25519` | public key | `ee08eaa3d8aa507343bc02924fe98d02f9e4471627ace61554f1b49635f24ab2` |
 
-The record is the appointment of section 6.2, with the id `3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80` of [records.md](records.md), section 9, and the type `axt.example.v1.Appointment`. Both devices write with the schema [Appointment.1.avsc](../types/axt/example/v1/Appointment.1.avsc), whose fingerprint is `0x1af207f82b6430cd` (as bytes: `cd 30 64 2b f8 07 f2 1a`), and each has offered it to the other and has it accepted. The record has seven fields. As in section 6.2, the stamps are small numbers that are chosen, not computed, each above every stamp its device had given or seen.
+The record is the appointment of section 6.2, with the id `3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80` of [records.md](records.md), section 9, and the type `axt.example.v1.Appointment`. Both devices write with the schema [Appointment.1.avsc](../types/axt/example/v1/Appointment.1.avsc), whose fingerprint is `0x49416306becfe686` (as bytes: `86 e6 cf be 06 63 41 49`), and each has offered it to the other and has it accepted. The record has eight fields. As in section 6.2, the stamps are small numbers that are chosen, not computed, each above every stamp its device had given or seen.
 
 The phone created the record with the stamp 100 and took the state stamp 101; the tablet took it from the phone in a whole `CHANGE`, acknowledged it and took the state stamp 105. Both hold this state, and every part of it is delivered in both directions:
 
@@ -1016,6 +1016,7 @@ The phone created the record with the stamp 100 and took the state stamp 101; th
 | `location`  | ""                                                                                                                        | 100   | phone  |
 | `notes`     | ""                                                                                                                        | 100   | phone  |
 | `reminders` | an empty array                                                                                                            | 100   | phone  |
+| `relations` | an empty array                                                                                                            | 100   | phone  |
 
 No removal. State stamp: 101 on the phone, 105 on the tablet. The value of each field is the Avro binary encoding of the value shown, under the type the field has in the schema.
 
@@ -1038,14 +1039,14 @@ The phone's user moves `start` to 10:30 and sets `location` to "Dr. Weber, Haupt
 | `removal`           | `null`                                                                                                                                                    |
 | `keep`              | `null`                                                                                                                                                    |
 | `fields`            | two entries, in this order: `start`, then `location`                                                                                                      |
-| `signature`         | the phone's signature: `4946f2fcee7acb885e95dd6a6c9502c570eff148c338136b5afcfb3d0447c418d8be0536b9189c9c928f494391a331fdd7d69f7784f58d81a81460c47ad56d0c` |
+| `signature`         | the phone's signature: `cbe0cdc4104f3ebee54385ec211309aac31b0acf0f574a462dad6c766bae19689dc770d8a8470a632ceedd65fd8fb4ca5091bf63117927789e6d55f827cb3807` |
 
 | `name`     | `schema`                         | `value`                                                                                                                                                                                                                                   | `stamp` | `device` |
 | ---------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | -------- |
 | `start`    | the fingerprint of Appointment.1 | 2025-11-18 10:30:00.000 in `Europe/Berlin`, with the offset 3600 and the instant 1,763,458,200,000 (2025-11-18T09:30:00Z); as bytes: `d2 1f 16 24 14 3c 00 00 02 1a 45 75 72 6f 70 65 2f 42 65 72 6c 69 6e 02 a0 38 02 80 c7 e5 e4 d2 66` | 110     | phone    |
 | `location` | the fingerprint of Appointment.1 | "Dr. Weber, Hauptstr. 5"; as bytes: `2c 44 72 2e 20 57 65 62 65 72 2c 20 48 61 75 70 74 73 74 72 2e 20 35`                                                                                                                                | 110     | phone    |
 
-The message: 386 bytes, SHA-256 `4a4d95dc78517edfa7b24d416513bec9b48997d2e1e0ac7dec507d9783e02eb3`. Its bytes, with offsets in hexadecimal; the signature covers the prefix `AXT-v1 message` with its zero byte and the bytes from offset `000a` to the signature ([keys.md](keys.md), section 2.2):
+The message: 386 bytes, SHA-256 `986701aebaa706b30f19f22553ec18d32d5cf87398ffd7af1f7f56741ed0315a`. Its bytes, with offsets in hexadecimal; the signature covers the prefix `AXT-v1 message` with its zero byte and the bytes from offset `000a` to the signature ([keys.md](keys.md), section 2.2):
 
 ```text
 0000  c3 01                    single-object marker
@@ -1084,7 +1085,7 @@ The message: 386 bytes, SHA-256 `4a4d95dc78517edfa7b24d416513bec9b48997d2e1e0ac7
 00a1  04                       body: fields: array block of 2 items
 00a2  0a                       body: fields[0].name: string length 5
 00a3  73 74 61 72 74           body: "start"
-00a8  cd 30 64 2b f8 07 f2 1a  body: fields[0].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+00a8  86 e6 cf be 06 63 41 49  body: fields[0].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
 00b0  02                       body: fields[0].value: union index 1, bytes
 00b1  42                       body: fields[0].value: bytes length 33
 00b2  d2 1f 16 24 14 3c 00 00  body: the value: an axt.DateTime, 2025-11-18 10:30:00.000 in Europe/Berlin
@@ -1099,7 +1100,7 @@ The message: 386 bytes, SHA-256 `4a4d95dc78517edfa7b24d416513bec9b48997d2e1e0ac7
       05 74 d0 fd b8 50 8c e0
 00f5  10                       body: fields[1].name: string length 8
 00f6  6c 6f 63 61 74 69 6f 6e  body: "location"
-00fe  cd 30 64 2b f8 07 f2 1a  body: fields[1].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+00fe  86 e6 cf be 06 63 41 49  body: fields[1].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
 0106  02                       body: fields[1].value: union index 1, bytes
 0107  2e                       body: fields[1].value: bytes length 23
 0108  2c 44 72 2e 20 57 65 62  body: the value: "Dr. Weber, Hauptstr. 5" as an Avro string
@@ -1111,14 +1112,14 @@ The message: 386 bytes, SHA-256 `4a4d95dc78517edfa7b24d416513bec9b48997d2e1e0ac7
       6b d7 c5 fc cf 0d 0a 43
       05 74 d0 fd b8 50 8c e0
 0141  00                       body: fields: end of the array
-0142  49 46 f2 fc ee 7a cb 88  signature: fixed(64)
-      5e 95 dd 6a 6c 95 02 c5
-      70 ef f1 48 c3 38 13 6b
-      5a fc fb 3d 04 47 c4 18
-      d8 be 05 36 b9 18 9c 9c
-      92 8f 49 43 91 a3 31 fd
-      d7 d6 9f 77 84 f5 8d 81
-      a8 14 60 c4 7a d5 6d 0c
+0142  cb e0 cd c4 10 4f 3e be  signature: fixed(64)
+      e5 43 85 ec 21 13 09 aa
+      c3 1b 0a cf 0f 57 4a 46
+      2d ad 6c 76 6b ae 19 68
+      9d c7 70 d8 a8 47 0a 63
+      2c ee dd 65 fd 8f b4 ca
+      50 91 bf 63 11 79 27 78
+      9e 6d 55 f8 27 cb 38 07
 0182  end
 ```
 
@@ -1140,7 +1141,7 @@ The tablet took two field states, so the outcome is `APPLIED`. It had given or s
 | `receiver_version` | 115, the tablet's new state stamp      |
 | `kept_fields`      | empty                                  |
 
-The `ACK`: 198 bytes, SHA-256 `65fd9649e305db3f519d411200bec4a7707f42d554920fabebad2c287231d0d7`. When the phone takes it, the two parts are delivered to the tablet, and the phone counts 115 as a stamp it has seen and as the highest state stamp of the record it has seen from a sibling (section 9.2). Both devices hold the same seven field states; the state stamps are 111 on the phone and 115 on the tablet. Should another app answer a `DATA` of the phone under the version 111 with `STALE` and the version 115, the phone knows that version and does nothing more (section 5.3).
+The `ACK`: 198 bytes, SHA-256 `65fd9649e305db3f519d411200bec4a7707f42d554920fabebad2c287231d0d7`. When the phone takes it, the two parts are delivered to the tablet, and the phone counts 115 as a stamp it has seen and as the highest state stamp of the record it has seen from a sibling (section 9.2). Both devices hold the same eight field states; the state stamps are 111 on the phone and 115 on the tablet. Should another app answer a `DATA` of the phone under the version 111 with `STALE` and the version 115, the phone knows that version and does nothing more (section 5.3).
 
 ### 16.3 A `RESYNC`
 
@@ -1213,8 +1214,8 @@ The tablet has given or seen the stamps up to 115. Before it sends the appointme
 | `whole`             | `true`                                                                                                                                                     |
 | `removal`           | `null`                                                                                                                                                     |
 | `keep`              | `null`                                                                                                                                                     |
-| `fields`            | seven entries, in the order of the schema's fields                                                                                                         |
-| `signature`         | the tablet's signature: `9b2a027860f8e499be59c594a5b1118d789f3893e96434b1088130170ee9e78d7f83f98d721f939a7845159e93f6f0f16a79c9021465b0d8db931e7309423409` |
+| `fields`            | eight entries, in the order of the schema's fields                                                                                                         |
+| `signature`         | the tablet's signature: `f81980430b593fcba96dc7f453e51e4b272c4119ad786ad963b5be8378a450ec4ff856ffc466da9edfe5f0861643464949266f6b071dbc4380b9781d728a2f06` |
 
 | `name`      | `schema`                         | `value`                                                   | `stamp` | `device` |
 | ----------- | -------------------------------- | --------------------------------------------------------- | ------- | -------- |
@@ -1225,8 +1226,9 @@ The tablet has given or seen the stamps up to 115. Before it sends the appointme
 | `location`  | the fingerprint of Appointment.1 | "Dr. Weber, Hauptstr. 5", the bytes of section 16.2       | 110     | phone    |
 | `notes`     | the fingerprint of Appointment.1 | ""; as bytes: `00`                                        | 100     | phone    |
 | `reminders` | the fingerprint of Appointment.1 | an empty array; as bytes: `00`                            | 100     | phone    |
+| `relations` | the fingerprint of Appointment.1 | an empty array; as bytes: `00`                            | 100     | phone    |
 
-The message: 648 bytes, SHA-256 `87876edaaafeed32a36537c829a45d4a1c86ac340c0f501729d268eaf9539ca8`. Its bytes, with offsets in hexadecimal; the signature covers the prefix `AXT-v1 message` with its zero byte and the bytes from offset `000a` to the signature ([keys.md](keys.md), section 2.2):
+The message: 703 bytes, SHA-256 `7f1e202d49b9d7a26d66afc14d3057b716d60d0bf31e7355f9c3940aeb7d8f2b`. Its bytes, with offsets in hexadecimal; the signature covers the prefix `AXT-v1 message` with its zero byte and the bytes from offset `000a` to the signature ([keys.md](keys.md), section 2.2):
 
 ```text
 0000  c3 01                    single-object marker
@@ -1245,7 +1247,7 @@ The message: 648 bytes, SHA-256 `87876edaaafeed32a36537c829a45d4a1c86ac340c0f501
       32 64 34 62 35 63 36 65
       37 66 38 30
 0052  ea 01                    record.version: long 117
-0054  e4 07                    body: bytes length 498
+0054  d2 08                    body: bytes length 553
 0056  c3 01                    body: single-object marker
 0058  c1 88 f8 c5 af 4d 09 4d  body: fingerprint of axt.Change, format 1
 0060  c3 38 de 9e 8b c4 ca 4a  body: to: fixed(32), the phone's test key
@@ -1262,10 +1264,10 @@ The message: 648 bytes, SHA-256 `87876edaaafeed32a36537c829a45d4a1c86ac340c0f501
 009e  01                       body: whole: boolean true
 009f  00                       body: removal: union index 0, null
 00a0  00                       body: keep: union index 0, null
-00a1  0e                       body: fields: array block of 7 items
+00a1  10                       body: fields: array block of 8 items
 00a2  0a                       body: fields[0].name: string length 5
 00a3  74 69 74 6c 65           body: "title"
-00a8  cd 30 64 2b f8 07 f2 1a  body: fields[0].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+00a8  86 e6 cf be 06 63 41 49  body: fields[0].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
 00b0  02                       body: fields[0].value: union index 1, bytes
 00b1  08                       body: fields[0].value: bytes length 4
 00b2  06 56 65 74              body: the value: "Vet" as an Avro string
@@ -1276,7 +1278,7 @@ The message: 648 bytes, SHA-256 `87876edaaafeed32a36537c829a45d4a1c86ac340c0f501
       05 74 d0 fd b8 50 8c e0
 00d8  0a                       body: fields[1].name: string length 5
 00d9  73 74 61 72 74           body: "start"
-00de  cd 30 64 2b f8 07 f2 1a  body: fields[1].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+00de  86 e6 cf be 06 63 41 49  body: fields[1].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
 00e6  02                       body: fields[1].value: union index 1, bytes
 00e7  42                       body: fields[1].value: bytes length 33
 00e8  d2 1f 16 24 14 3c 00 00  body: the value: an axt.DateTime, 2025-11-18 10:30:00.000 in Europe/Berlin
@@ -1291,7 +1293,7 @@ The message: 648 bytes, SHA-256 `87876edaaafeed32a36537c829a45d4a1c86ac340c0f501
       05 74 d0 fd b8 50 8c e0
 012b  06                       body: fields[2].name: string length 3
 012c  65 6e 64                 body: "end"
-012f  cd 30 64 2b f8 07 f2 1a  body: fields[2].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+012f  86 e6 cf be 06 63 41 49  body: fields[2].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
 0137  02                       body: fields[2].value: union index 1, bytes
 0138  02                       body: fields[2].value: bytes length 1
 0139  00                       body: the value: union index 0, null
@@ -1302,7 +1304,7 @@ The message: 648 bytes, SHA-256 `87876edaaafeed32a36537c829a45d4a1c86ac340c0f501
       05 74 d0 fd b8 50 8c e0
 015c  0e                       body: fields[3].name: string length 7
 015d  61 6c 6c 5f 64 61 79     body: "all_day"
-0164  cd 30 64 2b f8 07 f2 1a  body: fields[3].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+0164  86 e6 cf be 06 63 41 49  body: fields[3].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
 016c  02                       body: fields[3].value: union index 1, bytes
 016d  02                       body: fields[3].value: bytes length 1
 016e  00                       body: the value: boolean false
@@ -1313,7 +1315,7 @@ The message: 648 bytes, SHA-256 `87876edaaafeed32a36537c829a45d4a1c86ac340c0f501
       05 74 d0 fd b8 50 8c e0
 0191  10                       body: fields[4].name: string length 8
 0192  6c 6f 63 61 74 69 6f 6e  body: "location"
-019a  cd 30 64 2b f8 07 f2 1a  body: fields[4].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+019a  86 e6 cf be 06 63 41 49  body: fields[4].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
 01a2  02                       body: fields[4].value: union index 1, bytes
 01a3  2e                       body: fields[4].value: bytes length 23
 01a4  2c 44 72 2e 20 57 65 62  body: the value: "Dr. Weber, Hauptstr. 5" as an Avro string
@@ -1326,7 +1328,7 @@ The message: 648 bytes, SHA-256 `87876edaaafeed32a36537c829a45d4a1c86ac340c0f501
       05 74 d0 fd b8 50 8c e0
 01dd  0a                       body: fields[5].name: string length 5
 01de  6e 6f 74 65 73           body: "notes"
-01e3  cd 30 64 2b f8 07 f2 1a  body: fields[5].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+01e3  86 e6 cf be 06 63 41 49  body: fields[5].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
 01eb  02                       body: fields[5].value: union index 1, bytes
 01ec  02                       body: fields[5].value: bytes length 1
 01ed  00                       body: the value: a string of length 0
@@ -1338,7 +1340,7 @@ The message: 648 bytes, SHA-256 `87876edaaafeed32a36537c829a45d4a1c86ac340c0f501
 0210  12                       body: fields[6].name: string length 9
 0211  72 65 6d 69 6e 64 65 72  body: "reminders"
       73
-021a  cd 30 64 2b f8 07 f2 1a  body: fields[6].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+021a  86 e6 cf be 06 63 41 49  body: fields[6].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
 0222  02                       body: fields[6].value: union index 1, bytes
 0223  02                       body: fields[6].value: bytes length 1
 0224  00                       body: the value: an array without items
@@ -1347,16 +1349,28 @@ The message: 648 bytes, SHA-256 `87876edaaafeed32a36537c829a45d4a1c86ac340c0f501
       88 6f 9d ae fc 0a 4f 47
       6b d7 c5 fc cf 0d 0a 43
       05 74 d0 fd b8 50 8c e0
-0247  00                       body: fields: end of the array
-0248  9b 2a 02 78 60 f8 e4 99  signature: fixed(64)
-      be 59 c5 94 a5 b1 11 8d
-      78 9f 38 93 e9 64 34 b1
-      08 81 30 17 0e e9 e7 8d
-      7f 83 f9 8d 72 1f 93 9a
-      78 45 15 9e 93 f6 f0 f1
-      6a 79 c9 02 14 65 b0 d8
-      db 93 1e 73 09 42 34 09
-0288  end
+0247  12                       body: fields[7].name: string length 9
+0248  72 65 6c 61 74 69 6f 6e  body: "relations"
+      73
+0251  86 e6 cf be 06 63 41 49  body: fields[7].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+0259  02                       body: fields[7].value: union index 1, bytes
+025a  02                       body: fields[7].value: bytes length 1
+025b  00                       body: the value: an array without items
+025c  c8 01                    body: fields[7].stamp: long 100
+025e  c3 38 de 9e 8b c4 ca 4a  body: fields[7].device: fixed(32), the phone's test key
+      88 6f 9d ae fc 0a 4f 47
+      6b d7 c5 fc cf 0d 0a 43
+      05 74 d0 fd b8 50 8c e0
+027e  00                       body: fields: end of the array
+027f  f8 19 80 43 0b 59 3f cb  signature: fixed(64)
+      a9 6d c7 f4 53 e5 1e 4b
+      27 2c 41 19 ad 78 6a d9
+      63 b5 be 83 78 a4 50 ec
+      4f f8 56 ff c4 66 da 9e
+      df e5 f0 86 16 43 46 49
+      49 26 6f 6b 07 1d bc 43
+      80 b9 78 1d 72 8a 2f 06
+02bf  end
 ```
 
 The tablet signs the message, although the phone made every change in it (section 13.1). The phone processes it and merges:
@@ -1370,8 +1384,9 @@ The tablet signs the message, although the phone made every change in it (sectio
 | `location`  | "", 100, phone        | "Dr. Weber, Hauptstr. 5", 110, phone | other  | 110 is above 100     |
 | `notes`     | "", 100, phone        | "", 100, phone                       | own    | the same field state |
 | `reminders` | empty, 100, phone     | empty, 100, phone                    | own    | the same field state |
+| `relations` | empty, 100, phone     | empty, 100, phone                    | own    | the same field state |
 
-The phone took two field states, so the outcome is `APPLIED`: the change it had lost with the restore is back. It had given or seen the stamps up to 101; it counts 100, 110 and 117 as seen and takes a new state stamp above 117: here 118. Its `ACK` to the tablet carries the id, the version 117, `APPLIED`, the `receiver_version` 118, its new state stamp, and no kept field: 198 bytes, SHA-256 `e2e067426df1ebbe2315f47ece97042da721c4981cb512642f6d6c6f251578b8`. On the phone, the record is known to the tablet, and all seven parts of the message are delivered to it, the two it took and the five it held already. When the tablet takes the `ACK`, the record is known to the phone again, its seven parts are delivered to it, and the tablet counts 118 as seen.
+The phone took two field states, so the outcome is `APPLIED`: the change it had lost with the restore is back. It had given or seen the stamps up to 101; it counts 100, 110 and 117 as seen and takes a new state stamp above 117: here 118. Its `ACK` to the tablet carries the id, the version 117, `APPLIED`, the `receiver_version` 118, its new state stamp, and no kept field: 198 bytes, SHA-256 `e2e067426df1ebbe2315f47ece97042da721c4981cb512642f6d6c6f251578b8`. On the phone, the record is known to the tablet, and all eight parts of the message are delivered to it, the two it took and the six it held already. When the tablet takes the `ACK`, the record is known to the phone again, its eight parts are delivered to it, and the tablet counts 118 as seen.
 
 The appointment is the only record the tablet holds, so its answer is complete with that `CHANGE`. After it, the tablet acknowledges the request, in an `ACK` to the phone with one entry:
 
@@ -1392,7 +1407,7 @@ Had the tablet's message carried only `start` and `location`, with `whole` `fals
 
 The examples of sections 16.5 to 16.7 are the steps 1 and 2 of section 22.4. They do not continue sections 16.2 to 16.4: the phone and the tablet of section 16.1 are here the two devices of a set that takes a record from another app, and each has given or seen stamps as section 22.4 says, the phone up to 195 and the tablet up to 190. The other app is Old Brain Fix, which signs with the test key `Old Brain Fix, Ed25519` of [protocol.md](protocol.md), section 17.1, whose public key is `da9e54c9aa2db43244df99889d9138c1ca7175d4ca0908168f63530e4a7dedb7`. **These keys are for tests only and MUST NOT be used outside tests.** The phone knows Old Brain Fix by that one key, so it keeps no addition and no removal of it. It keeps the `MANIFEST` that Old Brain Fix sent in the connection, the message of [manifest.md](manifest.md), section 10.3, and has forwarded it to the tablet before the forward of this section, since a manifest goes before a record message (section 20.3). That forward is not shown: by it the tablet took the key of Old Brain Fix as the first key of a new known sender, without a question to its user (section 19.2), and keeps the manifest of that key.
 
-Old Brain Fix sends the appointment of [records.md](records.md), section 9, step 1, to the phone, in a live connection and under an offer of `axt.example.v1.Appointment` that the phone accepted. The offer carried the description of [Appointment.1.avsc](../types/axt/example/v1/Appointment.1.avsc) of [protocol.md](protocol.md), section 17.3; the phone holds the schema derived from it as its text ([fields.md](fields.md), section 9.3): 4,542 bytes. The record has the id `3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80`. The set's own record of section 16.1 has the same id; the two are different records, since their senders differ (section 17.1), and the examples of sections 16.5 to 16.7 are about the received one only.
+Old Brain Fix sends the appointment of [records.md](records.md), section 9, step 1, to the phone, in a live connection and under an offer of `axt.example.v1.Appointment` that the phone accepted. The offer carried the description [Appointment.1.json](../types/axt/example/v1/Appointment.1.json) of [protocol.md](protocol.md), section 17.3; the phone holds the schema derived from it as its text ([fields.md](fields.md), section 9.3): 4,542 bytes. The record has the id `3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80`. The set's own record of section 16.1 has the same id; the two are different records, since their senders differ (section 17.1), and the examples of sections 16.5 to 16.7 are about the received one only.
 
 The `DATA` of Old Brain Fix:
 
@@ -1403,10 +1418,10 @@ The `DATA` of Old Brain Fix:
 | `sender`            | the key of Old Brain Fix                                                                                                                                                                                                                                                                                            |
 | `record.id`         | `3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80`                                                                                                                                                                                                                                                                              |
 | `record.version`    | 1                                                                                                                                                                                                                                                                                                                   |
-| body                | an `axt.example.v1.Appointment` in single-object encoding, with the fingerprint of Appointment.1: `title` "Vet"; `start` 2025-11-18 10:00:00.000 in `Europe/Berlin`, with the offset 3600 and the instant 1,763,456,400,000; `end` `null`; `all_day` `false`; `location` ""; `notes` ""; `reminders` an empty array |
-| `signature`         | the signature of Old Brain Fix: `5c5317aec2ba2d08540017e0fc141a1b7cc3facc85652cd2d84a29cb53db8696e7711510451c21775cc6d52232f166b6129d12b4e17fc674c7f045dea3084802`                                                                                                                                                  |
+| body                | an `axt.example.v1.Appointment` in single-object encoding, with the fingerprint of Appointment.1: `title` "Vet"; `start` 2025-11-18 10:00:00.000 in `Europe/Berlin`, with the offset 3600 and the instant 1,763,456,400,000; `end` `null`; `all_day` `false`; `location` ""; `notes` ""; `reminders` an empty array; `relations` an empty array |
+| `signature`         | the signature of Old Brain Fix: `7ac030b774765432289aa010e628c1a4b9453ebbd97dbe68e96401d244be81d807a768f1b621c6b5c790f556a130b9d932d2690a3935bdde26617bc79bc0b109`                                                                                                                                                  |
 
-The `DATA`: 200 bytes, SHA-256 `d0bdcdf95c04da5b42af9d404c6a2b7d3157013d15758cb5d3ac7ee97cd4be0a`. The phone has no record under that id from Old Brain Fix, takes the record, and acknowledges it to Old Brain Fix with `APPLIED` and the receiver's version 1 ([records.md](records.md), section 5.2). It keeps the message with the text of its schema (section 20.1). The kept message is due for the tablet, so the phone forwards it, in a forward to which it gives the id `c4a1e2b3-6d7f-4809-9a1b-2c3d4e5f6071`, a UUID of version 4 chosen for this example:
+The `DATA`: 201 bytes, SHA-256 `b3dafc737f156759ff3844014f9cfde6adfe77125b54f92f384d6c964a8a80fb`. The phone has no record under that id from Old Brain Fix, takes the record, and acknowledges it to Old Brain Fix with `APPLIED` and the receiver's version 1 ([records.md](records.md), section 5.2). It keeps the message with the text of its schema (section 20.1). The kept message is due for the tablet, so the phone forwards it, in a forward to which it gives the id `c4a1e2b3-6d7f-4809-9a1b-2c3d4e5f6071`, a UUID of version 4 chosen for this example:
 
 | Part of the message | Value                                                                                                                                                     |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1416,11 +1431,11 @@ The `DATA`: 200 bytes, SHA-256 `d0bdcdf95c04da5b42af9d404c6a2b7d3157013d15758cb5
 | `record.id`         | `c4a1e2b3-6d7f-4809-9a1b-2c3d4e5f6071`, the id of the forward                                                                                             |
 | `record.version`    | 1                                                                                                                                                         |
 | `to`                | the tablet's key                                                                                                                                          |
-| `message`           | the `DATA` above, byte for byte: 200 bytes                                                                                                                |
-| `schema`            | the text of the schema derived from the description that Old Brain Fix offered: 4,542 bytes                                                               |
-| `signature`         | the phone's signature: `26e268de899237810affdfa9947b1c226a7730b9223f30429ca7bd336c2990b661ea68aceace2e5417077d250159ecc7a4a81abca56ee8e18f668e4a7a7e4c09` |
+| `message`           | the `DATA` above, byte for byte: 201 bytes                                                                                                                |
+| `schema`            | the text of the schema derived from the description that Old Brain Fix offered: 11,068 bytes                                                              |
+| `signature`         | the phone's signature: `85d30b167e75cfcf2067e21d3b366f7a214b24d6f25667a3e64237f7bd39ac2ee098aa34fbc09c70682cb39ed443d7b2a5657a22851415975bc111206a64a10c` |
 
-The `FORWARD`: 4,938 bytes, SHA-256 `59e193a7b223ab56641df8b9586dcb7b108762a3653b48008df89a875c47e94f`. Its bytes, with offsets in hexadecimal; the text of the schema is shown shortened:
+The `FORWARD`: 11,467 bytes, SHA-256 `7a9caee6e01f64b8038f7d3bf13df5c700267b43c18d9d65c74b40e25dda88fa`. Its bytes, with offsets in hexadecimal; the text of the schema is shown shortened:
 
 ```text
 0000  c3 01                    single-object marker
@@ -1439,64 +1454,65 @@ The `FORWARD`: 4,938 bytes, SHA-256 `59e193a7b223ab56641df8b9586dcb7b108762a3653
       32 63 33 64 34 65 35 66
       36 30 37 31
 0052  02                       record.version: long 1
-0053  ea 4a                    body: bytes length 4789
-0055  c3 01                    body: single-object marker
-0057  ad 3b 05 6b bf 6a 47 57  body: fingerprint of axt.Forward, format 1
-005f  ee 08 ea a3 d8 aa 50 73  body: to: fixed(32), the tablet's test key
+0053  ea b0 01                 body: bytes length 11317
+0056  c3 01                    body: single-object marker
+0058  ad 3b 05 6b bf 6a 47 57  body: fingerprint of axt.Forward, format 1
+0060  ee 08 ea a3 d8 aa 50 73  body: to: fixed(32), the tablet's test key
       43 bc 02 92 4f e9 8d 02
       f9 e4 47 16 27 ac e6 15
       54 f1 b4 96 35 f2 4a b2
-007f  90 03                    body: message: bytes length 200
-0081  c3 01                    body: message: single-object marker
-0083  16 30 6f 71 b9 ce 9e a8  body: message: fingerprint of axt.Envelope, format 1
-008b  02                       body: message: format: int 1
-008c  08                       body: message: kind: enum index 4, DATA
-008d  da 9e 54 c9 aa 2d b4 32  body: message: sender: fixed(32), Old Brain Fix's test key
+0080  92 03                    body: message: bytes length 201
+0082  c3 01                    body: message: single-object marker
+0084  16 30 6f 71 b9 ce 9e a8  body: message: fingerprint of axt.Envelope, format 1
+008c  02                       body: message: format: int 1
+008d  08                       body: message: kind: enum index 4, DATA
+008e  da 9e 54 c9 aa 2d b4 32  body: message: sender: fixed(32), Old Brain Fix's test key
       44 df 99 88 9d 91 38 c1
       ca 71 75 d4 ca 09 08 16
       8f 63 53 0e 4a 7d ed b7
-00ad  02                       body: message: record: union index 1, axt.RecordRef
-00ae  48                       body: message: record.id: string length 36
-00af  33 66 32 63 38 61 35 65  body: message: "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80"
+00ae  02                       body: message: record: union index 1, axt.RecordRef
+00af  48                       body: message: record.id: string length 36
+00b0  33 66 32 63 38 61 35 65  body: message: "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80"
       2d 39 62 31 64 2d 34 63
       37 65 2d 38 61 36 66 2d
       32 64 34 62 35 63 36 65
       37 66 38 30
-00d3  02                       body: message: record.version: long 1
-00d4  68                       body: message: body: bytes length 52
-00d5  c3 01                    body: message: body: single-object marker
-00d7  cd 30 64 2b f8 07 f2 1a  body: message: body: fingerprint of axt.example.v1.Appointment, version 1
-00df  06 56 65 74              body: message: body: title: the value of section 16.1
-00e3  d2 1f 16 24 14 00 00 00  body: message: body: start: the value of section 16.1
+00d4  02                       body: message: record.version: long 1
+00d5  6a                       body: message: body: bytes length 53
+00d6  c3 01                    body: message: body: single-object marker
+00d8  86 e6 cf be 06 63 41 49  body: message: body: fingerprint of axt.example.v1.Appointment, version 1
+00e0  06 56 65 74              body: message: body: title: the value of section 16.1
+00e4  d2 1f 16 24 14 00 00 00  body: message: body: start: the value of section 16.1
       02 1a 45 75 72 6f 70 65
       2f 42 65 72 6c 69 6e 02
       a0 38 02 80 ea 89 e3 d2
       66
-0104  00                       body: message: body: end: the value of section 16.1
-0105  00                       body: message: body: all_day: the value of section 16.1
-0106  00                       body: message: body: location: the value of section 16.1
-0107  00                       body: message: body: notes: the value of section 16.1
-0108  00                       body: message: body: reminders: the value of section 16.1
-0109  5c 53 17 ae c2 ba 2d 08  body: message: signature: fixed(64)
-      54 00 17 e0 fc 14 1a 1b
-      7c c3 fa cc 85 65 2c d2
-      d8 4a 29 cb 53 db 86 96
-      e7 71 15 10 45 1c 21 77
-      5c c6 d5 22 32 f1 66 b6
-      12 9d 12 b4 e1 7f c6 74
-      c7 f0 45 de a3 08 48 02
-0149  02                       body: schema: union index 1, string
-014a  fc 46                    body: schema: string length 4542
-014c  7b 22 61 78 ... 22 7d    body: the schema derived from the description of Appointment.1.avsc (4542 bytes of UTF-8 JSON)
-130a  26 e2 68 de 89 92 37 81  signature: fixed(64)
-      0a ff df a9 94 7b 1c 22
-      6a 77 30 b9 22 3f 30 42
-      9c a7 bd 33 6c 29 90 b6
-      61 ea 68 ac ea ce 2e 54
-      17 07 7d 25 01 59 ec c7
-      a4 a8 1a bc a5 6e e8 e1
-      8f 66 8e 4a 7a 7e 4c 09
-134a  end
+0105  00                       body: message: body: end: the value of section 16.1
+0106  00                       body: message: body: all_day: the value of section 16.1
+0107  00                       body: message: body: location: the value of section 16.1
+0108  00                       body: message: body: notes: the value of section 16.1
+0109  00                       body: message: body: reminders: the value of section 16.1
+010a  00                       body: message: body: relations: the value of section 16.1
+010b  7a c0 30 b7 74 76 54 32  body: message: signature: fixed(64)
+      28 9a a0 10 e6 28 c1 a4
+      b9 45 3e bb d9 7d be 68
+      e9 64 01 d2 44 be 81 d8
+      07 a7 68 f1 b6 21 c6 b5
+      c7 90 f5 56 a1 30 b9 d9
+      32 d2 69 0a 39 35 bd de
+      26 61 7b c7 9b c0 b1 09
+014b  02                       body: schema: union index 1, string
+014c  f8 ac 01                 body: schema: string length 11068
+014f  7b 22 61 78 ... 22 7d    body: the schema derived from the description Appointment.1.json (11068 bytes of UTF-8 JSON)
+2c8b  85 d3 0b 16 7e 75 cf cf  signature: fixed(64)
+      20 67 e2 1d 3b 36 6f 7a
+      21 4b 24 d6 f2 56 67 a3
+      e6 42 37 f7 bd 39 ac 2e
+      e0 98 aa 34 fb c0 9c 70
+      68 2c b3 9e d4 43 d7 b2
+      a5 65 7a 22 85 14 15 97
+      5b c1 11 20 6a 64 a1 0c
+2ccb  end
 ```
 
 The tablet processes it by section 18.3. The inner message is a valid `DATA` of envelope format 1 (steps 7 to 9); the fingerprint of the schema text is the one its body names (step 11); its signature verifies with the key of Old Brain Fix (step 12), which is no key of the tablet's set and no refused key (steps 13 and 14). That key is a current key of a sender the tablet knows, from the forwarded `MANIFEST`. The tablet holds no record under the id from that sender: it takes the record into the sender's layer with the receiver's version 1, keeps the message and the schema text, and shows the appointment (section 19.5). It sends Old Brain Fix nothing. The same bytes are now a kept message of the tablet, so that message is delivered to the phone on the tablet and is not forwarded back (section 20.2).
@@ -1535,13 +1551,13 @@ The tablet's user sets the `location` of the received appointment to "Dr. Weber,
 | `removal`           | `null`                                                                                                                                                     |
 | `keep`              | `null`                                                                                                                                                     |
 | `fields`            | one entry: `location`                                                                                                                                      |
-| `signature`         | the tablet's signature: `eef90edd59faeb7f64ccf01178e5c380984a1cfdd7edfafd3f129d24cbda8a4351426b12771be135e7d2a5817023a3081258aa19ef19d8d2ff5942edf291950c` |
+| `signature`         | the tablet's signature: `89bac993abe024058e90c9f6e1b3787ba4801eb5eec4dc2717c64e8bd49b52d62933676bd7aa5191e594db18365940da6bbf30547b933dcdc068c58b4c047400` |
 
 | `name`     | `schema`                         | `value`                                             | `stamp` | `device` |
 | ---------- | -------------------------------- | --------------------------------------------------- | ------- | -------- |
 | `location` | the fingerprint of Appointment.1 | "Dr. Weber, Hauptstr. 5", the bytes of section 16.2 | 200     | tablet   |
 
-The `CHANGE`: 335 bytes, SHA-256 `c7a062c2967186d250073cf2b2518ca445318d25809c95ff4330887866070524`. Its bytes, with offsets in hexadecimal:
+The `CHANGE`: 335 bytes, SHA-256 `b154971f55eb2dbdaec6ed5fd59c914bacd5b14f80a00a0917874c740005c664`. Its bytes, with offsets in hexadecimal:
 
 ```text
 0000  c3 01                    single-object marker
@@ -1584,7 +1600,7 @@ The `CHANGE`: 335 bytes, SHA-256 `c7a062c2967186d250073cf2b2518ca445318d25809c95
 00c1  02                       body: fields: array block of 1 items
 00c2  10                       body: fields[0].name: string length 8
 00c3  6c 6f 63 61 74 69 6f 6e  body: "location"
-00cb  cd 30 64 2b f8 07 f2 1a  body: fields[0].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
+00cb  86 e6 cf be 06 63 41 49  body: fields[0].schema: fixed(8), fingerprint of axt.example.v1.Appointment, version 1
 00d3  02                       body: fields[0].value: union index 1, bytes
 00d4  2e                       body: fields[0].value: bytes length 23
 00d5  2c 44 72 2e 20 57 65 62  body: the value: "Dr. Weber, Hauptstr. 5" as an Avro string
@@ -1596,14 +1612,14 @@ The `CHANGE`: 335 bytes, SHA-256 `c7a062c2967186d250073cf2b2518ca445318d25809c95
       f9 e4 47 16 27 ac e6 15
       54 f1 b4 96 35 f2 4a b2
 010e  00                       body: fields: end of the array
-010f  ee f9 0e dd 59 fa eb 7f  signature: fixed(64)
-      64 cc f0 11 78 e5 c3 80
-      98 4a 1c fd d7 ed fa fd
-      3f 12 9d 24 cb da 8a 43
-      51 42 6b 12 77 1b e1 35
-      e7 d2 a5 81 70 23 a3 08
-      12 58 aa 19 ef 19 d8 d2
-      ff 59 42 ed f2 91 95 0c
+010f  89 ba c9 93 ab e0 24 05  signature: fixed(64)
+      8e 90 c9 f6 e1 b3 78 7b
+      a4 80 1e b5 ee c4 dc 27
+      17 c6 4e 8b d4 9b 52 d6
+      29 33 67 6b d7 aa 51 91
+      e5 94 db 18 36 59 40 da
+      6b bf 30 54 7b 93 3d cd
+      c0 68 c5 8b 4c 04 74 00
 014f  end
 ```
 

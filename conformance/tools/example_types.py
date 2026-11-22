@@ -1,35 +1,35 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
 """Check the example types of spec/types.md and print their fingerprints.
 
-For every schema under types/axt/example/ this script:
+Each example type is published as its description, types/axt/example/v1/<Type>.<version>.json, from which
+conformance/tools/example_schemas.py derives the schema <Type>.<version>.avsc. For every example type this
+script:
 
-- checks the rules of spec/types.md, section 5, that a program can check:
+- checks that its description is valid (spec/fields.md, section 6), derives the schema of its file, and
+  carries the texts of spec/types.md, section 5.9: a label and an emoji, and the label and the help in
+  German, on the type and on each typed field except the items and values of a list or a map that are not
+  objects, and a label in both languages on each enum symbol and each group;
+- checks the rules of spec/types.md, section 5, that a program can check on the derived schema:
   a doc on the type, every named type and every field; the namespace and
   axt.version matching the file's path; names in the required case; only
   ["null", T] unions with the default null, and the union of the targets
   of axt.Relation; an enum default; only the logical type uuid; the time
-  types of spec/time.md and axt.Relation of spec/types.md, section 8,
+  types of spec/time.md and axt.Relation of spec/fields.md, section 11,
   defined in place at their first occurrence, as their published schemas
-  with every named type defined before them by its full name (section
-  8.6), and referred to by full name after it; axt.title naming a string
-  field; axt.unit only on
-  numbers; every axt.* attribute known, in its place and keeping its
-  rules, with the code of metadata_rules.py (spec/metadata.md), axt.anchor
-  among them; axt.label and axt.emoji on every record and field and
-  axt.symbols with a label for every enum symbol (section 5.9); no
-  recursion; the schema size and depth limits of spec/envelope.md; nested
-  type names unique across the types, the published types aside; and
-  that each version 2 is its version 1 with the field relations added;
-  the published schema types/axt/Relation.avsc under the same rules;
+  with every named type defined before them by its full name, and referred
+  to by full name after it; no recursion; the schema size and depth limits
+  of spec/envelope.md; nested type names unique across the types, the
+  published types aside; and the published schema types/axt/Relation.avsc
+  under the same rules, with the attributes of spec/metadata.md;
 - checks that every example datum keeps the rules of the time types
-  (spec/time.md, sections 4 to 7) and every check of its schema
-  (spec/metadata.md, section 6), and that each zoned time has the offset
-  of its zone at its instant by this system's zone rules;
+  (spec/time.md, sections 4 to 7) and of the relations, and every check of
+  its description (spec/fields.md, section 7), and that each zoned time has
+  the offset of its zone at its instant by this system's zone rules;
 - checks further records that keep every rule (VALID), such as all-day
   and floating times and an offset that is not the zone's, and records
   with a value that breaks a rule (BREACHES), each with the field path and
-  the rule of the first such value in the order of the encoding; and the
-  same for records of version 2 with relations (RELATION_VALID and
+  the rule or the check of the first such value in the order of the
+  encoding; and the same for records with relations (RELATION_VALID and
   RELATION_BREACHES), with the rules of spec/fields.md, section 11.4;
 - computes the Parsing Canonical Form and the CRC-64-AVRO fingerprint, and
   checks both against fastavro and the Apache avro package;
@@ -87,6 +87,15 @@ if _spec is None or _spec.loader is None:
 mr = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(mr)
 
+# The bricks of spec/fields.md, which hold the published descriptions of the example types.
+_spec = importlib.util.spec_from_file_location(
+    "fields_examples", Path(__file__).resolve().parent / "fields_examples.py"
+)
+if _spec is None or _spec.loader is None:
+    raise ImportError("fields_examples.py cannot be loaded")
+fe: Any = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(fe)
+
 LOGICAL_TYPES = {("string", "uuid")}  # spec/types.md, section 5.5
 # The published schemas of the time types, which a type defines in place (spec/time.md, section 3.1).
 TIME_TYPES = {
@@ -129,6 +138,7 @@ def date(year: int | None = None, month: int | None = None, day: int | None = No
 
 
 BERLIN, CET = "Europe/Berlin", 3600
+CEST = 7200
 HOUR = 3600000
 
 # One example datum per type, as fastavro takes and returns it. Every value keeps the checks of its field.
@@ -221,6 +231,100 @@ DATA: dict[str, dict[str, Any]] = {
 }
 
 
+# --- relations (spec/fields.md, section 11) ------------------------------------------------------
+
+# The public key of the test key "cat-a-log, old phone, Ed25519" of spec/keys.md, section 7.1: the sender of
+# records that another app's records relate to. generate_vectors.py compares it with keys_examples.py.
+OTHER_SENDER = bytes.fromhex("1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a")
+PET_ID = "0b6f4a3e-8c1d-4f27-9e5a-2d7c41b8e093"  # the ids of the records and relations below
+VET_ID = "5d2e9c71-3a4b-4e8f-b6d0-7f1a2c9e4b58"
+VISIT_ID = "9a4c1e07-6b2d-4d3f-8e91-c5f7a0b2d164"
+
+
+def record_target(rid: str, type_: str = "", text: str = "", sender: bytes | None = None) -> dict[str, Any]:
+    """The target of a relation that is a record (spec/fields.md, section 11.3)."""
+    return {"id": rid, "sender": sender, "type": type_, "text": text}
+
+
+def outside(uri: str, text: str = "") -> dict[str, Any]:
+    """The target of a relation that is a thing outside AXT (spec/fields.md, section 11.3)."""
+    return {"uri": uri, "text": text}
+
+
+def relation(
+    rid: str,
+    target: dict[str, Any],
+    kind: str = "axt.related",
+    note: str = "",
+    start: dict[str, Any] | None = None,
+    end: dict[str, Any] | None = None,
+    attributes: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """An axt.Relation as fastavro takes and returns it."""
+    return {
+        "id": rid,
+        "kind": kind,
+        "target": target,
+        "note": note,
+        "start": start,
+        "end": end,
+        "attributes": {} if attributes is None else attributes,
+    }
+
+
+MIMI = record_target(PET_ID, "axt.example.v1.Pet", "Mimi")
+VET = record_target(VET_ID, "axt.example.v1.Person", "Dr. Anna Maria Schmidt", OTHER_SENDER)
+RELATIONS: dict[str, list[dict[str, Any]]] = {
+    "Note": [relation("3e8a5b14-7c29-4d6e-a0f3-1b9d2c7e5a46", MIMI)],
+    "Task": [relation("c47d2e90-1f5a-4b38-9d6c-e2a8b0f31c75", MIMI)],
+    "Appointment": [
+        relation("f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b", MIMI, note="Her yearly vaccination."),
+        relation(
+            "6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60",
+            VET,
+            kind="org.example.catalog.vet",
+            attributes={"org.example.catalog.role": "vet", "org.example.catalog.paid_by": "owner"},
+        ),
+        relation(
+            "a2c4e6f8-0b1d-4e3f-8a5c-7e9f1b3d5a70",
+            outside("https://tierarzt.example/praxis", "Tierarztpraxis"),
+        ),
+    ],
+    "Person": [
+        relation(
+            "d5f7a9b1-3c5e-4708-9b2d-4f6a8c0e2b81",
+            record_target(PET_ID, "axt.example.v1.Pet", "Mimi", OTHER_SENDER),
+            kind="org.example.catalog.patient",
+            start=zoned(2021, 7, 1, 9, 0, BERLIN, CEST),
+        )
+    ],
+    "Car": [
+        relation(
+            "8e0a2c4d-6f8b-4a1c-9e3f-5a7c9e1b3d92", outside("urn:example:parking:14", "Parking space 14")
+        )
+    ],
+    "Pet": [
+        relation(
+            "1a3c5e7f-9b0d-4c2e-8f4a-6c8e0a2c4e13",
+            VET,
+            kind="org.example.catalog.vet",
+            start=zoned(2021, 7, 1, 9, 0, BERLIN, CEST),
+            end=None,
+        )
+    ],
+    "Measurement": [relation("4b6d8f0a-2c4e-4061-9a3b-5d7f9b1c3e24", MIMI)],
+    "Document": [
+        relation(
+            "7f9b1d3e-5a7c-4e92-8b0d-2f4a6c8e0b35",
+            record_target(VISIT_ID, "axt.example.v1.Appointment", "Vet: vaccination"),
+            kind="org.example.secondbrain.invoice_for",
+        )
+    ],
+}
+for _n, _rs in RELATIONS.items():
+    DATA[_n]["relations"] = _rs  # the relations of the example datum, its last field
+
+
 def floating(y: int, mo: int, d: int, h: int, mi: int) -> dict[str, Any]:
     """A floating axt.DateTime: a wall clock without zone, offset and instant (spec/time.md, section 6.5)."""
     return {
@@ -239,9 +343,6 @@ def floating(y: int, mo: int, d: int, h: int, mi: int) -> dict[str, Any]:
 
 def duration(months: int = 0, days: int = 0, millis: int = 0) -> dict[str, int]:
     return {"months": months, "days": days, "millis": millis}
-
-
-CEST = 7200
 
 
 def variant(name: str, **fields: Any) -> dict[str, Any]:
@@ -377,147 +478,54 @@ BREACHES = [
         "Person",
         nested("Person", "phones", 0, number="+49 30 1234567"),
         "phones[0].number",
-        "axt.format",
+        "format",
     ),
     (
         "a person whose country is a name, not a code",
         "Person",
         nested("Person", "addresses", 0, country="Germany"),
         "addresses[0].country",
-        "axt.format",
+        "format",
     ),
     (
         "a person whose e-mail address has no domain",
         "Person",
         nested("Person", "emails", 0, address="anna"),
         "emails[0].address",
-        "axt.format",
+        "format",
     ),
     (
         "a car whose VIN holds the letter O",
         "Car",
         variant("Car", vin="WVWZZZ1KZAW00000O"),
         "vin",
-        "axt.pattern",
+        "pattern",
     ),
-    ("a car of the year 1800", "Car", variant("Car", year=1800), "year", "axt.min"),
-    ("a car with a negative odometer", "Car", variant("Car", odometer=-1), "odometer", "axt.min"),
+    ("a car of the year 1800", "Car", variant("Car", year=1800), "year", "min"),
+    ("a car with a negative odometer", "Car", variant("Car", odometer=-1), "odometer", "min"),
     (
         "a document whose media type has no subtype",
         "Document",
         variant("Document", media_type="pdf"),
         "media_type",
-        "axt.format",
+        "format",
     ),
     (
         "a measurement with a time that is not valid, after a unit with a space",
         "Measurement",
         variant("Measurement", unit="kg m", measured_at=dict(DATA["Measurement"]["measured_at"], month=13)),
         "unit",
-        "axt.format",
+        "format",
     ),
     (
         "a document with a date that is not valid, after a media type without a subtype",
         "Document",
         variant("Document", media_type="pdf", dated=date(2026, 2, 30)),
         "media_type",
-        "axt.format",
+        "format",
     ),
 ]
 del start
-
-# --- relations (spec/types.md, section 8) --------------------------------------------------------
-
-# The public key of the test key "cat-a-log, old phone, Ed25519" of spec/keys.md, section 7.1: the sender of
-# records that another app's records relate to. generate_vectors.py compares it with keys_examples.py.
-OTHER_SENDER = bytes.fromhex("1b84a600f3503e22bbcc99e63202a7194bf6bd69aff1471cce6410d53c26ec4a")
-PET_ID = "0b6f4a3e-8c1d-4f27-9e5a-2d7c41b8e093"  # the ids of the records and relations below
-VET_ID = "5d2e9c71-3a4b-4e8f-b6d0-7f1a2c9e4b58"
-VISIT_ID = "9a4c1e07-6b2d-4d3f-8e91-c5f7a0b2d164"
-
-
-def record_target(rid: str, type_: str = "", text: str = "", sender: bytes | None = None) -> dict[str, Any]:
-    """The target of a relation that is a record (spec/fields.md, section 11.3)."""
-    return {"id": rid, "sender": sender, "type": type_, "text": text}
-
-
-def outside(uri: str, text: str = "") -> dict[str, Any]:
-    """The target of a relation that is a thing outside AXT (spec/fields.md, section 11.3)."""
-    return {"uri": uri, "text": text}
-
-
-def relation(
-    rid: str,
-    target: dict[str, Any],
-    kind: str = "axt.related",
-    note: str = "",
-    start: dict[str, Any] | None = None,
-    end: dict[str, Any] | None = None,
-    attributes: dict[str, str] | None = None,
-) -> dict[str, Any]:
-    """An axt.Relation as fastavro takes and returns it."""
-    return {
-        "id": rid,
-        "kind": kind,
-        "target": target,
-        "note": note,
-        "start": start,
-        "end": end,
-        "attributes": {} if attributes is None else attributes,
-    }
-
-
-MIMI = record_target(PET_ID, "axt.example.v1.Pet", "Mimi")
-VET = record_target(VET_ID, "axt.example.v1.Person", "Dr. Anna Maria Schmidt", OTHER_SENDER)
-RELATIONS: dict[str, list[dict[str, Any]]] = {
-    "Note": [relation("3e8a5b14-7c29-4d6e-a0f3-1b9d2c7e5a46", MIMI)],
-    "Task": [relation("c47d2e90-1f5a-4b38-9d6c-e2a8b0f31c75", MIMI)],
-    "Appointment": [
-        relation("f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b", MIMI, note="Her yearly vaccination."),
-        relation(
-            "6c8e0a2b-4d6f-4a81-9c3e-5f7a9b1d3e60",
-            VET,
-            kind="org.example.catalog.vet",
-            attributes={"org.example.catalog.role": "vet", "org.example.catalog.paid_by": "owner"},
-        ),
-        relation(
-            "a2c4e6f8-0b1d-4e3f-8a5c-7e9f1b3d5a70",
-            outside("https://tierarzt.example/praxis", "Tierarztpraxis"),
-        ),
-    ],
-    "Person": [
-        relation(
-            "d5f7a9b1-3c5e-4708-9b2d-4f6a8c0e2b81",
-            record_target(PET_ID, "axt.example.v1.Pet", "Mimi", OTHER_SENDER),
-            kind="org.example.catalog.patient",
-            start=zoned(2021, 7, 1, 9, 0, BERLIN, CEST),
-        )
-    ],
-    "Car": [
-        relation(
-            "8e0a2c4d-6f8b-4a1c-9e3f-5a7c9e1b3d92", outside("urn:example:parking:14", "Parking space 14")
-        )
-    ],
-    "Pet": [
-        relation(
-            "1a3c5e7f-9b0d-4c2e-8f4a-6c8e0a2c4e13",
-            VET,
-            kind="org.example.catalog.vet",
-            start=zoned(2021, 7, 1, 9, 0, BERLIN, CEST),
-            end=None,
-        )
-    ],
-    "Measurement": [relation("4b6d8f0a-2c4e-4061-9a3b-5d7f9b1c3e24", MIMI)],
-    "Document": [
-        relation(
-            "7f9b1d3e-5a7c-4e92-8b0d-2f4a6c8e0b35",
-            record_target(VISIT_ID, "axt.example.v1.Appointment", "Vet: vaccination"),
-            kind="org.example.secondbrain.invoice_for",
-        )
-    ],
-}
-for _n, _rs in RELATIONS.items():
-    DATA[f"{_n}.2"] = dict(copy.deepcopy(DATA[_n]), relations=_rs)  # the example datum of version 2
 
 
 def many(n: int, **fields: Any) -> list[dict[str, Any]]:
@@ -526,8 +534,8 @@ def many(n: int, **fields: Any) -> list[dict[str, Any]]:
 
 
 def variant2(name: str, *relations: dict[str, Any], **fields: Any) -> dict[str, Any]:
-    """The example datum of version 2 of the type, with the relations given and some fields replaced."""
-    return dict(copy.deepcopy(DATA[f"{name}.2"]), relations=list(relations), **fields)
+    """The example datum of the type, with the relations given and some fields replaced."""
+    return dict(copy.deepcopy(DATA[name]), relations=list(relations), **fields)
 
 
 def attributes(n: int, key: int = 1, value: int = 0) -> dict[str, str]:
@@ -537,16 +545,16 @@ def attributes(n: int, key: int = 1, value: int = 0) -> dict[str, str]:
 
 R0 = RELATIONS["Pet"][0]
 RELATION_VALID = [
-    ("an appointment without relations", "Appointment.2", variant2("Appointment")),
+    ("an appointment without relations", "Appointment", variant2("Appointment")),
     (
         "a note with a relation of a kind in the namespace axt that AXT does not define, which is taken",
-        "Note.2",
+        "Note",
         variant2("Note", dict(R0, kind="axt.later_kind")),
     ),
-    ("a pet with 256 relations", "Pet.2", variant2("Pet", *many(256))),
+    ("a pet with 256 relations", "Pet", variant2("Pet", *many(256))),
     (
         "a pet with a relation at every limit of its lengths and 32 attributes",
-        "Pet.2",
+        "Pet",
         variant2(
             "Pet",
             relation(
@@ -561,12 +569,12 @@ RELATION_VALID = [
     ),
     (
         "a relation whose target has no type and no display text, and an id in upper case",
-        "Pet.2",
+        "Pet",
         variant2("Pet", dict(R0, id=R0["id"].upper(), target=record_target(VET_ID))),
     ),
     (
         "a relation from a floating start to a floating end",
-        "Task.2",
+        "Task",
         variant2("Task", dict(R0, start=floating(2026, 1, 1, 0, 0), end=floating(2026, 2, 1, 0, 0))),
     ),
 ]
@@ -575,109 +583,109 @@ RELATION_VALID = [
 # rejects, or a check, which a receiver that checks reports: (label, type, datum, path, rule).
 REL = "axt.Relation"
 RELATION_BREACHES = [
-    ("a pet with 257 relations", "Pet.2", variant2("Pet", *many(257)), "relations", REL),
+    ("a pet with 257 relations", "Pet", variant2("Pet", *many(257)), "relations", REL),
     (
         "a pet with two relations of the same id, the second in upper case",
-        "Pet.2",
+        "Pet",
         variant2("Pet", R0, dict(R0, id=R0["id"].upper(), kind="org.example.catalog.other")),
         "relations[1].id",
         REL,
     ),
     (
         "a relation whose id is the nil UUID",
-        "Pet.2",
+        "Pet",
         variant2("Pet", dict(R0, id="00000000-0000-0000-0000-000000000000")),
         "relations[0].id",
         REL,
     ),
     (
         "a relation whose kind has no namespace",
-        "Pet.2",
+        "Pet",
         variant2("Pet", dict(R0, kind="vet")),
         "relations[0].kind",
         REL,
     ),
-    ("a relation whose kind is empty", "Pet.2", variant2("Pet", dict(R0, kind="")), "relations[0].kind", REL),
+    ("a relation whose kind is empty", "Pet", variant2("Pet", dict(R0, kind="")), "relations[0].kind", REL),
     (
         "a relation whose kind has 257 bytes",
-        "Pet.2",
+        "Pet",
         variant2("Pet", dict(R0, kind="org.example." + "k" * 245)),
         "relations[0].kind",
         REL,
     ),
     (
         "a relation whose target's id is not a UUID",
-        "Pet.2",
+        "Pet",
         variant2("Pet", dict(R0, target=dict(VET, id="Dr. Schmidt"))),
         "relations[0].target.id",
         REL,
     ),
     (
         "a relation whose target's type is not a full name",
-        "Pet.2",
+        "Pet",
         variant2("Pet", dict(R0, target=dict(VET, type="Person (vet)"))),
         "relations[0].target.type",
         REL,
     ),
     (
         "a relation whose display text has 257 bytes",
-        "Pet.2",
+        "Pet",
         variant2("Pet", dict(R0, target=dict(VET, text="ä" * 128 + "t"))),
         "relations[0].target.text",
         REL,
     ),
     (
         "a relation to an outside thing with an empty URI",
-        "Pet.2",
+        "Pet",
         variant2("Pet", dict(R0, target=outside("", "Tierarztpraxis"))),
         "relations[0].target.uri",
         REL,
     ),
     (
         "a relation to an outside thing whose URI has 2,049 bytes",
-        "Pet.2",
+        "Pet",
         variant2("Pet", dict(R0, target=outside("urn:" + "u" * 2045))),
         "relations[0].target.uri",
         REL,
     ),
     (
         "a relation whose note has 4,097 bytes",
-        "Pet.2",
+        "Pet",
         variant2("Pet", dict(R0, note="n" * 4097)),
         "relations[0].note",
         REL,
     ),
     (
         "a relation with 33 attributes",
-        "Pet.2",
+        "Pet",
         variant2("Pet", dict(R0, attributes=attributes(33))),
         "relations[0].attributes",
         REL,
     ),
     (
         "a relation with an attribute whose name is empty",
-        "Pet.2",
+        "Pet",
         variant2("Pet", dict(R0, attributes={"": "vet"})),
         "relations[0].attributes",
         REL,
     ),
     (
         "a relation whose start is not a valid time",
-        "Pet.2",
+        "Pet",
         variant2("Pet", dict(R0, start=dict(zoned(2021, 7, 1, 9, 0, BERLIN, CEST), month=13))),
         "relations[0].start",
         "axt.DateTime",
     ),
     (
         "a relation of a kind without a namespace, before a start that is not a valid time",
-        "Pet.2",
+        "Pet",
         variant2("Pet", dict(R0, kind="vet", start=dict(zoned(2021, 7, 1, 9, 0, BERLIN, CEST), month=13))),
         "relations[0].kind",
         REL,
     ),
     (
         "an appointment whose start is not a valid time, before a relation without a valid id",
-        "Appointment.2",
+        "Appointment",
         variant2(
             "Appointment",
             dict(R0, id="not a UUID"),
@@ -688,22 +696,28 @@ RELATION_BREACHES = [
     ),
     (
         "a relation to an outside thing whose URI has a space, which breaks only a check",
-        "Pet.2",
+        "Pet",
         variant2("Pet", dict(R0, target=outside("https://tierarzt.example/a b"))),
         "relations[0].target.uri",
-        "axt.format",
+        "format",
     ),
 ]
 del R0
 
 
+def description(name: str) -> dict[str, Any]:
+    """The published description of the example type (spec/types.md, section 7)."""
+    return cast(dict[str, Any], fe.EXAMPLE_DESCRIPTIONS[f"axt.example.v1.{name}"])
+
+
 def check_cases(schemas: dict[str, Any]) -> None:
     """The records of VALID and RELATION_VALID keep every rule; each of BREACHES and RELATION_BREACHES breaks
-    the rule named, first at the path named."""
+    the rule named, first at the path named: a check of the type's description (spec/fields.md, section 7),
+    or a rule that every receiver checks, of a time type or of a relation."""
     tm = time_rules()
     for label, name, datum in VALID + RELATION_VALID:
-        if tm.receiver_breaches(schemas[name], datum):
-            fail(name, f"{label}: {tm.receiver_breaches(schemas[name], datum)}")
+        if fe.breaches(description(name), datum, tm.time_check):
+            fail(name, f"{label}: {fe.breaches(description(name), datum, tm.time_check)}")
     # Each zoned time has the offset of its zone at its instant, except in the third case, whose offsets are
     # not those of Berlin at the instant: a receiver does not reject such a value (spec/time.md, section 6.2).
     for i, (label, name, datum) in enumerate(VALID + RELATION_VALID):
@@ -711,8 +725,8 @@ def check_cases(schemas: dict[str, Any]) -> None:
             if (tm.offset_at(v["zone"], v["instant_ms"]) == v["offset_seconds"]) != (i != 2):
                 fail(name, f"{label}: the offset {v['offset_seconds']} at {v['instant_ms']}")
     for label, name, datum, path, rule in BREACHES + RELATION_BREACHES:
-        found = tm.receiver_breaches(schemas[name], datum)
-        if not found or found[0][:2] != (path, rule):
+        found = fe.breaches(description(name), datum, tm.time_check)
+        if not found or found[0] != (path, rule):
             fail(name, f"{label}: {found}")
         elif (
             rule.startswith("axt.")
@@ -950,8 +964,6 @@ def check_schema(path: Path, schema: dict[str, Any], text: str) -> tuple[list[st
     depth = check_type(schema, where, schema, set(), defined)
     if depth > MAX_DATA_DEPTH:
         fail(where, f"data depth {depth} above {MAX_DATA_DEPTH}")
-    for here, message in presence_problems(schema):
-        fail(f"{where}.{here}" if here else where, message)
     return defined, depth
 
 
@@ -1165,6 +1177,8 @@ def check_datum(name: str, schema: Any) -> None:
     tm = time_rules()
     for path, rule, why in tm.receiver_breaches(schema, DATA[name]):
         fail(f"{name}.{path}" if path else name, f"the example datum breaks {rule}: {why}")
+    for path, rule in fe.breaches(description(name), DATA[name], tm.time_check):
+        fail(f"{name}.{path}" if path else name, f"the example datum breaks {rule}")
     for v in zoned_values(DATA[name]):
         if tm.offset_at(v["zone"], v["instant_ms"]) != v["offset_seconds"]:
             fail(name, f"the offset {v['offset_seconds']} is not that of {v['zone']} at {v['instant_ms']}")
@@ -1218,16 +1232,44 @@ def check_relation() -> tuple[str, int]:
     return pcf, fp
 
 
-def check_version_2(v1: Any, v2: Any, pcf1: str, pcf2: str) -> None:
-    """Version 2 is version 1 with the field relations added, a compatible change (spec/types.md, sections
-    3.3 and 7.4), and its canonical form differs (section 3.4)."""
-    if (
-        dict(v2, fields=v2["fields"][:-1], **{"axt.version": 1}) != v1
-        or v2["fields"][-1]["name"] != "relations"
-    ):
-        fail(v2["name"], "version 2 is not version 1 with the field relations added")
-    if v2["fields"][-1]["default"] != [] or pcf1 == pcf2:
-        fail(v2["name"], "relations has no default [], or the canonical forms of the versions are the same")
+def text_problems(d: dict[str, Any]) -> list[tuple[str, str]]:
+    """What spec/types.md, section 5.9, requires of the description of an example type beyond the rules of
+    spec/fields.md: a label and an emoji, and the label and the help in German, on the type and on each
+    typed field except the items and values of a list or a map that are not objects, and a label and its
+    German translation on each enum symbol and each group. Returns (path in the description, why)."""
+    out: list[tuple[str, str]] = []
+
+    def need(t: dict[str, Any], where: str, what: tuple[str, ...]) -> None:
+        for member in what:
+            if member.endswith("_translations"):
+                if not t[member].get("de"):
+                    out.append((where, f"no German {member.split('_')[0]}"))
+            elif t[member] == "":
+                out.append((where, f"no {member}"))
+
+    def walk(f: dict[str, Any], where: str, item: bool) -> None:
+        name, b = fe.kind_of(f)
+        if not item or name == "axt.ObjectField":
+            need(
+                f["texts"],
+                mr.path_join(where, "texts"),
+                ("label", "emoji", "label_translations", "help_translations"),
+            )
+        at = mr.path_join(where, "kind")
+        if name == "axt.ObjectField":
+            for i, g in enumerate(b["groups"]):
+                need(g["texts"], f"{at}.groups[{i}].texts", ("label", "label_translations"))
+            for i, sub in enumerate(b["fields"]):
+                walk(sub, f"{at}.fields[{i}]", False)
+        elif name == "axt.EnumField":
+            for i, x in enumerate(b["symbols"]):
+                need(x["texts"], f"{at}.symbols[{i}].texts", ("label", "label_translations"))
+        elif name in ("axt.ListField", "axt.MapField"):
+            member = "items" if name == "axt.ListField" else "values"
+            walk(b[member], f"{at}.{member}", True)
+
+    walk(d, "", False)
+    return out
 
 
 def main() -> None:
@@ -1241,11 +1283,13 @@ def main() -> None:
     for path in sorted(EXAMPLES.rglob("*.avsc")):
         text = path.read_text(encoding="utf-8")
         schema = json.loads(text)
-        # The example datum, the schema and the cases of version 1 go by the type's name; those of a later
-        # version by the name and the version, such as Pet.2.
-        name = (
-            schema["name"] if schema.get("axt.version") == 1 else f"{schema['name']}.{schema['axt.version']}"
-        )
+        name = schema["name"]  # one version of each type, which the example datum and the cases go by
+        # The type is published as its description, from which example_schemas.py derives the schema file.
+        d = description(name)
+        if fe.description_problems(d) or fe.derive(d) != schema or fe.type_of(d)[1] != schema["axt.version"]:
+            fail(str(path.relative_to(REPO)), "not the schema derived from its description")
+        for here, message in text_problems(d):
+            fail(f"{name}.json: {here}", message)
         defined, depth = cast(tuple[list[str], int], check_schema(path, schema, text))
         for full in defined:
             if full in published:
@@ -1264,8 +1308,6 @@ def main() -> None:
             f"{name}: the two libraries disagree on the canonical form"
         )
         pcfs[name] = pcf
-        if "." in name:
-            check_version_2(schemas[schema["name"]], schema, pcfs[schema["name"]], pcf)
         fp = crc64_avro(pcf.encode())
         assert fa_fingerprint(pcf, "CRC-64-AVRO") == fp.to_bytes(8, "little").hex(), (
             f"{name}: fastavro fingerprint differs"
@@ -1335,7 +1377,7 @@ def main() -> None:
     print()
     for title, valid, breaches in (
         ("", VALID, BREACHES),
-        (" of version 2, with relations", RELATION_VALID, RELATION_BREACHES),
+        (" with relations", RELATION_VALID, RELATION_BREACHES),
     ):
         print(f"{len(valid)} further records{title} that keep every rule:")
         for label, name, _datum in valid:

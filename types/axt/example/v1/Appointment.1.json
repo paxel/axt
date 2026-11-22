@@ -1,0 +1,267 @@
+{
+  "name": "appointment",
+  "doc": "An appointment: an event at a time and possibly a place, such as a visit to the vet.",
+  "texts": {
+    "label": "Appointment",
+    "label_translations": {
+      "de": "Termin"
+    },
+    "help": "An event at a time and possibly a place, such as a visit to the vet.",
+    "help_translations": {
+      "de": "Ein Ereignis zu einer Zeit und vielleicht an einem Ort, etwa ein Besuch beim Tierarzt."
+    },
+    "emoji": "📆"
+  },
+  "required": false,
+  "order": null,
+  "group": "",
+  "sensitive": false,
+  "advanced": false,
+  "kind": {
+    "axt.ObjectField": {
+      "name": "axt.example.v1.Appointment",
+      "fields": [
+        {
+          "name": "title",
+          "doc": "What the appointment is, as plain text on one line.",
+          "texts": {
+            "label": "Title",
+            "label_translations": {
+              "de": "Titel"
+            },
+            "help": "What the appointment is, on one line.",
+            "help_translations": {
+              "de": "Worum es beim Termin geht, in einer Zeile."
+            },
+            "emoji": "🏷️"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "start",
+          "doc": "When the appointment starts, as a date and time on the wall clock, in a time zone or floating. For an all-day appointment, 00:00 of its first day, floating.",
+          "texts": {
+            "label": "Start",
+            "label_translations": {
+              "de": "Beginn"
+            },
+            "help": "When the appointment starts.",
+            "help_translations": {
+              "de": "Wann der Termin beginnt."
+            },
+            "emoji": "🕘"
+          },
+          "required": true,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.DateTimeField": {
+              "anchor": "LOCAL"
+            }
+          }
+        },
+        {
+          "name": "end",
+          "doc": "When the appointment ends: the first moment after it, which is not part of it. It is in a time zone when start is, possibly another one, as for a flight, and floating when start is floating. For an all-day appointment, 00:00 of the day after its last day, floating. Null when no end is given; an all-day appointment without an end takes one day.",
+          "texts": {
+            "label": "End",
+            "label_translations": {
+              "de": "Ende"
+            },
+            "help": "When the appointment is over.",
+            "help_translations": {
+              "de": "Wann der Termin vorbei ist."
+            },
+            "emoji": "🔚"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.DateTimeField": {
+              "anchor": "LOCAL"
+            }
+          }
+        },
+        {
+          "name": "all_day",
+          "doc": "True when the appointment takes whole days; start and end are then floating at 00:00, and only their days count.",
+          "texts": {
+            "label": "All day",
+            "label_translations": {
+              "de": "Ganztägig"
+            },
+            "help": "On when the appointment takes whole days.",
+            "help_translations": {
+              "de": "An, wenn der Termin ganze Tage dauert."
+            },
+            "emoji": "☀️"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.BooleanField": {
+              "default": false
+            }
+          }
+        },
+        {
+          "name": "location",
+          "doc": "Where the appointment takes place, as text, such as an address or a room. Empty when not given.",
+          "texts": {
+            "label": "Location",
+            "label_translations": {
+              "de": "Ort"
+            },
+            "help": "Where the appointment takes place, such as an address or a room.",
+            "help_translations": {
+              "de": "Wo der Termin stattfindet, etwa eine Anschrift oder ein Raum."
+            },
+            "emoji": "📍"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "notes",
+          "doc": "Free notes on the appointment, as plain text; lines are separated by LF. Empty when there are none.",
+          "texts": {
+            "label": "Notes",
+            "label_translations": {
+              "de": "Notizen"
+            },
+            "help": "Anything else about the appointment.",
+            "help_translations": {
+              "de": "Alles Weitere zum Termin."
+            },
+            "emoji": "📝"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": true,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "reminders",
+          "doc": "When the user wants to be reminded, each as a duration added to start as spec/time.md, section 7.2, says: negative before start, such as -PT15M for 15 minutes before or -P1D for the day before at the same time on the wall clock, 0 at start, and positive after it. Empty when there are no reminders.",
+          "texts": {
+            "label": "Reminders",
+            "label_translations": {
+              "de": "Erinnerungen"
+            },
+            "help": "When to be reminded, each before or after the start.",
+            "help_translations": {
+              "de": "Wann erinnert werden soll, jeweils vor oder nach dem Beginn."
+            },
+            "emoji": "⏰"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.ListField": {
+              "items": {
+                "name": "reminders",
+                "doc": "When the user wants to be reminded, each as a duration added to start as spec/time.md, section 7.2, says: negative before start, such as -PT15M for 15 minutes before or -P1D for the day before at the same time on the wall clock, 0 at start, and positive after it. Empty when there are no reminders.",
+                "texts": {
+                  "label": "",
+                  "label_translations": {},
+                  "help": "",
+                  "help_translations": {},
+                  "emoji": ""
+                },
+                "required": true,
+                "order": null,
+                "group": "",
+                "sensitive": false,
+                "advanced": false,
+                "kind": {
+                  "axt.DurationField": {}
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "relations",
+          "doc": "The relations of the record to other records and to things outside AXT (spec/types.md, section 8), in the order the user gave them. Empty when it has none.",
+          "texts": {
+            "label": "Relations",
+            "label_translations": {
+              "de": "Verknüpfungen"
+            },
+            "help": "Entries and other things this one is linked to, such as the pets an appointment is for.",
+            "help_translations": {
+              "de": "Einträge und anderes, mit denen dieser verknüpft ist, etwa die Tiere, für die ein Termin ist."
+            },
+            "emoji": "🔗"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.RelationField": {}
+          }
+        }
+      ],
+      "groups": [],
+      "version": 1,
+      "title": "title"
+    }
+  }
+}

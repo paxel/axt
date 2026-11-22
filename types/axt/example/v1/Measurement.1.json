@@ -1,0 +1,234 @@
+{
+  "name": "measurement",
+  "doc": "One measured value or count at a point in time, such as a weight, a blood pressure reading or a tally of glasses of water.",
+  "texts": {
+    "label": "Measurement",
+    "label_translations": {
+      "de": "Messung"
+    },
+    "help": "A measured value or a count at a point in time, such as a weight.",
+    "help_translations": {
+      "de": "Ein gemessener Wert oder eine Zählung zu einem Zeitpunkt, etwa ein Gewicht."
+    },
+    "emoji": "📈"
+  },
+  "required": false,
+  "order": null,
+  "group": "",
+  "sensitive": false,
+  "advanced": false,
+  "kind": {
+    "axt.ObjectField": {
+      "name": "axt.example.v1.Measurement",
+      "fields": [
+        {
+          "name": "quantity",
+          "doc": "What was measured or counted, as the user calls it, such as Weight or Glasses of water.",
+          "texts": {
+            "label": "Quantity",
+            "label_translations": {
+              "de": "Messgröße"
+            },
+            "help": "What was measured or counted, such as Weight or Glasses of water.",
+            "help_translations": {
+              "de": "Was gemessen oder gezählt wurde, etwa Gewicht oder Gläser Wasser."
+            },
+            "emoji": "📋"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "value",
+          "doc": "The measured value or the count, in unit.",
+          "texts": {
+            "label": "Value",
+            "label_translations": {
+              "de": "Wert"
+            },
+            "help": "The measured value or the count.",
+            "help_translations": {
+              "de": "Der gemessene Wert oder die Anzahl."
+            },
+            "emoji": "🔢"
+          },
+          "required": true,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.DoubleField": {
+              "default": null,
+              "min": null,
+              "max": null,
+              "unit": "",
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "unit",
+          "doc": "The unit of value as a case-sensitive code of UCUM, such as kg, Cel or mm[Hg]. A count is 1, or an annotation in braces alone that names what is counted, such as {glass}.",
+          "texts": {
+            "label": "Unit",
+            "label_translations": {
+              "de": "Einheit"
+            },
+            "help": "The unit as a code of UCUM, such as kg; 1 for a count.",
+            "help_translations": {
+              "de": "Die Einheit als Code von UCUM, etwa kg; 1 für eine Anzahl."
+            },
+            "emoji": "📐"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.UcumField": {
+              "default": "1",
+              "min_length": null,
+              "max_length": null,
+              "preferred_length": 10,
+              "placeholder": "kg",
+              "example": "mm[Hg]"
+            }
+          }
+        },
+        {
+          "name": "measured_at",
+          "doc": "When the value was measured or counted.",
+          "texts": {
+            "label": "Measured at",
+            "label_translations": {
+              "de": "Gemessen am"
+            },
+            "help": "When the value was measured or counted.",
+            "help_translations": {
+              "de": "Wann der Wert gemessen oder gezählt wurde."
+            },
+            "emoji": "🕒"
+          },
+          "required": true,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.DateTimeField": {
+              "anchor": "INSTANT"
+            }
+          }
+        },
+        {
+          "name": "subject",
+          "doc": "Who or what was measured, as text, such as the name of a pet. Empty when it is the user.",
+          "texts": {
+            "label": "Subject",
+            "label_translations": {
+              "de": "Gemessen an"
+            },
+            "help": "Who or what was measured, such as the name of a pet; empty for the user.",
+            "help_translations": {
+              "de": "Wer oder was gemessen wurde, etwa der Name eines Tiers; leer für den Nutzer selbst."
+            },
+            "emoji": "🎯"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "notes",
+          "doc": "Free notes on the measurement, as plain text; lines are separated by LF. Empty when there are none.",
+          "texts": {
+            "label": "Notes",
+            "label_translations": {
+              "de": "Notizen"
+            },
+            "help": "Anything else about the measurement.",
+            "help_translations": {
+              "de": "Alles Weitere zur Messung."
+            },
+            "emoji": "📝"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": true,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "relations",
+          "doc": "The relations of the record to other records and to things outside AXT (spec/types.md, section 8), in the order the user gave them. Empty when it has none.",
+          "texts": {
+            "label": "Relations",
+            "label_translations": {
+              "de": "Verknüpfungen"
+            },
+            "help": "Entries and other things this one is linked to, such as the pets an appointment is for.",
+            "help_translations": {
+              "de": "Einträge und anderes, mit denen dieser verknüpft ist, etwa die Tiere, für die ein Termin ist."
+            },
+            "emoji": "🔗"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.RelationField": {}
+          }
+        }
+      ],
+      "groups": [],
+      "version": 1,
+      "title": "quantity"
+    }
+  }
+}

@@ -6128,7 +6128,7 @@ OBF_SEED = test_secret("Old Brain Fix, Ed25519")
 KEY_OBF = bytes(keys.public_key(OBF_SEED))
 FORWARD_ID = "c4a1e2b3-6d7f-4809-9a1b-2c3d4e5f6071"  # the forward of section 16.5
 MANIFEST_FORWARD_ID = "b3a0d1c2-5e6f-4708-8192-a3b4c5d6e7f8"  # the forward before it, which is not shown
-# The schema of the description of Appointment.1.avsc that Old Brain Fix offered (spec/protocol.md, 17.3).
+# The schema of the description Appointment.1.json that Old Brain Fix offered (spec/protocol.md, 17.3).
 APPOINTMENT_OFFERED = APPOINTMENT_1
 RECORD_ID = "3f2c8a5e-9b1d-4c7e-8a6f-2d4b5c6e7f80"  # spec/records.md, section 9
 REQUEST_ID = "7c1d9e42-5a3b-4f6c-8d2e-1b0a9c8f7e6d"  # the request of section 16.3
@@ -6188,6 +6188,7 @@ APPOINTMENT: dict[str, Any] = {
     "location": "",
     "notes": "",
     "reminders": [],
+    "relations": [],
 }
 START_1030 = date_time(10, 30, NOW + 1_800_000)
 VALUE = {name: field_value(APPOINTMENT_JSON, name, value) for name, value in APPOINTMENT.items()}
@@ -6451,7 +6452,7 @@ def check_messages(out: list[str]) -> None:
     assert key_order(TABLET, PHONE) > 0, "the tablet's key is the higher one"
     fp = int.from_bytes(SCHEMA_1, "little")
     out.append(f"Appointment.1: fingerprint 0x{fp:016x}, as bytes {SCHEMA_1.hex(' ')}")
-    assert [f["name"] for f in APPOINTMENT_JSON["fields"]] == list(APPOINTMENT) and len(APPOINTMENT) == 7
+    assert [f["name"] for f in APPOINTMENT_JSON["fields"]] == list(APPOINTMENT) and len(APPOINTMENT) == 8
     # The values by hand, against the two libraries.
     start = (
         b"".join(z(x) for x in (2025, 11, 18, 10, 0, 0, 0))
@@ -6471,6 +6472,7 @@ def check_messages(out: list[str]) -> None:
         "location": z(0),
         "notes": z(0),
         "reminders": z(0),
+        "relations": z(0),
     }
     assert by_hand == VALUE
     assert (
@@ -6491,6 +6493,7 @@ def check_messages(out: list[str]) -> None:
         "location": f'the value: "{WEBER}" as an Avro string',
         "notes": "the value: a string of length 0",
         "reminders": "the value: an array without items",
+        "relations": "the value: an array without items",
     }
 
     # 16.1: both devices hold the record; every part is delivered in both directions.
@@ -6586,7 +6589,7 @@ def check_messages(out: list[str]) -> None:
         "fields": entries(state, list(APPOINTMENT)),
     }
     assert change_version(d) == 117
-    assert [f["stamp"] for f in d["fields"]] == [100, 110, 100, 100, 110, 100, 100]
+    assert [f["stamp"] for f in d["fields"]] == [100, 110, 100, 100, 110, 100, 100, 100]
     body = change_parts(d, notes)
     assert b"".join(p[0] for p in body) == body_of("Change", d)
     assert apache_body("Change", body_of("Change", d)) == d
@@ -6751,8 +6754,7 @@ def check_received(out: list[str]) -> None:
     body += [
         (
             text,
-            f"the schema derived from the description of Appointment.1.avsc ({len(text)} bytes of UTF-8 "
-            "JSON)",
+            f"the schema derived from the description Appointment.1.json ({len(text)} bytes of UTF-8 JSON)",
         )
     ]
     assert b"".join(p[0] for p in body) == body_of("Forward", d), "the body differs from fastavro"
@@ -7118,7 +7120,7 @@ def _fields_brief(fields: dict[str, Any]) -> str:
         )
     return (
         " ".join(
-            f"{','.join(names) if len(names) < 7 else 'all seven'}@{stamp}{who}"
+            f"{','.join(names) if len(names) < len(APPOINTMENT) else 'all eight'}@{stamp}{who}"
             for (stamp, who), names in sorted(groups.items())
         )
         or "no field"
@@ -9201,6 +9203,16 @@ def received_sessions() -> list[Session]:
     text = APPOINTMENT_OFFERED
     m1, m2 = other_manifest(1), other_manifest(2)
     d1, d2, d3 = other_data(1), other_data(2), other_data(3)
+    # Two titles for a DATA of the same version as d2 in other bytes: the first gives a lower SHA-256 than
+    # d2, the second a higher one (section 20.1); each the first of its kind that does.
+    doctor_title = next(
+        t for t in ("Doctor", *(f"Doctor {i}" for i in range(1, 64))) if sha(other_data(2, title=t)) < sha(d2)
+    )
+    dentist_title = next(
+        t
+        for t in ("Dentist", *(f"Dentist {i}" for i in range(1, 64)))
+        if sha(other_data(2, title=t)) > sha(d2)
+    )
     weber = FieldState(VALUE_WEBER, 200, TABLET)
     obf = KEY["other app"]
 
@@ -9569,7 +9581,7 @@ def received_sessions() -> list[Session]:
     )
     s.receive(forward_message("tablet", d2, text))
     s.receive(forward_message("tablet", d2, text, fid=TABLET_FORWARD_2))
-    dentist, doctor = other_data(2, title="Dentist"), other_data(2, title="Doctor")
+    dentist, doctor = other_data(2, title=dentist_title), other_data(2, title=doctor_title)
     assert sha(doctor) < sha(d2) < sha(dentist)
     s.receive(forward_message("tablet", dentist, text, fid=TABLET_FORWARD_3))
     s.receive(forward_message("tablet", doctor, text, fid=TABLET_FORWARD_4))
@@ -9590,7 +9602,9 @@ def received_sessions() -> list[Session]:
         ["sync.md 19.5"],
         known(),
     )
-    s.receive(forward_message("tablet", other_data(1, more=b"\x00"), text))
+    # A byte left over that gives a lower SHA-256 than d1, so that d1 stands by the bytes as well.
+    extra = next(m for m in (bytes([i]) for i in range(256)) if sha(other_data(1, more=m)) < sha(d1))
+    s.receive(forward_message("tablet", other_data(1, more=extra), text))
     s.acks()
     for label, rid, version, code in [
         ("an id that is no UUID", "not-a-uuid", 2, "RECORD_ID_INVALID"),
@@ -9781,8 +9795,8 @@ def received_sessions() -> list[Session]:
             ["sync.md 19.5", "sync.md 20.1"],
             known(record=d2),
         )
-        give(s, how, other_data(2, title="Doctor"), text)
-        give(s, how, other_data(2, title="Dentist"), text, TABLET_FORWARD_2)
+        give(s, how, other_data(2, title=doctor_title), text)
+        give(s, how, other_data(2, title=dentist_title), text, TABLET_FORWARD_2)
         s.acks()
         s.about()
         s = new(
@@ -9800,8 +9814,8 @@ def received_sessions() -> list[Session]:
             ["sync.md 19.5", "sync.md 20.1"],
             tomb(),
         )
-        give(s, how, other_data(2, title="Doctor"), text)
-        give(s, how, other_data(2, title="Dentist"), text, TABLET_FORWARD_2)
+        give(s, how, other_data(2, title=doctor_title), text)
+        give(s, how, other_data(2, title=dentist_title), text, TABLET_FORWARD_2)
         s.acks()
         s.about()
         s = new(
@@ -11458,7 +11472,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11468,7 +11482,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11478,7 +11492,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11488,7 +11502,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11499,7 +11513,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11510,7 +11524,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11520,7 +11534,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11530,7 +11544,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11540,7 +11554,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11550,7 +11564,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11560,7 +11574,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "laptop: known, delivered: all",
             "tablet: known, delivered: all",
         ],
@@ -11571,7 +11585,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "laptop: known, delivered: all",
             "tablet: known, delivered: all",
         ],
@@ -11583,7 +11597,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11594,7 +11608,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11611,7 +11625,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11626,7 +11640,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11640,7 +11654,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11651,7 +11665,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11662,7 +11676,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11673,7 +11687,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11684,7 +11698,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11695,7 +11709,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11708,7 +11722,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 115; all_day,end,notes,reminders,start,title@100p location@110t; "
+                "state stamp 115; all_day,end,notes,relations,reminders,start,title@100p location@110t; "
                 "sibling stamp 111; to pass None; highest 115"
             ),
             "tablet: known, delivered: all",
@@ -11721,7 +11735,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11732,7 +11746,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -11934,9 +11948,9 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp None; all_day,end,notes,reminders,start,title@100p "
-                "location@9223372036854775807t removal@9223372036854775807t, taken back; sibling "
-                "stamp 9223372036854775807; to pass None; highest 9223372036854775807"
+                "state stamp None; all_day,end,notes,relations,reminders,start,title@100p "
+                "location@9223372036854775807t removal@9223372036854775807t, taken back; sibling stamp "
+                "9223372036854775807; to pass None; highest 9223372036854775807"
             ),
             "tablet: known, delivered: all and the removal",
         ],
@@ -11950,7 +11964,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 122; all_day,end,notes,reminders,start,title@100p location@110? "
+                "state stamp 122; all_day,end,notes,relations,reminders,start,title@100p location@110? "
                 "removal@120o, taken back; sibling stamp 121; to pass None; highest 122"
             ),
             "tablet: known, delivered: all and the removal",
@@ -11965,8 +11979,8 @@ SAID: dict[str, list[list[str]]] = {
             "ACK to tablet: version 105 STALE, receiver 101",
         ],
         [
-            "state stamp 101; all seven@100p; sibling stamp 105; to pass None; highest 105",
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "state stamp 101; all eight@100p; sibling stamp 105; to pass None; highest 105",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "step 6: a field state of unknown age, with the stamp -1, is valid, and loses against every other": [
@@ -11978,8 +11992,8 @@ SAID: dict[str, list[list[str]]] = {
             "ACK to tablet: version 105 STALE, receiver 101",
         ],
         [
-            "state stamp 101; all seven@100p; sibling stamp 105; to pass None; highest 105",
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "state stamp 101; all eight@100p; sibling stamp 105; to pass None; highest 105",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "step 7: the error names the first schema, in the order of the message, that the device lacks": [
@@ -11989,7 +12003,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -12011,7 +12025,7 @@ SAID: dict[str, list[list[str]]] = {
         [],
         [
             "outcome: None",
-            "ERROR to tablet: SCHEMA_UNKNOWN, fingerprint 051c22f83081ef02",
+            "ERROR to tablet: SCHEMA_UNKNOWN, fingerprint 62231c9093404ed8",
         ],
     ],
     "step 8: a schema of another type than the message names is rejected": [
@@ -12031,7 +12045,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -12042,7 +12056,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -12076,7 +12090,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 162; all_day,end,notes,reminders,start,title@100p location@160t "
+                "state stamp 162; all_day,end,notes,relations,reminders,start,title@100p location@160t "
                 "removal@150p; sibling stamp 161; to pass None; highest 162"
             ),
             "tablet: known, delivered: all and the removal",
@@ -12103,7 +12117,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 112; all_day,end,notes,reminders,start,title@100p location@110t; "
+                "state stamp 112; all_day,end,notes,relations,reminders,start,title@100p location@110t; "
                 "sibling stamp 111; to pass None; highest 112"
             ),
             "tablet: known, delivered: all",
@@ -12116,7 +12130,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -12127,7 +12141,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -12138,7 +12152,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -12149,7 +12163,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -12175,7 +12189,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -12186,7 +12200,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -12255,7 +12269,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 115; all_day,end,notes,reminders,start,title@100p location@110t; "
+                "state stamp 115; all_day,end,notes,relations,reminders,start,title@100p location@110t; "
                 "sibling stamp 111; to pass None; highest 115"
             ),
             "tablet: known, delivered: all",
@@ -12269,7 +12283,7 @@ SAID: dict[str, list[list[str]]] = {
             "ACK to tablet: version 105 DUPLICATE, receiver 101",
         ],
         [
-            "state stamp 101; all seven@100p; sibling stamp 105; to pass None; highest 105",
+            "state stamp 101; all eight@100p; sibling stamp 105; to pass None; highest 105",
             "tablet: known, delivered: all",
         ],
     ],
@@ -12281,7 +12295,7 @@ SAID: dict[str, list[list[str]]] = {
             "ACK to tablet: version 105 DUPLICATE, receiver 101",
         ],
         [
-            "state stamp 101; all seven@100p; sibling stamp 105; to pass None; highest 105",
+            "state stamp 101; all eight@100p; sibling stamp 105; to pass None; highest 105",
             "tablet: known, delivered: all",
         ],
     ],
@@ -12295,10 +12309,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 121; all_day,end,notes,reminders,start,title@100p location@120p; "
+                "state stamp 121; all_day,end,notes,relations,reminders,start,title@100p location@120p; "
                 "sibling stamp 111; to pass None; highest 121"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "a CHANGE with one later and one earlier field state is applied": [
@@ -12311,10 +12325,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 127; all_day,end,reminders,start,title@100p location@120p "
-                "notes@125t; sibling stamp 126; to pass None; highest 127"
+                "state stamp 127; all_day,end,relations,reminders,start,title@100p location@120p notes@125t; "
+                "sibling stamp 126; to pass None; highest 127"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "a CHANGE that is processed a second time is a duplicate": [
@@ -12330,7 +12344,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 115; all_day,end,notes,reminders,start,title@100p location@110t; "
+                "state stamp 115; all_day,end,notes,relations,reminders,start,title@100p location@110t; "
                 "sibling stamp 111; to pass None; highest 115"
             ),
             "tablet: known, delivered: all",
@@ -12356,10 +12370,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 117; all_day,end,notes,reminders,start,title@100p location@116p; "
+                "state stamp 117; all_day,end,notes,relations,reminders,start,title@100p location@116p; "
                 "sibling stamp 111; to pass None; highest 117"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "a CHANGE with a removal that stands deletes the record": [
@@ -12370,7 +12384,7 @@ SAID: dict[str, list[list[str]]] = {
             "ACK to tablet: version 151 APPLIED, receiver 152",
         ],
         [
-            "state stamp 152; all seven@100p removal@150t; sibling stamp 151; to pass None; highest 152",
+            "state stamp 152; all eight@100p removal@150t; sibling stamp 151; to pass None; highest 152",
             "tablet: known, delivered: all and the removal",
         ],
     ],
@@ -12383,7 +12397,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 162; all_day,end,notes,reminders,start,title@100p location@160t "
+                "state stamp 162; all_day,end,notes,relations,reminders,start,title@100p location@160t "
                 "removal@150p; sibling stamp 161; to pass None; highest 162"
             ),
             "tablet: known, delivered: all and the removal",
@@ -12398,8 +12412,8 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 172; all seven@100p removal@170t, taken back; sibling stamp 171; to "
-                "pass None; highest 172"
+                "state stamp 172; all eight@100p removal@170t, taken back; sibling stamp 171; to pass None; "
+                "highest 172"
             ),
             "tablet: known, delivered: all and the removal",
         ],
@@ -12412,7 +12426,7 @@ SAID: dict[str, list[list[str]]] = {
             "ACK to tablet: version 155 DUPLICATE, receiver 151",
         ],
         [
-            "state stamp 151; all seven@100p removal@150p; sibling stamp 155; to pass None; highest 155",
+            "state stamp 151; all eight@100p removal@150p; sibling stamp 155; to pass None; highest 155",
             "tablet: known, delivered: all and the removal",
         ],
     ],
@@ -12425,7 +12439,7 @@ SAID: dict[str, list[list[str]]] = {
             "ACK to tablet: version 141 STALE, receiver 151",
         ],
         [
-            "state stamp 151; all seven@100p removal@150p; sibling stamp 141; to pass None; highest 151",
+            "state stamp 151; all eight@100p removal@150p; sibling stamp 141; to pass None; highest 151",
             "tablet: known, delivered: all",
         ],
     ],
@@ -12438,7 +12452,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 121; all_day,end,notes,reminders,start,title@100p location@110t; "
+                "state stamp 121; all_day,end,notes,relations,reminders,start,title@100p location@110t; "
                 "sibling stamp 111; to pass None; highest 121"
             ),
             "tablet: known, delivered: all",
@@ -12461,8 +12475,8 @@ SAID: dict[str, list[list[str]]] = {
             "ACK to tablet: version 126 APPLIED, receiver 127",
         ],
         [
-            "state stamp 127; all seven@100p room@125t; sibling stamp 126; to pass None; highest 127",
-            "laptop: known, delivered: all_day,end,location,notes,reminders,start,title",
+            "state stamp 127; all eight@100p room@125t; sibling stamp 126; to pass None; highest 127",
+            "laptop: known, delivered: all_day,end,location,notes,relations,reminders,start,title",
             "tablet: known, delivered: all",
         ],
     ],
@@ -12477,7 +12491,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             "outcome: None",
-            "CHANGE of 7b1e6c2a to laptop, version 202, state 202, whole: all seven@200t",
+            "CHANGE of 7b1e6c2a to laptop, version 202, state 202, whole: all eight@200t",
         ],
         [
             "ACK of 7b1e6c2a to tablet: version 201 APPLIED, receiver 202",
@@ -12496,7 +12510,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 132; all_day,end,location,notes,reminders,start@100p title@130t; "
+                "state stamp 132; all_day,end,location,notes,relations,reminders,start@100p title@130t; "
                 "sibling stamp 131; to pass None; highest 132"
             ),
             "tablet: known, delivered: all",
@@ -12556,7 +12570,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             "outcome: None",
-            "CHANGE to laptop, version 127, state 127, whole: all seven@100p room@125t",
+            "CHANGE to laptop, version 127, state 127, whole: all eight@100p room@125t",
         ],
     ],
     "an answer to an offer that the device did not make is ignored": [
@@ -12575,8 +12589,8 @@ SAID: dict[str, list[list[str]]] = {
         ],
     ],
     (
-        "the outcome APPLIED of a sibling delivers the parts of the message, and the "
-        "sibling's state stamp counts as seen"
+        "the outcome APPLIED of a sibling delivers the parts of the message, and the sibling's state stamp "
+        "counts as seen"
     ): [
         [
             "made: True",
@@ -12587,15 +12601,15 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp 115; to pass None; highest 115"
             ),
             "tablet: known, delivered: all",
         ],
     ],
     (
-        "the outcome DUPLICATE of a sibling delivers the parts of the message, also with "
-        "a state stamp below the version"
+        "the outcome DUPLICATE of a sibling delivers the parts of the message, also with a state stamp below "
+        "the version"
     ): [
         [
             "made: True",
@@ -12606,7 +12620,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp 105; to pass None; highest 111"
             ),
             "tablet: known, delivered: all",
@@ -12614,7 +12628,8 @@ SAID: dict[str, list[list[str]]] = {
     ],
     (
         "the outcome STALE of a sibling delivers the parts of the message, and the device "
-        "keeps no version to pass"
+        "keeps no version to "
+        "pass"
     ): [
         [
             "made: True",
@@ -12625,7 +12640,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp 130; to pass None; highest 130"
             ),
             "tablet: known, delivered: all",
@@ -12644,10 +12659,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "the first outcome for an id and version stands": [
@@ -12663,7 +12678,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp 115; to pass None; highest 115"
             ),
             "tablet: known, delivered: all",
@@ -12680,11 +12695,11 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "laptop: known, delivered: all_day,end,notes,reminders,start,title",
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "laptop: known, delivered: all_day,end,notes,relations,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "an ACK of a sibling with the outcome MERGED is not valid, and none of its entries is taken": [
@@ -12698,10 +12713,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "an ACK of a sibling with the outcome KEPT is not valid, and none of its entries is taken": [
@@ -12715,10 +12730,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "an ACK of a sibling with the outcome WITHDRAWN is not valid, and none of its entries is taken": [
@@ -12732,10 +12747,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "an ACK of a sibling with a kept field is not valid, and none of its entries is taken": [
@@ -12749,10 +12764,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "an ACK of a sibling with a receiver_version of 0 is not valid, and none of its entries is taken": [
@@ -12766,10 +12781,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "an ACK of a sibling with a version of 0 is not valid, and none of its entries is taken": [
@@ -12783,10 +12798,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "an ACK of a sibling with an id and version twice is not valid, and none of its entries is taken": [
@@ -12800,10 +12815,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "an ACK of a sibling with an id that is no UUID is not valid, and none of its entries is taken": [
@@ -12817,10 +12832,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "an ACK of a sibling with no entry is not valid, and none of its entries is taken": [
@@ -12834,10 +12849,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "after SCHEMA_UNKNOWN the device offers the schema, and sends the same CHANGE once it is accepted": [
@@ -12855,10 +12870,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "after SCHEMA_UNKNOWN without a fingerprint the device sends the same CHANGE again at once": [
@@ -12880,12 +12895,12 @@ SAID: dict[str, list[list[str]]] = {
             "outcome: None",
             (
                 "CHANGE to tablet, version 114, state 114, whole: "
-                "title,start,end,all_day,notes,reminders@100p location@110p"
+                "title,start,end,all_day,notes,reminders,relations@100p location@110p"
             ),
         ],
         [
             (
-                "state stamp 114; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 114; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 114"
             ),
             "tablet: not known",
@@ -12912,10 +12927,10 @@ SAID: dict[str, list[list[str]]] = {
         [],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
         [
             "made: True",
@@ -12937,10 +12952,10 @@ SAID: dict[str, list[list[str]]] = {
         [],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
         [
             "made: True",
@@ -12962,10 +12977,10 @@ SAID: dict[str, list[list[str]]] = {
         [],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
         [
             "made: True",
@@ -12987,10 +13002,10 @@ SAID: dict[str, list[list[str]]] = {
         [],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
         [
             "made: True",
@@ -13012,10 +13027,10 @@ SAID: dict[str, list[list[str]]] = {
         [],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
         [
             "made: True",
@@ -13037,10 +13052,10 @@ SAID: dict[str, list[list[str]]] = {
         [],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
         [
             "made: True",
@@ -13062,10 +13077,10 @@ SAID: dict[str, list[list[str]]] = {
         [],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
         [
             "made: True",
@@ -13087,10 +13102,10 @@ SAID: dict[str, list[list[str]]] = {
         [],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
         [
             "made: True",
@@ -13112,10 +13127,10 @@ SAID: dict[str, list[list[str]]] = {
         [],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
         [
             "made: True",
@@ -13136,7 +13151,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp 115; to pass None; highest 115"
             ),
             "tablet: known, delivered: all",
@@ -13153,10 +13168,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "an ERROR about a CHANGE that has an outcome is ignored": [
@@ -13172,7 +13187,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp 115; to pass None; highest 115"
             ),
             "tablet: known, delivered: all",
@@ -13189,11 +13204,11 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "laptop: known, delivered: all_day,end,notes,reminders,start,title",
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "laptop: known, delivered: all_day,end,notes,relations,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "an ERROR about a message that the device did not send to that sibling changes nothing": [
@@ -13206,10 +13221,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "a change travels in part to every sibling, and an acknowledged part does not go again": [
@@ -13228,11 +13243,11 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 117; title,start,end,all_day,reminders@100p location@110p "
-                "notes@116p; sibling stamp 115; to pass None; highest 117"
+                "state stamp 117; title,start,end,all_day,reminders,relations@100p location@110p notes@116p; "
+                "sibling stamp 115; to pass None; highest 117"
             ),
-            "laptop: known, delivered: all_day,end,reminders,start,title",
-            "tablet: known, delivered: all_day,end,location,reminders,start,title",
+            "laptop: known, delivered: all_day,end,relations,reminders,start,title",
+            "tablet: known, delivered: all_day,end,location,relations,reminders,start,title",
         ],
     ],
     "a part that the device took from one sibling goes to the others, and not back": [
@@ -13248,7 +13263,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 115; all_day,end,notes,reminders,start,title@100p location@110t; "
+                "state stamp 115; all_day,end,notes,relations,reminders,start,title@100p location@110t; "
                 "sibling stamp 119; to pass None; highest 119"
             ),
             "laptop: known, delivered: all",
@@ -13260,7 +13275,7 @@ SAID: dict[str, list[list[str]]] = {
             "made: True",
             (
                 "CHANGE to laptop, version 111, state 111, whole: "
-                "title,start,end,all_day,notes,reminders@100p location@110p"
+                "title,start,end,all_day,notes,reminders,relations@100p location@110p"
             ),
             "CHANGE to tablet, version 111, state 111, in part: location@110p",
         ],
@@ -13269,11 +13284,11 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp 115; to pass None; highest 115"
             ),
             "laptop: known, delivered: all",
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "a new device gets the schemas offered and then every record whole": [
@@ -13282,10 +13297,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             "outcome: None",
-            "CHANGE to laptop, version 101, state 101, whole: all seven@100p",
+            "CHANGE to laptop, version 101, state 101, whole: all eight@100p",
         ],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "laptop: not known",
             "tablet: known, delivered: all",
         ],
@@ -13293,11 +13308,11 @@ SAID: dict[str, list[list[str]]] = {
     "a deletion travels as the removal alone, and a deleted record goes whole to a sibling that lacks it": [
         [
             "made: True",
-            "CHANGE to laptop, version 111, state 111, whole: all seven@100p removal@110p",
+            "CHANGE to laptop, version 111, state 111, whole: all eight@100p removal@110p",
             "CHANGE to tablet, version 111, state 111, in part: no field removal@110p",
         ],
         [
-            "state stamp 111; all seven@100p removal@110p; sibling stamp None; to pass None; highest 111",
+            "state stamp 111; all eight@100p removal@110p; sibling stamp None; to pass None; highest 111",
             "laptop: not known",
             "tablet: known, delivered: all",
         ],
@@ -13327,8 +13342,8 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 166; location@160t removal@150p; sibling stamp None; to pass None; "
-                "highest 166; incomplete"
+                "state stamp 166; location@160t removal@150p; sibling stamp None; to pass None; highest 166; "
+                "incomplete"
             ),
             "tablet: not known",
         ],
@@ -13338,10 +13353,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 173; all_day,end,notes,reminders,start@100p location@160t title@170t "
+                "state stamp 173; all_day,end,notes,relations,reminders,start@100p location@160t title@170t "
                 "removal@150p; sibling stamp 171; to pass None; highest 173"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "a different CHANGE of a record to one sibling takes a new state stamp; nothing becomes due by it": [
@@ -13354,15 +13369,15 @@ SAID: dict[str, list[list[str]]] = {
             "outcome: None",
             (
                 "CHANGE to tablet, version 113, state 113, whole: "
-                "title,start,end,all_day,notes,reminders@100p location@110p"
+                "title,start,end,all_day,notes,reminders,relations@100p location@110p"
             ),
         ],
         [
             (
-                "state stamp 113; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 113; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 113"
             ),
-            "laptop: known, delivered: all_day,end,notes,reminders,start,title",
+            "laptop: known, delivered: all_day,end,notes,relations,reminders,start,title",
             "tablet: not known",
         ],
     ],
@@ -13379,16 +13394,16 @@ SAID: dict[str, list[list[str]]] = {
             "outcome: None",
             (
                 "CHANGE to tablet, version 113, state 113, whole: "
-                "title,start,end,all_day,notes,reminders@100p location@110p"
+                "title,start,end,all_day,notes,reminders,relations@100p location@110p"
             ),
             "CHANGE to laptop, version 113, state 113, in part: location@110p",
         ],
         [
             (
-                "state stamp 113; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 113; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 113"
             ),
-            "laptop: known, delivered: all_day,end,notes,reminders,start,title",
+            "laptop: known, delivered: all_day,end,notes,relations,reminders,start,title",
             "tablet: not known",
         ],
     ],
@@ -13398,7 +13413,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             "outcome: None",
-            "CHANGE of 7b1e6c2a to tablet, version 101, state 101, whole: all seven@100p",
+            "CHANGE of 7b1e6c2a to tablet, version 101, state 101, whole: all eight@100p",
         ],
     ],
     "a CHANGE without an outcome goes again in the next connection, once its schema is accepted there": [
@@ -13415,10 +13430,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 111"
             ),
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "a CHANGE with an outcome does not go again in the next connection": [
@@ -13448,10 +13463,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 121; all_day,end,reminders,start,title@100p location,notes@110p; "
+                "state stamp 121; all_day,end,relations,reminders,start,title@100p location,notes@110p; "
                 "sibling stamp 120; to pass None; highest 121"
             ),
-            "tablet: known, delivered: all_day,end,location,reminders,start,title",
+            "tablet: known, delivered: all_day,end,location,relations,reminders,start,title",
         ],
     ],
     "a CHANGE of the sibling delivers the parts of a CHANGE on its way, which then does not go again": [
@@ -13465,7 +13480,7 @@ SAID: dict[str, list[list[str]]] = {
         [],
         [
             (
-                "state stamp 111; all_day,end,notes,reminders,start,title@100p location@110p; "
+                "state stamp 111; all_day,end,notes,relations,reminders,start,title@100p location@110p; "
                 "sibling stamp 120; to pass None; highest 120"
             ),
             "tablet: known, delivered: all",
@@ -13482,10 +13497,7 @@ SAID: dict[str, list[list[str]]] = {
             "made: False",
         ],
         [
-            (
-                "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest "
-                "9223372036854775807"
-            ),
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 9223372036854775807",
             "tablet: known, delivered: all",
         ],
     ],
@@ -13504,7 +13516,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; all_day,end,notes,reminders,start,title@100p location@110p; "
+                "state stamp 111; all_day,end,notes,relations,reminders,start,title@100p location@110p; "
                 "sibling stamp 105; to pass None; highest 9223372036854775807"
             ),
             "tablet: not known",
@@ -13513,7 +13525,7 @@ SAID: dict[str, list[list[str]]] = {
     "a record that its user creates travels whole, its deletion and the taking back as the removal alone": [
         [
             "made: True",
-            "CHANGE of 7b1e6c2a to tablet, version 101, state 101, whole: all seven@100p",
+            "CHANGE of 7b1e6c2a to tablet, version 101, state 101, whole: all eight@100p",
         ],
         [
             "outcome: None",
@@ -13528,14 +13540,14 @@ SAID: dict[str, list[list[str]]] = {
         [
             "made: True",
             (
-                "CHANGE of 7b1e6c2a to tablet, version 112, state 112, in part: no field "
-                "removal@111p, taken back"
+                "CHANGE of 7b1e6c2a to tablet, version 112, state 112, in part: no field removal@111p, taken "
+                "back"
             ),
         ],
         [
             (
-                "state stamp 112; all seven@100p removal@111p, taken back; sibling stamp 110; to "
-                "pass None; highest 112"
+                "state stamp 112; all eight@100p removal@111p, taken back; sibling stamp 110; to pass None; "
+                "highest 112"
             ),
             "tablet: known, delivered: all",
         ],
@@ -13543,14 +13555,14 @@ SAID: dict[str, list[list[str]]] = {
     "after a RESYNC the device sends every record whole under a new state stamp, then acknowledges it": [
         [
             "outcome: None",
-            "CHANGE to tablet, version 152, state 152, whole: all seven@100p",
+            "CHANGE to tablet, version 152, state 152, whole: all eight@100p",
             (
                 "CHANGE of 7b1e6c2a to tablet, version 153, state 153, whole: "
-                "title,start,end,all_day,notes,reminders@100p location@110t removal@150p"
+                "title,start,end,all_day,notes,reminders,relations@100p location@110t removal@150p"
             ),
         ],
         [
-            "state stamp 152; all seven@100p; sibling stamp None; to pass None; highest 153",
+            "state stamp 152; all eight@100p; sibling stamp None; to pass None; highest 153",
             "tablet: not known",
         ],
         [
@@ -13564,7 +13576,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 153; title,start,end,all_day,notes,reminders@100p location@110t "
+                "state stamp 153; title,start,end,all_day,notes,reminders,relations@100p location@110t "
                 "removal@150p; sibling stamp None; to pass None; highest 153"
             ),
             "tablet: not known",
@@ -13573,7 +13585,7 @@ SAID: dict[str, list[list[str]]] = {
     "a repeat of a RESYNC before its acknowledgement is sent changes nothing": [
         [
             "outcome: None",
-            "CHANGE to tablet, version 102, state 102, whole: all seven@100p",
+            "CHANGE to tablet, version 102, state 102, whole: all eight@100p",
         ],
         [
             "outcome: None",
@@ -13585,14 +13597,14 @@ SAID: dict[str, list[list[str]]] = {
     "a RESYNC with another id is another request, and is acted on": [
         [
             "outcome: None",
-            "CHANGE to tablet, version 102, state 102, whole: all seven@100p",
+            "CHANGE to tablet, version 102, state 102, whole: all eight@100p",
         ],
         [
             "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
         ],
         [
             "outcome: None",
-            "CHANGE to tablet, version 103, state 103, whole: all seven@100p",
+            "CHANGE to tablet, version 103, state 103, whole: all eight@100p",
         ],
         [
             "ACK of 0000000b to tablet: version 1 APPLIED, receiver 1",
@@ -13614,7 +13626,7 @@ SAID: dict[str, list[list[str]]] = {
         [],
         [
             "outcome: None",
-            "CHANGE to tablet, version 102, state 102, whole: all seven@100p",
+            "CHANGE to tablet, version 102, state 102, whole: all eight@100p",
         ],
         [
             "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
@@ -13631,7 +13643,7 @@ SAID: dict[str, list[list[str]]] = {
         [],
         [
             "outcome: None",
-            "CHANGE to tablet, version 102, state 102, whole: all seven@100p",
+            "CHANGE to tablet, version 102, state 102, whole: all eight@100p",
         ],
         [
             "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
@@ -13641,16 +13653,16 @@ SAID: dict[str, list[list[str]]] = {
         [
             "outcome: None",
             "OFFER 00000001 to tablet: axt.example.v1.Appointment version 2",
-            "CHANGE to tablet, version 128, state 128, whole: all seven@100p",
+            "CHANGE to tablet, version 128, state 128, whole: all eight@100p",
         ],
         [],
         [
             "outcome: None",
-            "CHANGE to tablet, version 129, state 129, whole: all seven@100p",
+            "CHANGE to tablet, version 129, state 129, whole: all eight@100p",
         ],
         [
             "outcome: None",
-            "CHANGE of 7b1e6c2a to tablet, version 130, state 130, whole: all seven@100p room@125t",
+            "CHANGE of 7b1e6c2a to tablet, version 130, state 130, whole: all eight@100p room@125t",
         ],
         [
             "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
@@ -13674,7 +13686,7 @@ SAID: dict[str, list[list[str]]] = {
             "outcome: None",
             (
                 "CHANGE to tablet, version 113, state 113, whole: "
-                "title,start,end,all_day,notes,reminders@100p location@110p"
+                "title,start,end,all_day,notes,reminders,relations@100p location@110p"
             ),
         ],
         [
@@ -13685,7 +13697,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 113; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 113; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp None; to pass None; highest 113"
             ),
             "tablet: not known",
@@ -13698,7 +13710,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -13709,7 +13721,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -13720,7 +13732,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -13731,7 +13743,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -13742,7 +13754,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -13753,7 +13765,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
@@ -13769,8 +13781,8 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101; "
-                "a request open to laptop, tablet"
+                "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101; a request "
+                "open to laptop, tablet"
             ),
             "laptop: not known",
             "tablet: not known",
@@ -13797,12 +13809,11 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 117; all_day,end,reminders,start,title@100p notes@102p "
-                "location@110p; sibling stamp 115; to pass None; highest 117; a request open to "
-                "laptop"
+                "state stamp 117; all_day,end,relations,reminders,start,title@100p notes@102p location@110p; "
+                "sibling stamp 115; to pass None; highest 117; a request open to laptop"
             ),
             "laptop: not known",
-            "tablet: known, delivered: all_day,end,location,reminders,start,title",
+            "tablet: known, delivered: all_day,end,location,relations,reminders,start,title",
         ],
         [
             "outcome: None",
@@ -13817,11 +13828,11 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 117; all_day,end,reminders,start,title@100p notes@102p "
-                "location@110p; sibling stamp 115; to pass None; highest 117"
+                "state stamp 117; all_day,end,relations,reminders,start,title@100p notes@102p location@110p; "
+                "sibling stamp 115; to pass None; highest 117"
             ),
             "laptop: not known",
-            "tablet: known, delivered: all_day,end,location,reminders,start,title",
+            "tablet: known, delivered: all_day,end,location,relations,reminders,start,title",
         ],
     ],
     "a restored device with a sibling gives its field states never stamped the stamp -1": [
@@ -13830,8 +13841,8 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 4; all seven@-1p; sibling stamp None; to pass None; highest 4; held "
-                "back from other apps; a request open to tablet"
+                "state stamp 4; all eight@-1p; sibling stamp None; to pass None; highest 4; held back from "
+                "other apps; a request open to tablet"
             ),
             "tablet: not known",
         ],
@@ -13840,12 +13851,12 @@ SAID: dict[str, list[list[str]]] = {
             "OFFER 00000001 to tablet: axt.example.v1.Appointment version 1",
         ],
         [
-            "state stamp 4; all seven@-1p; sibling stamp None; to pass None; highest 4",
+            "state stamp 4; all eight@-1p; sibling stamp None; to pass None; highest 4",
             "tablet: not known",
         ],
         [
             "outcome: None",
-            "CHANGE to tablet, version 5, state 5, whole: all seven@-1p",
+            "CHANGE to tablet, version 5, state 5, whole: all eight@-1p",
         ],
     ],
     "a record with a field state of unknown age is held back from other apps for at most 14 days": [
@@ -13855,16 +13866,17 @@ SAID: dict[str, list[list[str]]] = {
         [],
         [
             (
-                "state stamp 4; all seven@-1p; sibling stamp None; to pass None; highest 4; held "
-                "back from other apps; a request open to tablet"
+                "state stamp 4; all eight@-1p; sibling stamp None; to pass None; highest 4; held back from "
+                "other apps; a request open to tablet"
             ),
             "tablet: not known",
         ],
         [],
         [
             (
-                "state stamp 4; all seven@-1p; sibling stamp None; to pass None; highest 4; a "
-                "request open to tablet"
+                "state stamp 4; all eight@-1p; sibling stamp None; to pass None; highest 4; a "
+                "request open to "
+                "tablet"
             ),
             "tablet: not known",
         ],
@@ -13880,8 +13892,9 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 4; all seven@-1p; sibling stamp None; to pass None; highest 4; a "
-                "request open to laptop"
+                "state stamp 4; all eight@-1p; sibling stamp None; to pass None; highest 4; a "
+                "request open to "
+                "laptop"
             ),
             "laptop: not known",
             "tablet: not known",
@@ -13891,7 +13904,7 @@ SAID: dict[str, list[list[str]]] = {
             "OFFER 00000002 to laptop: axt.example.v1.Appointment version 1",
         ],
         [
-            "state stamp 4; all seven@-1p; sibling stamp None; to pass None; highest 4",
+            "state stamp 4; all eight@-1p; sibling stamp None; to pass None; highest 4",
             "laptop: not known",
             "tablet: not known",
         ],
@@ -13899,11 +13912,11 @@ SAID: dict[str, list[list[str]]] = {
     "a restored device keeps the requests of its backup that it acted on, and opens its own anew": [
         [
             "outcome: None",
-            "CHANGE to tablet, version 102, state 102, whole: all seven@100p",
+            "CHANGE to tablet, version 102, state 102, whole: all eight@100p",
         ],
         [
             "outcome: None",
-            "CHANGE to tablet, version 103, state 103, whole: all seven@100p",
+            "CHANGE to tablet, version 103, state 103, whole: all eight@100p",
         ],
         [
             "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
@@ -13930,8 +13943,8 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101; "
-                "a request open to tablet"
+                "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101; a request "
+                "open to tablet"
             ),
             "tablet: not known",
         ],
@@ -13940,7 +13953,7 @@ SAID: dict[str, list[list[str]]] = {
             "OFFER 00000002 to tablet: axt.example.v1.Appointment version 1",
         ],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: not known",
         ],
     ],
@@ -13954,9 +13967,8 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 6; title,start,end,all_day,location,reminders@-1p notes@5p; sibling "
-                "stamp None; to pass None; highest 6; held back from other apps; a request open "
-                "to tablet"
+                "state stamp 6; title,start,end,all_day,location,reminders,relations@-1p notes@5p; sibling "
+                "stamp None; to pass None; highest 6; held back from other apps; a request open to tablet"
             ),
             "tablet: not known",
         ],
@@ -13968,16 +13980,16 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 10; all_day,end,location,reminders,start,title@0p notes@5p; sibling "
+                "state stamp 10; all_day,end,location,relations,reminders,start,title@0p notes@5p; sibling "
                 "stamp 9; to pass None; highest 10; a request open to tablet"
             ),
-            "tablet: known, delivered: all_day,end,location,reminders,start,title",
+            "tablet: known, delivered: all_day,end,location,relations,reminders,start,title",
         ],
     ],
     "a device that restores as the only device of its set leaves its field states never stamped": [
         [],
         [
-            "state stamp 4; all seven@0p; sibling stamp None; to pass None; highest 4",
+            "state stamp 4; all eight@0p; sibling stamp None; to pass None; highest 4",
         ],
     ],
     "an open request goes again through the relay each time the holding time has passed, not before": [
@@ -13993,8 +14005,8 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101; "
-                "a request open to tablet"
+                "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101; a request "
+                "open to tablet"
             ),
             "tablet: not known",
         ],
@@ -14009,15 +14021,15 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             "outcome: None",
-            "CHANGE to tablet, version 102, state 102, whole: all seven@100p",
+            "CHANGE to tablet, version 102, state 102, whole: all eight@100p",
         ],
         [
             "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
         ],
         [
             (
-                "state stamp 102; all seven@100p; sibling stamp None; to pass None; highest 102; "
-                "a request open to tablet"
+                "state stamp 102; all eight@100p; sibling stamp None; to pass None; highest 102; a request "
+                "open to tablet"
             ),
             "tablet: not known",
         ],
@@ -14032,8 +14044,8 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101; "
-                "a request open to laptop"
+                "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101; a request "
+                "open to laptop"
             ),
             "laptop: not known",
         ],
@@ -14047,8 +14059,8 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101; "
-                "a request open to tablet"
+                "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101; a request "
+                "open to tablet"
             ),
             "tablet: not known",
         ],
@@ -14072,10 +14084,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp 115; to pass None; highest 115"
             ),
-            "laptop: known, delivered: all_day,end,notes,reminders,start,title",
+            "laptop: known, delivered: all_day,end,notes,relations,reminders,start,title",
             "tablet: known, delivered: all",
         ],
     ],
@@ -14097,7 +14109,7 @@ SAID: dict[str, list[list[str]]] = {
         [],
         [
             (
-                "state stamp 111; title,start,end,all_day,notes,reminders@100p location@110p; "
+                "state stamp 111; title,start,end,all_day,notes,reminders,relations@100p location@110p; "
                 "sibling stamp 115; to pass None; highest 115"
             ),
             "tablet: known, delivered: all",
@@ -14117,10 +14129,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 107; location@-1t all_day,end,notes,reminders,start,title@100p; "
+                "state stamp 107; location@-1t all_day,end,notes,relations,reminders,start,title@100p; "
                 "sibling stamp 110; to pass None; highest 110"
             ),
-            "laptop: known, delivered: all_day,end,notes,reminders,start,title",
+            "laptop: known, delivered: all_day,end,notes,relations,reminders,start,title",
             "tablet: known, delivered: all",
         ],
     ],
@@ -14138,17 +14150,17 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 113; title,start,end,all_day,reminders@100p location,notes@112p; "
+                "state stamp 113; title,start,end,all_day,reminders,relations@100p location,notes@112p; "
                 "sibling stamp 115; to pass None; highest 115"
             ),
-            "tablet: known, delivered: all_day,end,reminders,start,title",
+            "tablet: known, delivered: all_day,end,relations,reminders,start,title",
         ],
         [
             "outcome: None",
         ],
         [
             (
-                "state stamp 113; title,start,end,all_day,reminders@100p location,notes@112p; "
+                "state stamp 113; title,start,end,all_day,reminders,relations@100p location,notes@112p; "
                 "sibling stamp 116; to pass None; highest 116"
             ),
             "tablet: known, delivered: all",
@@ -14374,10 +14386,10 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 124; all_day,end,reminders,start@100p location@110p notes@120t "
+                "state stamp 124; all_day,end,relations,reminders,start@100p location@110p notes@120t "
                 "title@123p; sibling stamp 121; to pass None; highest 124"
             ),
-            "laptop: known, delivered: all_day,end,reminders,start",
+            "laptop: known, delivered: all_day,end,relations,reminders,start",
         ],
     ],
     "a DATA or a DELETE of a sibling is rejected with NOT_ACCEPTED, if the steps before it pass": [
@@ -14395,7 +14407,7 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             "outcome: None",
-            "ERROR to tablet: SCHEMA_UNKNOWN, fingerprint 71105335022c796b",
+            "ERROR to tablet: SCHEMA_UNKNOWN, fingerprint 20ff75fd4c93c8f4",
         ],
         [
             "outcome: None",
@@ -14411,18 +14423,18 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 101",
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 101",
             "tablet: known, delivered: all",
         ],
     ],
     "a device takes a DATA of a file of its own set with field states of unknown age, which travel": [
         [
             "taken: True",
-            "CHANGE to laptop, version 8, state 8, whole: all seven@-1t",
-            "CHANGE to tablet, version 8, state 8, whole: all seven@-1t",
+            "CHANGE to laptop, version 8, state 8, whole: all eight@-1t",
+            "CHANGE to tablet, version 8, state 8, whole: all eight@-1t",
         ],
         [
-            "state stamp 8; all seven@-1t; sibling stamp 7; to pass None; highest 8",
+            "state stamp 8; all eight@-1t; sibling stamp 7; to pass None; highest 8",
             "laptop: not known",
             "tablet: not known",
         ],
@@ -14433,7 +14445,7 @@ SAID: dict[str, list[list[str]]] = {
             "taken: False",
         ],
         [
-            "state stamp 8; all seven@-1t; sibling stamp 7; to pass None; highest 8",
+            "state stamp 8; all eight@-1t; sibling stamp 7; to pass None; highest 8",
             "laptop: not known",
             "tablet: not known",
         ],
@@ -14441,11 +14453,11 @@ SAID: dict[str, list[list[str]]] = {
     "a record with field states of unknown age is part of the answer to a RESYNC, like any record": [
         [
             "taken: True",
-            "CHANGE to tablet, version 8, state 8, whole: all seven@-1p",
+            "CHANGE to tablet, version 8, state 8, whole: all eight@-1p",
         ],
         [
             "outcome: None",
-            "CHANGE to tablet, version 9, state 9, whole: all seven@-1p",
+            "CHANGE to tablet, version 9, state 9, whole: all eight@-1p",
         ],
         [
             "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
@@ -14454,14 +14466,14 @@ SAID: dict[str, list[list[str]]] = {
     "field states of unknown age from a file lose to a sibling's, never stamped or stamped": [
         [
             "taken: True",
-            "CHANGE to laptop, version 8, state 8, whole: all seven@-1t",
-            "CHANGE to tablet, version 8, state 8, whole: all seven@-1t",
+            "CHANGE to laptop, version 8, state 8, whole: all eight@-1t",
+            "CHANGE to tablet, version 8, state 8, whole: all eight@-1t",
         ],
         [
             "outcome: APPLIED",
             (
                 "CHANGE to laptop, version 106, state 106, whole: "
-                "all_day,end,location,notes,reminders,start@0p title@100t"
+                "all_day,end,location,notes,relations,reminders,start@0p title@100t"
             ),
         ],
         [
@@ -14469,8 +14481,9 @@ SAID: dict[str, list[list[str]]] = {
         ],
         [
             (
-                "state stamp 106; all_day,end,location,notes,reminders,start@0p title@100t; "
-                "sibling stamp 105; to pass None; highest 106"
+                "state stamp 106; all_day,end,location,notes,relations,reminders,start@0p "
+                "title@100t; sibling "
+                "stamp 105; to pass None; highest 106"
             ),
             "laptop: not known",
             "tablet: known, delivered: all",
@@ -14479,23 +14492,23 @@ SAID: dict[str, list[list[str]]] = {
     "of two field states of unknown age the higher device key stands, then the higher value": [
         [
             "taken: True",
-            "CHANGE to laptop, version 8, state 8, whole: all seven@-1t",
-            "CHANGE to tablet, version 8, state 8, whole: all seven@-1t",
+            "CHANGE to laptop, version 8, state 8, whole: all eight@-1t",
+            "CHANGE to tablet, version 8, state 8, whole: all eight@-1t",
         ],
         [
             "outcome: STALE",
-            "CHANGE to laptop, version 8, state 8, whole: all seven@-1t",
+            "CHANGE to laptop, version 8, state 8, whole: all eight@-1t",
         ],
         [
             "outcome: APPLIED",
-            "CHANGE to tablet, version 9, state 9, whole: all seven@-1t",
+            "CHANGE to tablet, version 9, state 9, whole: all eight@-1t",
         ],
         [
             "ACK to laptop: version 4 APPLIED, receiver 9",
             "ACK to laptop: version 3 STALE, receiver 8",
         ],
         [
-            "state stamp 9; all seven@-1t; sibling stamp 7; to pass None; highest 9",
+            "state stamp 9; all eight@-1t; sibling stamp 7; to pass None; highest 9",
             "laptop: known, delivered: title",
             "tablet: not known",
         ],
@@ -15634,9 +15647,9 @@ SAID: dict[str, list[list[str]]] = {
         [
             "outcome: APPLIED",
             (
-                "FORWARD 00000001 to laptop, #0: DATA version 1, id 7b1e6c2a, name 'Mimi', "
-                "species 'cat', breed 'Maine Coon', sex 'FEMALE', neutered True, birthday "
-                "changed, microchip '276098100000000', notes '', with a schema"
+                "FORWARD 00000001 to laptop, #0: DATA version 1, id 7b1e6c2a, name 'Mimi', species 'cat', "
+                "breed 'Maine Coon', sex 'FEMALE', neutered True, birthday changed, microchip "
+                "'276098100000000', notes '', relations changed, with a schema"
             ),
         ],
         [
@@ -15647,14 +15660,15 @@ SAID: dict[str, list[list[str]]] = {
             "kept: MANIFEST revision 1; delivered to laptop, tablet",
             "kept: DATA version 1; delivered to laptop, tablet",
             (
-                "kept: DATA version 1, id 7b1e6c2a, name 'Mimi', species 'cat', breed 'Maine "
-                "Coon', sex 'FEMALE', neutered True, birthday changed, microchip "
-                "'276098100000000', notes ''; delivered to tablet"
+                "kept: DATA version 1, id 7b1e6c2a, name 'Mimi', species 'cat', breed 'Maine Coon', sex "
+                "'FEMALE', neutered True, birthday changed, microchip '276098100000000', notes '', relations "
+                "changed; delivered to tablet"
             ),
             (
-                "sender's layer: there, version 1, type axt.example.v1.Pet, from DATA version 1, "
-                "id 7b1e6c2a, name 'Mimi', species 'cat', breed 'Maine Coon', sex 'FEMALE', "
-                "neutered True, birthday changed, microchip '276098100000000', notes ''"
+                "sender's layer: there, version 1, type axt.example.v1.Pet, from DATA version "
+                "1, id 7b1e6c2a, "
+                "name 'Mimi', species 'cat', breed 'Maine Coon', sex 'FEMALE', neutered True, birthday "
+                "changed, microchip '276098100000000', notes '', relations changed"
             ),
             "owner's layer: none",
             "shows: there",
@@ -16722,15 +16736,15 @@ SAID: dict[str, list[list[str]]] = {
         ],
     ],
     (
-        "on the first channel to a sibling every kept message is forwarded, sender by "
-        "sender: the additions, then the manifests, then the record messages"
+        "on the first channel to a sibling every kept message is forwarded, sender by sender: the additions, "
+        "then the manifests, then the record messages"
     ): [
         [
             "FORWARD 00000002 to tablet, #1: DEVICE_ADD of the other app, new by the other app",
-            "FORWARD 00000006 to tablet, #5: DATA version 1, id 7b1e6c2a, with the schema as offered",
-            "FORWARD 00000001 to tablet, #0: DATA version 1 of the second app, with the schema as offered",
             "FORWARD 00000005 to tablet, #4: DATA version 1, with the schema as offered",
             "FORWARD 00000003 to tablet, #2: MANIFEST revision 1 of the other app, new",
+            "FORWARD 00000006 to tablet, #5: DATA version 1, id 7b1e6c2a, with the schema as offered",
+            "FORWARD 00000001 to tablet, #0: DATA version 1 of the second app, with the schema as offered",
             "FORWARD 00000004 to tablet, #3: MANIFEST revision 1",
         ],
         [
@@ -16818,12 +16832,12 @@ SAID: dict[str, list[list[str]]] = {
         ],
     ],
     (
-        "the answer to a RESYNC holds a new forward of every kept message, then the "
-        "records of the set, then the owner's layers, and then the acknowledgement"
+        "the answer to a RESYNC holds a new forward of every kept message, then the records of the set, then "
+        "the owner's layers, and then the acknowledgement"
     ): [
         [
             "outcome: None",
-            "CHANGE to tablet, version 206, state 206, whole: all seven@100p",
+            "CHANGE to tablet, version 206, state 206, whole: all eight@100p",
             "CHANGE, origin other app, to tablet, version 207, state 207, whole: location@200t",
             "FORWARD 00000002 to tablet, #1: DATA version 1, with the schema as offered",
             "FORWARD 00000001 to tablet, #0: MANIFEST revision 1",
@@ -17497,12 +17511,12 @@ SAID: dict[str, list[list[str]]] = {
         ],
     ],
     (
-        "steps 7 and 8: the schema is looked up among those of the record's sender and of "
-        "the sibling's offers, not among the device's own"
+        "steps 7 and 8: the schema is looked up among those of the record's sender and of the sibling's "
+        "offers, not among the device's own"
     ): [
         [
             "outcome: None",
-            "ERROR to tablet: SCHEMA_UNKNOWN, fingerprint 051c22f83081ef02",
+            "ERROR to tablet: SCHEMA_UNKNOWN, fingerprint 62231c9093404ed8",
         ],
         [],
         [
@@ -17517,14 +17531,14 @@ SAID: dict[str, list[list[str]]] = {
     "step 7: a schema that the device keeps of another sender only is not found": [
         [
             "outcome: None",
-            "ERROR to tablet: SCHEMA_UNKNOWN, fingerprint 051c22f83081ef02",
+            "ERROR to tablet: SCHEMA_UNKNOWN, fingerprint 62231c9093404ed8",
         ],
         [],
     ],
     "step 7 holds for an entry with a null value as well": [
         [
             "outcome: None",
-            "ERROR to tablet: SCHEMA_UNKNOWN, fingerprint 051c22f83081ef02",
+            "ERROR to tablet: SCHEMA_UNKNOWN, fingerprint 62231c9093404ed8",
         ],
         [],
     ],
@@ -18321,11 +18335,11 @@ SAID: dict[str, list[list[str]]] = {
     "a DATA beside a tombstone travels to a new device, before the DELETE": [
         [
             "OFFER 00000001 to laptop: axt.example.v1.Appointment version 1",
+            "FORWARD 00000003 to laptop, #2: DELETE version 4",
             (
                 "FORWARD 00000002 to laptop, #1: DATA version 3, start changed, notes 'Bring the vaccination "
                 "card', with the schema as offered"
             ),
-            "FORWARD 00000003 to laptop, #2: DELETE version 4",
             "FORWARD 00000001 to laptop, #0: MANIFEST revision 1",
         ],
     ],
@@ -18974,25 +18988,41 @@ SAID: dict[str, list[list[str]]] = {
         ],
     ],
     "the answering device answers ACCEPTED: the reply to the key that signed, and the values as one change": [
-        ["taken: True", "FORWARD 00000001 to tablet, #0: PROPOSAL 1 to the phone"],
+        [
+            "taken: True",
+            "FORWARD 00000001 to tablet, #0: PROPOSAL 1 to the phone",
+        ],
         [
             "made: True",
             "PROPOSAL_REPLY 00000001 to other app, version 1: ACCEPTED",
             "CHANGE of 7b1e6c2a to tablet, version 202, state 202, in part: location@201p",
         ],
-        ["answer 00000001: ACCEPTED"],
         [
-            "state stamp 202; title,start,end,all_day,notes,reminders@100p "
-            "location@201p; sibling stamp None; to pass None; highest 202",
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            "answer 00000001: ACCEPTED",
         ],
-        ["taken: False", "PROPOSAL_REPLY 00000001 to other app, version 1: ACCEPTED"],
+        [
+            (
+                "state stamp 202; title,start,end,all_day,notes,reminders,relations@100p location@201p; "
+                "sibling stamp None; to pass None; highest 202"
+            ),
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
+        ],
+        [
+            "taken: False",
+            "PROPOSAL_REPLY 00000001 to other app, version 1: ACCEPTED",
+        ],
     ],
     "an answer DECLINED: the reply, and nothing changes": [
-        ["taken: True", "FORWARD 00000001 to tablet, #0: PROPOSAL 1 to the phone"],
-        ["made: True", "PROPOSAL_REPLY 00000001 to other app, version 1: DECLINED"],
         [
-            "state stamp 101; all seven@100p; sibling stamp None; to pass None; highest 195",
+            "taken: True",
+            "FORWARD 00000001 to tablet, #0: PROPOSAL 1 to the phone",
+        ],
+        [
+            "made: True",
+            "PROPOSAL_REPLY 00000001 to other app, version 1: DECLINED",
+        ],
+        [
+            "state stamp 101; all eight@100p; sibling stamp None; to pass None; highest 195",
             "tablet: known, delivered: all",
         ],
     ],
@@ -19124,22 +19154,33 @@ SAID: dict[str, list[list[str]]] = {
         ],
     ],
     "ACCEPTED stamps every proposed field, also one whose value the record holds already": [
-        ["taken: True", "FORWARD 00000001 to tablet, #0: PROPOSAL 1 to the phone"],
+        [
+            "taken: True",
+            "FORWARD 00000001 to tablet, #0: PROPOSAL 1 to the phone",
+        ],
         [
             "made: True",
             "PROPOSAL_REPLY 00000001 to other app, version 1: ACCEPTED",
             "CHANGE of 7b1e6c2a to tablet, version 202, state 202, in part: location@201p",
         ],
         [
-            "state stamp 202; title,start,end,all_day,notes,reminders@100p location@201p; "
-            "sibling stamp None; to pass None; highest 202",
-            "tablet: known, delivered: all_day,end,notes,reminders,start,title",
+            (
+                "state stamp 202; title,start,end,all_day,notes,reminders,relations@100p location@201p; "
+                "sibling stamp None; to pass None; highest 202"
+            ),
+            "tablet: known, delivered: all_day,end,notes,relations,reminders,start,title",
         ],
     ],
     "a forwarded PROPOSAL in other bytes with a higher SHA-256 takes the place of the one kept": [
-        ["outcome: APPLIED"],
-        ["outcome: APPLIED"],
-        ["outcome: DUPLICATE"],
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "outcome: APPLIED",
+        ],
+        [
+            "outcome: DUPLICATE",
+        ],
         [
             "ACK of 0000000a to tablet: version 1 APPLIED, receiver 1",
             "ACK of 0000000b to tablet: version 1 APPLIED, receiver 1",
@@ -19149,7 +19190,7 @@ SAID: dict[str, list[list[str]]] = {
             "sender first known by other app; current: other app; highest 195",
             "kept: MANIFEST revision 1; delivered to tablet",
             "kept: DATA version 1; delivered to tablet",
-            "kept: PROPOSAL 1 to the phone; delivered to tablet",
+            "kept: PROPOSAL 1 to the tablet; delivered to tablet",
         ],
     ],
     "two answers before a merge: ACCEPTED on the device stands over a later DECLINED of a sibling": [

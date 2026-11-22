@@ -493,13 +493,13 @@ cat-a-log checks that the key in Old Brain Fix's `HELLO` is the code's `signing_
 
 ### 7.4 A message on the stream
 
-The `DATA` of [protocol.md](protocol.md), section 17.5, 321 bytes, in a `MESSAGE` frame:
+The `DATA` of [protocol.md](protocol.md), section 17.5, 322 bytes, in a `MESSAGE` frame:
 
 ```text
 0000  02                       frame type 2, MESSAGE
-0001  00 00 01 41              length 321
-0005  c3 01 16 30 ... 41 0d    the DATA of spec/protocol.md, section 17.5
-0146  end
+0001  00 00 01 42              length 322
+0005  c3 01 16 30 ... 18 00    the DATA of spec/protocol.md, section 17.5
+0147  end
 ```
 
 A `PING`:

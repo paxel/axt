@@ -203,8 +203,8 @@ The values were produced with [conformance/tools/fields_examples.py](../conforma
 
 - checks [types/axt/Field.avsc](../types/axt/Field.avsc) by the rules of [types.md](types.md), sections 5.1 and 5.2, and its fingerprint, with fastavro 1.13.1 and the Python `avro` 1.12.2 package;
 - checks that the description of `com.example.Vet` is valid, and 45 descriptions that each break one rule, each with the path of its problem, and the limits of section 9.1;
-- describes each example type of version 1 and checks that the schema derived from its description has the canonical form of its `.avsc` file, and that the derivation is the same when it is done again;
-- describes each example type of version 2, whose field `relations` has the brick `axt.RelationField`, and checks that the type derived for it is that of its `.avsc` file, and derives `com.example.Links`, with relation fields first, after a date and time, twice, as the items of a list and in a nested object (section 11.6);
+- checks that the published description of each example type ([types.md](types.md), section 7) is valid, derives the schema of its `.avsc` file, and derives it again from that schema, and that the registry of descriptions of the models holds it for its derived schema;
+- derives `com.example.Links`, with relation fields first, after a date and time, twice, as the items of a list and in a nested object (section 11.6);
 - checks the 23 values of the table and the others, a value of each semantic brick that has its format and one that does not, and values of the bricks the type does not use;
 - encodes each description with fastavro and decodes it again with both libraries.
 
@@ -248,7 +248,7 @@ The derived schema of a valid description is an Avro 1.12 schema of a record, wr
 
 The first occurrence is the first in the order of the JSON, the fields of each record in their order and depth first, and a time type that a published schema defines inside itself, such as `axt.Time` in a schema that holds `axt.DateTime` first, has its first occurrence there ([time.md](time.md), section 3.1), as does `axt.DateTime` in `axt.Relation` (section 11.6). The derived schema carries no attribute other than `axt.version` and those of the published schema of `axt.Relation`: what a receiver shows of a type and checks of its values is in the description, which travels with it.
 
-The rule gives the forms that [types.md](types.md), section 5, requires of a type: a value that may be absent is `["null", T]` with the default `null`, a text that may be empty is a `string` whose brick gives the default `""`, and a list is an array with the default `[]`. The description of each example type of version 1 derives a schema with the Parsing Canonical Form of its file under [types/axt/example/v1/](../types/axt/example/v1/), and so its fingerprint.
+The rule gives the forms that [types.md](types.md), section 5, requires of a type: a value that may be absent is `["null", T]` with the default `null`, a text that may be empty is a `string` whose brick gives the default `""`, and a list is an array with the default `[]`. Each example type is published as its description, from which the schema file next to it under [types/axt/example/v1/](../types/axt/example/v1/) is derived ([types.md](types.md), section 7).
 
 ### 9.3 The text
 

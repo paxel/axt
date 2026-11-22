@@ -64,6 +64,11 @@ def test_the_brick_schemas_are_the_generators_output() -> None:
     assert done.returncode == 0, done.stdout + done.stderr
 
 
+def test_the_example_schemas_are_derived_from_their_descriptions() -> None:
+    done = run(TOOLS / "example_schemas.py", "--check")
+    assert done.returncode == 0, done.stdout + done.stderr
+
+
 @pytest.mark.parametrize("name", EXAMPLE_SCRIPTS)
 def test_the_examples_of_the_specification_hold(name: str) -> None:
     done = run(TOOLS / f"{name}.py")

@@ -1,0 +1,326 @@
+{
+  "name": "task",
+  "doc": "A task: something the user wants to do, possibly by a due date, possibly repeating.",
+  "texts": {
+    "label": "Task",
+    "label_translations": {
+      "de": "Aufgabe"
+    },
+    "help": "Something to do, possibly by a due date, possibly repeating.",
+    "help_translations": {
+      "de": "Etwas zu erledigen, vielleicht bis zu einem Fälligkeitsdatum, vielleicht wiederkehrend."
+    },
+    "emoji": "✅"
+  },
+  "required": false,
+  "order": null,
+  "group": "",
+  "sensitive": false,
+  "advanced": false,
+  "kind": {
+    "axt.ObjectField": {
+      "name": "axt.example.v1.Task",
+      "fields": [
+        {
+          "name": "title",
+          "doc": "What is to be done, as plain text on one line.",
+          "texts": {
+            "label": "Title",
+            "label_translations": {
+              "de": "Titel"
+            },
+            "help": "What is to be done, on one line.",
+            "help_translations": {
+              "de": "Was zu tun ist, in einer Zeile."
+            },
+            "emoji": "🏷️"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "notes",
+          "doc": "Free notes on the task, as plain text; lines are separated by LF. Empty when there are none.",
+          "texts": {
+            "label": "Notes",
+            "label_translations": {
+              "de": "Notizen"
+            },
+            "help": "Anything else about the task.",
+            "help_translations": {
+              "de": "Alles Weitere zur Aufgabe."
+            },
+            "emoji": "📝"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": true,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "due",
+          "doc": "The date and time on the wall clock by which the task is due, in a time zone or floating; see due_all_day. Null when the task has no due date.",
+          "texts": {
+            "label": "Due",
+            "label_translations": {
+              "de": "Fällig"
+            },
+            "help": "The day, and the time, by which the task is due.",
+            "help_translations": {
+              "de": "Der Tag und die Uhrzeit, bis zu der die Aufgabe fällig ist."
+            },
+            "emoji": "📅"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.DateTimeField": {
+              "anchor": "LOCAL"
+            }
+          }
+        },
+        {
+          "name": "due_all_day",
+          "doc": "True when the task is due on the day of due without a time of day; due is then floating at 00:00, and its time has no meaning.",
+          "texts": {
+            "label": "Due all day",
+            "label_translations": {
+              "de": "Ganztägig fällig"
+            },
+            "help": "On when only the day counts, not the time.",
+            "help_translations": {
+              "de": "An, wenn nur der Tag zählt, nicht die Uhrzeit."
+            },
+            "emoji": "☀️"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.BooleanField": {
+              "default": false
+            }
+          }
+        },
+        {
+          "name": "repeat",
+          "doc": "How the task repeats: the value of an RFC 5545 RRULE property without the RRULE: prefix, such as FREQ=WEEKLY;BYDAY=TU. The occurrences start at due, on the wall clock of its time zone, or of wherever the user is when due is floating. Null when the task does not repeat.",
+          "texts": {
+            "label": "Repeats",
+            "label_translations": {
+              "de": "Wiederholung"
+            },
+            "help": "How the task repeats, as a rule of iCalendar.",
+            "help_translations": {
+              "de": "Wie sich die Aufgabe wiederholt, als Regel von iCalendar."
+            },
+            "emoji": "🔁"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": null,
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": null,
+              "placeholder": "FREQ=WEEKLY;BYDAY=TU",
+              "example": "FREQ=MONTHLY;INTERVAL=3"
+            }
+          }
+        },
+        {
+          "name": "done",
+          "doc": "True when the task is done. For a repeating task: the occurrence at due is done.",
+          "texts": {
+            "label": "Done",
+            "label_translations": {
+              "de": "Erledigt"
+            },
+            "help": "On when the task is done; for a repeating task, the occurrence at the due date.",
+            "help_translations": {
+              "de": "An, wenn die Aufgabe erledigt ist; bei einer wiederkehrenden Aufgabe das Vorkommen am Fälligkeitsdatum."
+            },
+            "emoji": "✔️"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.BooleanField": {
+              "default": false
+            }
+          }
+        },
+        {
+          "name": "done_at",
+          "doc": "When the task was marked done. Null when it is not done or the time is not known.",
+          "texts": {
+            "label": "Done at",
+            "label_translations": {
+              "de": "Erledigt am"
+            },
+            "help": "When the task was marked done.",
+            "help_translations": {
+              "de": "Wann die Aufgabe als erledigt markiert wurde."
+            },
+            "emoji": "🏁"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": true,
+          "kind": {
+            "axt.DateTimeField": {
+              "anchor": "INSTANT"
+            }
+          }
+        },
+        {
+          "name": "priority",
+          "doc": "How important the task is.",
+          "texts": {
+            "label": "Priority",
+            "label_translations": {
+              "de": "Priorität"
+            },
+            "help": "How important the task is.",
+            "help_translations": {
+              "de": "Wie wichtig die Aufgabe ist."
+            },
+            "emoji": "❗"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.EnumField": {
+              "name": "TaskPriority",
+              "symbols": [
+                {
+                  "symbol": "NONE",
+                  "texts": {
+                    "label": "None",
+                    "label_translations": {
+                      "de": "Keine"
+                    },
+                    "help": "",
+                    "help_translations": {},
+                    "emoji": "⚪"
+                  }
+                },
+                {
+                  "symbol": "LOW",
+                  "texts": {
+                    "label": "Low",
+                    "label_translations": {
+                      "de": "Niedrig"
+                    },
+                    "help": "",
+                    "help_translations": {},
+                    "emoji": "🟢"
+                  }
+                },
+                {
+                  "symbol": "MEDIUM",
+                  "texts": {
+                    "label": "Medium",
+                    "label_translations": {
+                      "de": "Mittel"
+                    },
+                    "help": "",
+                    "help_translations": {},
+                    "emoji": "🟡"
+                  }
+                },
+                {
+                  "symbol": "HIGH",
+                  "texts": {
+                    "label": "High",
+                    "label_translations": {
+                      "de": "Hoch"
+                    },
+                    "help": "",
+                    "help_translations": {},
+                    "emoji": "🔴"
+                  }
+                }
+              ],
+              "fallback": "NONE",
+              "default": "NONE"
+            }
+          }
+        },
+        {
+          "name": "relations",
+          "doc": "The relations of the record to other records and to things outside AXT (spec/types.md, section 8), in the order the user gave them. Empty when it has none.",
+          "texts": {
+            "label": "Relations",
+            "label_translations": {
+              "de": "Verknüpfungen"
+            },
+            "help": "Entries and other things this one is linked to, such as the pets an appointment is for.",
+            "help_translations": {
+              "de": "Einträge und anderes, mit denen dieser verknüpft ist, etwa die Tiere, für die ein Termin ist."
+            },
+            "emoji": "🔗"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.RelationField": {}
+          }
+        }
+      ],
+      "groups": [],
+      "version": 1,
+      "title": "title"
+    }
+  }
+}

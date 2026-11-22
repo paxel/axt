@@ -180,7 +180,7 @@ A reference is a field whose value is the id of another record of the same sende
 - The deletion of a record does not change the records that refer to it. If their meaning changes with it, the sender sends new versions of them.
 - A reference is a field like any other when the receiver merges (section 6.1).
 
-The example types of version 1 carry no references; Measurement names what was measured as text in `subject` ([types.md](types.md), section 7.1). Version 2 of each example type links to other records with relations ([types.md](types.md), section 8).
+The example types carry no references; Measurement names what was measured as text in `subject` ([types.md](types.md), section 7.1). Each example type links to other records with relations ([types.md](types.md), section 8).
 
 ## 9. Example
 

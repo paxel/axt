@@ -1,0 +1,791 @@
+{
+  "name": "person",
+  "doc": "A person: a contact with name, birthday, phone numbers, email addresses and postal addresses.",
+  "texts": {
+    "label": "Person",
+    "label_translations": {
+      "de": "Person"
+    },
+    "help": "A contact with name, birthday, phone numbers, email addresses and postal addresses.",
+    "help_translations": {
+      "de": "Ein Kontakt mit Name, Geburtstag, Telefonnummern, E-Mail-Adressen und Anschriften."
+    },
+    "emoji": "👤"
+  },
+  "required": false,
+  "order": null,
+  "group": "",
+  "sensitive": false,
+  "advanced": false,
+  "kind": {
+    "axt.ObjectField": {
+      "name": "axt.example.v1.Person",
+      "fields": [
+        {
+          "name": "display_name",
+          "doc": "The name to show for the person, as the user wrote it, such as Dr. Anna Maria Schmidt. When empty, a receiver may build a name from the name parts.",
+          "texts": {
+            "label": "Display name",
+            "label_translations": {
+              "de": "Anzeigename"
+            },
+            "help": "The name to show; when empty, it is built from the parts of the name.",
+            "help_translations": {
+              "de": "Der angezeigte Name; wenn leer, wird er aus den Teilen des Namens gebildet."
+            },
+            "emoji": "🏷️"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "prefix",
+          "doc": "Titles written before the name, such as Dr. Empty when there are none.",
+          "texts": {
+            "label": "Prefix",
+            "label_translations": {
+              "de": "Titel"
+            },
+            "help": "Titles before the name, such as Dr.",
+            "help_translations": {
+              "de": "Titel vor dem Namen, etwa Dr."
+            },
+            "emoji": "🎓"
+          },
+          "required": false,
+          "order": null,
+          "group": "name",
+          "sensitive": false,
+          "advanced": true,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "given_name",
+          "doc": "The given name, such as Anna. Empty when not known.",
+          "texts": {
+            "label": "Given name",
+            "label_translations": {
+              "de": "Vorname"
+            },
+            "help": "The first name, such as Anna.",
+            "help_translations": {
+              "de": "Der Vorname, etwa Anna."
+            },
+            "emoji": "🙂"
+          },
+          "required": false,
+          "order": null,
+          "group": "name",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "middle_name",
+          "doc": "Further given names, such as Maria. Empty when there are none.",
+          "texts": {
+            "label": "Middle names",
+            "label_translations": {
+              "de": "Weitere Vornamen"
+            },
+            "help": "Further given names, such as Maria.",
+            "help_translations": {
+              "de": "Weitere Vornamen, etwa Maria."
+            },
+            "emoji": "➕"
+          },
+          "required": false,
+          "order": null,
+          "group": "name",
+          "sensitive": false,
+          "advanced": true,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "family_name",
+          "doc": "The family name, such as Schmidt. Empty when not known.",
+          "texts": {
+            "label": "Family name",
+            "label_translations": {
+              "de": "Nachname"
+            },
+            "help": "The family name, such as Schmidt.",
+            "help_translations": {
+              "de": "Der Nachname, etwa Schmidt."
+            },
+            "emoji": "👪"
+          },
+          "required": false,
+          "order": null,
+          "group": "name",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "suffix",
+          "doc": "Additions written after the name, such as Jr. Empty when there are none.",
+          "texts": {
+            "label": "Suffix",
+            "label_translations": {
+              "de": "Namenszusatz"
+            },
+            "help": "Additions after the name, such as Jr.",
+            "help_translations": {
+              "de": "Zusätze nach dem Namen, etwa jr."
+            },
+            "emoji": "🔠"
+          },
+          "required": false,
+          "order": null,
+          "group": "name",
+          "sensitive": false,
+          "advanced": true,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "birthday",
+          "doc": "The day of birth, as far as it is known: its year is null when only the day and the month are known, as address books often hold birthdays. Null when not known.",
+          "texts": {
+            "label": "Birthday",
+            "label_translations": {
+              "de": "Geburtstag"
+            },
+            "help": "The day of birth; the year may be left out.",
+            "help_translations": {
+              "de": "Der Tag der Geburt; das Jahr kann fehlen."
+            },
+            "emoji": "🎂"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.DateField": {}
+          }
+        },
+        {
+          "name": "phones",
+          "doc": "The person's phone numbers, in the user's order. Empty when there are none.",
+          "texts": {
+            "label": "Phone numbers",
+            "label_translations": {
+              "de": "Telefonnummern"
+            },
+            "help": "The person's phone numbers.",
+            "help_translations": {
+              "de": "Die Telefonnummern der Person."
+            },
+            "emoji": "📞"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.ListField": {
+              "items": {
+                "name": "phones",
+                "doc": "A phone number of a person.",
+                "texts": {
+                  "label": "Phone number",
+                  "label_translations": {
+                    "de": "Telefonnummer"
+                  },
+                  "help": "A phone number and what it is for.",
+                  "help_translations": {
+                    "de": "Eine Telefonnummer und wofür sie ist."
+                  },
+                  "emoji": "☎️"
+                },
+                "required": true,
+                "order": null,
+                "group": "",
+                "sensitive": false,
+                "advanced": false,
+                "kind": {
+                  "axt.ObjectField": {
+                    "name": "PersonPhone",
+                    "fields": [
+                      {
+                        "name": "label",
+                        "doc": "What it is for, as the user wrote it, such as home, work or mobile. Empty when not given.",
+                        "texts": {
+                          "label": "Label",
+                          "label_translations": {
+                            "de": "Bezeichnung"
+                          },
+                          "help": "What the number is for, such as home, work or mobile.",
+                          "help_translations": {
+                            "de": "Wofür die Nummer ist, etwa privat, Arbeit oder mobil."
+                          },
+                          "emoji": "🏷️"
+                        },
+                        "required": false,
+                        "order": null,
+                        "group": "",
+                        "sensitive": false,
+                        "advanced": false,
+                        "kind": {
+                          "axt.StringField": {
+                            "default": "",
+                            "min_length": null,
+                            "max_length": null,
+                            "pattern": null,
+                            "multiline": false,
+                            "preferred_length": null,
+                            "placeholder": "",
+                            "example": ""
+                          }
+                        }
+                      },
+                      {
+                        "name": "number",
+                        "doc": "The phone number in the international format of ITU-T E.164: a + and 2 to 15 digits, without spaces, such as +49301234567. Empty when not given.",
+                        "texts": {
+                          "label": "Number",
+                          "label_translations": {
+                            "de": "Nummer"
+                          },
+                          "help": "In international form, with + and the country code, without spaces.",
+                          "help_translations": {
+                            "de": "In internationaler Form, mit + und Ländervorwahl, ohne Leerzeichen."
+                          },
+                          "emoji": "📱"
+                        },
+                        "required": false,
+                        "order": null,
+                        "group": "",
+                        "sensitive": false,
+                        "advanced": false,
+                        "kind": {
+                          "axt.PhoneField": {
+                            "default": "",
+                            "min_length": null,
+                            "max_length": null,
+                            "preferred_length": 16,
+                            "placeholder": "+49301234567",
+                            "example": "+49301234567"
+                          }
+                        }
+                      }
+                    ],
+                    "groups": [],
+                    "version": null,
+                    "title": ""
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "emails",
+          "doc": "The person's email addresses, in the user's order. Empty when there are none.",
+          "texts": {
+            "label": "Email addresses",
+            "label_translations": {
+              "de": "E-Mail-Adressen"
+            },
+            "help": "The person's email addresses.",
+            "help_translations": {
+              "de": "Die E-Mail-Adressen der Person."
+            },
+            "emoji": "📧"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.ListField": {
+              "items": {
+                "name": "emails",
+                "doc": "An email address of a person.",
+                "texts": {
+                  "label": "Email address",
+                  "label_translations": {
+                    "de": "E-Mail-Adresse"
+                  },
+                  "help": "An email address and what it is for.",
+                  "help_translations": {
+                    "de": "Eine E-Mail-Adresse und wofür sie ist."
+                  },
+                  "emoji": "✉️"
+                },
+                "required": true,
+                "order": null,
+                "group": "",
+                "sensitive": false,
+                "advanced": false,
+                "kind": {
+                  "axt.ObjectField": {
+                    "name": "PersonEmail",
+                    "fields": [
+                      {
+                        "name": "label",
+                        "doc": "What it is for, as the user wrote it, such as home or work. Empty when not given.",
+                        "texts": {
+                          "label": "Label",
+                          "label_translations": {
+                            "de": "Bezeichnung"
+                          },
+                          "help": "What the address is for, such as home or work.",
+                          "help_translations": {
+                            "de": "Wofür die Adresse ist, etwa privat oder Arbeit."
+                          },
+                          "emoji": "🏷️"
+                        },
+                        "required": false,
+                        "order": null,
+                        "group": "",
+                        "sensitive": false,
+                        "advanced": false,
+                        "kind": {
+                          "axt.StringField": {
+                            "default": "",
+                            "min_length": null,
+                            "max_length": null,
+                            "pattern": null,
+                            "multiline": false,
+                            "preferred_length": null,
+                            "placeholder": "",
+                            "example": ""
+                          }
+                        }
+                      },
+                      {
+                        "name": "address",
+                        "doc": "The email address, such as anna@example.org. Empty when not given.",
+                        "texts": {
+                          "label": "Address",
+                          "label_translations": {
+                            "de": "Adresse"
+                          },
+                          "help": "The email address, such as anna@example.org.",
+                          "help_translations": {
+                            "de": "Die E-Mail-Adresse, etwa anna@example.org."
+                          },
+                          "emoji": "📨"
+                        },
+                        "required": false,
+                        "order": null,
+                        "group": "",
+                        "sensitive": false,
+                        "advanced": false,
+                        "kind": {
+                          "axt.EmailField": {
+                            "default": "",
+                            "min_length": null,
+                            "max_length": null,
+                            "preferred_length": null,
+                            "placeholder": "anna@example.org",
+                            "example": ""
+                          }
+                        }
+                      }
+                    ],
+                    "groups": [],
+                    "version": null,
+                    "title": ""
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "addresses",
+          "doc": "The person's postal addresses, in the user's order. Empty when there are none.",
+          "texts": {
+            "label": "Postal addresses",
+            "label_translations": {
+              "de": "Anschriften"
+            },
+            "help": "The person's postal addresses.",
+            "help_translations": {
+              "de": "Die Anschriften der Person."
+            },
+            "emoji": "🏠"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.ListField": {
+              "items": {
+                "name": "addresses",
+                "doc": "A postal address of a person. Every part is empty when not given.",
+                "texts": {
+                  "label": "Postal address",
+                  "label_translations": {
+                    "de": "Anschrift"
+                  },
+                  "help": "A postal address and what it is for.",
+                  "help_translations": {
+                    "de": "Eine Anschrift und wofür sie ist."
+                  },
+                  "emoji": "📮"
+                },
+                "required": true,
+                "order": null,
+                "group": "",
+                "sensitive": false,
+                "advanced": false,
+                "kind": {
+                  "axt.ObjectField": {
+                    "name": "PersonAddress",
+                    "fields": [
+                      {
+                        "name": "label",
+                        "doc": "What it is for, as the user wrote it, such as home or work. Empty when not given.",
+                        "texts": {
+                          "label": "Label",
+                          "label_translations": {
+                            "de": "Bezeichnung"
+                          },
+                          "help": "What the address is for, such as home or work.",
+                          "help_translations": {
+                            "de": "Wofür die Anschrift ist, etwa privat oder Arbeit."
+                          },
+                          "emoji": "🏷️"
+                        },
+                        "required": false,
+                        "order": null,
+                        "group": "",
+                        "sensitive": false,
+                        "advanced": false,
+                        "kind": {
+                          "axt.StringField": {
+                            "default": "",
+                            "min_length": null,
+                            "max_length": null,
+                            "pattern": null,
+                            "multiline": false,
+                            "preferred_length": null,
+                            "placeholder": "",
+                            "example": ""
+                          }
+                        }
+                      },
+                      {
+                        "name": "street",
+                        "doc": "The street and house number, and further lines such as a flat or a c/o, separated by LF.",
+                        "texts": {
+                          "label": "Street",
+                          "label_translations": {
+                            "de": "Straße"
+                          },
+                          "help": "The street and house number, and further lines such as a flat or a c/o.",
+                          "help_translations": {
+                            "de": "Straße und Hausnummer, dazu weitere Zeilen wie eine Wohnung oder ein c/o."
+                          },
+                          "emoji": "🛣️"
+                        },
+                        "required": false,
+                        "order": null,
+                        "group": "",
+                        "sensitive": false,
+                        "advanced": false,
+                        "kind": {
+                          "axt.StringField": {
+                            "default": "",
+                            "min_length": null,
+                            "max_length": null,
+                            "pattern": null,
+                            "multiline": true,
+                            "preferred_length": null,
+                            "placeholder": "",
+                            "example": ""
+                          }
+                        }
+                      },
+                      {
+                        "name": "postal_code",
+                        "doc": "The postal code, such as 10115.",
+                        "texts": {
+                          "label": "Postal code",
+                          "label_translations": {
+                            "de": "Postleitzahl"
+                          },
+                          "help": "The postal code, such as 10115.",
+                          "help_translations": {
+                            "de": "Die Postleitzahl, etwa 10115."
+                          },
+                          "emoji": "🔢"
+                        },
+                        "required": false,
+                        "order": null,
+                        "group": "",
+                        "sensitive": false,
+                        "advanced": false,
+                        "kind": {
+                          "axt.StringField": {
+                            "default": "",
+                            "min_length": null,
+                            "max_length": null,
+                            "pattern": null,
+                            "multiline": false,
+                            "preferred_length": 10,
+                            "placeholder": "",
+                            "example": ""
+                          }
+                        }
+                      },
+                      {
+                        "name": "locality",
+                        "doc": "The city, town or village.",
+                        "texts": {
+                          "label": "City",
+                          "label_translations": {
+                            "de": "Ort"
+                          },
+                          "help": "The city, town or village.",
+                          "help_translations": {
+                            "de": "Die Stadt, die Gemeinde oder das Dorf."
+                          },
+                          "emoji": "🏙️"
+                        },
+                        "required": false,
+                        "order": null,
+                        "group": "",
+                        "sensitive": false,
+                        "advanced": false,
+                        "kind": {
+                          "axt.StringField": {
+                            "default": "",
+                            "min_length": null,
+                            "max_length": null,
+                            "pattern": null,
+                            "multiline": false,
+                            "preferred_length": null,
+                            "placeholder": "",
+                            "example": ""
+                          }
+                        }
+                      },
+                      {
+                        "name": "region",
+                        "doc": "The state, province or county, where an address names one.",
+                        "texts": {
+                          "label": "Region",
+                          "label_translations": {
+                            "de": "Region"
+                          },
+                          "help": "The state, province or county, where the address names one.",
+                          "help_translations": {
+                            "de": "Das Bundesland, die Provinz oder der Bezirk, wo die Anschrift eines nennt."
+                          },
+                          "emoji": "🗺️"
+                        },
+                        "required": false,
+                        "order": null,
+                        "group": "",
+                        "sensitive": false,
+                        "advanced": true,
+                        "kind": {
+                          "axt.StringField": {
+                            "default": "",
+                            "min_length": null,
+                            "max_length": null,
+                            "pattern": null,
+                            "multiline": false,
+                            "preferred_length": null,
+                            "placeholder": "",
+                            "example": ""
+                          }
+                        }
+                      },
+                      {
+                        "name": "country",
+                        "doc": "The country, as an upper-case code of ISO 3166-1 alpha-2, such as DE.",
+                        "texts": {
+                          "label": "Country",
+                          "label_translations": {
+                            "de": "Land"
+                          },
+                          "help": "The country as a code of two letters, such as DE.",
+                          "help_translations": {
+                            "de": "Das Land als Code aus zwei Buchstaben, etwa DE."
+                          },
+                          "emoji": "🌍"
+                        },
+                        "required": false,
+                        "order": null,
+                        "group": "",
+                        "sensitive": false,
+                        "advanced": false,
+                        "kind": {
+                          "axt.CountryField": {
+                            "default": "",
+                            "min_length": null,
+                            "max_length": null,
+                            "preferred_length": 2,
+                            "placeholder": "DE",
+                            "example": ""
+                          }
+                        }
+                      }
+                    ],
+                    "groups": [],
+                    "version": null,
+                    "title": ""
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "notes",
+          "doc": "Free notes on the person, as plain text; lines are separated by LF. Empty when there are none.",
+          "texts": {
+            "label": "Notes",
+            "label_translations": {
+              "de": "Notizen"
+            },
+            "help": "Anything else about the person.",
+            "help_translations": {
+              "de": "Alles Weitere zur Person."
+            },
+            "emoji": "📝"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": true,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "relations",
+          "doc": "The relations of the record to other records and to things outside AXT (spec/types.md, section 8), in the order the user gave them. Empty when it has none.",
+          "texts": {
+            "label": "Relations",
+            "label_translations": {
+              "de": "Verknüpfungen"
+            },
+            "help": "Entries and other things this one is linked to, such as the pets an appointment is for.",
+            "help_translations": {
+              "de": "Einträge und anderes, mit denen dieser verknüpft ist, etwa die Tiere, für die ein Termin ist."
+            },
+            "emoji": "🔗"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.RelationField": {}
+          }
+        }
+      ],
+      "groups": [
+        {
+          "key": "name",
+          "texts": {
+            "label": "Name",
+            "label_translations": {
+              "de": "Name"
+            },
+            "help": "The parts of the name.",
+            "help_translations": {
+              "de": "Die Teile des Namens."
+            },
+            "emoji": "🪪"
+          }
+        }
+      ],
+      "version": 1,
+      "title": "display_name"
+    }
+  }
+}

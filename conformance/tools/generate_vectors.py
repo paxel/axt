@@ -1281,10 +1281,9 @@ def encoding_category() -> Category:
     proposal_short = proposal_body[:at] + proposal_body[at + 1 :]
     forward: bytes = sy.EXAMPLE_MESSAGES["the FORWARD of sync.md, section 16.5"]
     forward_body = cast(bytes, sy.read_all("Envelope", forward[10:])["body"])
-    schema_at = len(forward_body) - len(sy.APPOINTMENT_OFFERED.encode()) - 3  # the union index of schema
-    assert forward_body[schema_at : schema_at + 3] == keys.zigzag(1) + keys.zigzag(
-        len(sy.APPOINTMENT_OFFERED.encode())
-    )
+    schema_head = keys.zigzag(1) + keys.zigzag(len(sy.APPOINTMENT_OFFERED.encode()))  # union index, length
+    schema_at = len(forward_body) - len(sy.APPOINTMENT_OFFERED.encode()) - len(schema_head)
+    assert forward_body[schema_at : schema_at + len(schema_head)] == schema_head
     without_schema = sy.body_of("Forward", {"to": sy.TABLET, "message": pe.m2, "schema": None})
     c.add(
         "decode_body",
@@ -1368,7 +1367,9 @@ def encoding_category() -> Category:
         (
             "a FORWARD body whose schema is no UTF-8",
             "FORWARD",
-            forward_body[: schema_at + 3] + b"\xff" + forward_body[schema_at + 4 :],
+            forward_body[: schema_at + len(schema_head)]
+            + b"\xff"
+            + forward_body[schema_at + len(schema_head) + 1 :],
         ),
         ("a FORWARD body of the RESYNC schema", "FORWARD", resync_body),
         ("an empty body for a FORWARD", "FORWARD", b""),
@@ -1409,18 +1410,8 @@ def encoding_category() -> Category:
 # --- types (spec/types.md) -------------------------------------------------------------
 
 EXAMPLES = REPO / "types" / "axt" / "example" / "v1"
+# The example types (spec/types.md, section 7.3), each published as its description, with one version.
 TYPE_FPS = {
-    "Appointment": 0x1AF207F82B6430CD,
-    "Car": 0x7277E2001E503F8B,
-    "Document": 0xD610000B15046BAC,
-    "Measurement": 0x00F7713C4975C427,
-    "Note": 0x0D3E5D90BDBC4EE0,
-    "Person": 0x749561A5AF95D9F6,
-    "Pet": 0x6B792C0235531071,
-    "Task": 0xA83870208718DD20,
-}
-# Version 2 of each example type, with relations, and axt.Relation (spec/types.md, sections 7.3 and 8).
-TYPE_FPS_2 = {
     "Appointment": 0x49416306BECFE686,
     "Car": 0xA8EAA96101D47106,
     "Document": 0x69594B59D2CE6DCA,
@@ -1555,7 +1546,7 @@ def types_category() -> Category:
         b"".join(keys.zigzag(d[k]) for k in ("months", "days", "millis")) for d in ap["reminders"]
     )
     one_block = keys.zigzag(2) + first + second + keys.zigzag(0)
-    assert ap_body.count(one_block) == 1 and ap_body.endswith(one_block)
+    assert ap_body.count(one_block) == 1
     blocks = keys.zigzag(-1) + keys.zigzag(len(first)) + first + keys.zigzag(1) + second + keys.zigzag(0)
     record_vector(
         "axt.example.v1.Appointment with its reminders in two array blocks, one with a negative count",
@@ -1683,9 +1674,8 @@ def types_category() -> Category:
 
 
 def relation_vectors(c: Category, texts: dict[str, str], record_vector: Callable[..., None]) -> None:
-    """Version 2 of the example types, with relations (spec/types.md, sections 7.4 and 8): fingerprints,
-    a record of each, its defaults, both versions read with the other, and the records of example_types.py
-    with relations, those that break a rule of section 8.4 rejected."""
+    """The relations of the example types (spec/fields.md, section 11): the fingerprint of axt.Relation, and
+    the records of example_types.py with relations, those that break a rule of section 11.4 rejected."""
     assert rules.OTHER_SENDER == pe.CAT, "not the test key of spec/keys.md, section 7.1"
     text = (REPO / "types" / "axt" / "Relation.avsc").read_text(encoding="utf-8")
     pcf, fp = me.fingerprint(text)
@@ -1697,75 +1687,6 @@ def relation_vectors(c: Category, texts: dict[str, str], record_vector: Callable
         {"schema": text},
         accept({"canonical_form": pcf, "fingerprint": H(pe.fp8(fp))}),
     )
-    texts2 = {}
-    for name, want in TYPE_FPS_2.items():
-        path = EXAMPLES / f"{name}.2.avsc"
-        text = path.read_text(encoding="utf-8")
-        texts2[name] = pe.compact(path)
-        pcf, fp = me.fingerprint(text)
-        assert fp == want and pe.canonical_fp(texts2[name]) == want, name
-        c.add(
-            "fingerprint",
-            f"axt.example.v1.{name}, version 2",
-            ["types.md 3.4", "types.md 7.3", "types.md 7.4"],
-            {"schema": text},
-            accept({"canonical_form": pcf, "fingerprint": H(pe.fp8(fp))}),
-        )
-
-    def compact(schema: Any) -> str:
-        return json.dumps(schema, separators=(",", ":"), ensure_ascii=False)
-
-    for name in TYPE_FPS_2:
-        schema, datum, datum1 = json.loads(texts2[name]), rules.DATA[f"{name}.2"], rules.DATA[name]
-        body = single_object(texts2[name], datum)
-        record_vector(
-            f"a record of axt.example.v1.{name}, version 2, with relations",
-            ["types.md 7.4", "fields.md 11.1", "fields.md 11.3"],
-            texts2[name],
-            None,
-            body,
-        )
-        reduced = compact(rules.without_defaults(schema))
-        record_vector(
-            f"axt.example.v1.{name}, version 2, written without its fields that have a default",
-            ["types.md 5.4", "envelope.md 6"],
-            reduced,
-            texts2[name],
-            single_object(reduced, rules.project(schema, datum)),
-        )
-        nested = rules.nested_arrays(schema)
-        ndatum = dict(datum, **{f["name"]: datum[f["name"]][:1] for f in nested})
-        reduced = compact(rules.without_defaults(schema, nested_only=True))
-        record_vector(
-            f"axt.example.v1.{name}, version 2, written without the defaulted fields of its relations",
-            ["types.md 5.4", "fields.md 11.1", "envelope.md 6"],
-            reduced,
-            texts2[name],
-            single_object(reduced, rules.project(schema, ndatum, nested_only=True)),
-        )
-        # Both directions of schema resolution (spec/types.md, sections 3.3 and 7.4).
-        old = single_object(texts[name], datum1)
-        got = decode_meaning(texts[name], texts2[name], old[10:])
-        assert got["relations"] == [] and {
-            k: v for k, v in got.items() if k != "relations"
-        } == decode_meaning(texts[name], None, old[10:])
-        record_vector(
-            f"axt.example.v1.{name}, version 1, read with version 2: no relations",
-            ["types.md 3.3", "types.md 7.4", "envelope.md 6"],
-            texts[name],
-            texts2[name],
-            old,
-        )
-        got = decode_meaning(texts2[name], texts[name], body[10:])
-        assert got == decode_meaning(texts[name], None, old[10:])
-        record_vector(
-            f"axt.example.v1.{name}, version 2, read with version 1: the relations ignored",
-            ["types.md 3.3", "types.md 7.4", "envelope.md 6"],
-            texts2[name],
-            texts[name],
-            body,
-        )
-
     # The further records with relations and those that break a rule (example_types.py). decode_record
     # rejects a relation that breaks a rule of spec/fields.md, section 11.4, as a time value that is not
     # valid; a value that only breaks a check of an attribute is taken (spec/conformance.md, section 5.2).
@@ -1773,33 +1694,33 @@ def relation_vectors(c: Category, texts: dict[str, str], record_vector: Callable
     for label, key, datum in rules.RELATION_VALID:
         name = key.split(".")[0]
         record_vector(
-            f"axt.example.v1.{name}, version 2: {label}",
+            f"axt.example.v1.{name}: {label}",
             ["fields.md 11"],
-            texts2[name],
+            texts[name],
             None,
-            single_object(texts2[name], datum),
+            single_object(texts[name], datum),
         )
     for label, key, datum, _path, _rule in rules.RELATION_BREACHES:
         name = key.split(".")[0]
-        found = tm.value_breaches(json.loads(texts2[name]), datum)
+        found = tm.value_breaches(json.loads(texts[name]), datum)
         expected = reject("VALUE_INVALID", found[0][2], field=found[0][0]) if found else None
         record_vector(
-            f"{'reject' if found else 'take'} axt.example.v1.{name}, version 2: {label}",
+            f"{'reject' if found else 'take'} axt.example.v1.{name}: {label}",
             ["fields.md 11.4", "metadata.md 7.2"] if found else ["metadata.md 7.1", "conformance.md 5.13"],
-            texts2[name],
+            texts[name],
             None,
-            single_object(texts2[name], datum),
+            single_object(texts[name], datum),
             expected,
         )
     # A target whose union index is that of no branch.
-    pet, relation = rules.DATA["Pet.2"], rules.RELATIONS["Pet"][0]
-    body = single_object(texts2["Pet"], pet)
+    pet, relation = rules.DATA["Pet"], rules.RELATIONS["Pet"][0]
+    body = single_object(texts["Pet"], pet)
     head = b"".join(keys.zigzag(len(x.encode())) + x.encode() for x in (relation["id"], relation["kind"]))
     assert body.count(head + b"\x00") == 1
     record_vector(
-        "reject axt.example.v1.Pet, version 2, with a relation whose target has the union index 2",
+        "reject axt.example.v1.Pet, with a relation whose target has the union index 2",
         ["envelope.md 1", "fields.md 11.3"],
-        texts2["Pet"],
+        texts["Pet"],
         None,
         body.replace(head + b"\x00", head + keys.zigzag(2)),
         reject("UNDECODABLE"),
@@ -2028,8 +1949,10 @@ def metadata_category() -> Category:
             {"code": "?"},
             ["metadata.md 6.4", "metadata.md 3.3"],
         )
-    # The example types: every example datum and the further valid records keep their checks; each record of
-    # example_types.py with a value that breaks a rule names the first such value.
+    # The example types: every example datum and the further valid records keep every rule; each record of
+    # example_types.py with a time value that is not valid names the first such value. The checks of an
+    # example type are in its description (spec/fields.md, section 7), not in its derived schema, so the
+    # records that break only a check are not among these.
     examples = {n: pe.compact(EXAMPLES / f"{n}.1.avsc") for n in TYPE_FPS}
     for name in TYPE_FPS:
         check(
@@ -2041,6 +1964,8 @@ def metadata_category() -> Category:
     for label, name, datum in rules.VALID:
         check(f"axt.example.v1.{name}: {label}", examples[name], datum, ["metadata.md 6", "time.md 6"])
     for label, name, datum, path, rule in rules.BREACHES:
+        if rule not in mr.TIME_TYPES:
+            continue
         assert tm.receiver_breaches(json.loads(examples[name]), datum)[0][:2] == (path, rule), label
         check(
             f"reject axt.example.v1.{name}: {label}",
@@ -3815,6 +3740,7 @@ def records_category() -> Category:
         "location": "",
         "notes": "",
         "reminders": [],
+        "relations": [],
     }
     v3 = dict(v1, start=tm.zoned(2025, 11, 18, 10, 30, tm.BERLIN, tm.CET), notes="Bring the vaccination card")
     task = json.loads(
@@ -4105,6 +4031,7 @@ def shares_category() -> Category:
         "location": "",
         "notes": "",
         "reminders": [],
+        "relations": [],
     }
     v3 = dict(v1, start=tm.zoned(2025, 11, 18, 10, 30, tm.BERLIN, tm.CET), notes="Bring the vaccination card")
     task = json.loads(json.dumps(rules.DATA["Task"]))
@@ -7139,18 +7066,18 @@ def same_values(v: Any) -> Any:
 # The vectors of each category by operation, and of them the rejected ones, as the table of
 # spec/conformance.md, section 7.4, counts them.
 COUNTS = {
-    "bricks": ({"derive": 72, "decode_record": 7}, {"derive": 51, "decode_record": 4}),
+    "bricks": ({"derive": 64, "decode_record": 7}, {"derive": 51, "decode_record": 4}),
     "encoding": (
         {"fingerprint": 25, "decode_message": 40, "decode_body": 56, "encode_message": 8},
         {"decode_message": 17, "decode_body": 37},
     ),
     # 0.1.0 and the relations of 0.2.0 (spec/conformance.md, section 7.5): 9 + 65 vectors, 18 rejected.
-    "types": ({"fingerprint": 17, "decode_record": 128}, {"decode_record": 39}),
+    "types": ({"fingerprint": 9, "decode_record": 95}, {"decode_record": 39}),
     "time": (
         {"fingerprint": 4, "decode_record": 81, "resolve_date_time": 10, "add_duration": 22},
         {"decode_record": 46},
     ),
-    "metadata": ({"describe": 22, "check_record": 209}, {"check_record": 113}),
+    "metadata": ({"describe": 22, "check_record": 200}, {"check_record": 104}),
     "records": ({"apply": 13}, {}),
     "manifest": ({"check_manifest": 52, "fit": 19}, {"check_manifest": 46}),
     "keys": (

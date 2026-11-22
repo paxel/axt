@@ -1,0 +1,229 @@
+{
+  "name": "document",
+  "doc": "A document: a file with a title, such as a scanned invoice, a certificate or a photo.",
+  "texts": {
+    "label": "Document",
+    "label_translations": {
+      "de": "Dokument"
+    },
+    "help": "A file with a title, such as a scanned invoice, a certificate or a photo.",
+    "help_translations": {
+      "de": "Eine Datei mit Titel, etwa eine eingescannte Rechnung, eine Bescheinigung oder ein Foto."
+    },
+    "emoji": "📄"
+  },
+  "required": false,
+  "order": null,
+  "group": "",
+  "sensitive": false,
+  "advanced": false,
+  "kind": {
+    "axt.ObjectField": {
+      "name": "axt.example.v1.Document",
+      "fields": [
+        {
+          "name": "title",
+          "doc": "What the document is, as plain text on one line.",
+          "texts": {
+            "label": "Title",
+            "label_translations": {
+              "de": "Titel"
+            },
+            "help": "What the document is, on one line.",
+            "help_translations": {
+              "de": "Was das Dokument ist, in einer Zeile."
+            },
+            "emoji": "🏷️"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "file_name",
+          "doc": "The file's name with its extension, such as invoice-2026-11.pdf. Empty when not known.",
+          "texts": {
+            "label": "File name",
+            "label_translations": {
+              "de": "Dateiname"
+            },
+            "help": "The file's name with its extension, such as invoice-2026-11.pdf.",
+            "help_translations": {
+              "de": "Der Name der Datei mit Endung, etwa invoice-2026-11.pdf."
+            },
+            "emoji": "🗂️"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": true,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "media_type",
+          "doc": "The media type of content as in RFC 6838, such as application/pdf or image/jpeg, without parameters.",
+          "texts": {
+            "label": "File type",
+            "label_translations": {
+              "de": "Dateityp"
+            },
+            "help": "The media type of the file, such as application/pdf.",
+            "help_translations": {
+              "de": "Der Medientyp der Datei, etwa application/pdf."
+            },
+            "emoji": "🧾"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": true,
+          "kind": {
+            "axt.MediaTypeField": {
+              "default": "application/octet-stream",
+              "min_length": null,
+              "max_length": null,
+              "preferred_length": null,
+              "placeholder": "application/pdf",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "content",
+          "doc": "The file's content. The whole message, this record included, must stay within the message limit of the AXT envelope.",
+          "texts": {
+            "label": "File",
+            "label_translations": {
+              "de": "Datei"
+            },
+            "help": "The file itself.",
+            "help_translations": {
+              "de": "Die Datei selbst."
+            },
+            "emoji": "📎"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.BytesField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null
+            }
+          }
+        },
+        {
+          "name": "dated",
+          "doc": "The date the document bears, such as the date of an invoice, or only its month or year where it names no day. Null when it bears none.",
+          "texts": {
+            "label": "Date",
+            "label_translations": {
+              "de": "Datum"
+            },
+            "help": "The date the document bears, such as the date of an invoice.",
+            "help_translations": {
+              "de": "Das Datum, das das Dokument trägt, etwa das Datum einer Rechnung."
+            },
+            "emoji": "📅"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.DateField": {}
+          }
+        },
+        {
+          "name": "notes",
+          "doc": "Free notes on the document, as plain text; lines are separated by LF. Empty when there are none.",
+          "texts": {
+            "label": "Notes",
+            "label_translations": {
+              "de": "Notizen"
+            },
+            "help": "Anything else about the document.",
+            "help_translations": {
+              "de": "Alles Weitere zum Dokument."
+            },
+            "emoji": "📝"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": true,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "relations",
+          "doc": "The relations of the record to other records and to things outside AXT (spec/types.md, section 8), in the order the user gave them. Empty when it has none.",
+          "texts": {
+            "label": "Relations",
+            "label_translations": {
+              "de": "Verknüpfungen"
+            },
+            "help": "Entries and other things this one is linked to, such as the pets an appointment is for.",
+            "help_translations": {
+              "de": "Einträge und anderes, mit denen dieser verknüpft ist, etwa die Tiere, für die ein Termin ist."
+            },
+            "emoji": "🔗"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.RelationField": {}
+          }
+        }
+      ],
+      "groups": [],
+      "version": 1,
+      "title": "title"
+    }
+  }
+}

@@ -1,0 +1,338 @@
+{
+  "name": "car",
+  "doc": "A car the user owns or drives.",
+  "texts": {
+    "label": "Car",
+    "label_translations": {
+      "de": "Auto"
+    },
+    "help": "A car that is owned or driven.",
+    "help_translations": {
+      "de": "Ein Auto, das man besitzt oder fährt."
+    },
+    "emoji": "🚗"
+  },
+  "required": false,
+  "order": null,
+  "group": "",
+  "sensitive": false,
+  "advanced": false,
+  "kind": {
+    "axt.ObjectField": {
+      "name": "axt.example.v1.Car",
+      "fields": [
+        {
+          "name": "make",
+          "doc": "The manufacturer, such as Volkswagen. Empty when not known.",
+          "texts": {
+            "label": "Make",
+            "label_translations": {
+              "de": "Marke"
+            },
+            "help": "The manufacturer, such as Volkswagen.",
+            "help_translations": {
+              "de": "Der Hersteller, etwa Volkswagen."
+            },
+            "emoji": "🏭"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "model",
+          "doc": "The model, such as Golf. Empty when not known.",
+          "texts": {
+            "label": "Model",
+            "label_translations": {
+              "de": "Modell"
+            },
+            "help": "The model, such as Golf.",
+            "help_translations": {
+              "de": "Das Modell, etwa Golf."
+            },
+            "emoji": "🚙"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "year",
+          "doc": "The model year, such as 2019, from 1886 to 9999: the year the manufacturer gives the model, which need not be a year in which the car was built or sold, and so a number rather than a date. Null when not known.",
+          "texts": {
+            "label": "Model year",
+            "label_translations": {
+              "de": "Modelljahr"
+            },
+            "help": "The model year, such as 2019.",
+            "help_translations": {
+              "de": "Das Modelljahr, etwa 2019."
+            },
+            "emoji": "📅"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.IntField": {
+              "default": null,
+              "min": 1886,
+              "max": 9999,
+              "unit": "",
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "plate",
+          "doc": "The licence plate number as written on the plate. Empty when the car has none or it is not known.",
+          "texts": {
+            "label": "Licence plate",
+            "label_translations": {
+              "de": "Kennzeichen"
+            },
+            "help": "The number as written on the licence plate.",
+            "help_translations": {
+              "de": "Das Kennzeichen, wie es auf dem Schild steht."
+            },
+            "emoji": "🪪"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": 10,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "vin",
+          "doc": "The vehicle identification number of ISO 3779: 17 characters, each a digit or an upper-case letter other than I, O and Q. Empty when not known.",
+          "texts": {
+            "label": "VIN",
+            "label_translations": {
+              "de": "FIN"
+            },
+            "help": "The vehicle identification number: 17 letters and digits.",
+            "help_translations": {
+              "de": "Die Fahrzeug-Identifizierungsnummer: 17 Buchstaben und Ziffern."
+            },
+            "emoji": "🆔"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": true,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": "[A-HJ-NPR-Z0-9]{17}",
+              "multiline": false,
+              "preferred_length": 17,
+              "placeholder": "",
+              "example": "WVWZZZ1KZAW000000"
+            }
+          }
+        },
+        {
+          "name": "odometer",
+          "doc": "The distance on the odometer, in odometer_unit, 0 or more. Null when not known.",
+          "texts": {
+            "label": "Odometer",
+            "label_translations": {
+              "de": "Tachostand"
+            },
+            "help": "The distance on the odometer, in its unit.",
+            "help_translations": {
+              "de": "Die Strecke auf dem Tacho, in dessen Einheit."
+            },
+            "emoji": "🔢"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.LongField": {
+              "default": null,
+              "min": 0,
+              "max": null,
+              "unit": "",
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "odometer_unit",
+          "doc": "The unit of odometer.",
+          "texts": {
+            "label": "Odometer unit",
+            "label_translations": {
+              "de": "Einheit des Tachos"
+            },
+            "help": "Whether the odometer counts kilometres or miles.",
+            "help_translations": {
+              "de": "Ob der Tacho Kilometer oder Meilen zählt."
+            },
+            "emoji": "📐"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.EnumField": {
+              "name": "CarDistanceUnit",
+              "symbols": [
+                {
+                  "symbol": "KILOMETRE",
+                  "texts": {
+                    "label": "Kilometres",
+                    "label_translations": {
+                      "de": "Kilometer"
+                    },
+                    "help": "",
+                    "help_translations": {},
+                    "emoji": "📏"
+                  }
+                },
+                {
+                  "symbol": "MILE",
+                  "texts": {
+                    "label": "Miles",
+                    "label_translations": {
+                      "de": "Meilen"
+                    },
+                    "help": "",
+                    "help_translations": {},
+                    "emoji": "🛣️"
+                  }
+                },
+                {
+                  "symbol": "UNKNOWN",
+                  "texts": {
+                    "label": "Unknown",
+                    "label_translations": {
+                      "de": "Unbekannt"
+                    },
+                    "help": "",
+                    "help_translations": {},
+                    "emoji": "❔"
+                  }
+                }
+              ],
+              "fallback": "UNKNOWN",
+              "default": "KILOMETRE"
+            }
+          }
+        },
+        {
+          "name": "notes",
+          "doc": "Free notes on the car, as plain text; lines are separated by LF. Empty when there are none.",
+          "texts": {
+            "label": "Notes",
+            "label_translations": {
+              "de": "Notizen"
+            },
+            "help": "Anything else about the car.",
+            "help_translations": {
+              "de": "Alles Weitere zum Auto."
+            },
+            "emoji": "📝"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": true,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "relations",
+          "doc": "The relations of the record to other records and to things outside AXT (spec/types.md, section 8), in the order the user gave them. Empty when it has none.",
+          "texts": {
+            "label": "Relations",
+            "label_translations": {
+              "de": "Verknüpfungen"
+            },
+            "help": "Entries and other things this one is linked to, such as the pets an appointment is for.",
+            "help_translations": {
+              "de": "Einträge und anderes, mit denen dieser verknüpft ist, etwa die Tiere, für die ein Termin ist."
+            },
+            "emoji": "🔗"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.RelationField": {}
+          }
+        }
+      ],
+      "groups": [],
+      "version": 1,
+      "title": "model"
+    }
+  }
+}

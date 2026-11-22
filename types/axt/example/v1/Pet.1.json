@@ -1,0 +1,326 @@
+{
+  "name": "pet",
+  "doc": "A pet: an animal the user keeps, such as a cat or a dog.",
+  "texts": {
+    "label": "Pet",
+    "label_translations": {
+      "de": "Haustier"
+    },
+    "help": "An animal that is kept, such as a cat or a dog.",
+    "help_translations": {
+      "de": "Ein Tier, das gehalten wird, etwa eine Katze oder ein Hund."
+    },
+    "emoji": "🐾"
+  },
+  "required": false,
+  "order": null,
+  "group": "",
+  "sensitive": false,
+  "advanced": false,
+  "kind": {
+    "axt.ObjectField": {
+      "name": "axt.example.v1.Pet",
+      "fields": [
+        {
+          "name": "name",
+          "doc": "The pet's name. Empty when it has none.",
+          "texts": {
+            "label": "Name",
+            "label_translations": {
+              "de": "Name"
+            },
+            "help": "The pet's name.",
+            "help_translations": {
+              "de": "Der Name des Tiers."
+            },
+            "emoji": "🏷️"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "species",
+          "doc": "The kind of animal, as the user wrote it, such as cat or dog. Empty when not given.",
+          "texts": {
+            "label": "Species",
+            "label_translations": {
+              "de": "Tierart"
+            },
+            "help": "The kind of animal, such as cat or dog.",
+            "help_translations": {
+              "de": "Die Tierart, etwa Katze oder Hund."
+            },
+            "emoji": "🐈"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "breed",
+          "doc": "The breed, as the user wrote it, such as Maine Coon. Empty when not known.",
+          "texts": {
+            "label": "Breed",
+            "label_translations": {
+              "de": "Rasse"
+            },
+            "help": "The breed, such as Maine Coon.",
+            "help_translations": {
+              "de": "Die Rasse, etwa Maine Coon."
+            },
+            "emoji": "🧬"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "sex",
+          "doc": "The pet's sex.",
+          "texts": {
+            "label": "Sex",
+            "label_translations": {
+              "de": "Geschlecht"
+            },
+            "help": "The pet's sex.",
+            "help_translations": {
+              "de": "Das Geschlecht des Tiers."
+            },
+            "emoji": "⚧️"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.EnumField": {
+              "name": "PetSex",
+              "symbols": [
+                {
+                  "symbol": "UNKNOWN",
+                  "texts": {
+                    "label": "Unknown",
+                    "label_translations": {
+                      "de": "Unbekannt"
+                    },
+                    "help": "",
+                    "help_translations": {},
+                    "emoji": "❔"
+                  }
+                },
+                {
+                  "symbol": "FEMALE",
+                  "texts": {
+                    "label": "Female",
+                    "label_translations": {
+                      "de": "Weiblich"
+                    },
+                    "help": "",
+                    "help_translations": {},
+                    "emoji": "♀️"
+                  }
+                },
+                {
+                  "symbol": "MALE",
+                  "texts": {
+                    "label": "Male",
+                    "label_translations": {
+                      "de": "Männlich"
+                    },
+                    "help": "",
+                    "help_translations": {},
+                    "emoji": "♂️"
+                  }
+                }
+              ],
+              "fallback": "UNKNOWN",
+              "default": "UNKNOWN"
+            }
+          }
+        },
+        {
+          "name": "neutered",
+          "doc": "True when the pet is neutered or spayed, false when it is not. Null when not known.",
+          "texts": {
+            "label": "Neutered",
+            "label_translations": {
+              "de": "Kastriert"
+            },
+            "help": "Whether the pet is neutered or spayed.",
+            "help_translations": {
+              "de": "Ob das Tier kastriert ist."
+            },
+            "emoji": "✂️"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.BooleanField": {
+              "default": null
+            }
+          }
+        },
+        {
+          "name": "birthday",
+          "doc": "The pet's day of birth, as far as it is known, such as the year alone for an animal from a shelter. Null when not known.",
+          "texts": {
+            "label": "Birthday",
+            "label_translations": {
+              "de": "Geburtstag"
+            },
+            "help": "The day of birth, or only its month or year when that is all that is known.",
+            "help_translations": {
+              "de": "Der Tag der Geburt, oder nur Monat oder Jahr, wenn nur das bekannt ist."
+            },
+            "emoji": "🎂"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.DateField": {}
+          }
+        },
+        {
+          "name": "microchip",
+          "doc": "The number of the pet's microchip, as read from it; 15 digits for a chip of ISO 11784. Empty when it has none or it is not known.",
+          "texts": {
+            "label": "Microchip",
+            "label_translations": {
+              "de": "Mikrochip"
+            },
+            "help": "The number read from the pet's microchip.",
+            "help_translations": {
+              "de": "Die Nummer, die vom Mikrochip des Tiers gelesen wird."
+            },
+            "emoji": "📟"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": true,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": false,
+              "preferred_length": 15,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "notes",
+          "doc": "Free notes on the pet, as plain text; lines are separated by LF. Empty when there are none.",
+          "texts": {
+            "label": "Notes",
+            "label_translations": {
+              "de": "Notizen"
+            },
+            "help": "Anything else about the pet.",
+            "help_translations": {
+              "de": "Alles Weitere zum Tier."
+            },
+            "emoji": "📝"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.StringField": {
+              "default": "",
+              "min_length": null,
+              "max_length": null,
+              "pattern": null,
+              "multiline": true,
+              "preferred_length": null,
+              "placeholder": "",
+              "example": ""
+            }
+          }
+        },
+        {
+          "name": "relations",
+          "doc": "The relations of the record to other records and to things outside AXT (spec/types.md, section 8), in the order the user gave them. Empty when it has none.",
+          "texts": {
+            "label": "Relations",
+            "label_translations": {
+              "de": "Verknüpfungen"
+            },
+            "help": "Entries and other things this one is linked to, such as the pets an appointment is for.",
+            "help_translations": {
+              "de": "Einträge und anderes, mit denen dieser verknüpft ist, etwa die Tiere, für die ein Termin ist."
+            },
+            "emoji": "🔗"
+          },
+          "required": false,
+          "order": null,
+          "group": "",
+          "sensitive": false,
+          "advanced": false,
+          "kind": {
+            "axt.RelationField": {}
+          }
+        }
+      ],
+      "groups": [],
+      "version": 1,
+      "title": "name"
+    }
+  }
+}
