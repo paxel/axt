@@ -109,7 +109,6 @@
     "encoding",
     "types",
     "time",
-    "metadata",
     "records",
     "manifest",
     "keys",
@@ -1573,15 +1572,15 @@
    ]
   },
   "input.check_record": {
-   "description": "The input of check_record (spec/conformance.md, section 5.13).",
+   "description": "The input of check_record (spec/conformance.md, section 5.16).",
    "type": "object",
    "required": [
-    "schema",
+    "description",
     "body"
    ]
   },
   "result.check_record": {
-   "description": "The result of check_record (spec/conformance.md, section 5.13): accept with the members it requires, or reject.",
+   "description": "The result of check_record (spec/conformance.md, section 5.16): accept with the members it requires, or reject.",
    "oneOf": [
     {
      "type": "object",
@@ -1890,16 +1889,16 @@
    ]
   },
   "input.describe": {
-   "description": "The input of describe (spec/conformance.md, section 5.13).",
+   "description": "The input of describe (spec/conformance.md, section 5.16).",
    "type": "object",
    "required": [
-    "schema",
+    "description",
     "field",
     "languages"
    ]
   },
   "result.describe": {
-   "description": "The result of describe (spec/conformance.md, section 5.13): accept with the members it requires, or reject.",
+   "description": "The result of describe (spec/conformance.md, section 5.16): accept with the members it requires, or reject.",
    "oneOf": [
     {
      "type": "object",

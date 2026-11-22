@@ -135,14 +135,14 @@ A writer MUST write `offset_seconds` as its own zone rules give the zone at `ins
 
 ### 6.4 Zone rules that differ: the anchor
 
-A receiver's zone rules can give a zone another offset at an instant than the writer's did, because one of the two has an older copy of the database, or because the rules of the zone changed between writing and reading. The wall clock and the instant then no longer agree, and the receiver has to keep one of them. Which one depends on what the field means, and so the host type says it, with the attribute `axt.anchor` on the field ([types.md](types.md), section 6):
+A receiver's zone rules can give a zone another offset at an instant than the writer's did, because one of the two has an older copy of the database, or because the rules of the zone changed between writing and reading. The wall clock and the instant then no longer agree, and the receiver has to keep one of them. Which one depends on what the field means, and so the host type says it, with the `anchor` of the field's `axt.DateTimeField` ([fields.md](fields.md), section 4.7):
 
-| `axt.anchor` | Kept                    | For                                                                                                                 |
-| ------------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `local`      | The wall clock and zone | A time agreed on the wall clock, mostly in the future: an appointment at 10:00 stays at 10:00 when the rules change |
-| `instant`    | The instant and zone    | A time at which something happened, mostly in the past: a measurement, the time a note was written                  |
+| `anchor`  | Kept                    | For                                                                                                                 |
+| --------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `LOCAL`   | The wall clock and zone | A time agreed on the wall clock, mostly in the future: an appointment at 10:00 stays at 10:00 when the rules change |
+| `INSTANT` | The instant and zone    | A time at which something happened, mostly in the past: a measurement, the time a note was written                  |
 
-The attribute sits on a field whose type is `axt.DateTime`, `["null", axt.DateTime]`, or an array of either, and applies to every `axt.DateTime` in the field's value. A field without the attribute, or with another value, has the anchor `local`: a receiver ignores attributes it does not know, and a wall clock that moves under its user misses an appointment, while an instant that moves by an hour on the wall clock is still the same instant.
+The anchor applies to every `axt.DateTime` in the field's value, also to each item of a list of them. Its default is `LOCAL`: a wall clock that moves under its user misses an appointment, while an instant that moves by an hour on the wall clock is still the same instant. Below, the anchors are named `local` and `instant`.
 
 A receiver that takes a zoned time:
 
@@ -262,7 +262,7 @@ A value written with rules that gave Berlin no summer time in 2026, 2026-07-01 1
 `com.example.Visit` is an illustration only, not an example type. Its field `start` defines `axt.DateTime` in place, `end` refers to it by its full name, and `booked` and `remind` define `axt.Date` and `axt.Duration`:
 
 ```json
-{"type":"record","name":"Visit","namespace":"com.example","doc":"An illustration for spec/time.md; not an AXT example type.","fields":[{"name":"start","type":{"type":"record","name":"DateTime","namespace":"axt","doc":"…","fields":[…]},"doc":"When the visit starts.","axt.anchor":"local"},{"name":"end","type":["null","axt.DateTime"],"default":null,"doc":"When the visit ends; null when open.","axt.anchor":"local"},{"name":"booked","type":{"type":"record","name":"Date","namespace":"axt","doc":"…","fields":[…]},"doc":"The day the visit was booked."},{"name":"remind","type":{"type":"array","items":{"type":"record","name":"Duration","namespace":"axt","doc":"…","fields":[…]}},"default":[],"doc":"When to remind, each before start."}]}
+{"type":"record","name":"Visit","namespace":"com.example","doc":"An illustration for spec/time.md; not an AXT example type.","fields":[{"name":"start","type":{"type":"record","name":"DateTime","namespace":"axt","doc":"…","fields":[…]},"doc":"When the visit starts."},{"name":"end","type":["null","axt.DateTime"],"default":null,"doc":"When the visit ends; null when open."},{"name":"booked","type":{"type":"record","name":"Date","namespace":"axt","doc":"…","fields":[…]},"doc":"The day the visit was booked."},{"name":"remind","type":{"type":"array","items":{"type":"record","name":"Duration","namespace":"axt","doc":"…","fields":[…]}},"default":[],"doc":"When to remind, each before start."}]}
 ```
 
 The `…` stand for the `doc` and the fields of the published schemas. Its Parsing Canonical Form holds the canonical form of `axt.DateTime` of section 9.1 once, at `start`, and `"axt.DateTime"` at `end`; its CRC-64-AVRO is `0x0e3e5cd48bbba990`.

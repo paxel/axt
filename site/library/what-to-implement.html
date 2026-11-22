@@ -7,7 +7,7 @@
 
 <h2>The categories</h2>
 <p>
-  The vectors are grouped into sixteen categories, one vector file each
+  The vectors are grouped into fifteen categories, one vector file each
   (<a href="../spec/conformance.html#section-2-1">conformance.md, section 2.1</a>). Nine of them
   every library implements. The others depend on what the library offers the apps that use it
   (<a href="../spec/conformance.html#section-2-2">section 2.2</a>).
@@ -25,8 +25,7 @@
     <tr><td><code>keys</code></td><td>Every library</td><td>Signing keys, strict verification, short fingerprints, device sets, padding, sealing and opening</td></tr>
     <tr><td><code>protocol</code></td><td>Every library</td><td>One app in a live connection</td></tr>
     <tr><td><code>shares</code></td><td>Every library</td><td>Withdrawals at a receiver, what a sender owes, proposals at their owner and their proposer</td></tr>
-    <tr><td><code>bricks</code></td><td>Every library</td><td>Descriptions of types: the schema derived from each, and the descriptions that are not valid</td></tr>
-    <tr><td><code>metadata</code></td><td>A library that offers the attributes of a schema</td><td>What a receiver shows of a type and its fields, and which values break a check</td></tr>
+    <tr><td><code>bricks</code></td><td>Every library</td><td>Descriptions of types: the schema derived from each, the descriptions that are not valid, what a receiver shows of a type, and which values break a check</td></tr>
     <tr><td><code>file</code></td><td>A library that supports files</td><td>Reading an AXT file</td></tr>
     <tr><td><code>local</code> and <code>qr</code></td><td>A library that supports the local network</td><td>The frames and the <code>HELLO</code>; the QR payload and its text</td></tr>
     <tr><td><code>relay</code></td><td>A library that supports the relay</td><td>The relay as an app uses it; <code>qr</code> as well if the library shows or scans QR codes for it</td></tr>
@@ -44,17 +43,13 @@
   <code>shares</code> is asked of every library, as <code>records</code> is. Every offer and every
   file carries its types as descriptions, from which each app derives the schema
   (<a href="../spec/fields.html#section-9">fields.md, section 9</a>), so <code>bricks</code> is asked of every
-  library as well.
+  library as well. With it, a library offers its apps what a receiver shows of a type and the
+  checks of its values, which a receiver need not use
+  (<a href="../spec/metadata.html#section-4">metadata.md, sections 4 to 7</a>).
 </p>
 
 <h3>The ones that depend on the library</h3>
 <ul>
-  <li>
-    <strong>Metadata.</strong> A receiver need not show or check the attributes of a schema
-    (<a href="../spec/metadata.html#section-4">metadata.md, sections 4 to 7</a>). A library that
-    offers them, such as the label of a field in the user's language, implements
-    <code>metadata</code>.
-  </li>
   <li>
     <strong>Transports.</strong> AXT does not require an app to support every transport
     (<a href="../spec/transports.html#section-1">transports.md, section 1</a>), so it does not

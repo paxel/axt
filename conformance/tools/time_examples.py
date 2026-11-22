@@ -259,19 +259,12 @@ def time_check(full: str, v: dict[str, Any]) -> str | None:
     return broken[0] if broken else None
 
 
-def receiver_breaches(schema: Any, value: Any, attributes: bool = True) -> list[tuple[str, str, str]]:
-    """The values inside a value of the schema that break a rule, as (field path, rule, why), in the order of
-    the encoding: the time values that are not valid (spec/time.md, section 8), the relations that break a
-    rule of spec/fields.md, section 11.4, and, with attributes, the values that break a check."""
-    found: list[tuple[str, str, str]] = mr.breaches(schema, value, time_check, attributes, relations=fe)
-    return found
-
-
 def value_breaches(schema: Any, value: Any) -> list[tuple[str, str, str]]:
     """The time values and relations inside a value of the schema that are not valid, as (field path, rule,
     why), in the order of the encoding: what a receiver reports with VALUE_INVALID (spec/time.md, section 8;
     spec/fields.md, section 11.4)."""
-    return receiver_breaches(schema, value, attributes=False)
+    found: list[tuple[str, str, str]] = mr.breaches(schema, value, time_check, relations=fe)
+    return found
 
 
 # --- zone rules (spec/time.md, section 6) ---------------------------------------------------
@@ -815,14 +808,12 @@ HOST_TEXT = json.dumps(
                 "name": "start",
                 "type": jsons["DateTime"],
                 "doc": "When the visit starts.",
-                "axt.anchor": "local",
             },
             {
                 "name": "end",
                 "type": ["null", "axt.DateTime"],
                 "default": None,
                 "doc": "When the visit ends; null when open.",
-                "axt.anchor": "local",
             },
             {"name": "booked", "type": jsons["Date"], "doc": "The day the visit was booked."},
             {
@@ -1049,16 +1040,6 @@ def check() -> tuple[str, int, bytes]:
     assert value_breaches(host, broken) == [
         ("end", "axt.DateTime", "instant_ms is not the wall clock minus offset_seconds")
     ]
-    # axt.anchor (section 6.4; spec/metadata.md, section 2): on a field that holds axt.DateTime, local or
-    # instant.
-    assert mr.schema_problems(host) == []
-    other = json.loads(HOST_TEXT)
-    other["fields"][0]["axt.anchor"] = "utc"
-    other["fields"][2]["axt.anchor"] = "instant"
-    assert mr.schema_problems(other) == [
-        ("start", "axt.anchor: neither local nor instant"),
-        ("booked", "axt.anchor: on a field that holds no axt.DateTime"),
-    ], mr.schema_problems(other)
     late = dict(HOST_VALUE, remind=[duration(days=-1), duration(days=1, millis=-HOUR)])
     assert value_breaches(host, late) == [("remind[1]", "axt.Duration", "parts of both signs")]
     for label, n, v, rule in INVALID:

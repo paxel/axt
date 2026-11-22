@@ -19,7 +19,6 @@
     "encoding",
     "types",
     "time",
-    "metadata",
     "records",
     "manifest",
     "keys",
@@ -197,7 +196,7 @@
      "then": {
       "properties": {
        "input": {
-        "required": ["schema", "body"]
+        "required": ["description", "body"]
        }
       }
      }
@@ -351,7 +350,7 @@
      "then": {
       "properties": {
        "input": {
-        "required": ["schema", "field", "languages"]
+        "required": ["description", "field", "languages"]
        }
       }
      }
@@ -1057,26 +1056,6 @@
   {
    "if": {
     "properties": {
-     "category": {"const": "metadata"}
-    }
-   },
-   "then": {
-    "properties": {
-     "vectors": {
-      "items": {
-       "properties": {
-        "op": {
-         "enum": ["check_record", "describe"]
-        }
-       }
-      }
-     }
-    }
-   }
-  },
-  {
-   "if": {
-    "properties": {
      "category": {"const": "records"}
     }
    },
@@ -1321,7 +1300,7 @@
       "items": {
        "properties": {
         "op": {
-         "enum": ["decode_record", "derive"]
+         "enum": ["check_record", "decode_record", "derive", "describe"]
         }
        }
       }

@@ -9,8 +9,9 @@ encoding and the schema checks of example_types.py and manifest_examples.py,
 the Ed25519, X25519 and HPKE of keys_examples.py and its model of a receiver
 that follows the devices of its senders, the model of an app of
 protocol_examples.py, the QR code, frames and relay of
-transports_examples.py, the time types of time_examples.py, and the attributes of spec/metadata.md of
-metadata_rules.py, and the stamps, the merge and the model of a device with
+transports_examples.py, the time types of time_examples.py, the bricks of spec/fields.md of
+fields_examples.py, with the texts, formats and field paths of metadata_rules.py, and the stamps,
+the merge and the model of a device with
 its siblings of spec/sync.md of sync_examples.py, and the receiver of withdrawals, the sending
 device, the owner that takes proposals and the proposer of spec/shares.md of shares_examples.py.
 Where those scripts have no model, for a receiver's own changes to records (spec/records.md,
@@ -64,7 +65,6 @@ CATEGORIES = [
     "encoding",
     "types",
     "time",
-    "metadata",
     "records",
     "manifest",
     "keys",
@@ -397,18 +397,50 @@ def op_decode_body(i: Any) -> dict[str, Any]:
 
 def op_derive(i: Any) -> dict[str, Any]:
     """The schema derived from a description, its canonical form and its fingerprint (sections 9.2, 9.3)."""
+    d, rejected = read_description(b_in(i["description"]))
+    if rejected:
+        return rejected
+    text = pe.fe.derived_text(d)
+    pcf, fp = me.fingerprint(text)
+    return ok({"schema": text, "canonical_form": pcf, "fingerprint": pe.fp8(fp).hex()})
+
+
+def read_description(data: bytes) -> tuple[Any, dict[str, Any] | None]:
+    """A valid description from its Avro encoding; or a rejection."""
     fe = pe.fe
     try:
-        d = fe.read(b_in(i["description"]), fe.PARSED)
+        d = fe.read(data, fe.PARSED)
     except Exception as e:
-        return no("UNDECODABLE", f"not a datum of axt.Field: {type(e).__name__}")
+        return None, no("UNDECODABLE", f"not a datum of axt.Field: {type(e).__name__}")
     problems = fe.description_problems(d)
     if problems:
         where, problem = problems[0]
-        return no("DESCRIPTION_INVALID", f"{where or 'the root'}: {problem}")
-    text = fe.derived_text(d)
-    pcf, fp = me.fingerprint(text)
-    return ok({"schema": text, "canonical_form": pcf, "fingerprint": pe.fp8(fp).hex()})
+        return None, no("DESCRIPTION_INVALID", f"{where or 'the root'}: {problem}")
+    return d, None
+
+
+def op_describe(i: Any) -> dict[str, Any]:
+    """What a receiver shows of the type or of one field (spec/conformance.md, section 5.16)."""
+    d, rejected = read_description(b_in(i["description"]))
+    if rejected:
+        return rejected
+    return ok(pe.fe.describe(d, i["field"], i["languages"]))
+
+
+def op_check_record(i: Any) -> dict[str, Any]:
+    """A receiver that checks the values of a record against its description: the first value, in the order of
+    the encoding, that breaks a check of spec/fields.md, section 7, or a rule that every receiver checks."""
+    d, rejected = read_description(b_in(i["description"]))
+    if rejected:
+        return rejected
+    value, rejected = decode_value(pe.fe.derived_text(d), b_in(i["body"]))
+    if rejected:
+        return rejected
+    broken = pe.fe.breaches(d, value, tm.time_check)
+    if broken:
+        path, rule = broken[0]
+        return no("VALUE_INVALID", rule, field=mr.error_field(path))
+    return ok()
 
 
 def op_fingerprint(i: Any) -> dict[str, Any]:
@@ -459,27 +491,6 @@ def op_decode_record(i: Any) -> dict[str, Any]:
     except Exception as e:
         return no("DOES_NOT_RESOLVE", str(e))
     return ok({"value": json_of(r, resolved)})
-
-
-# --- metadata (spec/metadata.md) ------------------------------------------------------------
-
-
-def op_describe(i: Any) -> dict[str, Any]:
-    return ok(mr.describe(json.loads(i["schema"]), i["field"], i["languages"]))
-
-
-def op_check_record(i: Any) -> dict[str, Any]:
-    """A receiver that checks the attributes: the first value, in the order of the encoding, that breaks a
-    rule, whether a check of an attribute or a rule of a time type (spec/conformance.md, section 5.13)."""
-    value, rejected = decode_value(i["schema"], b_in(i["body"]))
-    if rejected:
-        return rejected
-    writer = pe.without_logical_types(json.loads(i["schema"]))
-    broken = tm.receiver_breaches(writer, value)
-    if broken:
-        path, rule, why = broken[0]
-        return no("VALUE_INVALID", f"{rule}: {why}", field=mr.error_field(path))
-    return ok()
 
 
 # --- manifest (spec/manifest.md) ------------------------------------------------------------

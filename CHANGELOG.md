@@ -31,7 +31,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 ### Changed
 
 - Deleting a relay mailbox that does not exist succeeds with `204`, so a deletion can be repeated. ([axt-1048](https://github.com/paxel/axt/issues/56))
-- The documents keep the behaviour and name the definitions: limits, the relay interface and the adapter protocol are no longer restated. ([axt-1050](https://github.com/paxel/axt/issues/58))
+- The documents name the definitions instead of restating them, and the schema attributes are retired: bricks hold texts and checks, which `bricks` vectors test. ([axt-1050](https://github.com/paxel/axt/issues/58))
 - The test vectors are those of specification 0.2.0. ([axt-1036](https://github.com/paxel/axt/issues/44))
 
 ---

@@ -59,14 +59,13 @@ tx = load("transports_examples")
 pe, me, keys, rules = tx.pe, tx.me, tx.keys, tx.rules
 env = load("envelope_examples")
 tm = load("time_examples")
-mx = load("metadata_examples")
 sy = load("sync_examples")
 sy.check()  # the examples of spec/sync.md hold; fills its examples, messages and sessions for the vectors
 se = load("shares_examples")  # runs none of its checks on import; the receiver and sender of spec/shares.md
 se.check()  # the examples of spec/shares.md hold
 WITHDRAW_MSG = se.withdraw_message(pe.CAT_SEED, pe.OBF, se.REC_ID, 4)[1]  # spec/shares.md, section 11.2
 PROPOSAL_MSG, REPLY_MSG = se.example_proposal()[:2]  # spec/shares.md, sections 11.4 and 11.5
-mr = mx.mr
+mr = rules.mr  # the texts, formats and field paths of spec/metadata.md
 assert mr.LANGTAG.pattern == me.LANGTAG.pattern and mr.LANGTAG.flags == me.LANGTAG.flags, (
     "two language tag rules"
 )
@@ -1534,7 +1533,7 @@ def types_category() -> Category:
         expected = reject("VALUE_INVALID", found[0][2], field=found[0][0]) if found else None
         record_vector(
             f"{'reject' if found else 'take'} axt.example.v1.{name}: {label}",
-            ["time.md 8", "metadata.md 7.2"] if found else ["metadata.md 7.1", "conformance.md 5.13"],
+            ["time.md 8", "metadata.md 7.2"] if found else ["metadata.md 7.1", "conformance.md 5.16"],
             texts[name],
             None,
             single_object(texts[name], datum),
@@ -1719,7 +1718,7 @@ def relation_vectors(c: Category, texts: dict[str, str], record_vector: Callable
         expected = reject("VALUE_INVALID", found[0][2], field=found[0][0]) if found else None
         record_vector(
             f"{'reject' if found else 'take'} axt.example.v1.{name}: {label}",
-            ["fields.md 11.4", "metadata.md 7.2"] if found else ["metadata.md 7.1", "conformance.md 5.13"],
+            ["fields.md 11.4", "metadata.md 7.2"] if found else ["metadata.md 7.1", "conformance.md 5.16"],
             texts[name],
             None,
             single_object(texts[name], datum),
@@ -1853,183 +1852,6 @@ def time_category() -> Category:
             {"date_time": v, "duration": d},
             accept({"date_time": want}),
         )
-    return c
-
-
-# --- metadata (spec/metadata.md) --------------------------------------------------------
-
-
-def metadata_category() -> Category:
-    c = Category(
-        "metadata",
-        "The attributes of a schema that tell a receiver how to show and check a field: labels, help "
-        "and emoji in a language, the order and groups of fields, formats, patterns and limits, and the "
-        "field a check names (spec/metadata.md).",
-    )
-    vet, loose = mx.VET_TEXT, mx.LOOSE_TEXT
-
-    def describe(label: str, text: str, path: Any, languages: list[str], refs: list[str]) -> None:
-        got = mr.describe(json.loads(text), path, languages)
-        c.add("describe", label, refs, {"schema": text, "field": path, "languages": languages}, accept(got))
-
-    # The type and its fields, in English, German and a language the type has no text in.
-    assert mr.describe(mx.VET, None, ["en"])["fields"] == mx.VET_ORDER
-    for languages in (["en"], ["de-AT", "en"], ["fr-CH", "fr"]):
-        describe(
-            f"com.example.Vet for a user who reads {', '.join(languages)}",
-            vet,
-            None,
-            languages,
-            ["metadata.md 4", "metadata.md 5.1", "metadata.md 5.2"],
-        )
-    for path, languages, refs in [
-        ("name", ["de"], ["metadata.md 4", "metadata.md 5.3"]),
-        ("kind", ["de"], ["metadata.md 4.4"]),
-        ("kind", ["en-GB"], ["metadata.md 4.4"]),
-        ("phone", ["en"], ["metadata.md 5.3", "metadata.md 6.3"]),
-        ("address", ["de"], ["metadata.md 4", "metadata.md 5.1"]),
-        ("address.postal_code", ["de"], ["metadata.md 4.2", "metadata.md 5.3"]),
-        ("visit_minutes", ["en"], ["metadata.md 2", "types.md 6"]),
-        ("iban", ["de"], ["metadata.md 5.4"]),
-        ("notes", ["en"], ["metadata.md 5.3", "metadata.md 6.3"]),
-        ("website", ["de"], ["metadata.md 5.2"]),
-    ]:
-        describe(f"com.example.Vet, the field {path}, for {', '.join(languages)}", vet, path, languages, refs)
-    # Attributes that break their rules are ignored, each on its own.
-    assert len(mx.LOOSE_PROBLEMS) == 20
-    describe(
-        "attributes that break their rules are ignored: the type",
-        loose,
-        None,
-        ["de"],
-        ["metadata.md 3.3", "metadata.md 5.1"],
-    )
-    for path, why in [
-        ("code", "a pattern outside I-Regexp"),
-        ("count", "a format on a number, and a minimum above the maximum"),
-        ("title", "translations under the tag en"),
-        ("mood", "an emoji that is a word, an unknown format and a bad group"),
-        ("address", "a format on the field's type and a multiline that is not a boolean"),
-        ("size", "an unknown attribute and a maximum that is not a number"),
-        ("rank", "a pattern that is not a string"),
-        ("level", "entries of symbols with a member that breaks its rules each"),
-    ]:
-        describe(
-            f"attributes that break their rules are ignored: {path}, {why}",
-            loose,
-            path,
-            ["de"],
-            ["metadata.md 3.3"],
-        )
-
-    def check(label: str, text: str, datum: Any, refs: list[str]) -> None:
-        schema = json.loads(text)
-        found = tm.receiver_breaches(schema, datum)
-        expected = (
-            reject("VALUE_INVALID", found[0][2], field=mr.error_field(found[0][0])) if found else accept()
-        )
-        c.add("check_record", label, refs, {"schema": text, "body": B(single_object(text, datum))}, expected)
-
-    # The counts of spec/metadata.md, section 9.
-    assert (len(mx.CHECKS), len(mx.FORMAT_VALUES), len(mx.PATTERNS), len(mx.BAD_PATTERNS)) == (35, 14, 11, 13)
-    for label, how, path, attribute in mx.CHECKS:
-        datum = how(copy.deepcopy(mx.VET_VALUE))
-        assert mx.first(mx.VET, datum) == (path, attribute), label
-        check(label, vet, datum, ["metadata.md 6", "metadata.md 7.2"])
-    check(
-        "a value of attributes that break their rules is not checked by them",
-        loose,
-        mx.LOOSE_VALUE,
-        ["metadata.md 3.3"],
-    )
-    for name, (good, bad) in mx.FORMAT_VALUES.items():
-        text = mx.compact(mx.with_format(name))
-        for k, v in enumerate(good, 1):
-            check(
-                f"the format {name}, value {k}: {json.dumps(v, ensure_ascii=False)}",
-                text,
-                {"value": v},
-                ["metadata.md 6.3"],
-            )
-        for k, v in enumerate(bad, 1):
-            check(
-                f"the format {name}, broken value {k}: {json.dumps(v, ensure_ascii=False)}",
-                text,
-                {"value": v},
-                ["metadata.md 6.3"],
-            )
-    unknown = mx.compact(mx.with_format("zip-code"))
-    check(
-        "a format the receiver does not know is plain text",
-        unknown,
-        {"value": "any text"},
-        ["metadata.md 6.3"],
-    )
-    for n, (pattern, good, bad) in enumerate(mx.PATTERNS, 1):
-        text = mx.compact(mx.with_pattern(pattern))
-        for k, v in enumerate(good + bad, 1):
-            check(
-                f"pattern {n}, value {k}: {json.dumps(pattern, ensure_ascii=False)} "
-                f"and {json.dumps(v, ensure_ascii=False)}",
-                text,
-                {"code": v},
-                ["metadata.md 6.4"],
-            )
-    for pattern, why in mx.BAD_PATTERNS:
-        check(
-            f"a pattern that is not an I-Regexp, {why}, is ignored",
-            mx.compact(mx.with_pattern(pattern)),
-            {"code": "?"},
-            ["metadata.md 6.4", "metadata.md 3.3"],
-        )
-    # The example types: every example datum and the further valid records keep every rule; each record of
-    # example_types.py with a time value that is not valid names the first such value. The checks of an
-    # example type are in its description (spec/fields.md, section 7), not in its derived schema, so the
-    # records that break only a check are not among these.
-    examples = {n: pe.compact(EXAMPLES / f"{n}.1.avsc") for n in TYPE_FPS}
-    for name in TYPE_FPS:
-        check(
-            f"the record of axt.example.v1.{name} of types.md keeps every check",
-            examples[name],
-            rules.DATA[name],
-            ["metadata.md 6", "types.md 5.9"],
-        )
-    for label, name, datum in rules.VALID:
-        check(f"axt.example.v1.{name}: {label}", examples[name], datum, ["metadata.md 6", "time.md 6"])
-    for label, name, datum, path, rule in rules.BREACHES:
-        if rule not in mr.TIME_TYPES:
-            continue
-        assert tm.receiver_breaches(json.loads(examples[name]), datum)[0][:2] == (path, rule), label
-        check(
-            f"reject axt.example.v1.{name}: {label}",
-            examples[name],
-            datum,
-            ["metadata.md 7.1", "metadata.md 7.2"],
-        )
-    # Field paths into a map and above 1,024 bytes, and time values next to the checks.
-    due = mx.compact(mx.DUE)
-    check(
-        "a time value that is not valid in a map is named by its key",
-        due,
-        mx.DUE_VALUE,
-        ["metadata.md 7.2", "time.md 8"],
-    )
-    long_name = "f" * 1100
-    long = {
-        "type": "record",
-        "name": "Long",
-        "namespace": "com.example",
-        "doc": "A field with a long name.",
-        "fields": [
-            {"name": long_name, "type": "string", "default": "", "doc": "A field.", "axt.min_length": 1}
-        ],
-    }
-    check(
-        "a path above 1,024 bytes is reported as null",
-        mx.compact(long),
-        {long_name: ""},
-        ["metadata.md 7.2", "protocol.md 8.1"],
-    )
     return c
 
 
@@ -4124,7 +3946,7 @@ def records_category() -> Category:
                     assert decode_meaning(json.dumps(schema), None, avro_encode(schema, datum)) == value, v[
                         "id"
                     ]
-                    assert tm.receiver_breaches(schema, value) == [], v["id"]
+                    assert tm.value_breaches(schema, value) == [], v["id"]
     relation_sessions(c)
     return c
 
@@ -7507,7 +7329,154 @@ def bricks_category() -> Category:
             reject("DESCRIPTION_INVALID", f"{where or 'the root'}: {problem}"),
         )
     brick_records(c, fe)
+    brick_describe(c, fe)
+    brick_checks(c, fe)
     return c
+
+
+def brick_describe(c: Category, fe: Any) -> None:
+    """What a receiver shows of a type and its fields in the user's language (spec/metadata.md, sections 4
+    and 5)."""
+
+    def describe(label: str, d: Any, path: Any, languages: list[str], refs: list[str]) -> None:
+        got = fe.describe(d, path, languages)
+        c.add(
+            "describe",
+            label,
+            refs,
+            {"description": B(fe.binary(d)), "field": path, "languages": languages},
+            accept(got),
+        )
+
+    vet = fe.vet()
+    for languages in (["en"], ["de-AT", "en"], ["fr-CH", "fr"]):
+        describe(
+            f"com.example.Vet for a user who reads {', '.join(languages)}",
+            vet,
+            None,
+            languages,
+            ["metadata.md 4", "metadata.md 5.1", "metadata.md 5.2"],
+        )
+    for path, languages, refs in [
+        ("name", ["de"], ["metadata.md 4.1", "metadata.md 4.2"]),
+        ("kind", ["de"], ["metadata.md 4.4"]),
+        ("kind", ["en-GB"], ["metadata.md 4.4"]),
+        ("phone", ["en"], ["metadata.md 4.3", "metadata.md 6.3"]),
+        ("address", ["de"], ["metadata.md 4", "metadata.md 5.1"]),
+        ("address.postal_code", ["de"], ["metadata.md 4.2"]),
+        ("visit_minutes", ["en"], ["metadata.md 4.1"]),
+        ("iban", ["de"], ["metadata.md 4.1", "metadata.md 5.4"]),
+        ("tags", ["de"], ["metadata.md 4.1", "fields.md 4.5"]),
+        ("extra_fees", ["fr"], ["metadata.md 4.2", "fields.md 4.5"]),
+    ]:
+        describe(f"com.example.Vet, the field {path}, for {', '.join(languages)}", vet, path, languages, refs)
+    order = fe.order_description()
+    assert fe.describe(order, None, ["en"])["fields"] == fe.ORDER
+    describe(
+        "fields by their order, with a group brought together where its first field stands",
+        order,
+        None,
+        ["de"],
+        ["metadata.md 5.1", "metadata.md 5.2"],
+    )
+
+
+def brick_checks(c: Category, fe: Any) -> None:
+    """Records checked against the checks of their description (spec/fields.md, section 7), with the rules
+    that every receiver checks: the first value that breaks one, in the order of the encoding."""
+
+    def check(label: str, d: Any, datum: Any, refs: list[str]) -> None:
+        text = fe.derived_text(d)
+        body = single_object(text, datum)
+        found = fe.breaches(d, datum, tm.time_check)
+        expected = (
+            reject("VALUE_INVALID", found[0][1], field=mr.error_field(found[0][0])) if found else accept()
+        )
+        c.add(
+            "check_record",
+            label,
+            refs,
+            {"description": B(fe.binary(d)), "body": B(body)},
+            expected,
+        )
+
+    # The counts of spec/fields.md, section 8.
+    assert (len(fe.VALUE_CASES), len(fe.FORMAT_CASES), len(fe.PATTERN_CASES), len(fe.BAD_PATTERNS)) == (
+        23,
+        13,
+        11,
+        13,
+    )
+    vet = fe.vet()
+    for what, changes, expected in fe.VALUE_CASES:
+        assert fe.breaches(vet, {**fe.VALUE, **changes}) == expected, what
+        if what == "no kind":
+            continue  # null in a required enum, which the derived schema cannot hold
+        check(f"com.example.Vet: {what}", vet, {**fe.VALUE, **changes}, ["fields.md 7", "metadata.md 7.2"])
+    for which, (good, bad) in fe.FORMAT_CASES.items():
+        one = fe.one_field(which)
+        for k, v in enumerate(good, 1):
+            check(
+                f"{which}, value {k}: {json.dumps(v, ensure_ascii=False)}", one, {"value": v}, ["fields.md 5"]
+            )
+        for k, v in enumerate(bad, 1):
+            check(
+                f"{which}, broken value {k}: {json.dumps(v, ensure_ascii=False)}",
+                one,
+                {"value": v},
+                ["fields.md 5", "metadata.md 6.3"],
+            )
+    for n, (pattern, good, bad) in enumerate(fe.PATTERN_CASES, 1):
+        one = fe.one_field("axt.StringField", "code", pattern=pattern)
+        for k, v in enumerate(good + bad, 1):
+            check(
+                f"pattern {n}, value {k}: {json.dumps(pattern, ensure_ascii=False)} "
+                f"and {json.dumps(v, ensure_ascii=False)}",
+                one,
+                {"code": v},
+                ["fields.md 4.1", "metadata.md 6.4"],
+            )
+    kinds = fe.kinds_description()
+    for k, (changes, _expected) in enumerate(fe.KINDS_CASES, 1):
+        if None in changes.values():
+            continue  # null in a required field, which the derived schema cannot hold
+        datum = {**fe.KINDS_VALUE, **changes}
+        datum = {
+            **datum,
+            "photo": bytes.fromhex(datum["photo"]) if isinstance(datum["photo"], str) else datum["photo"],
+        }
+        check(f"the other bricks, values {k}", kinds, datum, ["fields.md 3.3", "fields.md 4"])
+    check(
+        "a time value that is not valid in a map is named by its key",
+        fe.due_description(),
+        fe.DUE_VALUE,
+        ["metadata.md 7.2", "time.md 8"],
+    )
+    long_name = "f" * 1100
+    long = fe.one_field("axt.StringField", long_name, min_length=1)
+    check(
+        "a path above 1,024 bytes is reported as null",
+        long,
+        {long_name: ""},
+        ["metadata.md 7.2", "protocol.md 8.1"],
+    )
+    # The example types: every example datum and the further records keep every rule and check; each record
+    # of example_types.py with a value that breaks one names the first such value.
+    for name in TYPE_FPS:
+        d = fe.EXAMPLE_DESCRIPTIONS[f"axt.example.v1.{name}"]
+        check(
+            f"the record of axt.example.v1.{name} of types.md keeps every check",
+            d,
+            rules.DATA[name],
+            ["fields.md 7", "types.md 5.9"],
+        )
+    for label, name, datum in rules.VALID:
+        d = fe.EXAMPLE_DESCRIPTIONS[f"axt.example.v1.{name}"]
+        check(f"axt.example.v1.{name}: {label}", d, datum, ["fields.md 7", "time.md 6"])
+    for label, name, datum, path, _rule in rules.BREACHES:
+        d = fe.EXAMPLE_DESCRIPTIONS[f"axt.example.v1.{name}"]
+        assert fe.breaches(d, datum, tm.time_check)[0][0] == path, label
+        check(f"reject axt.example.v1.{name}: {label}", d, datum, ["fields.md 7", "metadata.md 7.2"])
 
 
 def brick_records(c: Category, fe: Any) -> None:
@@ -7561,7 +7530,6 @@ CATEGORIES = [
     encoding_category,
     types_category,
     time_category,
-    metadata_category,
     records_category,
     manifest_category,
     keys_category,
@@ -7619,7 +7587,10 @@ def same_values(v: Any) -> Any:
 # The vectors of each category by operation, and of them the rejected ones, as the table of
 # spec/conformance.md, section 7.4, counts them.
 COUNTS = {
-    "bricks": ({"derive": 64, "decode_record": 7}, {"derive": 51, "decode_record": 4}),
+    "bricks": (
+        {"derive": 77, "decode_record": 7, "describe": 14, "check_record": 183},
+        {"derive": 64, "decode_record": 4, "check_record": 107},
+    ),
     "encoding": (
         {"fingerprint": 25, "decode_message": 40, "decode_body": 56, "encode_message": 8},
         {"decode_message": 17, "decode_body": 37},
@@ -7630,7 +7601,6 @@ COUNTS = {
         {"fingerprint": 4, "decode_record": 81, "resolve_date_time": 10, "add_duration": 22},
         {"decode_record": 46},
     ),
-    "metadata": ({"describe": 22, "check_record": 200}, {"check_record": 104}),
     "records": ({"apply": 18, "relations": 4}, {}),
     "manifest": ({"check_manifest": 52, "fit": 19}, {"check_manifest": 46}),
     "keys": (

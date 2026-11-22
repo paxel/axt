@@ -11,7 +11,7 @@
     <tr><th>Part</th><th>Specification</th><th>Categories</th></tr>
   </thead>
   <tbody>
-    <tr><td>1. Avro, fingerprints and the types</td><td><a href="../spec/envelope.html#section-1">envelope.md</a> 1 and 5 to 8; <a href="../spec/types.html">types.md</a>; <a href="../spec/time.html">time.md</a>; <a href="../spec/metadata.html">metadata.md</a></td><td><code>encoding</code>, <code>types</code>, <code>time</code>; <code>metadata</code> if offered</td></tr>
+    <tr><td>1. Avro, fingerprints and the types</td><td><a href="../spec/envelope.html#section-1">envelope.md</a> 1 and 5 to 8; <a href="../spec/types.html">types.md</a>; <a href="../spec/time.html">time.md</a>; <a href="../spec/metadata.html">metadata.md</a></td><td><code>encoding</code>, <code>types</code>, <code>time</code>; <code>describe</code> and <code>check_record</code> of <code>bricks</code></td></tr>
     <tr><td>2. The envelope and signatures</td><td><a href="../spec/envelope.html#section-2">envelope.md</a> 2 to 4; <a href="../spec/keys.html#section-2">keys.md</a> 2</td><td><code>encoding</code>, <code>keys</code></td></tr>
     <tr><td>3. Records</td><td><a href="../spec/records.html">records.md</a></td><td><code>records</code></td></tr>
     <tr><td>4. The manifest and the protocol</td><td><a href="../spec/manifest.html">manifest.md</a>; <a href="../spec/protocol.html">protocol.md</a></td><td><code>manifest</code>, <code>protocol</code></td></tr>
@@ -78,15 +78,15 @@
     and adding a duration (<a href="../spec/time.html">time.md</a>).
   </li>
   <li>
-    <strong>Metadata.</strong> The attributes of a schema, for a library that offers them
-    (<a href="../spec/metadata.html">metadata.md</a>).
+    <strong>Metadata.</strong> What a receiver shows of a type and checks of its values, by its
+    description (<a href="../spec/metadata.html">metadata.md</a>).
   </li>
 </ul>
 <p>
   Tested by: <code>encoding</code> (<code>fingerprint</code>), <code>types</code>
   (<code>fingerprint</code>, <code>decode_record</code>), <code>time</code>
   (<code>fingerprint</code>, <code>decode_record</code>, <code>resolve_date_time</code>,
-  <code>add_duration</code>) and <code>metadata</code> (<code>describe</code>,
+  <code>add_duration</code>) and <code>bricks</code> (<code>describe</code>,
   <code>check_record</code>). The example types are listed on
   <a href="../spec/example-types.html">Example types</a>.
 </p>

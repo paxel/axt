@@ -25,36 +25,36 @@ Sender, receiver and type have the meaning of [records.md](records.md), section 
 
 [types/axt/Field.avsc](../types/axt/Field.avsc) defines `axt.Field` and, in place, every brick and every record a brick holds, so that the file is parsed on its own. Its CRC-64-AVRO is `0xe50fe3675c626251`.
 
-| Brick                | Values                                    | Section |
-| -------------------- | ----------------------------------------- | ------- |
-| `axt.StringField`    | plain text                                | 4.1     |
-| `axt.IntField`       | 32-bit integers                           | 4.2     |
-| `axt.LongField`      | 64-bit integers                           | 4.2     |
-| `axt.DoubleField`    | numbers of double precision               | 4.2     |
-| `axt.BooleanField`   | `true` or `false`                         | 4.3     |
-| `axt.BytesField`     | bytes                                     | 4.3     |
-| `axt.EnumField`      | one of a list of symbols                  | 4.4     |
-| `axt.ListField`      | a list of items of one typed field        | 4.5     |
-| `axt.MapField`       | a map from strings to values of one field | 4.5     |
-| `axt.ObjectField`    | a value made of typed fields              | 4.6     |
-| `axt.DateField`      | `axt.Date`                                | 4.7     |
-| `axt.TimeField`      | `axt.Time`                                | 4.7     |
-| `axt.DateTimeField`  | `axt.DateTime`                            | 4.7     |
-| `axt.DurationField`  | `axt.Duration`                            | 4.7     |
-| `axt.MarkdownField`  | text read as CommonMark                   | 5       |
-| `axt.EmailField`     | an email address                          | 5       |
-| `axt.PhoneField`     | a phone number                            | 5       |
-| `axt.UrlField`       | a web address                             | 5       |
-| `axt.UriField`       | a URI of any scheme                       | 5       |
-| `axt.ColourField`    | a colour                                  | 5       |
-| `axt.IbanField`      | an IBAN                                   | 5       |
-| `axt.BicField`       | a BIC                                     | 5       |
-| `axt.CountryField`   | a country code                            | 5       |
-| `axt.LanguageField`  | a language tag                            | 5       |
-| `axt.CurrencyField`  | a currency code                           | 5       |
-| `axt.MediaTypeField` | a media type                              | 5       |
-| `axt.UcumField`      | a unit code                               | 5       |
-| `axt.RelationField`  | a list of relations, each `axt.Relation`  | 11      |
+| Brick                | Values                                     | Section |
+| -------------------- | ------------------------------------------ | ------- |
+| `axt.StringField`    | plain text                                 | 4.1     |
+| `axt.IntField`       | 32-bit integers                            | 4.2     |
+| `axt.LongField`      | 64-bit integers                            | 4.2     |
+| `axt.DoubleField`    | numbers of double precision                | 4.2     |
+| `axt.BooleanField`   | `true` or `false`                          | 4.3     |
+| `axt.BytesField`     | bytes                                      | 4.3     |
+| `axt.EnumField`      | one of a list of symbols                   | 4.4     |
+| `axt.ListField`      | a list of items of one typed field         | 4.5     |
+| `axt.MapField`       | a map from strings to values of one field  | 4.5     |
+| `axt.ObjectField`    | a value made of typed fields               | 4.6     |
+| `axt.DateField`      | `axt.Date`                                 | 4.7     |
+| `axt.TimeField`      | `axt.Time`                                 | 4.7     |
+| `axt.DateTimeField`  | `axt.DateTime`                             | 4.7     |
+| `axt.DurationField`  | `axt.Duration`                             | 4.7     |
+| `axt.MarkdownField`  | text read as CommonMark                    | 5       |
+| `axt.EmailField`     | an email address                           | 5       |
+| `axt.PhoneField`     | a phone number                             | 5       |
+| `axt.UrlField`       | a web address                              | 5       |
+| `axt.UriField`       | a URI of any scheme                        | 5       |
+| `axt.ColourField`    | a colour                                   | 5       |
+| `axt.IbanField`      | an IBAN                                    | 5       |
+| `axt.BicField`       | a BIC                                      | 5       |
+| `axt.CountryField`   | a country code                             | 5       |
+| `axt.LanguageField`  | a language tag                             | 5       |
+| `axt.CurrencyField`  | a currency code                            | 5       |
+| `axt.MediaTypeField` | a media type                               | 5       |
+| `axt.UcumField`      | a unit code                                | 5       |
+| `axt.RelationField`  | a list of relations, each `axt.Relation`   | 11      |
 | `axt.ExtensionField` | a list of extensions, each `axt.Extension` | 12      |
 
 The union `kind` has the bricks in this order.
@@ -75,13 +75,13 @@ Every typed field has the members of `axt.Field` besides `kind`.
 
 ### 3.3 Required
 
-`required` true means that the field needs a value. The value breaks the check `required` when it is `null`, or when it is the empty string, empty bytes, an empty list or an empty map. A field that is not required may hold such a value, and then holds no value; the other checks of its brick do not apply to `null`, and of the checks of form, `format` and `pattern`, none applies to the empty string, as [metadata.md](metadata.md), section 6.1, says of the attributes.
+`required` true means that the field needs a value. The value breaks the check `required` when it is `null`, or when it is the empty string, empty bytes, an empty list or an empty map. A field that is not required may hold such a value, and then holds no value; the other checks of its brick do not apply to `null`, and of the checks of form, `format` and `pattern`, none applies to the empty string, as [metadata.md](metadata.md), section 6.1, says.
 
 The `default` of a brick, where it has one, is the value the field starts with when its user gives none. `null` there means that the brick gives no default. A default keeps the field's checks.
 
 ### 3.4 Hints
 
-These hints of the common part, and the members `placeholder` and `example` of the bricks of text and numbers, say how to show the field, as the attributes of [metadata.md](metadata.md), sections 5.1 to 5.4, of the same names do:
+These hints of the common part, and the members `placeholder` and `example` of the bricks of text and numbers, say how to show the field, as [metadata.md](metadata.md), sections 5.1 to 5.4, says:
 
 - `order` and `group` place the field among the fields of its object (sections 5.1 and 5.2 there). `group` is the empty string or a key of the groups of the object that holds the field.
 - `sensitive` and `advanced` (section 5.4 there).
@@ -95,14 +95,14 @@ These hints of the common part, and the members `placeholder` and `example` of t
 
 - `min_length` and `max_length` are checks of the number of code points of the value, as [metadata.md](metadata.md), section 6.2, counts them; `null` is no limit. `min_length` is not larger than `max_length`.
 - `pattern` is a check: a non-empty value matches it as a whole. It is an I-Regexp with the rules of [metadata.md](metadata.md), section 6.4, which a receiver implements as that section describes.
-- `multiline` and `preferred_length` are hints, as [metadata.md](metadata.md), section 5.3, says of the attributes of the same names. `preferred_length` is not larger than `max_length`.
+- `multiline` and `preferred_length` are hints, as [metadata.md](metadata.md), section 5.3, says. `preferred_length` is not larger than `max_length`.
 
 ### 4.2 Numbers
 
 `axt.IntField`, `axt.LongField` and `axt.DoubleField` describe numbers of the Avro types `int`, `long` and `double`.
 
 - `min` and `max` are checks: the value is at least `min` and at most `max`, compared as exact numbers; `null` is no limit. NaN breaks every `min` and `max`. A limit of a `double` is finite, and `min` is not larger than `max`.
-- `unit` is a hint, the unit of the value as a code of UCUM where the field fixes it, with the meaning of `axt.unit` of [types.md](types.md), section 6. The limits are in that unit.
+- `unit` is a hint: the unit of the value as a case-sensitive code of [UCUM](https://ucum.org/), such as `min` for minutes, the empty string where the field fixes no unit. Where the unit differs from record to record, as for a measurement, it is a field of its own. The limits are in that unit.
 
 ### 4.3 Booleans and bytes
 
@@ -171,7 +171,7 @@ A value keeps every check of its typed field at once. The checks are `required` 
 
 - A value that breaks a check is named by its field path. When it breaks several, the first in the order `required`, `format`, `pattern`, `min_length`, `max_length`, `min`, `max` is named.
 - When several values break a check, the first in the order of the encoding is named: the fields of each object in their order, depth first, and the items and values in the order in which they are encoded.
-- What a sender and a receiver do with a value that breaks a check, and the error `VALUE_INVALID`, are as [metadata.md](metadata.md), section 7, says of the checks of the attributes.
+- What a sender and a receiver do with a value that breaks a check, and the error `VALUE_INVALID`, are as [metadata.md](metadata.md), section 7, says.
 
 ## 8. Example
 
@@ -207,7 +207,8 @@ The values were produced with [conformance/tools/fields_examples.py](../conforma
 - checks that the description of `com.example.Vet` is valid, and 45 descriptions that each break one rule, each with the path of its problem, and the limits of section 9.1;
 - checks that the published description of each example type ([types.md](types.md), section 7) is valid, derives the schema of its `.avsc` file, and derives it again from that schema, and that the registry of descriptions of the models holds it for its derived schema;
 - derives `com.example.Links`, with relation fields first, after a date and time, twice, as the items of a list and in a nested object (section 11.6);
-- checks the 23 values of the table and the others, a value of each semantic brick that has its format and one that does not, and values of the bricks the type does not use;
+- checks the 23 values of the table and the others, values of the bricks the type does not use, 79 values of the 13 formats, 41 values of 11 patterns and 13 patterns that are not an I-Regexp, which make a description not valid;
+- checks what a receiver shows of the type in English, German and French, and the order of fields with an `order` and a group ([metadata.md](metadata.md), sections 4 and 5);
 - encodes each description with fastavro and decodes it again with both libraries.
 
 The test vectors of [conformance.md](conformance.md) take precedence over these values.
@@ -218,7 +219,7 @@ The test vectors of [conformance.md](conformance.md) take precedence over these 
 
 A description describes one type. In addition to the rules of sections 3 to 6, a description keeps these:
 
-- **The root.** Its brick is `axt.ObjectField`. Its `name` is the full name of the type, with a namespace ([types.md](types.md), section 2), its `version` the version of the type within its major version, at least 1 ([types.md](types.md), section 3.2), and its `title`, if not empty, the name of one of its fields whose brick is `axt.StringField` or a semantic brick: the field whose value a receiver MAY show as the name of a record, as `axt.title` of [types.md](types.md), section 6, says. The root's `doc` and `texts` are those of the type. Its own `name` is not used. It is not `required`, and has no `order`, no `group`, and neither `sensitive` nor `advanced`.
+- **The root.** Its brick is `axt.ObjectField`. Its `name` is the full name of the type, with a namespace ([types.md](types.md), section 2), its `version` the version of the type within its major version, at least 1 ([types.md](types.md), section 3.2), and its `title`, if not empty, the name of one of its fields whose brick is `axt.StringField` or a semantic brick: the field whose value a receiver MAY show as the name of a record in a list, such as `title` in Note. The root's `doc` and `texts` are those of the type. Its own `name` is not used. It is not `required`, and has no `order`, no `group`, and neither `sensitive` nor `advanced`.
 - **Nested objects and enums.** Their names have no namespace; they take the namespace of the root. No two of the objects and enums of a description, the root among them, have the same full name, and none has the name of a time type or of a named type that `axt.Relation` defines (section 11.6). A nested object has the `version` `null`; its `title`, if not empty, names one of its own fields of text, which a receiver MAY show as the name of each of its values.
 - **Depth.** Typed fields nest at most `fields.depth` deep ([types/axt/limits.json](../types/axt/limits.json)): the root is at depth 1, and a field of an object, the items of a list and the values of a map are one deeper than the typed field that holds them. The derived schema nests within `envelope.schema_depth` as JSON, as every schema does ([envelope.md](envelope.md), section 8).
 - **Numbers.** A default of `axt.DoubleField` is finite, and a default of `axt.LongField` is at most `fields.long_default` in magnitude, so that the text of section 9.3 writes it exactly.
@@ -285,15 +286,15 @@ A relation links the record that holds it to another record or to a thing outsid
 
 ### 11.1 The relation record
 
-| Field        | Avro type                                                 | Value                                                                                                                    |
-| ------------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `id`         | `string` with `uuid`                                      | The id of the relation, unique among the relations of the list and kept for as long as the relation exists               |
-| `kind`       | `string`, default `axt.related`                           | What kind of link it is (section 11.2)                                                                                   |
-| `target`     | `axt.RelationRecordTarget` or `axt.RelationOutsideTarget` | What the relation points at: a record or a thing outside AXT (section 11.3)                                              |
-| `note`       | `string`, default `""`                                    | Plain text about the link ([types.md](types.md), section 5.6); empty when there is none                                  |
-| `start`      | `["null", axt.DateTime]`, default `null`                  | When the link begins; `null` when it has no beginning or it is not known                                                 |
+| Field        | Avro type                                                 | Value                                                                                                                          |
+| ------------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `id`         | `string` with `uuid`                                      | The id of the relation, unique among the relations of the list and kept for as long as the relation exists                     |
+| `kind`       | `string`, default `axt.related`                           | What kind of link it is (section 11.2)                                                                                         |
+| `target`     | `axt.RelationRecordTarget` or `axt.RelationOutsideTarget` | What the relation points at: a record or a thing outside AXT (section 11.3)                                                    |
+| `note`       | `string`, default `""`                                    | Plain text about the link ([types.md](types.md), section 5.6); empty when there is none                                        |
+| `start`      | `["null", axt.DateTime]`, default `null`                  | When the link begins; `null` when it has no beginning or it is not known                                                       |
 | `end`        | `["null", axt.DateTime]`, default `null`                  | The first moment after the link, as the end of [types.md](types.md), section 5.6; `null` when it has no end or it is not known |
-| `attributes` | `map` of `string`, default `{}`                           | Further values that the kind needs beyond the other fields, by names that the kind gives them; empty when there are none |
+| `attributes` | `map` of `string`, default `{}`                           | Further values that the kind needs beyond the other fields, by names that the kind gives them; empty when there are none       |
 
 A sender creates the id of a relation as the id of a record ([records.md](records.md), section 2): a UUID of version 4 or 7, generated when the relation is created and never used for another relation of the list. The relations of a list are part of the record's value, in the order its user gave them.
 
@@ -346,9 +347,9 @@ An extension adds fields of an app's own to a record of another type without for
 
 ### 12.1 The extension record
 
-| Field  | Avro type | Value                                                                                                                                                        |
-| ------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `name` | `string`  | The full name of the extension's record type, with a namespace, such as `org.example.catalog.CatExtension`; it holds the type's major version, as a type's name does ([types.md](types.md), section 3) |
+| Field  | Avro type | Value                                                                                                                                                                                                            |
+| ------ | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name` | `string`  | The full name of the extension's record type, with a namespace, such as `org.example.catalog.CatExtension`; it holds the type's major version, as a type's name does ([types.md](types.md), section 3)           |
 | `data` | `bytes`   | The extension's record in single-object encoding ([envelope.md](envelope.md), section 3): `C3 01`, the fingerprint of its writer schema as 8 bytes in little-endian order, and the record's Avro binary encoding |
 
 An extension's type is a type of the app that defines it, in the app's own namespace ([types.md](types.md), section 2), and keeps the rules of [types.md](types.md), section 5, for its fields. The namespace `axt` and every namespace that begins with `axt.` are reserved for this specification. A list holds at most one extension of a name: the app that owns the type keeps its fields in that one record.

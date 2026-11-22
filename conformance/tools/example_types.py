@@ -20,7 +20,7 @@ script:
   to by full name after it; no recursion; the schema size and depth limits
   of spec/envelope.md; nested type names unique across the types, the
   published types aside; and the published schema types/axt/Relation.avsc
-  under the same rules, with the attributes of spec/metadata.md, and
+  under the same rules, with its labels and emoji, and
   types/axt/Extension.avsc, a record of a name and bytes;
 - checks that every example datum keeps the rules of the time types
   (spec/time.md, sections 4 to 7) and of the relations, and every check of
@@ -81,7 +81,7 @@ from fastavro.schema import to_parsing_canonical_form
 REPO = Path(__file__).resolve().parents[2]
 EXAMPLES = REPO / "types" / "axt" / "example"
 
-# The rules of the attributes of spec/metadata.md; a module that imports none of the other scripts.
+# Names and field paths (spec/metadata.md, section 7.2); a module that imports none of the other scripts.
 _spec = importlib.util.spec_from_file_location(
     "metadata_rules", Path(__file__).resolve().parent / "metadata_rules.py"
 )
@@ -111,7 +111,6 @@ EXTENSION_PUBLISHED = json.loads((REPO / "types" / "axt" / "Extension.avsc").rea
 PUBLISHED: dict[str, Any] = dict(
     TIME_TYPES, **{"axt.Relation": RELATION, "axt.Extension": EXTENSION_PUBLISHED}
 )
-NUMBERS = {"int", "long", "float", "double"}
 LIMITS: dict[str, int] = {  # types/axt/limits.json
     k: v["value"]
     for k, v in json.loads((REPO / "types" / "axt" / "limits.json").read_text(encoding="utf-8"))[
@@ -954,13 +953,41 @@ def inner(t: Any) -> tuple[list[str], int]:
     return names, walk(t, "")
 
 
+def stray_attributes(schema: Any) -> list[str]:
+    """The places of a derived schema, outside the published types, whose JSON has a member axt.* other than
+    axt.version on the type's record."""
+    out: list[str] = []
+
+    def walk(t: Any, where: str) -> None:
+        if isinstance(t, list):
+            for b in t:
+                walk(b, where)
+            return
+        if not isinstance(t, dict) or published_type(t):
+            return
+        if any(k.startswith("axt.") and not (k == "axt.version" and t is schema) for k in t):
+            out.append(where)
+        for f in t.get("fields", []):
+            here = f"{where}.{f['name']}" if where else f["name"]
+            if any(k.startswith("axt.") for k in f):
+                out.append(here)
+            walk(f["type"], here)
+        for member in ("items", "values"):
+            if member in t:
+                walk(t[member], where)
+
+    walk(schema, "")
+    return out
+
+
 def check_type(t: Any, where: str, top: Any, path: set[str], defined: list[str]) -> int:
     """Check a schema node; return the data depth it adds (record, array, map count 1)."""
-    if t is top:
-        # The axt.* attributes of the whole schema (spec/metadata.md; spec/types.md, section 5.9).
-        for here, message in mr.schema_problems(top):
-            fail(f"{where}.{here}" if here else where, message)
-    elif published_type(t):
+    if t is top and top is not RELATION and top is not EXTENSION_PUBLISHED:
+        # The derived schema carries no attribute but axt.version, outside the published types it defines in
+        # place (spec/fields.md, section 9.2; spec/types.md, section 5.9).
+        for here in stray_attributes(top):
+            fail(f"{where}.{here}" if here else where, "an axt.* attribute other than axt.version")
+    if t is not top and published_type(t):
         # A time type or axt.Relation, defined in place at its first occurrence as its published schema, with
         # every named type defined before it by its full name (spec/time.md, section 3.1; spec/types.md,
         # section 8.6).
@@ -1026,12 +1053,6 @@ def check_type(t: Any, where: str, top: Any, path: set[str], defined: list[str])
             ft = field["type"]
             if isinstance(ft, list) and ft[0] == "null" and field.get("default", ...) is not None:
                 fail(here, "an optional field has a default other than null")
-            if "axt.unit" in field:
-                base = ft[1] if isinstance(ft, list) else ft
-                base = base["items"] if isinstance(base, dict) and base["type"] == "array" else base
-                base = base["type"] if isinstance(base, dict) else base
-                if base not in NUMBERS:
-                    fail(here, "axt.unit on a field that is not a number")
             depth = max(depth, check_type(ft, here, top, path | {full}, defined))
         return 1 + depth
     return 0
@@ -1052,11 +1073,6 @@ def check_schema(path: Path, schema: dict[str, Any], text: str) -> tuple[list[st
         fail(where, f"namespace {schema.get('namespace')} does not match the directory {namespace}")
     if schema.get("axt.version") != int(m.group(2)):
         fail(where, "axt.version does not match the file name")
-    title = schema.get("axt.title")
-    if title is not None:
-        target = [f for f in schema["fields"] if f["name"] == title]
-        if not target or target[0]["type"] not in ("string", ["null", "string"]):
-            fail(where, f"axt.title names {title}, which is not a string field")
     if len(text.encode("utf-8")) > MAX_SCHEMA_BYTES:
         fail(where, "schema above the size limit")
     if json_depth(schema) > MAX_JSON_DEPTH:
@@ -1277,7 +1293,7 @@ def check_datum(name: str, schema: Any) -> None:
     """The example datum keeps the rules of the time types and every check of its schema; each zoned time
     has the offset of its zone at its instant by this system's zone rules (spec/time.md, section 6.3)."""
     tm = time_rules()
-    for path, rule, why in tm.receiver_breaches(schema, DATA[name]):
+    for path, rule, why in tm.value_breaches(schema, DATA[name]):
         fail(f"{name}.{path}" if path else name, f"the example datum breaks {rule}: {why}")
     for path, rule in fe.breaches(description(name), DATA[name], tm.time_check):
         fail(f"{name}.{path}" if path else name, f"the example datum breaks {rule}")

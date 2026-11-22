@@ -51,8 +51,8 @@
   <li>add a field that has a default, under a name that no earlier version of the major version used;</li>
   <li>remove a field that had a default in every earlier version; its name is not used again within the major version;</li>
   <li>add a symbol to an enum, which has a default symbol;</li>
-  <li>change <code>doc</code> texts, or add, change or remove <code>axt.title</code> or a hint other than <code>axt.unit</code> and <code>axt.anchor</code>, such as a label, a translation or the order of the fields, without changing what any value means;</li>
-  <li>remove a check, or widen it so that every value that kept it still does: a lower <code>axt.min_length</code> or <code>axt.min</code>, a higher <code>axt.max_length</code> or <code>axt.max</code>.</li>
+  <li>change <code>doc</code> texts, or add, change or remove the <code>title</code> or a hint other than <code>unit</code> and <code>anchor</code>, such as a label, a translation or the order of the fields, without changing what any value means;</li>
+  <li>remove a check, or widen it so that every value that kept it still does: a lower <code>min_length</code> or <code>min</code>, a higher <code>max_length</code> or <code>max</code>.</li>
 </ol>
 <p>
   Each keeps resolution working both ways. A receiver with the new version fills the added fields
@@ -66,10 +66,10 @@
 <p>Every other change, among them:</p>
 <ul>
   <li>changing a field's type, logical type or default;</li>
-  <li>changing <code>axt.unit</code> or <code>axt.anchor</code>;</li>
+  <li>changing <code>unit</code> or <code>anchor</code>;</li>
   <li>renaming a field, adding a branch to a union, or removing an enum symbol;</li>
   <li>keeping the encoding but changing what a value means;</li>
-  <li>adding a check or narrowing one, or changing <code>axt.format</code> or <code>axt.pattern</code> other than by removing it. A sender never sends a value that breaks a check, so it could not send all its older records under the new version.</li>
+  <li>adding a check or narrowing one, or changing a semantic brick or a <code>pattern</code> other than by removing it: a semantic brick replaced by <code>axt.StringField</code>, or no <code>pattern</code>. A sender never sends a value that breaks a check, so it could not send all its older records under the new version.</li>
 </ul>
 <p>
   A record keeps the full name of its type for its whole life: every version of it is sent with a
@@ -83,10 +83,10 @@
 <p>
   In a live connection, a record names its schema by a fingerprint over the schema's Parsing
   Canonical Form, which
-  drops <code>doc</code>, defaults, logical types and every attribute
+  drops <code>doc</code>, defaults, logical types and every attribute, and the texts, hints and checks are not in the schema at all
   (<a href="../spec/types.html#section-3-4">types, section 3.4</a>). Every published version of a
   full name must differ from the earlier ones in that form, so that the fingerprint tells them
-  apart. A change of <code>doc</code> texts or attributes alone is therefore not a version of its
+  apart. A change of <code>doc</code> texts, texts, hints or checks alone is therefore not a version of its
   own: it waits for the next version that also adds or removes a field or a symbol.
 </p>
 

@@ -80,7 +80,7 @@ Step 3 costs one scalar multiplication for each point. For A it is needed once, 
 
 ### 2.4 The schemas of a connection
 
-A `DATA` message names its writer schema only by fingerprint, and a fingerprint is not collision resistant ([envelope.md](envelope.md), section 5); it also leaves out `doc` and every other attribute a receiver shows its user. The schemas themselves are therefore bound to the sender by a signature. In a live connection and through a relay, the `OFFER` ([protocol.md](protocol.md), section 4) is that signature. This document requires of it:
+A `DATA` message names its writer schema only by fingerprint, and a fingerprint is not collision resistant ([envelope.md](envelope.md), section 5); it also leaves out `doc` and the description whose texts a receiver shows its user. The schemas themselves are therefore bound to the sender by a signature. In a live connection and through a relay, the `OFFER` ([protocol.md](protocol.md), section 4) is that signature. This document requires of it:
 
 - An `OFFER` MUST carry each type as its description in its body, so that the offer's signature covers the writer schema derived from it and everything a receiver shows of the type, its texts, `doc` and version included ([fields.md](fields.md), section 10.1).
 - A receiver MUST keep the schemas it was offered per sender, and MUST decode the body of a `DATA` message only with a schema that the same sender offered. It looks up the body's fingerprint among that sender's schemas alone; a schema with the same fingerprint that another sender offered MUST NOT be used.

@@ -473,14 +473,14 @@ def relation_breaches(
     value: list[Any], path: str, time_check: Any, items: Any = None
 ) -> list[tuple[str, str]]:
     """The values of a list of relations that break a rule of section 11.4, as (field path, axt.Relation), or
-    a time value in it that is not valid, or the URI of a target that does not have the format uri, which the
-    published schema of axt.Relation gives it, as (field path, format)."""
+    a time value in it that is not valid, or the URI of a target that does not have the format uri of section
+    11.3, as (field path, format)."""
     schema = {"type": "array", "items": RELATION_SCHEMA if items is None else items}
-    found = mr.breaches(schema, value, time_check, True, RELATION_RULES)
+    found = mr.breaches(schema, value, time_check, RELATION_RULES)
     out = []
     for where, rule, _why in found:
         here = path + where if where.startswith("[") or not where else mr.path_join(path, where)
-        out.append((here, "format" if rule == "axt.format" else rule))
+        out.append((here, rule))
     return out
 
 
@@ -492,6 +492,67 @@ def breaches(f: dict[str, Any], value: Any, time_check: Any = None) -> list[tupl
     out: list[tuple[str, str]] = []
     walk(f, value, "", out, time_check)
     return out
+
+
+# --- what a receiver shows (spec/metadata.md, sections 4 and 5) --------------------------------------
+
+
+def shown_texts(t: dict[str, Any], languages: list[str]) -> dict[str, Any]:
+    """The label, help and emoji of texts, each chosen by the Lookup of RFC 4647 and null when empty."""
+    out: dict[str, Any] = {}
+    for name in ("label", "help"):
+        out[name] = mr.lookup(t[name], t[f"{name}_translations"], languages) if t[name] != "" else None
+    out["emoji"] = t["emoji"] or None
+    return out
+
+
+def display_order(fields: list[dict[str, Any]]) -> list[str]:
+    """The names of an object's fields in the order of spec/metadata.md, section 5.1, with the fields of
+    each group brought together where its first field stands (section 5.2)."""
+    ranked = sorted(
+        range(len(fields)),
+        key=lambda i: (fields[i]["order"] is None, fields[i]["order"] or 0, i),
+    )
+    out: list[str] = []
+    for i in ranked:
+        name, group = fields[i]["name"], fields[i]["group"]
+        if name in out:
+            continue
+        out.extend(
+            [fields[j]["name"] for j in ranked if group != "" and fields[j]["group"] == group] or [name]
+        )
+    return out
+
+
+def shown_object(b: dict[str, Any], t: dict[str, Any], languages: list[str]) -> dict[str, Any]:
+    used = {f["group"] for f in b["fields"]} - {""}
+    groups = {g["key"]: shown_texts(g["texts"], languages) for g in b["groups"] if g["key"] in used}
+    return shown_texts(t, languages) | {"fields": display_order(b["fields"]), "groups": groups}
+
+
+def shown_field(f: dict[str, Any], languages: list[str]) -> dict[str, Any]:
+    name, b = kind_of(f)
+    out = shown_texts(f["texts"], languages) | {"brick": name, "symbols": None, "record": None, "items": None}
+    if name == "axt.EnumField":
+        out["symbols"] = {x["symbol"]: shown_texts(x["texts"], languages) for x in b["symbols"]}
+    elif name == "axt.ObjectField":
+        out["record"] = shown_object(b, f["texts"], languages)
+    elif name in ("axt.ListField", "axt.MapField"):
+        out["items"] = shown_field(b["items" if name == "axt.ListField" else "values"], languages)
+    return out
+
+
+def describe(f: dict[str, Any], path: str | None, languages: list[str]) -> dict[str, Any]:
+    """What a receiver shows of the type of a description (path None), or of the field at path, the names of
+    the fields from the root to it joined by '.' (spec/conformance.md, section 5.16)."""
+    if path is None:
+        return shown_object(kind_of(f)[1], f["texts"], languages)
+    for part in path.split("."):
+        name, b = kind_of(f)
+        while name in ("axt.ListField", "axt.MapField"):  # a path goes through the items of a list or map
+            name, b = kind_of(b["items" if name == "axt.ListField" else "values"])
+        (f,) = [x for x in b["fields"] if x["name"] == part]
+    return shown_field(f, languages)
 
 
 # --- relations (spec/fields.md, section 11) -----------------------------------------------------
@@ -797,7 +858,7 @@ def register(f: dict[str, Any]) -> str:
 
 def source(text: str) -> str:
     """The derived text of a schema of a model, such as an example type: its description is the one that
-    describe_schema makes, which keeps the schema's attributes as the bricks hold them."""
+    describe_schema makes, which takes the members axt.* of the schema into the bricks."""
     return register(describe_schema(json.loads(text)))
 
 
@@ -832,7 +893,8 @@ def type_of(f: dict[str, Any]) -> tuple[str, int]:
     return b["name"], b["version"]
 
 
-# --- a schema with the attributes of spec/metadata.md as a description ----------------------------
+# --- a schema of a script as a description: the scripts write some types as schemas, with members axt.*
+# that name the members of the bricks; no derived schema carries them (section 9.2).
 
 
 class NotDescribable(ValueError):
@@ -921,7 +983,7 @@ def prefix(entry: dict[str, Any]) -> dict[str, Any]:
 
 
 def describe_field(x: dict[str, Any], names: dict[str, Any]) -> dict[str, Any]:
-    """A field of a schema with the attributes of spec/metadata.md as a typed field."""
+    """A field of a schema, with its members axt.*, as a typed field."""
     t, attrs = x["type"], {k: v for k, v in x.items() if k.startswith("axt.")}
     common = {v: attrs[k] for k, v in COMMON_ATTRIBUTES.items() if k in attrs}
     if isinstance(t, list):
@@ -1619,6 +1681,140 @@ FORMAT_VALUES = {
 }
 
 
+# Every semantic brick with values that have its format and values that do not (spec/metadata.md,
+# section 6.3).
+FORMAT_CASES: dict[str, tuple[list[str], list[str]]] = {
+    "axt.MarkdownField": (["# Title\n\n*text*"], []),
+    "axt.EmailField": (
+        ["anna@example.org", "a.b+c@sub.example.org", "jörg@bücher.example"],
+        [
+            "anna",
+            "anna@@example.org",
+            ".anna@example.org",
+            "anna@example.org.",
+            "anna smith@example.org",
+            "a" * 65 + "@example.org",
+        ],
+    ),
+    "axt.PhoneField": (["+49301234567", "+12"], ["+0301234567", "+1", "0049 30 1234567", "+49-30-1234567"]),
+    "axt.UrlField": (
+        ["http://example.org", "HTTPS://example.org/a?b#c", "https://[2001:db8::1]:8443/"],
+        [
+            "mailto:anna@example.org",
+            "https://",
+            "https://exa mple.org/",
+            "https://example.org/ä",
+            "//example.org/",
+        ],
+    ),
+    "axt.UriField": (
+        [
+            "tel:+49301234567",
+            "urn:isbn:9783161484100",
+            "mailto:anna@example.org",
+            "https://example.org/%C3%A4",
+        ],
+        ["example.org", "1http://example.org", "https://example.org/%zz", "https://[fe80::1%25eth0]/"],
+    ),
+    "axt.ColourField": (["#000000", "#FFFFFF", "#2e7D32"], ["#fff", "#2e7d32ff", "#gggggg"]),
+    "axt.IbanField": (
+        ["DE89370400440532013000", "GB82WEST12345698765432"],
+        ["DE89370400440532013001", "de89370400440532013000", "DE8937040044", "DE89 3704 0044 0532 0130 00"],
+    ),
+    "axt.BicField": (["COBADEFF", "COBADEFFXXX"], ["COBADEF", "cobadeff", "COBADEFFXX"]),
+    "axt.CountryField": (["DE", "AT"], ["DEU", "de", "D"]),
+    "axt.LanguageField": (
+        ["de", "de-AT", "zh-Hant-TW", "de-CH-1996"],
+        ["de_AT", "x-private", "i-klingon", "de-"],
+    ),
+    "axt.CurrencyField": (["EUR", "CHF"], ["eur", "EURO", "€"]),
+    "axt.MediaTypeField": (
+        ["application/pdf", "image/svg+xml", "text/vnd.a"],
+        ["application", "application/pdf; charset=utf-8", "/pdf"],
+    ),
+    "axt.UcumField": (["kg", "{glass}", "mm[Hg]", "10*3/uL"], ["k g", "°C"]),
+}
+
+# I-Regexp: valid patterns with values that match the whole value and values that do not (spec/metadata.md,
+# section 6.4).
+PATTERN_CASES: list[tuple[str, list[str], list[str]]] = [
+    ("[0-9]{5}", ["10115"], ["1011", "101150", "10115\n", " 10115"]),
+    ("^[0-9]+$", ["^12$"], ["12"]),
+    ("a.c", ["abc", "a c"], ["a\nc", "a\rc", "ac"]),
+    ("colou?r|grey", ["color", "colour", "grey"], ["colours", "greyish", "colorgrey"]),
+    ("\\p{Lu}\\p{Ll}+", ["Mimi", "Ärger"], ["mimi", "MIMI", "Mimi2"]),
+    ("[^0-9]*", ["", "Mimi"], ["Mimi2"]),
+    ("(ab){2,3}", ["abab", "ababab"], ["ab", "abababab"]),
+    ("[\\p{L} \\-]{1,20}", ["Anna-Lena Müller"], ["Anna_Lena", "A" * 21]),
+    ("\\P{N}+", ["Mimi"], ["Mimi1", "Ⅻ"]),
+    ("[a-c-]+", ["a-b", "-"], ["d"]),
+    ("\\.\\*\\{\\}", [".*{}"], ["x*{}"]),
+]
+# Patterns that are not an I-Regexp or exceed its limits: a description with one is not valid.
+BAD_PATTERNS: list[tuple[str, str]] = [
+    ("\\d{5}", "the escape \\d"),
+    ("\\w+", "the escape \\w"),
+    ("(?:ab)+", "a group with ?:"),
+    ("a*?", "a lazy quantifier"),
+    ("a{2,1}", "a range quantifier whose maximum is below its minimum"),
+    ("[z-a]", "a range whose end is below its start"),
+    ("[^]", "the class [^]"),
+    ("a{1001}", "a range quantifier above 1000"),
+    ("\\$", "an escaped $, which is a NormalChar"),
+    ("(a", "a group that does not end"),
+    ("\\p{IsBasicLatin}", "a Unicode block"),
+    ("[a-z-[aeiou]]", "class subtraction"),
+    ("x" * 1025, "a pattern above 1,024 bytes"),
+]
+
+
+def one_field(which: str, name: str = "value", **members: Any) -> dict[str, Any]:
+    """A type com.example.One with one field of the brick, which is not required."""
+    f = field(name, "A value.", {which: complete(which, members)}, texts())
+    return field(
+        "one", "One field.", brick("ObjectField", name="com.example.One", fields=[f], version=1), texts()
+    )
+
+
+def due_description() -> dict[str, Any]:
+    """A map of dates, for a field path into a map (spec/metadata.md, section 7.2)."""
+    due = field(
+        "due",
+        "When each thing is due.",
+        brick("MapField", values=field("due", "A day.", brick("DateField"), texts(), required=True)),
+        texts(),
+    )
+    return field(
+        "due",
+        "Dates by name.",
+        brick("ObjectField", name="com.example.Due", fields=[due], version=1),
+        texts(),
+    )
+
+
+def order_description() -> dict[str, Any]:
+    """Fields with and without an order and a group, for spec/metadata.md, sections 5.1 and 5.2."""
+
+    def f(name: str, **common: Any) -> dict[str, Any]:
+        return field(name, f"The field {name}.", brick("StringField"), texts(name.upper()), **common)
+
+    fields = [f("a"), f("b", order=2, group="g"), f("c", order=1), f("d", group="g"), f("e", order=-1)]
+    groups = [complete("axt.FieldGroup", {"key": "g", "texts": texts("Group", "Gruppe", "📁")})]
+    root = brick("ObjectField", name="com.example.Order", fields=fields, groups=groups, version=1)
+    return field("order", "Fields in an order.", root, texts("Order", "Reihenfolge"))
+
+
+ORDER = ["e", "c", "b", "d", "a"]  # by order, the lowest first, then the group g gathered where b stands
+
+
+DUE_VALUE: dict[str, Any] = {
+    "due": {
+        "tax": {"year": 2027, "month": 5, "day": 31},
+        'vet "check"': {"year": 2027, "month": 2, "day": 30},
+    }
+}
+
+
 def kinds_description() -> dict[str, Any]:
     """The bricks that the Vet does not use, each required, for the rule of section 3.3."""
 
@@ -1655,9 +1851,20 @@ KINDS_VALUE: dict[str, Any] = {
     "counts": {"cats": 3},
     "done": True,
     "big": 2**40,
-    "at": {"local": 0},
-    "takes": {"months": 0},
-    "opens": {"hour": 8},
+    "at": {
+        "year": 2026,
+        "month": 5,
+        "day": 1,
+        "hour": 9,
+        "minute": 0,
+        "second": 0,
+        "millisecond": 0,
+        "zone": None,
+        "offset_seconds": None,
+        "instant_ms": None,
+    },
+    "takes": {"months": 0, "days": 0, "millis": 1_800_000},
+    "opens": {"hour": 8, "minute": 0, "second": 0, "millisecond": 0},
 }
 KINDS_CASES: list[tuple[dict[str, Any], list[tuple[str, str]]]] = [
     ({}, []),
@@ -1752,13 +1959,22 @@ def links_description() -> dict[str, Any]:
     )
 
 
-# The rules of section 11.4 for the walk of metadata_rules.breaches, as time_examples.py gives it this module.
+def uri_check(record: str, name: str, v: Any) -> tuple[str, str] | None:
+    """The check format of the URI of an outside target (section 11.3), for a receiver that checks."""
+    if record == "axt.RelationOutsideTarget" and name == "uri" and v != "" and not mr.FORMATS["uri"](v):
+        return "format", "not a URI"
+    return None
+
+
+# The rules of section 11.4 for the walk of metadata_rules.breaches, as time_examples.py gives it this module,
+# and, for the check of a value (section 7), the format of the URI of an outside target.
 RELATION_RULES = types.SimpleNamespace(
     RELATION=RELATION,
     LISTS=LISTS,
     relation_problem=relation_problem,
     list_problem=list_problem,
     repeated_ids=repeated_ids,
+    value_check=uri_check,
 )
 
 
@@ -1780,6 +1996,9 @@ def vector_descriptions() -> tuple[list[tuple[str, dict[str, Any]]], list[tuple[
         )
     )
     invalid = [(what, mutate(path, new), where) for what, path, new, where in DESCRIPTION_CASES]
+    for n, (pattern, why) in enumerate(BAD_PATTERNS, 1):
+        d = one_field("axt.StringField", "code", pattern=pattern)
+        invalid.append((f"pattern {n} that is not an I-Regexp, {why}", d, "kind.fields[0].kind.pattern"))
     deep = field("v", "Lists in lists.", brick("LongField"), texts())
     for _ in range(MAX_TYPED_DEPTH - 1):
         deep = field("v", "Lists in lists.", brick("ListField", items=deep), texts())
@@ -1835,6 +2054,36 @@ def main() -> None:
     assert breaches(formats, good) == []
     bad = {name: v[1] for name, v in FORMAT_VALUES.items()}
     assert breaches(formats, bad) == [(name, "format") for name in FORMAT_VALUES]
+
+    for which, (good_values, bad_values) in FORMAT_CASES.items():
+        one = one_field(which)
+        assert description_problems(one) == [], which
+        assert all(breaches(one, {"value": v}) == [] for v in good_values), which
+        assert all(breaches(one, {"value": v}) == [("value", "format")] for v in bad_values), which
+    for pattern, good_values, bad_values in PATTERN_CASES:
+        one = one_field("axt.StringField", "code", pattern=pattern)
+        assert description_problems(one) == [], pattern
+        assert all(breaches(one, {"code": v}) == [] for v in good_values), pattern
+        assert all(breaches(one, {"code": v}) == [("code", "pattern")] for v in bad_values), pattern
+    for pattern, why in BAD_PATTERNS:
+        problems = description_problems(one_field("axt.StringField", "code", pattern=pattern))
+        assert [w for w, _ in problems] == ["kind.fields[0].kind.pattern"], why
+    print(
+        f"{sum(len(g) + len(b) for g, b in FORMAT_CASES.values())} values of {len(FORMAT_CASES)} formats, "
+        f"{sum(len(g) + len(b) for _, g, b in PATTERN_CASES)} values of {len(PATTERN_CASES)} patterns and "
+        f"{len(BAD_PATTERNS)} patterns that are not an I-Regexp checked"
+    )
+    for languages in (["en"], ["de-AT", "en"], ["fr-CH", "fr"]):
+        shown = describe(description, None, languages)
+        assert shown["fields"] == [
+            x["name"] for x in kind_of(description)[1]["fields"]
+        ]  # contact is together
+        print(f"  com.example.Vet for {', '.join(languages)}: {shown['emoji']} {shown['label']}")
+    order = order_description()
+    assert description_problems(order) == [] and describe(order, None, ["de"])["fields"] == ORDER
+    assert describe(description, "kind", ["de"])["symbols"]["EMERGENCY"]["label"] == "Notdienst"
+    assert describe(description, "address", ["de"])["record"]["fields"][0] == "country"
+    assert describe(description, "tags", ["de"])["items"]["label"] == "Schlagwort"
 
     kinds = kinds_description()
     assert description_problems(kinds) == []
@@ -1904,11 +2153,11 @@ def main() -> None:
         "history": [[relation, relation]],
         "place": None,
     }
-    assert mr.breaches(derived, value, None, False, RELATION_RULES) == [
+    assert mr.breaches(derived, value, None, RELATION_RULES) == [
         ("history[0][1].id", RELATION, "an id of an earlier relation")
     ]
     value = dict(value, history=[], sources=[relation] * 257, links=[dict(relation, kind="related")])
-    assert [p for p, _, _ in mr.breaches(derived, value, None, False, RELATION_RULES)] == [
+    assert [p for p, _, _ in mr.breaches(derived, value, None, RELATION_RULES)] == [
         "links[0].kind",
         "sources",
         *[f"sources[{i}].id" for i in range(1, 257)],

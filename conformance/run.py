@@ -36,7 +36,6 @@ CATEGORIES = [
     "encoding",
     "types",
     "time",
-    "metadata",
     "records",
     "manifest",
     "keys",

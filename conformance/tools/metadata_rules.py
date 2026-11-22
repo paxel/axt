@@ -1,22 +1,20 @@
 # SPDX-License-Identifier: Apache-2.0 OR MIT
-"""The rules of spec/metadata.md: the axt.* attributes of a schema, the formats, I-Regexp and the checks.
+"""The rules of spec/metadata.md that the bricks of spec/fields.md use: texts, formats, I-Regexp and
+field paths, and the walk of a writer schema for the rules that every receiver checks.
 
 This module imports none of the other scripts, so that each of them can import it. It provides:
 
+- one_line, translations_ok, emoji_ok and lookup: the texts of spec/metadata.md, sections 4.1 to 4.3,
+  and the Lookup of RFC 4647 by which a receiver chooses a language;
 - iregexp(pattern): the pattern of RFC 9485 translated to Python's re, or IRegexpError for a
   pattern that is not an I-Regexp within the limits of spec/metadata.md, section 6.4;
 - FORMATS: for each format of spec/metadata.md, section 6.3, a function that says whether a
   non-empty string has the format;
-- schema_problems(schema): every attribute that breaks a rule of sections 2 to 6, for a sender's
-  schema, which MUST have none (spec/types.md, section 5.9); unknown axt.* names included;
-- describe(schema, path, languages): what a receiver shows of the type or of one field, with every
-  attribute that breaks its rules ignored (section 3.3) and texts chosen by the Lookup of RFC 4647;
-- breaches(schema, value, time_check): the values that break a check, as (path, attribute, why), in
-  the order of the encoding, with the field paths of section 7.2. time_check, if given, is asked
-  about every record of a time type first, so that one walk finds the time values that are not
-  valid (spec/time.md, section 8) and the values that break a check; with relations, the rules of
-  the relations of spec/fields.md, section 11.4, which fields_examples.py holds, are found in the
-  same walk.
+- path_join and error_field: the field paths of spec/metadata.md, section 7.2;
+- breaches(schema, value, time_check, relations): the values of a writer schema's value that break a
+  rule every receiver checks, as (path, rule, why), in the order of the encoding: the time values
+  that are not valid (spec/time.md, section 8), and, with relations, the relations and extensions
+  that break a rule of spec/fields.md, sections 11.4 and 12.3, which fields_examples.py holds.
 
 A value is either as fastavro decodes it or in the JSON form of spec/conformance.md, section 3.3,
 in which bytes are hexadecimal strings. Unions of null and one other type are followed, and the
@@ -26,12 +24,11 @@ the only unions the example types and the vectors use.
 
 import functools
 import json
-import math
 import re
 import unicodedata
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
-from typing import Any, TypeGuard, cast
+from typing import Any
 
 # --- limits (spec/metadata.md) ------------------------------------------------------------------
 
@@ -53,11 +50,8 @@ MAX_QUANTIFIER = LIMITS[
 MAX_TRANSLATIONS = LIMITS["metadata.translations"]
 MAX_TAG = LIMITS["manifest.language_tag"]
 MAX_EMOJI_CODE_POINTS = LIMITS["metadata.emoji"]
-MAX_GROUP_KEY = LIMITS["metadata.group_key"]  # bytes
 MAX_PATH = LIMITS["protocol.error_field"]  # bytes of a field path in an ERROR (spec/protocol.md, section 8.1)
-MIN_INT, MAX_INT = -(2**31), 2**31 - 1
 
-NUMBERS = {"int", "long", "float", "double"}
 PRIMITIVES = {"null", "boolean", "int", "long", "float", "double", "bytes", "string"}
 TIME_TYPES = {"axt.Date", "axt.Time", "axt.DateTime", "axt.Duration"}
 AVRO_NAME = r"[A-Za-z_][A-Za-z0-9_]*"
@@ -75,40 +69,6 @@ LANGTAG = re.compile(
     r"(?:-x(?:-[a-z0-9]{1,8})+)?$",
     re.IGNORECASE,
 )
-
-# Where each attribute may sit (spec/metadata.md, section 2): on the type's record ("type"), on a
-# nested record ("record"), on a field, on an enum.
-TEXTS = ("axt.label", "axt.label_translations", "axt.help", "axt.help_translations", "axt.emoji")
-ON_RECORD = set(TEXTS) | {"axt.groups"}
-ON_TYPE = ON_RECORD | {"axt.version", "axt.title"}
-ON_FIELD = set(TEXTS) | {
-    "axt.format",
-    "axt.pattern",
-    "axt.min_length",
-    "axt.max_length",
-    "axt.preferred_length",
-    "axt.min",
-    "axt.max",
-    "axt.unit",
-    "axt.anchor",
-    "axt.example",
-    "axt.placeholder",
-    "axt.multiline",
-    "axt.sensitive",
-    "axt.order",
-    "axt.group",
-    "axt.advanced",
-}
-ON_ENUM = {"axt.symbols"}
-KNOWN = ON_TYPE | ON_FIELD | ON_ENUM
-CHECKS = ("axt.format", "axt.pattern", "axt.min_length", "axt.max_length", "axt.min", "axt.max")
-ENTRY_MEMBERS = {
-    "label",
-    "label_translations",
-    "help",
-    "help_translations",
-    "emoji",
-}  # an entry of axt.symbols, axt.groups
 
 # --- text (spec/metadata.md, section 4) -----------------------------------------------------------
 
@@ -625,416 +585,6 @@ def branch(names: Names, t: list[Any], v: Any, namespace: str) -> Any:
     raise ValueError("a value of no branch of the union")
 
 
-def value_type(names: Names, t: Any, namespace: str) -> tuple[Any, str, str]:
-    """The value type of a field (spec/metadata.md, section 3.2): the type without ["null", T], and of an
-    array the item type, again without ["null", T]. Returns (node, kind, namespace)."""
-    node, namespace = names.resolve(strip(optional(strip(t))), namespace)
-    if kind_of(node) == "array":
-        node, namespace = names.resolve(strip(optional(strip(node["items"]))), namespace)
-    return node, kind_of(node), namespace
-
-
-# --- the rules of each attribute ------------------------------------------------------------------
-
-
-def is_int(v: Any) -> TypeGuard[int]:
-    return isinstance(v, int) and not isinstance(v, bool)
-
-
-def is_number(v: Any) -> TypeGuard[float]:
-    return (isinstance(v, (int, float)) and not isinstance(v, bool)) and not (
-        isinstance(v, float) and not math.isfinite(v)
-    )
-
-
-def entry_problems(entry: Any) -> list[str]:
-    """The members of an entry of axt.symbols or axt.groups that break their rules."""
-    if not isinstance(entry, dict):
-        return ["not an object"]
-    out = [f"unknown member {k}" for k in sorted(entry) if k not in ENTRY_MEMBERS]
-    for name in sorted(set(entry) & ENTRY_MEMBERS):
-        p = text_problem(name, entry[name], entry)
-        if p:
-            out.append(f"{name}: {p}")
-    return out
-
-
-def text_problem(name: str, value: Any, holder: dict[str, Any]) -> str | None:
-    bare = name.removeprefix("axt.")
-    if bare == "label":
-        return None if one_line(value, MAX_LABEL) else f"not one line of 1 to {MAX_LABEL} bytes"
-    if bare == "help":
-        return None if one_line(value, MAX_HELP) else f"not one line of 1 to {MAX_HELP} bytes"
-    if bare in ("label_translations", "help_translations"):
-        base = name.replace("_translations", "")
-        if base not in holder or text_problem(base, holder[base], holder):
-            return f"without a valid {base}"
-        return (
-            None
-            if translations_ok(value, MAX_LABEL if bare == "label_translations" else MAX_HELP)
-            else (
-                "not a map of up to 64 language tags of RFC 5646, other than en and each once, "
-                "to one line of text"
-            )
-        )
-    if bare == "emoji":
-        return (
-            None
-            if emoji_ok(value)
-            else "not an emoji: 1 to 10 code points, no control character or space, ASCII only in a keycap"
-        )
-    raise ValueError(name)
-
-
-def field_attribute_problem(
-    name: str, value: Any, field: dict[str, Any], vt: Any, kind: str, vt_full: str | None
-) -> str | None:
-    """Why the attribute name of the field breaks its rules, or None (spec/metadata.md, sections 4 to 6)."""
-    if name in TEXTS:
-        return text_problem(name, value, field)
-    string, numeric = kind == "string", kind in NUMBERS
-    if name == "axt.format":
-        if not string:
-            return "on a field whose value type is not string"
-        return None if isinstance(value, str) and value != "" else "not a non-empty string"
-    if name == "axt.pattern":
-        if not string:
-            return "on a field whose value type is not string"
-        return iregexp_problem(value)
-    if name in ("axt.min_length", "axt.max_length"):
-        if kind not in ("string", "bytes"):
-            return "on a field whose value type is neither string nor bytes"
-        if not is_int(value) or value < 0:
-            return "not an integer of at least 0"
-        lo, hi = field.get("axt.min_length"), field.get("axt.max_length")
-        if is_int(lo) and is_int(hi) and lo >= 0 and hi >= 0 and lo > hi:
-            return "axt.min_length above axt.max_length"
-        return None
-    if name == "axt.preferred_length":
-        if not string:
-            return "on a field whose value type is not string"
-        if not is_int(value) or value < 1:
-            return "not an integer of at least 1"
-        hi = field.get("axt.max_length")
-        if (
-            field_attribute_problem("axt.max_length", hi, field, vt, kind, vt_full) is None
-            and "axt.max_length" in field
-            and value > cast(int, hi)  # an integer: axt.max_length is there and keeps its rules
-        ):
-            return "above axt.max_length"
-        return None
-    if name in ("axt.min", "axt.max"):
-        if not numeric:
-            return "on a field whose value type is not a number"
-        if not is_number(value):
-            return "not a finite number"
-        lo, hi = field.get("axt.min"), field.get("axt.max")
-        if is_number(lo) and is_number(hi) and lo > hi:
-            return "axt.min above axt.max"
-        return None
-    if name == "axt.unit":
-        if not numeric:
-            return "on a field whose value type is not a number"
-        return None if isinstance(value, str) and FORMATS["ucum"](value) else "not a UCUM code"
-    if name == "axt.anchor":
-        if vt_full != "axt.DateTime":
-            return "on a field that holds no axt.DateTime"
-        return None if value in ("local", "instant") else "neither local nor instant"
-    if name == "axt.example":
-        return (
-            None
-            if isinstance(value, str)
-            and value != ""
-            and len(value.encode("utf-8")) <= MAX_EXAMPLE
-            and not any(control(c) and c != "\n" for c in value)
-            else f"not a text of 1 to {MAX_EXAMPLE} bytes"
-        )
-    if name == "axt.placeholder":
-        return None if one_line(value, MAX_PLACEHOLDER) else f"not one line of 1 to {MAX_PLACEHOLDER} bytes"
-    if name == "axt.multiline":
-        if not string:
-            return "on a field whose value type is not string"
-        return None if isinstance(value, bool) else "not a boolean"
-    if name in ("axt.sensitive", "axt.advanced"):
-        return None if isinstance(value, bool) else "not a boolean"
-    if name == "axt.order":
-        return None if is_int(value) and MIN_INT <= value <= MAX_INT else "not an integer of 32 bits"
-    if name == "axt.group":
-        return (
-            None
-            if isinstance(value, str) and KEY.match(value) and len(value) <= MAX_GROUP_KEY
-            else "not a key of the form of a field name"
-        )
-    raise ValueError(name)
-
-
-def used(field: dict[str, Any], name: str, names: Names | None = None, namespace: str = "") -> bool:
-    """Whether a receiver uses the attribute of the field (spec/metadata.md, section 3.3)."""
-    if name not in field:
-        return False
-    # Every caller passes the names; without them value_type fails, as it did before the annotations.
-    vt, kind, ns = value_type(cast(Names, names), field["type"], namespace)
-    vt_full = full_name(vt, ns)[0] if isinstance(vt, dict) and "name" in vt else None
-    return field_attribute_problem(name, field[name], field, vt, kind, vt_full) is None
-
-
-def record_attribute_problem(
-    name: str, value: Any, record: dict[str, Any], top: bool, members: bool = True
-) -> str | None:
-    """Why the attribute of a record breaks its rules, or None. With members False, only what makes a
-    receiver ignore the whole attribute: a member of an entry of axt.groups that breaks its rules is ignored
-    on its own."""
-    if name in TEXTS:
-        return text_problem(name, value, record)
-    if name == "axt.groups":
-        if not isinstance(value, dict):
-            return "not an object"
-        for key, entry in value.items():
-            if not KEY.match(key) or len(key.encode("utf-8")) > MAX_GROUP_KEY:
-                return f"the key {key!r} is not of the form of a field name"
-            if not isinstance(entry, dict):
-                return f"{key}: not an object"
-            p = entry_problems(entry) if members else []
-            if p:
-                return f"{key}: {p[0]}"
-        return None
-    if name == "axt.version":
-        return (
-            None
-            if top and is_int(value) and value >= 1
-            else "not an integer of at least 1 on the type's record"
-        )
-    if name == "axt.title":
-        if not top:
-            return "on a nested record"
-        target = [f for f in record["fields"] if f["name"] == value]
-        return (
-            None
-            if target and strip(target[0]["type"]) in ("string", ["null", "string"])
-            else "does not name a string field"
-        )
-    raise ValueError(name)
-
-
-def symbols_problem(value: Any, enum: dict[str, Any], members: bool = True) -> str | None:
-    """Why axt.symbols breaks its rules, or None; members as for record_attribute_problem."""
-    if not isinstance(value, dict):
-        return "not an object"
-    for symbol, entry in value.items():
-        if symbol not in enum["symbols"]:
-            return f"{symbol} is not a symbol of the enum"
-        if not isinstance(entry, dict):
-            return f"{symbol}: not an object"
-        p = entry_problems(entry) if members else []
-        if p:
-            return f"{symbol}: {p[0]}"
-    return None
-
-
-def schema_problems(schema: Any) -> list[tuple[str, str]]:
-    """Every axt.* attribute of the schema that breaks a rule of spec/metadata.md, as (where, why)."""
-    names = Names(schema)
-    out: list[tuple[str, str]] = []
-
-    def attrs(node: Any) -> list[str]:
-        return sorted(k for k in node if isinstance(k, str) and k.startswith("axt."))
-
-    def walk(t: Any, where: str, namespace: str, top: bool = False) -> None:
-        if isinstance(t, list):
-            for b in t:
-                walk(b, where, namespace)
-            return
-        if not isinstance(t, dict):
-            return  # a primitive or a reference by name, defined where it first occurs
-        kind = t.get("type")
-        if isinstance(kind, (dict, list)):
-            walk(kind, where, namespace)
-            kind = None
-        if kind in ("record", "enum", "fixed"):
-            namespace = full_name(t, namespace)[1]
-        allowed = (
-            ON_TYPE
-            if (kind == "record" and top)
-            else ON_RECORD
-            if kind == "record"
-            else ON_ENUM
-            if kind == "enum"
-            else set()
-        )
-        for a in attrs(t):
-            if a not in KNOWN:
-                out.append((where, f"{a} is not an attribute of this specification"))
-            elif a not in allowed:
-                out.append(
-                    (where, f"{a} does not belong on a {kind if kind in ('record', 'enum') else 'type'}")
-                )
-            elif kind == "record":
-                p = record_attribute_problem(a, t[a], t, top)
-                if p:
-                    out.append((where, f"{a}: {p}"))
-            else:
-                p = symbols_problem(t[a], t)
-                if p:
-                    out.append((where, f"{a}: {p}"))
-        if kind == "record":
-            groups = t.get("axt.groups")
-            for key in groups if isinstance(groups, dict) else {}:
-                if not any(f.get("axt.group") == key for f in t["fields"]):
-                    out.append((where, f"axt.groups names {key}, which no field uses"))
-            for f in t["fields"]:
-                here = f"{where}.{f['name']}" if where else f["name"]
-                vt, vkind, vns = value_type(names, f["type"], namespace)
-                vt_full = full_name(vt, vns)[0] if isinstance(vt, dict) and "name" in vt else None
-                for a in attrs(f):
-                    if a not in KNOWN:
-                        out.append((here, f"{a} is not an attribute of this specification"))
-                    elif a not in ON_FIELD:
-                        out.append((here, f"{a} does not belong on a field"))
-                    else:
-                        p = field_attribute_problem(a, f[a], f, vt, vkind, vt_full)
-                        if p:
-                            out.append((here, f"{a}: {p}"))
-                if vkind == "string" and used(f, "axt.example", names, namespace):
-                    why = string_breach(f, f["axt.example"])
-                    if why:
-                        out.append((here, f"axt.example breaks {why}"))
-                if "axt.format" in f and isinstance(f["axt.format"], str) and f["axt.format"] not in FORMATS:
-                    out.append(
-                        (here, f"axt.format {f['axt.format']!r} is not a format of this specification")
-                    )
-                walk(f["type"], here, namespace)
-        elif kind == "array":
-            walk(t["items"], where, namespace)
-        elif kind == "map":
-            walk(t["values"], where, namespace)
-
-    walk(schema, "", "", top=True)
-    return out
-
-
-# --- describe (spec/metadata.md, sections 4 and 5; spec/conformance.md, section 5.13) --------------
-
-
-def texts_of(
-    holder: dict[str, Any], languages: Iterable[str], problem: Callable[[str], str | None]
-) -> dict[str, Any]:
-    """label, help and emoji of a record or field, with the attributes that break their rules ignored."""
-    out: dict[str, Any] = {}
-    for base in ("axt.label", "axt.help"):
-        if base not in holder or problem(base):
-            out[base[4:]] = None
-            continue
-        tkey = base + "_translations"
-        tr = holder[tkey] if tkey in holder and not problem(tkey) else None
-        out[base[4:]] = lookup(holder[base], tr, languages)
-    out["emoji"] = holder["axt.emoji"] if "axt.emoji" in holder and not problem("axt.emoji") else None
-    return out
-
-
-def entry_texts(entry: Any, languages: Iterable[str]) -> dict[str, Any]:
-    if not isinstance(entry, dict):
-        return {"label": None, "help": None, "emoji": None}
-    out: dict[str, Any] = {}
-    for base in ("label", "help"):
-        ok = base in entry and text_problem(base, entry[base], entry) is None
-        tr = (
-            entry.get(base + "_translations")
-            if ok
-            and base + "_translations" in entry
-            and text_problem(base + "_translations", entry[base + "_translations"], entry) is None
-            else None
-        )
-        out[base] = lookup(entry[base], tr, languages) if ok else None
-    out["emoji"] = entry["emoji"] if "emoji" in entry and emoji_ok(entry["emoji"]) else None
-    return out
-
-
-def display_order(names: Names, record: dict[str, Any], namespace: str) -> tuple[list[str], list[Any]]:
-    """The fields of a record in the order of spec/metadata.md, section 5.1, with each group gathered."""
-    fields = record["fields"]
-
-    def order(i: int) -> Any:
-        return fields[i]["axt.order"] if used(fields[i], "axt.order", names, namespace) else None
-
-    ranked = sorted(range(len(fields)), key=lambda i: (order(i) is None, order(i) or 0, i))
-
-    def group(i: int) -> Any:
-        return fields[i]["axt.group"] if used(fields[i], "axt.group", names, namespace) else None
-
-    out: list[str] = []
-    placed: set[int] = set()
-    for i in ranked:
-        if i in placed:
-            continue
-        g = group(i)
-        members = [j for j in ranked if g is not None and group(j) == g] or [i]
-        for j in members:
-            out.append(fields[j]["name"])
-            placed.add(j)
-    return out, [group(i) for i in ranked]
-
-
-def describe_record(
-    names: Names, record: dict[str, Any], namespace: str, languages: Iterable[str], top: bool
-) -> dict[str, Any]:
-    def problem(a: str) -> str | None:
-        return record_attribute_problem(a, record[a], record, top)
-
-    out = texts_of(record, languages, problem)
-    order, groups_used = display_order(names, record, namespace)
-    out["fields"] = order
-    groups = (
-        record["axt.groups"]
-        if "axt.groups" in record
-        and not record_attribute_problem("axt.groups", record["axt.groups"], record, top, members=False)
-        else {}
-    )
-    out["groups"] = {g: entry_texts(groups.get(g), languages) for g in groups_used if g is not None}
-    return out
-
-
-def describe(schema: dict[str, Any], path: str | None, languages: Iterable[str]) -> dict[str, Any]:
-    """What a receiver shows of the type (path None) or of the field at path (names joined by .)."""
-    names = Names(schema)
-    record, namespace = schema, full_name(schema, "")[1]
-    if path is None:
-        return describe_record(names, record, namespace, languages, True)
-    parts = path.split(".")
-    for n, part in enumerate(parts):
-        (field,) = [f for f in record["fields"] if f["name"] == part]
-        vt, kind, vns = value_type(names, field["type"], namespace)
-        if n < len(parts) - 1:
-            record, namespace = vt, vns
-    vt_full = full_name(vt, vns)[0] if isinstance(vt, dict) and "name" in vt else None
-
-    def problem(a: str) -> str | None:
-        return field_attribute_problem(a, field[a], field, vt, kind, vt_full)
-
-    def use(a: str) -> bool:
-        return a in field and problem(a) is None
-
-    out = texts_of(field, languages, problem)
-    fmt = field["axt.format"] if use("axt.format") else None
-    out["format"] = (fmt if fmt in FORMATS else "plain") if kind == "string" else None
-    out["placeholder"] = field["axt.placeholder"] if use("axt.placeholder") else None
-    out["example"] = field["axt.example"] if use("axt.example") else None
-    for flag in ("multiline", "sensitive", "advanced"):
-        out[flag] = field["axt." + flag] if use("axt." + flag) else False
-    out["group"] = field["axt.group"] if use("axt.group") else None
-    out["preferred_length"] = field["axt.preferred_length"] if use("axt.preferred_length") else None
-    out["unit"] = field["axt.unit"] if use("axt.unit") else None
-    out["symbols"] = None
-    if kind == "enum":
-        sym = (
-            vt["axt.symbols"]
-            if "axt.symbols" in vt and symbols_problem(vt["axt.symbols"], vt, members=False) is None
-            else {}
-        )
-        out["symbols"] = {s: entry_texts(sym.get(s), languages) for s in vt["symbols"]}
-    out["record"] = describe_record(names, vt, vns, languages, False) if kind == "record" else None
-    return out
-
-
 # --- the checks (spec/metadata.md, section 6) and field paths (section 7.2) ---------------------
 
 
@@ -1052,69 +602,29 @@ def length_of(value: Any, kind: str) -> int:
     return len(value)  # code points
 
 
-def string_breach(
-    field: dict[str, Any], value: Any, names: Names | None = None, namespace: str = ""
-) -> str | None:
-    """The check of a string field that the value breaks, or None."""
-    if not isinstance(value, str):
-        return None  # a logical type that a library decoded to another kind of value, such as a UUID
-
-    def use(a: str) -> bool:
-        return used(field, a, names or Names({"type": "record", "name": "X", "fields": [field]}), namespace)
-
-    if value != "":
-        if use("axt.format") and field["axt.format"] in FORMATS and not FORMATS[field["axt.format"]](value):
-            return "axt.format"
-        if use("axt.pattern") and not iregexp(field["axt.pattern"]).fullmatch(value):
-            return "axt.pattern"
-    return length_breach(field, value, "string", use)
-
-
-def length_breach(field: dict[str, Any], value: Any, kind: str, use: Callable[[str], bool]) -> str | None:
-    if not isinstance(value, (str, bytes, bytearray)):
-        return None
-    n = length_of(value, kind)
-    if use("axt.min_length") and n < field["axt.min_length"]:
-        return "axt.min_length"
-    if use("axt.max_length") and n > field["axt.max_length"]:
-        return "axt.max_length"
-    return None
-
-
-def number_breach(field: dict[str, Any], value: Any, use: Callable[[str], bool]) -> str | None:
-    if not isinstance(value, (int, float)) or isinstance(value, bool):
-        return None  # a logical type that a library decoded to another kind of value
-    nan = isinstance(value, float) and math.isnan(value)
-    if use("axt.min") and (nan or value < field["axt.min"]):
-        return "axt.min"
-    if use("axt.max") and (nan or value > field["axt.max"]):
-        return "axt.max"
-    return None
-
-
 def breaches(
     schema: Any,
     value: Any,
     time_check: Callable[[str, Any], str | None] | None = None,
-    attributes: bool = True,
     relations: Any = None,
 ) -> list[tuple[str, str, str]]:
-    """The values that break a rule, in the order of the encoding, as (path, rule, why).
+    """The values that break a rule that every receiver checks, in the order of the encoding, as (path,
+    rule, why), by a walk of the writer schema.
 
-    The rule is the full name of a time type, for a time value that time_check finds not valid; axt.Relation,
-    for a relation that breaks a rule of spec/fields.md, section 11.4, which relations, if given, holds: an
-    object with RELATION, relation_problem(record, field, value), list_problem(relations) and
-    repeated_ids(relations), as fields_examples.py has them; or the attribute of a check that the value
-    breaks."""
+    The rule is the full name of a time type, for a time value that time_check finds not valid; axt.Relation
+    or axt.Extension, for a relation or an extension that breaks a rule of spec/fields.md, section 11.4 or
+    12.3, which relations, if given, holds: an object with RELATION, relation_problem(record, field, value),
+    list_problem(relations) and repeated_ids(relations), as fields_examples.py has them, and optionally
+    value_check(record, field, value), a check that a value of a published record breaks, as (check, why)."""
     names = Names(schema)
     out: list[tuple[str, str, str]] = []
+    value_check = getattr(relations, "value_check", None)
 
-    def visit(t: Any, v: Any, path: str, namespace: str, field: tuple[Any, str] | None = None) -> None:
-        """field is (the field whose value v is or holds, the namespace of the record that has it)."""
+    def visit(t: Any, v: Any, path: str, namespace: str) -> None:
         t = strip(t)
         if isinstance(t, list):
             if v is not None:
-                visit(branch(names, t, v, namespace), v, path, namespace, field)
+                visit(branch(names, t, v, namespace), v, path, namespace)
             return
         node, namespace = names.resolve(t, namespace)
         node = strip(node)
@@ -1131,7 +641,10 @@ def breaches(
                 why = relations.relation_problem(full, f["name"], v[f["name"]]) if relations else None
                 if why:
                     out.append((here, full if full == "axt.Extension" else relations.RELATION, why))
-                visit(f["type"], v[f["name"]], here, inner, (f, inner))
+                broken = value_check(full, f["name"], v[f["name"]]) if value_check else None
+                if broken:
+                    out.append((here, *broken))
+                visit(f["type"], v[f["name"]], here, inner)
             return
         if kind == "array":
             items = names.resolve(strip(node["items"]), namespace)[0]
@@ -1158,30 +671,11 @@ def breaches(
                             else "a name of an earlier extension",
                         )
                     )
-                visit(node["items"], item, path_join(path, i), namespace, field)
+                visit(node["items"], item, path_join(path, i), namespace)
             return
         if kind == "map":
             for key, item in v.items():
-                visit(node["values"], item, path_join(path, (key,)), namespace, None)
-            return
-        if field is None or not attributes:
-            return
-        f, fns = field
-
-        def use(a: str) -> bool:
-            return used(f, a, names, fns)
-
-        rule = (
-            string_breach(f, v, names, fns)
-            if kind == "string"
-            else length_breach(f, v, "bytes", use)
-            if kind == "bytes"
-            else number_breach(f, v, use)
-            if kind in NUMBERS
-            else None
-        )
-        if rule:
-            out.append((path, rule, f"breaks {rule} {json.dumps(f[rule], ensure_ascii=False)}"))
+                visit(node["values"], item, path_join(path, (key,)), namespace)
 
     visit(schema, value, "", "")
     return out
@@ -1222,8 +716,13 @@ for bad in (
     "\\w",
     "a{,3}",
     "\\$",
+    "a{2",
+    "\\pL",
+    "\\q",
+    "[a",
 ):
     assert iregexp_problem(bad), bad
+assert iregexp_problem(5) == "not a string"
 for good in (
     "",
     "a{0,1000}",
@@ -1238,3 +737,18 @@ for good in (
     "[$^]",
 ):
     assert iregexp_problem(good) is None, good
+
+# --- self-test of the texts (spec/metadata.md, sections 4.2 and 4.3) --------------------------------
+
+assert translations_ok({"de": "Name", "pt-BR": "Nome"}, MAX_LABEL)
+assert not translations_ok({f"de-{i:03d}": "Name" for i in range(MAX_TRANSLATIONS + 1)}, MAX_LABEL)
+assert not translations_ok({"de": "Name", "DE": "Name"}, MAX_LABEL)  # two keys equal without regard to case
+assert not translations_ok({"de": ""}, MAX_LABEL)
+assert (
+    emoji_ok("📞") and emoji_ok("1\u20e3") and emoji_ok("#\ufe0f\u20e3")
+)  # keycaps, with and without U+FE0F
+assert not emoji_ok("a") and not emoji_ok("1") and not emoji_ok("📞 📞")
+assert (
+    lookup("Tag", {"de": "Schlagwort"}, ["de-x-private"]) == "Schlagwort"
+)  # a singleton is dropped with its subtag
+assert lookup("Tag", {"de": "Schlagwort"}, ["fr-CH", "fr"]) == "Tag"

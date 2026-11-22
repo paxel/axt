@@ -201,10 +201,10 @@ The record type `com.example.Memo` is an illustration only, not an example type.
 
 ### 10.1 Schemas and fingerprints
 
-`com.example.Memo`, as offered. Its field `written` defines the time type `axt.DateTime` in place ([time.md](time.md), section 3.1); the `…` stand for the `doc` and the fields of the published schema [types/axt/DateTime.avsc](../types/axt/DateTime.avsc), which the schema carries in full:
+`com.example.Memo`, the schema derived from its description, which gives the field `written` the anchor `INSTANT` ([time.md](time.md), section 6.4), with its members in the order of the Avro specification rather than in that of the text of [fields.md](fields.md), section 9.3. Its field `written` defines the time type `axt.DateTime` in place ([time.md](time.md), section 3.1); the `…` stand for the `doc` and the fields of the published schema [types/axt/DateTime.avsc](../types/axt/DateTime.avsc), which the schema carries in full:
 
 ```json
-{"type":"record","name":"Memo","namespace":"com.example","doc":"An illustration for spec/envelope.md; not an AXT example type.","fields":[{"name":"text","type":"string","doc":"The memo's text."},{"name":"written","type":{"type":"record","name":"DateTime","namespace":"axt","doc":"…","fields":[…]},"doc":"When the memo was written.","axt.anchor":"instant"}]}
+{"type":"record","name":"Memo","namespace":"com.example","doc":"An illustration for spec/envelope.md; not an AXT example type.","axt.version":1,"fields":[{"name":"text","type":"string","doc":"The memo's text."},{"name":"written","type":{"type":"record","name":"DateTime","namespace":"axt","doc":"…","fields":[…]},"doc":"When the memo was written."}]}
 ```
 
 Its Parsing Canonical Form:

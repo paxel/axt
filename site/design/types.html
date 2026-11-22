@@ -77,7 +77,7 @@
   <li><strong>Times.</strong> Dates, times of day, dates and times, and lengths of time are the time types <code>axt.Date</code>, <code>axt.Time</code>, <code>axt.DateTime</code> and <code>axt.Duration</code>, not Avro's logical types (<a href="../spec/types.html#section-5-5">5.5</a>; <a href="../spec/time.html#section-3-2">time, section 3.2</a>). The zone belongs into the <code>axt.DateTime</code>, not into a field of its own (<a href="../spec/types.html#section-5-6">5.6</a>).</li>
   <li><strong>No id or version fields.</strong> The envelope carries the id and the version of every record (<a href="../spec/types.html#section-5-8">5.8</a>).</li>
   <li><strong>Depth.</strong> A type of your own may be recursive, but no record may nest deeper than 32 levels of records, arrays and maps (<a href="../spec/types.html#section-5-7">5.7</a>).</li>
-  <li><strong>Labels and checks.</strong> Labels, help texts, emoji, formats and limits are the attributes of <a href="metadata.html">Describe the fields</a>.</li>
+  <li><strong>Labels and checks.</strong> Labels, help texts, emoji, formats and limits are in the type's description: <a href="metadata.html">Describe the fields</a>.</li>
 </ul>
 <p>
   A copy of an example type keeps these rules already, which makes it a good start for a type of

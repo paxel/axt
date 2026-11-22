@@ -26,7 +26,6 @@ EXAMPLE_SCRIPTS = [
     "envelope_examples",
     "example_types",
     "time_examples",
-    "metadata_examples",
     "fields_examples",
     "keys_examples",
     "manifest_examples",
@@ -54,7 +53,7 @@ def test_the_reference_adapter_passes_every_vector() -> None:
     done = run(RUNNER, "--", sys.executable, REPO / "conformance" / "reference" / "adapter.py")
     assert done.returncode == 0, done.stdout[-2000:] + done.stderr[-2000:]
     assert "adapter.schema.json" not in done.stdout
-    assert " vectors passed in 16 categories" in last_line(done.stdout)
+    assert " vectors passed in 15 categories" in last_line(done.stdout)
 
 
 def test_the_reference_relay_passes_the_relay_server_vectors() -> None:

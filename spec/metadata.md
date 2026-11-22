@@ -2,18 +2,14 @@
 
 Status: released in 0.1.0, changed in 0.2.0. A change to this document is a new version of AXT, with its entry in [CHANGELOG.md](../CHANGELOG.md).
 
-This document defines the attributes that a schema carries so that a receiver which learns a type only from its schema can show and check each field: labels, help texts and emoji in English and other languages, the order and groups of fields, hints for inputs, formats, patterns and limits. It also says what a sender and a receiver do with a value that breaks a check, and how a receiver names that value.
-
-The bricks of [fields.md](fields.md) describe the same fields as Avro records rather than as attributes; they are defined by [types/axt/Field.avsc](../types/axt/Field.avsc), and the column "Brick" of section 2 names the member of a brick that holds what each attribute holds.
+This document says how a receiver shows the fields of a type and checks their values, by the bricks that describe the type ([fields.md](fields.md)): labels, help texts and emoji in English and other languages, the order and groups of fields, hints for inputs, formats, patterns and limits. It also says what a sender and a receiver do with a value that breaks a check, and how a receiver names that value. What each brick holds is defined by [types/axt/Field.avsc](../types/axt/Field.avsc); a schema carries none of it as attributes ([fields.md](fields.md), section 9.2).
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in BCP 14 ([RFC 2119](https://www.rfc-editor.org/rfc/rfc2119), [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174)) when, and only when, they appear in all capitals, as shown here.
 
 ## 1. Terms
 
-- **Attribute**: a member of a schema's JSON whose name begins with `axt.`, such as `axt.label`. Avro permits members that its specification does not define, as long as they do not change the serialized data ([Avro 1.12](https://avro.apache.org/docs/1.12.0/specification/)); every attribute is one ([types.md](types.md), section 6).
-- **Hint**: an attribute that says how to show a type, a field or a symbol. A value cannot break a hint.
-- **Check**: an attribute that a value can break: `axt.format`, `axt.pattern`, `axt.min_length`, `axt.max_length`, `axt.min` and `axt.max` (section 6).
-- **Value type** of a field: the type its values are checked and shown by (section 3.2).
+- **Typed field**, **brick**, **description**, **hint** and **check**: as [fields.md](fields.md), section 1, defines them.
+- **Texts**: the label, the help text and the emoji of a typed field, an enum symbol or a group, with their translations: an `axt.FieldTexts` ([fields.md](fields.md), section 3.2). The empty string stands for a text that is absent.
 - **Field path**: the name of one value inside a record, such as `address.postal_code` or `tags[1]` (section 7.2).
 - **Code point**: a Unicode scalar value, U+0000 to U+D7FF or U+E000 to U+10FFFF. An Avro `string` is well-formed UTF-8 ([envelope.md](envelope.md), section 7), so it is a sequence of code points.
 
@@ -21,97 +17,35 @@ Sender, receiver and type have the meaning of [records.md](records.md), section 
 
 ## 2. The attributes
 
-| Attribute                | JSON value                     | On                        | Kind  | Section                      | Brick                                        |
-| ------------------------ | ------------------------------ | ------------------------- | ----- | ---------------------------- | -------------------------------------------- |
-| `axt.version`            | integer                        | the type's record         | hint  | [types.md](types.md), 3.2    | —                                            |
-| `axt.title`              | string, a field name           | the type's record         | hint  | [types.md](types.md), 6      | —                                            |
-| `axt.label`              | string                         | record, field             | hint  | 4.1                          | `texts.label`                                |
-| `axt.label_translations` | object: language tag to string | record, field             | hint  | 4.2                          | `texts.label_translations`                   |
-| `axt.help`               | string                         | record, field             | hint  | 4.1                          | `texts.help`                                 |
-| `axt.help_translations`  | object: language tag to string | record, field             | hint  | 4.2                          | `texts.help_translations`                    |
-| `axt.emoji`              | string                         | record, field             | hint  | 4.3                          | `texts.emoji`                                |
-| `axt.symbols`            | object: symbol to entry        | enum                      | hint  | 4.4                          | `symbols` of `axt.EnumField`                 |
-| `axt.groups`             | object: group key to entry     | record                    | hint  | 5.2                          | `groups` of `axt.ObjectField`                |
-| `axt.order`              | integer                        | field                     | hint  | 5.1                          | `order`                                      |
-| `axt.group`              | string, a group key            | field                     | hint  | 5.2                          | `group`                                      |
-| `axt.placeholder`        | string                         | field                     | hint  | 5.3                          | `placeholder`                                |
-| `axt.example`            | string                         | field                     | hint  | 5.3                          | `example`                                    |
-| `axt.multiline`          | boolean                        | field of strings          | hint  | 5.3                          | `multiline` of `axt.StringField`             |
-| `axt.preferred_length`   | integer                        | field of strings          | hint  | 5.3                          | `preferred_length` of `axt.StringField`      |
-| `axt.sensitive`          | boolean                        | field                     | hint  | 5.4                          | `sensitive`                                  |
-| `axt.advanced`           | boolean                        | field                     | hint  | 5.4                          | `advanced`                                   |
-| `axt.unit`               | string, a UCUM code            | field of numbers          | hint  | [types.md](types.md), 6; 6.2 | `unit` of the bricks of numbers              |
-| `axt.anchor`             | string, `local` or `instant`   | field of `axt.DateTime`   | hint  | [time.md](time.md), 6.4      | `anchor` of `axt.DateTimeField`              |
-| `axt.format`             | string, a format name          | field of strings          | check | 6.3                          | a semantic brick, [fields.md](fields.md), 5  |
-| `axt.pattern`            | string, an I-Regexp            | field of strings          | check | 6.4                          | `pattern` of `axt.StringField`               |
-| `axt.min_length`         | integer                        | field of strings or bytes | check | 6.2                          | `min_length` of the bricks of text and bytes |
-| `axt.max_length`         | integer                        | field of strings or bytes | check | 6.2                          | `max_length` of the bricks of text and bytes |
-| `axt.min`                | number                         | field of numbers          | check | 6.2                          | `min` of the bricks of numbers               |
-| `axt.max`                | number                         | field of numbers          | check | 6.2                          | `max` of the bricks of numbers               |
-
-"Record" is the type's own record or a record nested in it; "field of strings" is a field whose value type (section 3.2) is `string`, and so on. Every attribute is optional. When an attribute is absent, a receiver behaves as the section of the attribute says, mostly as it would for a schema without attributes ([types.md](types.md), section 6).
-
-The limits of the attributes, by the names of [types/axt/limits.json](../types/axt/limits.json):
-
-| What                                                               | Maximum                                                                     |
-| ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `axt.label` and each value of `axt.label_translations`             | `metadata.label`                                                            |
-| `axt.help` and each value of `axt.help_translations`               | `metadata.help`                                                             |
-| `axt.placeholder`                                                  | `metadata.placeholder`                                                      |
-| `axt.example`                                                      | `metadata.example`                                                          |
-| Entries of one `axt.label_translations` or `axt.help_translations` | `metadata.translations`                                                     |
-| A language tag                                                     | `manifest.language_tag`                                                     |
-| `axt.emoji`                                                        | `metadata.emoji`                                                            |
-| `axt.pattern`                                                      | `metadata.pattern`; each number in it at most `metadata.pattern_quantifier` |
-| A group key                                                        | `metadata.group_key`                                                        |
-| `axt.order`                                                        | −2,147,483,648 to 2,147,483,647                                             |
-
-Lengths of texts are in bytes of UTF-8. The limits of a schema as a whole, `envelope.schema` and `envelope.schema_depth`, are those of [envelope.md](envelope.md), section 8.
+The attributes `axt.*` of 0.1.0 are retired: what each held is a member of a brick of [types/axt/Field.avsc](../types/axt/Field.avsc), and a derived schema carries no attribute but `axt.version` and those of the published schemas of `axt.Relation` and `axt.Extension` that it holds ([fields.md](fields.md), section 9.2).
 
 ## 3. Rules for every attribute
 
+The rules of a description are those of [fields.md](fields.md), section 6.
+
 ### 3.1 Where they sit
 
-An attribute sits on one of these JSON objects of a schema:
-
-- **The type's record** or **a nested record**: the object with `"type": "record"`. Its label, help and emoji describe the type, or the nested type, wherever it is used.
-- **A field**: an object in the `fields` of a record. Its attributes describe that field only.
-- **An enum**: the object with `"type": "enum"`. `axt.symbols` describes the symbols wherever the enum is used.
-
-The attributes of a field sit on the field, not on the field's type, as `axt.unit` and `axt.anchor` do ([types.md](types.md), section 6): an attribute on a named type would apply to every field that uses it, and some Avro libraries drop the members of a primitive type written as an object, such as `{"type": "string", "axt.format": "email"}`. An attribute in any other place than the column "On" of section 2 names is not used.
+The texts and hints describe the typed field, enum symbol or group that holds them ([fields.md](fields.md), sections 3 and 4).
 
 ### 3.2 The value type of a field
 
-The value type of a field is the field's type with these taken away, in this order:
-
-1. a union of `null` and one other type, `["null", T]`: its value type is T;
-2. an array: its value type is the value type of its items, again without `["null", T]`.
-
-So `string`, `["null", "string"]`, an array of `string` and an array of `["null", "string"]` all have the value type `string`. A primitive written with a logical type has the value type of the primitive. A check applies to each value of the value type in the field: to the value itself, or to each item of the array. A map is not taken away: a field whose type is a map has the value type `map`, and no check of section 6 applies to it.
+The checks of the items of a list or the values of a map apply to each item or value ([fields.md](fields.md), section 4.5).
 
 ### 3.3 Attributes that break their rules
 
-An attribute breaks its rules when its JSON value is not of the kind section 2 names, when it sits elsewhere than section 2 names, or when it breaks a rule of its own section, such as a label of more than 256 bytes or a pattern that is not an I-Regexp.
-
-- A sender MUST NOT send a schema with an attribute that breaks its rules, and MUST NOT use an attribute name beginning with `axt.` that this specification does not define, or a format name that section 6.3 does not define.
-- A receiver MUST ignore an attribute that breaks its rules, as if it were absent, and uses the others. In an entry of `axt.symbols` or `axt.groups` it ignores each member that breaks its rules on its own. Translations whose English text is absent or ignored are ignored as well.
-- A receiver MUST ignore attributes it does not know, and MUST NOT reject a schema or decline a type because of an attribute, whether it knows it or not ([types.md](types.md), section 6). It MAY reject a record only for a value that breaks a check it uses (section 7.1).
-
-An `OFFER` whose schema carries a pattern that is not an I-Regexp is therefore not invalid, and the type is not declined for it: the receiver takes the type as if the field had no pattern. The attributes describe how to show and check values; they do not change how the values are encoded or what they mean, so a schema with a broken attribute still reads. Declining it would refuse records the receiver can read, for a fault in a text or a check of the sender's schema. A receiver that is stricter can still decline the type with `NOT_WANTED` ([protocol.md](protocol.md), section 5.2), as it can any type.
+A description that breaks a rule is not valid, and a receiver declines its type ([fields.md](fields.md), section 10.1).
 
 ### 3.4 Fingerprints and versions
 
-The Parsing Canonical Form drops every attribute ([types.md](types.md), section 3.4), so no attribute changes a schema's fingerprint. A receiver uses the attributes of the schema it received with the record: the writer schema of the offer or of the file header ([types.md](types.md), section 3.4). The attributes travel with the schema; a receiver MUST NOT take the attributes of one schema for a record written with another.
-
-Which changes of attributes a new version of a type may make is in [types.md](types.md), section 3.3.
+A receiver shows and checks a record by the description that came with its writer schema, in the offer or the file header ([fields.md](fields.md), section 10); it MUST NOT take the texts and checks of one description for a record written under another. Which changes a new version of a type may make is in [types.md](types.md), section 3.3.
 
 ## 4. Labels, help and emoji
 
 ### 4.1 Label and help
 
-`axt.label` is the name a receiver shows for a type, a nested type or a field, in English, such as `Postal code`. `axt.help` is one or two sentences in English that say what the value is or how to enter it, such as `Five digits.`, shown next to the field or on request.
+The `label` is the name a receiver shows for a type, a nested object or a field, in English, such as `Postal code`. The `help` is one or two sentences in English that say what the value is or how to enter it, such as `Five digits.`, shown next to the field or on request.
 
-- Both are one line of plain text: not empty, without control characters (Unicode general category Cc, which includes LF and CR), and without the line and paragraph separators U+2028 and U+2029, as the purpose sentences of [manifest.md](manifest.md), section 4. A label is within `metadata.label`, a help text within `metadata.help` (section 3).
+- Both are one line of plain text: without control characters (Unicode general category Cc, which includes LF and CR), and without the line and paragraph separators U+2028 and U+2029, as the purpose sentences of [manifest.md](manifest.md), section 4. A label is within `metadata.label`, a help text within `metadata.help` ([types/axt/limits.json](../types/axt/limits.json)); lengths of texts are in bytes of UTF-8.
 - A receiver MUST show them as text and MUST NOT interpret markup in them.
 - Without a label, a receiver shows the name, with underscores read as spaces for a field ([types.md](types.md), section 6). Without a help text, it shows none, or the `doc`.
 
@@ -119,21 +53,21 @@ A label and a help text are written for the user; the `doc` is written for the d
 
 ### 4.2 Languages
 
-`axt.label_translations` and `axt.help_translations` give the label and the help text in other languages. They follow the rules of the purpose sentence and its translations of [manifest.md](manifest.md), section 3.6:
+`label_translations` and `help_translations` give the label and the help text in other languages. They follow the rules of the purpose sentence and its translations of [manifest.md](manifest.md), section 3.6:
 
-- Each key is a language tag of [BCP 47](https://www.rfc-editor.org/info/bcp47) in the `langtag` form of [RFC 5646, section 2.1](https://www.rfc-editor.org/rfc/rfc5646#section-2.1), of at most `manifest.language_tag` characters, such as `de` or `pt-BR`. A key MUST NOT be `en`, in any case, and two keys MUST NOT be equal when compared without regard to case. A map has at most `metadata.translations` entries.
+- Each key is a language tag of [BCP 47](https://www.rfc-editor.org/info/bcp47) in the `langtag` form of [RFC 5646, section 2.1](https://www.rfc-editor.org/rfc/rfc5646#section-2.1), of at most `manifest.language_tag` characters, such as `de` or `pt-BR`. A key is not `en`, in any case, and no two keys are equal when compared without regard to case. A map has at most `metadata.translations` entries.
 - Each value is the label or the help text in that language, with the rules of section 4.1.
-- A translation needs its English text: `axt.label_translations` without a valid `axt.label`, and `axt.help_translations` without a valid `axt.help`, break their rules.
+- A translation needs its English text ([fields.md](fields.md), section 3.2).
 
 A receiver chooses the language by the Lookup scheme of [RFC 4647, section 3.4](https://www.rfc-editor.org/rfc/rfc4647#section-3.4): it matches its user's language priority list against the keys of the translations and the tag `en` for the English text, without regard to case, and takes the English text when nothing matches. It chooses for the label and for the help text on their own. A user who reads `de-AT` gets the `de` label; a user who reads `fr-CH` and `fr` gets the English one if there is no `fr` label.
 
-The English text is an attribute of its own, not an entry of the map, so that every label has a text every app can show, as with the purpose sentence.
+The English text is a member of its own, not an entry of the map, so that every label has a text every app can show, as with the purpose sentence.
 
 ### 4.3 Emoji
 
-`axt.emoji` is an emoji that a receiver MAY show next to the label, such as `📞` for a phone number or `🏥` for a type of vet practices.
+The `emoji` is an emoji that a receiver MAY show next to the label, such as `📞` for a phone number or `🏥` for a type of vet practices.
 
-- It is a string of 1 to `metadata.emoji` code points (section 3) without control characters (U+0000 to U+001F, U+007F to U+009F) and without white space or separators (U+0020, U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000). It holds an ASCII character only as the first of a keycap sequence: a digit, `#` or `*`, an optional U+FE0F, then U+20E3, such as `1️⃣`.
+- It is a string of 1 to `metadata.emoji` code points without control characters (U+0000 to U+001F, U+007F to U+009F) and without white space or separators (U+0020, U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000). It holds an ASCII character only as the first of a keycap sequence: a digit, `#` or `*`, an optional U+FE0F, then U+20E3, such as `1️⃣`.
 - It SHOULD be one emoji that [UTS #51](https://www.unicode.org/reports/tr51/) recommends for general interchange (an RGI emoji), and so one grapheme cluster.
 - A receiver that cannot show it shows nothing in its place. It MUST NOT show it in place of the label.
 
@@ -141,74 +75,66 @@ The rule can be checked without Unicode data: whether a string is an RGI emoji o
 
 ### 4.4 Enum symbols
 
-`axt.symbols` on an enum gives, for each symbol, an entry: an object with the members `label`, `label_translations`, `help`, `help_translations` and `emoji`, each optional, with the rules of sections 4.1 to 4.3.
+Each symbol of an `axt.EnumField` has its texts, with the rules of sections 4.1 to 4.3 ([fields.md](fields.md), section 4.4).
 
-```json
-"axt.symbols": {"EMERGENCY": {"label": "Emergency service", "label_translations": {"de": "Notdienst"}, "emoji": "🚑"}}
-```
-
-- A key MUST be a symbol of the enum. An entry for another name breaks the rules of `axt.symbols`, and a receiver ignores the whole attribute.
-- A symbol without an entry, or without a label in its entry, is shown by its name ([types.md](types.md), section 6).
-- An unknown symbol that a receiver reads as the enum's default ([types.md](types.md), section 5.4) is shown as the default symbol.
-
-The entries sit on the enum because Avro gives symbols no attributes of their own.
+- A symbol without a label is shown by its name ([types.md](types.md), section 6).
+- An unknown symbol that a receiver reads as the enum's `fallback` ([types.md](types.md), section 5.4) is shown as the fallback symbol.
 
 ## 5. Showing the fields
 
 ### 5.1 Order
 
-A receiver that shows the fields of a record shows them in this order:
+A receiver that shows the fields of an object shows them in this order:
 
-1. the fields with `axt.order`, by their `axt.order`, the lowest first;
+1. the fields with an `order`, by their `order`, the lowest first;
 2. then the fields without it;
-3. fields with the same `axt.order`, and the fields without it, in the order of the schema.
+3. fields with the same `order`, and the fields without it, in the order of the description.
 
-Then the fields of each group are brought together (section 5.2). The order is for display only; the encoding keeps the order of the schema. `axt.order` is an integer from −2,147,483,648 to 2,147,483,647, so a type can put a field before those it already has.
+Then the fields of each group are brought together (section 5.2). The order is for display only; the encoding keeps the order of the description. The `order` is an `int`, so a type can put a field before those it already has.
 
 ### 5.2 Groups
 
-`axt.group` on a field is a group key: a name of the form of a field name, lower-case ASCII letters, digits and single underscores that starts with a letter ([types.md](types.md), section 5.2), within `metadata.group_key` (section 3). Fields of one record with the same key form a group, shown together under the group's label. In the order of section 5.1, a group stands where its first field stands, and its fields follow each other in that order; a field without a group keeps its place.
+The `group` of a field is a group key: a name of the form of a field name, lower-case ASCII letters, digits and single underscores that starts with a letter ([types.md](types.md), section 5.2), within `metadata.group_key`. Fields of one object with the same key form a group, shown together under the group's label. In the order of section 5.1, a group stands where its first field stands, and its fields follow each other in that order; a field without a group keeps its place.
 
-`axt.groups` on the record gives the label of each group: an object from group key to an entry with the members of section 4.4. The label of a group is thus a key, with its own translations, rather than a text repeated on each field: the fields of a group cannot carry different texts for it, and a group is translated once. A group key without an entry is shown by its key, with underscores read as spaces. A sender MUST NOT name a key in `axt.groups` that no field of the record uses. Groups belong to one record; a nested record has groups of its own.
+The `groups` of the `axt.ObjectField` give the texts of each group. The label of a group is thus a key, with its own translations, rather than a text repeated on each field: the fields of a group cannot carry different texts for it, and a group is translated once. A group without a label is shown by its key, with underscores read as spaces. Groups belong to one object; a nested object has groups of its own.
 
 ### 5.3 Inputs
 
-- **`axt.placeholder`**: a text that an empty input for the field shows, such as `+49301234567`, as one line of plain text within `metadata.placeholder` (section 3). It is not translated; it SHOULD be a form of the value that a reader of any language understands, such as digits, a sample address or a mask. A text that needs translation belongs into the help text.
-- **`axt.example`**: an example value as text, within `metadata.example` (section 3), without control characters other than LF, such as `DE89370400440532013000`. A receiver MAY show it in the help. On a field of strings, a sender's example MUST meet the field's checks.
-- **`axt.multiline`**: `true` when the value may hold several lines, separated by LF ([types.md](types.md), section 5.6), so that a receiver offers an input of several lines. Absent or `false`, a receiver SHOULD offer an input of one line. It is a hint, not a check: a receiver MUST show the line breaks of a value it received and MUST NOT reject a value because it has some.
-- **`axt.preferred_length`**: the number of code points an input for the field SHOULD have room for, such as 5 for a postal code, at least 1. It is not a limit. A sender MUST NOT make it larger than `axt.max_length`.
+- **`placeholder`**: a text that an empty input for the field shows, such as `+49301234567`, as one line of plain text within `metadata.placeholder`. It is not translated; it SHOULD be a form of the value that a reader of any language understands, such as digits, a sample address or a mask. A text that needs translation belongs into the help text.
+- **`example`**: an example value as text, within `metadata.example`, without control characters other than LF, such as `DE89370400440532013000`. A receiver MAY show it in the help. In a brick of text, it keeps the field's checks ([fields.md](fields.md), section 3.4).
+- **`multiline`**: `true` when the value may hold several lines, separated by LF ([types.md](types.md), section 5.6), so that a receiver offers an input of several lines. When it is `false`, a receiver SHOULD offer an input of one line. It is a hint, not a check: a receiver MUST show the line breaks of a value it received and MUST NOT reject a value because it has some.
+- **`preferred_length`**: the number of code points an input for the field SHOULD have room for, such as 5 for a postal code, at least 1. It is not a limit.
 
 ### 5.4 Sensitive and advanced
 
-- **`axt.sensitive`**: `true` when the value is a secret or personal data that others near the screen should not see, such as an account number. A receiver SHOULD hide it until its user asks to see it, and SHOULD NOT put it into notifications, previews, logs or error reports. It changes neither the encoding nor the protection of the value: every message is signed, and through a relay sealed, as every other ([keys.md](keys.md)).
-- **`axt.advanced`**: `true` when most users need not see or fill in the field. A receiver MAY show it only when its user asks for more, in its place in the order of section 5.1.
+- **`sensitive`**: `true` when the value is a secret or personal data that others near the screen should not see, such as an account number. A receiver SHOULD hide it until its user asks to see it, and SHOULD NOT put it into notifications, previews, logs or error reports. It changes neither the encoding nor the protection of the value: every message is signed, and through a relay sealed, as every other ([keys.md](keys.md)).
+- **`advanced`**: `true` when most users need not see or fill in the field. A receiver MAY show it only when its user asks for more, in its place in the order of section 5.1.
 
 ## 6. Checks
 
 ### 6.1 What a check is
 
-A check is a rule that each value of the field's value type keeps. A value keeps every check of its field at once.
+A check is a rule that each value of a typed field keeps ([fields.md](fields.md), section 7). A value keeps every check of its field at once.
 
-- `null` keeps every check: a field of the type `["null", T]` holds no value then.
-- The empty string keeps every `axt.format` and `axt.pattern`. In an example type, and as an app type SHOULD do, a text that may be empty is the empty string ([types.md](types.md), section 5.3), not `null`; a check of the form of a value does not apply when there is no value. A field that needs a value says so with `axt.min_length` 1. This narrows "the whole value matches" of a pattern (section 6.4) by one case, the empty string.
-- A check applies to each item of an array (section 3.2), not to the array: `axt.max_length` 32 on an array of strings limits each string. The number of items is not checked.
+- `null` keeps every check but `required` ([fields.md](fields.md), section 3.3): a field of the type `["null", T]` holds no value then.
+- The empty string keeps every `format` and `pattern`. In an example type, and as an app type SHOULD do, a text that may be empty is the empty string ([types.md](types.md), section 5.3), not `null`; a check of the form of a value does not apply when there is no value. A field that needs a value is `required`. This narrows "the whole value matches" of a pattern (section 6.4) by one case, the empty string.
+- The checks of the items of a list or the values of a map apply to each item or value, not to the list or the map: a `max_length` of 32 on the items of a list of strings limits each string.
 
 ### 6.2 Lengths and numbers
 
-- **`axt.min_length` and `axt.max_length`**: integers of at least 0. For a `string`, the value has at least `axt.min_length` and at most `axt.max_length` code points; for `bytes`, bytes. A sender MUST NOT make `axt.min_length` larger than `axt.max_length`; if it does, both break their rules.
-- **`axt.min` and `axt.max`**: finite JSON numbers. A value of `int`, `long`, `float` or `double` is at least `axt.min` and at most `axt.max`, compared as exact numbers. NaN breaks every `axt.min` and `axt.max`; infinity is compared as it is. A sender MUST NOT make `axt.min` larger than `axt.max`; if it does, both break their rules.
+- **`min_length` and `max_length`**: for text, the value has at least `min_length` and at most `max_length` code points; for bytes, bytes.
+- **`min` and `max`**: a value of `axt.IntField`, `axt.LongField` or `axt.DoubleField` is at least `min` and at most `max`, compared as exact numbers. NaN breaks every `min` and `max`; infinity is compared as it is.
 
 Lengths are counted in code points rather than in UTF-16 units or bytes of UTF-8. A code point is the same in every encoding, while UTF-8 and UTF-16 count `ä` as 2 and 1 and `𝄞` as 4 and 2, and the platforms that apps run on use either. Grapheme clusters would count as users do, but their rules change with the Unicode version, and two apps would count the same text differently.
 
-The limits are in the field's unit: a field with `axt.unit` `min` and `axt.max` 240 holds at most 240 minutes. A receiver that shows the value in another unit converts the limits with it.
+The limits are in the field's unit: a field with the `unit` `min` and the `max` 240 holds at most 240 minutes. A receiver that shows the value in another unit converts the limits with it.
 
 ### 6.3 Formats
 
-`axt.format` names the form of a field of strings. A receiver MAY check it, and SHOULD show and offer inputs for the value as the format suggests. Each format but `plain` is also a semantic brick of [fields.md](fields.md), section 5, with the format built in. The formats and what a non-empty value of each requires:
+Each semantic brick of [fields.md](fields.md), section 5, has one of these formats built in. A receiver MAY check it, and SHOULD show and offer inputs for the value as the format suggests. The formats and what a non-empty value of each requires:
 
 | Format       | The value                                                                                                                                                                                                                                                              | A receiver shows it                               |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| `plain`      | Any text; the same as no format                                                                                                                                                                                                                                        | as plain text ([types.md](types.md), section 5.6) |
 | `markdown`   | Any text, read as [CommonMark](https://spec.commonmark.org/)                                                                                                                                                                                                           | rendered, with raw HTML shown as text (section 8) |
 | `email`      | `local@domain`, each a `dot-atom-text` of [RFC 5322, section 3.2.3](https://www.rfc-editor.org/rfc/rfc5322#section-3.2.3), with the non-ASCII characters of [RFC 6532](https://www.rfc-editor.org/rfc/rfc6532); the local part at most 64 bytes, the whole at most 254 | as an address to write to                         |
 | `phone`      | A number of [ITU-T E.164](https://www.itu.int/rec/T-REC-E.164): `+`, then 2 to 15 ASCII digits, the first not `0`; no spaces or other characters                                                                                                                       | grouped for reading, see below                    |
@@ -224,16 +150,15 @@ The limits are in the field's unit: a field with `axt.unit` `min` and `axt.max` 
 | `ucum`       | A code of [UCUM](https://ucum.org/), case-sensitive: one or more of the ASCII characters U+0021 to U+007E                                                                                                                                                              | as the unit                                       |
 
 - **Syntax only.** Each format is checked by the syntax in the table, without a registry: whether a country code, currency or language is assigned, whether an IBAN has the length of its country, whether a domain exists or a UCUM code is valid beyond its characters, is not part of the check. A receiver MUST NOT reject a value by such a registry with `VALUE_INVALID`; it MAY tell its user. A sender SHOULD write only values that are valid by the registry as well.
-- **An unknown format.** A receiver that does not know a format treats the value as `plain`: it checks nothing for it and shows the value as text.
-- **Phone numbers.** A phone number is stored in E.164 form, so that every app can dial and compare it. A receiver SHOULD show it in the international notation of [ITU-T E.123](https://www.itu.int/rec/T-REC-E.123), with spaces between the country code, the area code and the number, as its own numbering-plan data groups it, such as `+49 30 1234567`; without such data it shows it as stored. It MAY offer to call it as a `tel:` URI of [RFC 3966](https://www.rfc-editor.org/rfc/rfc3966). It MUST NOT store the form it shows. An extension or a number written for one country cannot be held; such a field has no format.
-- **No date or id formats.** Dates and times are the time types ([time.md](time.md)), and a UUID is the logical type `uuid` ([types.md](types.md), section 5.5). There is no format for them, so that each has one form.
+- **Phone numbers.** A phone number is stored in E.164 form, so that every app can dial and compare it. A receiver SHOULD show it in the international notation of [ITU-T E.123](https://www.itu.int/rec/T-REC-E.123), with spaces between the country code, the area code and the number, as its own numbering-plan data groups it, such as `+49 30 1234567`; without such data it shows it as stored. It MAY offer to call it as a `tel:` URI of [RFC 3966](https://www.rfc-editor.org/rfc/rfc3966). It MUST NOT store the form it shows. An extension or a number written for one country cannot be held; such a field is plain text, `axt.StringField`.
+- **No date or id formats.** Dates and times are the time bricks ([fields.md](fields.md), section 4.7), and a UUID is the logical type `uuid` ([types.md](types.md), section 5.5). There is no format for them, so that each has one form.
 
 ### 6.4 Patterns
 
-`axt.pattern` is a regular expression that the value matches as a whole. It is an I-Regexp of [RFC 9485](https://www.rfc-editor.org/rfc/rfc9485): an expression of the grammar of its section 3, with the semantics of its section 4, those of the regular expressions of XML Schema.
+The `pattern` of an `axt.StringField` is a regular expression that the value matches as a whole. It is an I-Regexp of [RFC 9485](https://www.rfc-editor.org/rfc/rfc9485): an expression of the grammar of its section 3, with the semantics of its section 4, those of the regular expressions of XML Schema.
 
 - **Whole value.** A value keeps the pattern when the whole value is in the language of the expression, not a part of it: `[0-9]{5}` takes `10115`, not `10115 Berlin` and not `10115` followed by LF. I-Regexp has no anchors: `^` and `$` are ordinary characters, and `^[0-9]+$` takes `^12$`, not `12`. `.` matches any code point except LF and CR. The empty string keeps every pattern (section 6.1).
-- **The subset.** The grammar has no `\d`, `\w`, `\s` and other multi-character escapes, no groups of the form `(?…)`, no lazy or possessive quantifiers, no back references, no class subtraction and no Unicode blocks. It has `\p{…}` and `\P{…}` for the general categories of Unicode, such as `\p{Lu}`, and `[^]` is not allowed. A pattern outside the grammar breaks the rules of `axt.pattern` (section 3.3).
+- **The subset.** The grammar has no `\d`, `\w`, `\s` and other multi-character escapes, no groups of the form `(?…)`, no lazy or possessive quantifiers, no back references, no class subtraction and no Unicode blocks. It has `\p{…}` and `\P{…}` for the general categories of Unicode, such as `\p{Lu}`, and `[^]` is not allowed. A description with a pattern outside the grammar is not valid ([fields.md](fields.md), section 6).
 - **Limits.** A pattern is within `metadata.pattern`, and each number of a range quantifier, as in `{2,4}`, is at most `metadata.pattern_quantifier` ([types/axt/limits.json](../types/axt/limits.json)). Some engines refuse larger repeats, RE2 among them, and every engine spends more time on them.
 - **Validity.** A receiver decides whether a pattern is an I-Regexp with a parser of the grammar of RFC 9485, section 3, and its limits, not by whether its own engine compiles it: most engines take patterns outside the subset, such as `\d`, with a meaning of their own.
 - **Unicode version.** `\p{…}` refers to the general categories of the receiver's version of Unicode. A code point that a later version assigns is in `Cn` for a receiver with an earlier one. A sender SHOULD NOT depend on categories of code points assigned in the last few years.
@@ -252,8 +177,8 @@ These steps are those known for the dialects named; the semantics of RFC 9485, s
 
 ### 7.1 Sender and receiver
 
-- **Sender.** A sender MUST NOT send a record with a value that breaks a check of the schema it writes the record with. It keeps the checks of its own schema as it keeps the rules of the types, so that a receiver can rely on them.
-- **Receiver.** A receiver MAY check the values of a record it gets against the checks of the record's writer schema. A receiver that checks and finds a value that breaks one MAY reject the record with the error `VALUE_INVALID` ([protocol.md](protocol.md), sections 6.2 and 8), whose `field` names the first such value in the order of the encoding (section 7.2). It reports only checks of the writer schema; rules of its own, such as those of its reader schema, are its own matter and not reported with `VALUE_INVALID`.
+- **Sender.** A sender MUST NOT send a record with a value that breaks a check of the description of the schema it writes the record with. It keeps the checks of its own description as it keeps the rules of the types, so that a receiver can rely on them.
+- **Receiver.** A receiver MAY check the values of a record it gets against the checks of the description of the record's writer schema. A receiver that checks and finds a value that breaks one MAY reject the record with the error `VALUE_INVALID` ([protocol.md](protocol.md), sections 6.2 and 8), whose `field` names the first such value as [fields.md](fields.md), section 7, says. It reports only checks of that description; rules of its own, such as those of its reader schema, are its own matter and not reported with `VALUE_INVALID`.
 - **Taking it anyway.** A receiver that takes a record with a value that breaks a check MUST keep and show the value as received. It MUST NOT change it to meet the check, such as by cutting a text to its maximum length or removing the spaces of a phone number, since that would change the record without its user ([records.md](records.md), section 6). It MAY show its user that the value does not meet the check.
 - **In a file.** A reader of a file that checks the values MAY leave a record with a value that breaks a check unapplied, with the result `VALUE_INVALID`, as it does for a record that fails another step of [protocol.md](protocol.md), section 6.2 ([transports.md](transports.md), section 2.2).
 
@@ -278,75 +203,18 @@ When several values break a rule, the error names the first in the order of the 
 The two errors about the body of a `DATA` divide by one rule:
 
 - **`UNDECODABLE`**: the bytes are not a value of the offered schema. They end early, bytes are left over, a string is not well-formed UTF-8, an index or a length is out of range, or the data nest deeper than `types.data_depth` ([types.md](types.md), section 5.7). The fault is in the sender's encoder, and nothing in the value can be named.
-- **`VALUE_INVALID`**: the bytes are a value of the schema, and the value breaks a rule set for it: a rule of a time type ([time.md](time.md), section 8) or of a relation ([fields.md](fields.md), section 11.4), which every receiver checks, or a check of the schema's attributes, which a receiver may check. The fault is in the data, and `field` names the value, so that the sender can show its user what to correct.
+- **`VALUE_INVALID`**: the bytes are a value of the schema, and the value breaks a rule set for it: a rule of a time type ([time.md](time.md), section 8), of a relation or of an extension ([fields.md](fields.md), sections 11.4 and 12.3), which every receiver checks, or a check of the type's description ([fields.md](fields.md), section 7), which a receiver may check. The fault is in the data, and `field` names the value, so that the sender can show its user what to correct.
 
 ## 8. Security
 
 - **Patterns** come from the other app and are run against values from it. A backtracking engine can take time exponential in the length of the value for some patterns, such as `(a*)*b`. A receiver SHOULD match with an engine that runs in time linear in the value, such as RE2, or bound the time a match takes. A receiver that reaches its bound takes the value as if it kept the pattern; it MUST NOT reject the record for it.
 - **Markdown** is rendered by a receiver of the other app's text. A receiver MUST NOT render raw HTML in it as HTML, MUST NOT run scripts from it, and SHOULD NOT load images or other resources it names without its user's consent.
 - **Labels, help texts, placeholders and examples** are the sender's text. A receiver MUST show them as plain text ([manifest.md](manifest.md), section 3.6, says the same of purpose sentences). A label can say anything; it does not make a field mean what it says, and a receiver that acts on a field by its label, rather than by a type it knows, acts on the sender's word.
-- **`axt.sensitive`** is a hint for showing. It does not protect a value beyond what every message has.
+- **`sensitive`** is a hint for showing. It does not protect a value beyond what every message has.
 
 ## 9. Example
 
-`com.example.Vet` is an illustration only, not an example type. It carries every attribute of section 2 except `axt.version`, `axt.title` and `axt.anchor`. Its schema has 5,775 bytes of JSON without whitespace; three of its fields:
-
-```json
-{"type":"record","name":"Vet","namespace":"com.example","doc":"…","axt.label":"Vet practice","axt.label_translations":{"de":"Tierarztpraxis"},"axt.help":"A practice that treats animals.","axt.help_translations":{"de":"Eine Praxis, die Tiere behandelt."},"axt.emoji":"🏥","axt.groups":{"contact":{"label":"Contact","label_translations":{"de":"Kontakt"},"emoji":"📞"},"billing":{"label":"Billing","label_translations":{"de":"Abrechnung"},"emoji":"💶","help":"Only for invoices.","help_translations":{"de":"Nur für Rechnungen."}}},"fields":[
- {"name":"phone","type":"string","default":"","doc":"…","axt.label":"Phone","axt.label_translations":{"de":"Telefon"},"axt.emoji":"📞","axt.format":"phone","axt.placeholder":"+49301234567","axt.example":"+49301234567","axt.group":"contact","axt.order":3},
- {"name":"visit_minutes","type":"int","default":15,"doc":"…","axt.label":"Length of a visit","axt.label_translations":{"de":"Dauer eines Besuchs"},"axt.emoji":"⏱️","axt.unit":"min","axt.min":5,"axt.max":240},
- {"name":"iban","type":"string","default":"","doc":"…","axt.label":"IBAN","axt.emoji":"🏦","axt.format":"iban","axt.sensitive":true,"axt.advanced":true,"axt.group":"billing","axt.example":"DE89370400440532013000"},
- …]}
-```
-
-The `…` stand for the `doc` texts and the other fields of [conformance/tools/metadata_examples.py](../conformance/tools/metadata_examples.py). Its Parsing Canonical Form is that of the same schema without any attribute; its CRC-64-AVRO is `0xf6870cff0cc1a7e3`.
-
-A receiver shows the type as `🏥 Vet practice` to a user who reads `en`, and as `🏥 Tierarztpraxis` to one who reads `de-AT`; a user who reads `fr-CH` and `fr` gets the English label. It shows the fields in this order, by `axt.order` for the first three and with the groups brought together, so that `website`, the last field of the schema, follows `email` in the group `contact`:
-
-| Field           | Group     | English                | German                       | Emoji | Hints                              |
-| --------------- | --------- | ---------------------- | ---------------------------- | ----- | ---------------------------------- |
-| `name`          |           | Name                   | Name                         | 🏷️    |                                    |
-| `kind`          |           | Kind                   | Art                          | 🗂️    |                                    |
-| `phone`         | `contact` | Phone                  | Telefon                      | 📞     | format `phone`                     |
-| `email`         | `contact` | Email                  | E-Mail                       | 📧     | format `email`                     |
-| `website`       | `contact` | Website                | Webseite                     | 🌐     | format `url`                       |
-| `address`       |           | Address                | Anschrift                    | 📮     |                                    |
-| `colour`        |           | Colour in the calendar | Farbe im Kalender            | 🎨     | format `colour`                    |
-| `rating`        |           | Rating                 | Bewertung                    | ⭐     |                                    |
-| `visit_minutes` |           | Length of a visit      | Dauer eines Besuchs          | ⏱️    | unit `min`                         |
-| `fee`           |           | Fee for a check-up     | Gebühr für eine Untersuchung | 💶     |                                    |
-| `currency`      |           | Currency               | Währung                      | 💱     | format `currency`                  |
-| `iban`          | `billing` | IBAN                   | IBAN                         | 🏦     | format `iban`, sensitive, advanced |
-| `bic`           | `billing` | BIC                    | BIC                          | 🏦     | format `bic`, advanced             |
-| `notes`         |           | Notes                  | Notizen                      | 📝     | format `markdown`, multiline       |
-| `tags`          |           | Tags                   | Schlagwörter                 | 🔖     |                                    |
-
-`kind` is an enum whose `axt.symbols` give `EMERGENCY` the label `Notdienst` and the emoji `🚑` for `de`. The nested record `address` shows its field `country` first, by its `axt.order` 0. `IBAN` has no translations, so every user gets the English label.
-
-A receiver that checks finds, among the 35 records the script checks:
-
-| Record                                                                                     | `field`               | Check            |
-| ------------------------------------------------------------------------------------------ | --------------------- | ---------------- |
-| Every value meets its checks                                                               | —                     | —                |
-| The empty string in `phone`, `email`, `colour`, `iban`, `bic`, `postal_code` and `country` | —                     | —                |
-| A phone number with spaces, `+49 30 1234567`                                               | `phone`               | `axt.format`     |
-| An IBAN whose check digits do not match                                                    | `iban`                | `axt.format`     |
-| A postal code of four digits                                                               | `address.postal_code` | `axt.pattern`    |
-| A postal code followed by LF                                                               | `address.postal_code` | `axt.pattern`    |
-| A tag of 33 times `𝄞`, 33 code points and 66 UTF-16 units                                  | `tags[1]`             | `axt.max_length` |
-| A tag of 32 times `𝄞`                                                                      | —                     | —                |
-| An empty name, below `axt.min_length` 1                                                    | `name`                | `axt.min_length` |
-| A fee that is NaN                                                                          | `fee`                 | `axt.min`        |
-| A phone number with spaces and a rating of 9                                               | `phone`               | `axt.format`     |
-
-The values were produced with [conformance/tools/metadata_examples.py](../conformance/tools/metadata_examples.py), with the rules of [conformance/tools/metadata_rules.py](../conformance/tools/metadata_rules.py). The script:
-
-- checks the type by the rules of [types.md](types.md), section 5, with the checks of [conformance/tools/example_types.py](../conformance/tools/example_types.py), which include the rules of every attribute, and that its canonical form is that of the schema without attributes, with fastavro 1.13.1 and the Python `avro` 1.12.2 package;
-- checks a schema with 20 attributes that break their rules, each reported for a sender and ignored by a receiver, among them members of an entry of `axt.groups` and `axt.symbols`, which a receiver ignores one by one;
-- checks what a receiver shows of the type and its fields in English, German and French, and the 35 records above and the others, each encoded with fastavro and decoded again with both libraries;
-- checks each of the 14 formats with 37 values that have it and 44 that do not, 11 patterns with 41 values, and 13 patterns that are not an I-Regexp or exceed its limits.
-
-The test vectors of [conformance.md](conformance.md) take precedence over these values.
+The example is `com.example.Vet` of [fields.md](fields.md), section 8; the category `bricks` of [conformance.md](conformance.md) holds what a receiver shows of it and the values it checks.
 
 ## References
 

@@ -76,7 +76,7 @@ The sender knows the version of each schema it writes. The receiver learns it fr
 
 ### 3.5 Any type
 
-When `any_type` is not `null`, the app takes every type whose full name is not in `takes`, in every version, and `any_type`'s purpose sentence says what it does with their records. A receiver that takes any type shows records of a type it does not know from their schema ([types.md](types.md), section 6; [metadata.md](metadata.md)) and reads them with the writer schema alone ([envelope.md](envelope.md), section 6).
+When `any_type` is not `null`, the app takes every type whose full name is not in `takes`, in every version, and `any_type`'s purpose sentence says what it does with their records. A receiver that takes any type shows records of a type it does not know by their description ([types.md](types.md), section 6; [metadata.md](metadata.md)) and reads them with the writer schema alone ([envelope.md](envelope.md), section 6).
 
 `any_type` covers only full names that `takes` does not name. A type named in `takes` in a version outside its range does not fit, even when `any_type` is present (section 5.2): the entry states what the app does with that type, and the app has left out those versions on purpose.
 
