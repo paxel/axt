@@ -40,3 +40,21 @@ effectiveUntil = 2027-05-19
 reason = """deps.dev reports avro's licence as non-standard; its LICENSE.txt in apache/avro is \
 Apache-2.0. The conformance scripts use it to check the specification's examples; nothing this \
 repository publishes contains it."""
+
+[[PackageOverrides]]
+name = "minimatch"
+ecosystem = "npm"
+license.ignore = true
+effectiveUntil = 2027-05-19
+reason = """minimatch is under the Blue Oak Model License 1.0.0, a permissive licence that \
+asks only for the licence text or a link to it to travel with copies. It comes through eslint \
+and typescript-eslint and is installed for linting the site generator only; nothing this \
+repository publishes contains it."""
+
+[[PackageOverrides]]
+name = "@isaacs/nonrecursive-glob-match"
+ecosystem = "npm"
+license.ignore = true
+effectiveUntil = 2027-05-19
+reason = """A dependency of minimatch under the same Blue Oak Model License 1.0.0, installed \
+with eslint for linting only."""
