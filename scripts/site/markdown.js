@@ -32,9 +32,9 @@ import { escapeHtml } from "./html.js";
 /** @typedef {{ kind: "doc", doc: string } | { kind: "external" } | null} LinkTarget */
 
 const NUMBER = String.raw`\d+(?:\.\d+)*`;
-const HEADING = /^(#{1,6})[ \t]+(.*?)[ \t]*$/;
+const HEADING = /^(#{1,6})[ \t](.*)$/;
 const NUMBERED_HEADING = /^(\d+(?:\.\d+)*)\.?[ \t]+/;
-const LIST_ITEM = /^( *)([-*]|\d+\.)[ \t]+(.*)$/;
+const LIST_ITEM = /^( *)([-*]|\d+\.)[ \t](.*)$/;
 const FENCE = /^```(\S*)\s*$/;
 const TABLE_RULE = /^\|(?:[ \t]*:?-{3,}:?[ \t]*\|)+[ \t]*$/;
 // A singular "section" takes one number ("section 5.2, the …" is no list); a plural one a list
@@ -66,7 +66,7 @@ export function sectionNumbers(source) {
     if (FENCE.test(line)) fenced = !fenced;
     if (fenced) continue;
     const heading = HEADING.exec(line);
-    const numbered = heading && NUMBERED_HEADING.exec(/** @type {string} */ (heading[2]));
+    const numbered = heading && NUMBERED_HEADING.exec((heading[2] ?? "").trim());
     if (numbered) numbers.add(/** @type {string} */ (numbered[1]));
   }
   return numbers;
@@ -79,12 +79,12 @@ export function sectionNumbers(source) {
  * @returns {SpecDocument}
  */
 export function readDocument(file, source) {
-  const title = /^#[ \t]+(.+?)[ \t]*$/m.exec(source);
+  const title = /^#[ \t](.*)$/m.exec(source);
   if (!title) throw new Error(`spec/${file}: no heading to take the title from`);
   return {
     name: file === "README.md" ? "index" : file.replace(/\.md$/, ""),
     file,
-    title: /** @type {string} */ (title[1]).replaceAll("`", ""),
+    title: (title[1] ?? "").trim().replaceAll("`", ""),
     source,
     sections: sectionNumbers(source),
   };
@@ -423,7 +423,7 @@ function parseList(lines, start, ctx, linked = []) {
       if (/\d/.test(item[2] ?? "") !== ordered) break;
       closeParagraph();
       items.push([]);
-      paragraph = [item[3] ?? ""];
+      paragraph = [(item[3] ?? "").trimStart()];
       i++;
       continue;
     }
@@ -486,7 +486,7 @@ export function convertDocument(ctx) {
     const heading = HEADING.exec(line);
     if (heading) {
       const level = (heading[1] ?? "").length;
-      const text = heading[2] ?? "";
+      const text = (heading[2] ?? "").trim();
       if (level === 1 && !titled) {
         titled = true;
       } else {
