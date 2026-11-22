@@ -3379,16 +3379,37 @@ def within_extension(
 
 
 def element_within(
-    field: str, key: str, item: bytes, fields: dict[str, FieldState], texts: dict[bytes, str] | None
+    field: str,
+    key: str,
+    item: bytes,
+    fields: dict[str, FieldState],
+    texts: dict[bytes, str] | None,
+    layer: bool = False,
 ) -> bytes:
     """within_extension for the element of the key in the list `field`, with the element part and the
     parts within it that `fields` holds; the element as it is for a list of another type, or without
-    `texts`."""
+    `texts`. In an owner's layer (`layer`), an element part that is a copy (is_copy) is no element part
+    of the owner's: every part within it comes on top (section 25.7)."""
     if texts is None:
         return item
     prefix = f"{field}/{key}/"
     parts = {n: f for n, f in fields.items() if n.startswith(prefix) and n.count("/") == 2}
-    return within_extension(item, fields.get(f"{field}/{key}"), parts, texts) if parts else item
+    element = fields.get(f"{field}/{key}")
+    if layer and is_copy(fields, field, key):
+        element = None
+    return within_extension(item, element, parts, texts) if parts else item
+
+
+def is_copy(fields: dict[str, FieldState], field: str, key: str) -> bool:
+    """Whether the owner's element part of the key is a copy (section 25.7): the extension as the record
+    showed it, stamped by the owner's change within it, which a part within it has the stamp and the
+    device of."""
+    element = fields.get(f"{field}/{key}")
+    prefix = f"{field}/{key}/"
+    return element is not None and any(
+        n.startswith(prefix) and n.count("/") == 2 and (f.stamp, f.device) == (element.stamp, element.device)
+        for n, f in fields.items()
+    )
 
 
 def list_value(field: str, fields: dict[str, FieldState], texts: dict[bytes, str]) -> bytes:
@@ -3455,7 +3476,12 @@ def owner_elements(
     theirs = split_value(schema, field, value)
     order = [str(k) for k in cast_list(fastavro.schemaless_reader(io.BytesIO(theirs[field]), ORDER, ORDER))]
     sender = [theirs[f"{field}/{k}"][1:] for k in order]
-    shown_parts = [(k, over.get(f"{field}/{k}", theirs[f"{field}/{k}"])) for k in order]
+    # The sender's element where the sender holds it and the owner's element part is a copy (25.7).
+    copies = {k for k in order if own is not None and is_copy(own, field, k)}
+    shown_parts = [
+        (k, theirs[f"{field}/{k}"] if k in copies else over.get(f"{field}/{k}", theirs[f"{field}/{k}"]))
+        for k in order
+    ]
     mine = []
     if field in over:
         mine = [str(k) for k in cast_list(fastavro.schemaless_reader(io.BytesIO(over[field]), ORDER, ORDER))]
@@ -3466,7 +3492,9 @@ def owner_elements(
         if f"{field}/{k}" in over:
             shown_parts.append((k, over[f"{field}/{k}"]))
     out = [
-        element_within(field, k, part[1:], own or {}, texts) for k, part in shown_parts if part[:1] == b"\x02"
+        element_within(field, k, part[1:], own or {}, texts, True)
+        for k, part in shown_parts
+        if part[:1] == b"\x02"
     ][:MAX_ELEMENTS]
     return sender, out
 
@@ -6141,6 +6169,20 @@ class SetDevice:
                     )
                     schema = own[1]
                 fields[name] = FieldState(value, first, self.key, schema)
+            for name in sorted(n for n in values if n.count("/") == 2):
+                # The owner's first change within an extension: the extension as the record shows it after
+                # the change, as a copy in its element part, which stays if the sender removes it (25.7).
+                field, key = part_of(name)
+                element = f"{field}/{key}"
+                if element in state.fields or rec is None or not rec.there or rec.schema is None:
+                    continue
+                writer = json.loads(rec.schema)
+                sender_parts = split_value(writer, field, rec.values[field])
+                assert element in sender_parts, "the owner changes an extension the record shows"
+                texts = {**self.schemas, **sender.schemas, schema_fingerprint(rec.schema): rec.schema}
+                parts = {n: f for n, f in fields.items() if n.startswith(element + "/")}
+                item = within_extension(sender_parts[element][1:], None, parts, texts)
+                fields[element] = FieldState(b"\x02" + item, first, self.key, schema_fingerprint(rec.schema))
         elif action == "discard":
             for name in values:
                 fields[name] = FieldState(None, first, self.key, fields[name].schema)
@@ -11027,6 +11069,27 @@ def received_sessions() -> list[Session]:
         "schema": SCHEMA_1.hex(),
         "from": "owner",
     }, "the record shows the owner's fur in the sender's extension"
+    s = new(
+        "an extension that the owner changed within stays when the sender removes it",
+        ["sync.md 25.7", "sync.md 25.9", "sync.md 22.2", "records.md 6.1"],
+        known(
+            record=other_data(1, extensions=[CAT_EXT]),
+            schemas=(APPOINTMENT_1, CAT_TEXT),
+            accepted={"tablet": [SCHEMA_1, CAT_FP]},
+        ),
+    )
+    s.owner("set", {f"extensions/{CAT_NAME}/fur": text_value("black")}, (4, 0))
+    s.take(d2, text)  # the appointment without extensions
+    s.acks()
+    s.about()
+    mine = field_value(
+        APPOINTMENT_JSON, "extensions", [tm.rules.extension(tasso_id="276098100123456", fur="black")]
+    )
+    assert s.answers[-1]["shown"]["fields"]["extensions"] == {
+        "value": mine.hex(),
+        "schema": SCHEMA_1.hex(),
+        "from": "owner",
+    }, "the record shows the owner's extension, which the sender no longer holds"
 
     # --- the answer to a RESYNC (section 20.4) ---
     layer = State({"location": weber}, None, 205)  # the phone took it from the tablet, as in section 16.7
@@ -20431,7 +20494,8 @@ SAID: dict[str, list[list[str]]] = {
             "made: True",
             (
                 "CHANGE, origin other app, to tablet, version 201, state 201, whole: "
-                "extensions/org.example.catalog.CatExtension/fur@200p"
+                "extensions/org.example.catalog.CatExtension/fur,extensions/org.example.catalog."
+                "CatExtension@200p"
             ),
         ],
         [
@@ -20450,8 +20514,37 @@ SAID: dict[str, list[list[str]]] = {
                 "version 2, extensions changed"
             ),
             (
-                "owner's layer: state stamp 201; extensions/org.example.catalog.CatExtension/fur@200p; "
-                "type axt.example.v1.Appointment"
+                "owner's layer: state stamp 201; extensions/org.example.catalog.CatExtension/fur,"
+                "extensions/org.example.catalog.CatExtension@200p; type axt.example.v1.Appointment"
+            ),
+            "tablet: not known",
+            "shows: there; the owner's value in extensions",
+        ],
+    ],
+    "an extension that the owner changed within stays when the sender removes it": [
+        [
+            "made: True",
+            (
+                "CHANGE, origin other app, to tablet, version 201, state 201, whole: "
+                "extensions/org.example.catalog.CatExtension/fur,extensions/org.example.catalog."
+                "CatExtension@200p"
+            ),
+        ],
+        [
+            "outcome: MERGED, kept ['extensions']",
+            "FORWARD 00000001 to tablet, #0: DATA version 2, with the schema as offered",
+        ],
+        [
+            "ACK to other app: version 2 MERGED, receiver 2, kept ['extensions']",
+        ],
+        [
+            "sender first known by other app; current: other app; highest 201",
+            "kept: MANIFEST revision 1; delivered to tablet",
+            "kept: DATA version 2; delivered to no sibling",
+            "sender's layer: there, version 2, type axt.example.v1.Appointment, from DATA version 2",
+            (
+                "owner's layer: state stamp 201; extensions/org.example.catalog.CatExtension/fur,"
+                "extensions/org.example.catalog.CatExtension@200p; type axt.example.v1.Appointment"
             ),
             "tablet: not known",
             "shows: there; the owner's value in extensions",

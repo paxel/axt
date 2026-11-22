@@ -4077,6 +4077,28 @@ def records_category() -> Category:
             known,
         )
 
+    # The sender removes the extension that the user changed within: the user's extension stays.
+    scenario(
+        "an extension that the user changed within stays when the sender removes it",
+        ["records.md 6.1", "fields.md 12.4"],
+        per_field_delete,
+        [
+            (data(1, first), done("APPLIED", 1, "there", first)),
+            (change("extensions", [cat("276098100123456", "black"), vet_ext]), None),
+            (
+                data(2, dict(v1, extensions=[vet_ext])),
+                done(
+                    "MERGED",
+                    2,
+                    "there",
+                    dict(v1, extensions=[vet_ext, cat("276098100123456", "black")]),
+                    ["extensions"],
+                ),
+            ),
+        ],
+        [sy.CAT_TEXT],
+    )
+
     # Every value in the sessions is a valid record of its type: it encodes with the type's schema, and its
     # time values and the checks of its schema hold (spec/time.md, section 8; spec/metadata.md, section 6).
     schemas = {
@@ -7360,7 +7382,7 @@ COUNTS = {
         {"decode_record": 46},
     ),
     "metadata": ({"describe": 22, "check_record": 200}, {"check_record": 104}),
-    "records": ({"apply": 17, "relations": 4}, {}),
+    "records": ({"apply": 18, "relations": 4}, {}),
     "manifest": ({"check_manifest": 52, "fit": 19}, {"check_manifest": 46}),
     "keys": (
         {
@@ -7406,7 +7428,7 @@ COUNTS = {
             "stale": 10,
             "pass_version": 5,
             "shown": 27,
-            "siblings": 487,
+            "siblings": 488,
             "withdrawal_stamp": 4,
         },
         {},
