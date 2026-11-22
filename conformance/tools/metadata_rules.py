@@ -14,8 +14,9 @@ This module imports none of the other scripts, so that each of them can import i
 - breaches(schema, value, time_check): the values that break a check, as (path, attribute, why), in
   the order of the encoding, with the field paths of section 7.2. time_check, if given, is asked
   about every record of a time type first, so that one walk finds the time values that are not
-  valid (spec/time.md, section 8) and the values that break a check; with it, the rules of the
-  relations of spec/types.md, section 8.4, are found in the same walk.
+  valid (spec/time.md, section 8) and the values that break a check; with relations, the rules of
+  the relations of spec/fields.md, section 11.4, which fields_examples.py holds, are found in the
+  same walk.
 
 A value is either as fastavro decodes it or in the JSON form of spec/conformance.md, section 3.3,
 in which bytes are hexadecimal strings. Unions of null and one other type are followed, and the
@@ -48,21 +49,7 @@ MIN_INT, MAX_INT = -(2**31), 2**31 - 1
 NUMBERS = {"int", "long", "float", "double"}
 PRIMITIVES = {"null", "boolean", "int", "long", "float", "double", "bytes", "string"}
 TIME_TYPES = {"axt.Date", "axt.Time", "axt.DateTime", "axt.Duration"}
-# The limits of a relation (spec/types.md, section 8.4), in bytes of UTF-8.
-RELATION = "axt.Relation"
-TARGETS = ("axt.RelationRecordTarget", "axt.RelationOutsideTarget")
-MAX_RELATIONS = 256  # items of an array of axt.Relation
-MAX_RELATION_ATTRIBUTES = 32  # entries of attributes
-MAX_RELATION_NAME = 256  # kind, and the type of a record target
-MAX_RELATION_TEXT = 256  # the display text of a target
-MAX_RELATION_URI = 2048
-MAX_RELATION_NOTE = 4096
-MAX_RELATION_KEY = 256  # a name in attributes
-MAX_RELATION_VALUE = 1024  # a value in attributes
 AVRO_NAME = r"[A-Za-z_][A-Za-z0-9_]*"
-FULL_NAME = re.compile(rf"{AVRO_NAME}(?:\.{AVRO_NAME})*")  # a full name of Avro 1.12, Names
-KIND_NAME = re.compile(rf"{AVRO_NAME}(?:\.{AVRO_NAME})+")  # a full name with a namespace
-UUID_TEXT = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 KEY = re.compile(
     r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$"
 )  # a group key, as a field name (spec/types.md, section 5.2)
@@ -627,48 +614,6 @@ def branch(names: Names, t: list[Any], v: Any, namespace: str) -> Any:
     raise ValueError("a value of no branch of the union")
 
 
-def uuid_problem(v: Any) -> bool:
-    """Not a UUID in text form, or the nil or the max UUID (spec/records.md, section 2)."""
-    return (
-        not isinstance(v, str)
-        or not UUID_TEXT.fullmatch(v)
-        or v.replace("-", "").lower() in ("0" * 32, "f" * 32)
-    )
-
-
-def utf8(v: Any) -> int:
-    return len(v.encode("utf-8")) if isinstance(v, str) else 0
-
-
-def relation_problem(record: str, field: str, v: Any) -> str | None:
-    """The rule of spec/types.md, section 8.4, that the value v of the field of a record of axt.Relation or
-    of one of its targets breaks, or None."""
-    if record == RELATION:
-        if field == "id" and uuid_problem(v):
-            return "the id is no UUID in text form, or the nil or the max UUID"
-        if field == "kind" and not (KIND_NAME.fullmatch(v) and utf8(v) <= MAX_RELATION_NAME):
-            return "the kind is no full name with a namespace of at most 256 bytes"
-        if field == "note" and utf8(v) > MAX_RELATION_NOTE:
-            return "the note is above 4,096 bytes"
-        if field == "attributes":
-            if len(v) > MAX_RELATION_ATTRIBUTES:
-                return "more than 32 attributes"
-            if any(
-                not 1 <= utf8(k) <= MAX_RELATION_KEY or utf8(x) > MAX_RELATION_VALUE for k, x in v.items()
-            ):
-                return "an attribute name not of 1 to 256 bytes, or a value above 1,024 bytes"
-    elif record == "axt.RelationRecordTarget":
-        if field == "id" and uuid_problem(v):
-            return "the target's id is no UUID in text form, or the nil or the max UUID"
-        if field == "type" and not (v == "" or (FULL_NAME.fullmatch(v) and utf8(v) <= MAX_RELATION_NAME)):
-            return "the type is neither empty nor a full name of at most 256 bytes"
-    elif record == "axt.RelationOutsideTarget" and field == "uri" and not 1 <= utf8(v) <= MAX_RELATION_URI:
-        return "the URI is not of 1 to 2,048 bytes"
-    if record in TARGETS and field == "text" and utf8(v) > MAX_RELATION_TEXT:
-        return "the display text is above 256 bytes"
-    return None
-
-
 def value_type(names: Names, t: Any, namespace: str) -> tuple[Any, str, str]:
     """The value type of a field (spec/metadata.md, section 3.2): the type without ["null", T], and of an
     array the item type, again without ["null", T]. Returns (node, kind, namespace)."""
@@ -1141,14 +1086,16 @@ def breaches(
     value: Any,
     time_check: Callable[[str, Any], str | None] | None = None,
     attributes: bool = True,
+    relations: Any = None,
 ) -> list[tuple[str, str, str]]:
     """The values that break a rule, in the order of the encoding, as (path, rule, why).
 
     The rule is the full name of a time type, for a time value that time_check finds not valid; axt.Relation,
-    for a relation that breaks a rule of spec/types.md, section 8.4, which is checked only with time_check;
-    or the attribute of a check that the value breaks."""
+    for a relation that breaks a rule of spec/fields.md, section 11.4, which relations, if given, holds: an
+    object with RELATION, relation_problem(record, field, value), list_problem(relations) and
+    repeated_ids(relations), as fields_examples.py has them; or the attribute of a check that the value
+    breaks."""
     names = Names(schema)
-    relations = time_check is not None
     out: list[tuple[str, str, str]] = []
 
     def visit(t: Any, v: Any, path: str, namespace: str, field: tuple[Any, str] | None = None) -> None:
@@ -1170,29 +1117,32 @@ def breaches(
                 return
             for f in node["fields"]:
                 here = path_join(path, f["name"])
-                why = relation_problem(full, f["name"], v[f["name"]]) if relations else None
+                why = relations.relation_problem(full, f["name"], v[f["name"]]) if relations else None
                 if why:
-                    out.append((here, RELATION, why))
+                    out.append((here, relations.RELATION, why))
                 visit(f["type"], v[f["name"]], here, inner, (f, inner))
             return
         if kind == "array":
             items = names.resolve(strip(node["items"]), namespace)[0]
             of_relations = (
-                relations
+                relations is not None
                 and isinstance(items, dict)
                 and "name" in items
-                and full_name(items, namespace)[0] == RELATION
+                and full_name(items, namespace)[0] == relations.RELATION
             )
-            if of_relations and len(v) > MAX_RELATIONS:
-                out.append((path, RELATION, "more than 256 relations"))
-            ids: set[str] = set()
+            why = relations.list_problem(v) if of_relations else None
+            if why:
+                out.append((path, relations.RELATION, why))
+            repeated = relations.repeated_ids(v) if of_relations else set()
             for i, item in enumerate(v):
-                if of_relations and isinstance(item.get("id"), str) and not uuid_problem(item["id"]):
-                    if item["id"].lower() in ids:
-                        out.append(
-                            (path_join(path_join(path, i), "id"), RELATION, "an id of an earlier relation")
+                if i in repeated:
+                    out.append(
+                        (
+                            path_join(path_join(path, i), "id"),
+                            relations.RELATION,
+                            "an id of an earlier relation",
                         )
-                    ids.add(item["id"].lower())
+                    )
                 visit(node["items"], item, path_join(path, i), namespace, field)
             return
         if kind == "map":

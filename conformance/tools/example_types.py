@@ -30,7 +30,7 @@ For every schema under types/axt/example/ this script:
   with a value that breaks a rule (BREACHES), each with the field path and
   the rule of the first such value in the order of the encoding; and the
   same for records of version 2 with relations (RELATION_VALID and
-  RELATION_BREACHES), with the rules of spec/types.md, section 8.4;
+  RELATION_BREACHES), with the rules of spec/fields.md, section 11.4;
 - computes the Parsing Canonical Form and the CRC-64-AVRO fingerprint, and
   checks both against fastavro and the Apache avro package;
 - encodes one example datum with fastavro, decodes it back and compares
@@ -93,7 +93,7 @@ TIME_TYPES = {
     f"axt.{n}": json.loads((REPO / "types" / "axt" / f"{n}.avsc").read_text(encoding="utf-8"))
     for n in ("Date", "Time", "DateTime", "Duration")
 }
-# The published types that a type defines in place, the time types and axt.Relation (spec/types.md, 8.6).
+# The published types that a type defines in place, the time types and axt.Relation (spec/fields.md, 11.6).
 RELATION = json.loads((REPO / "types" / "axt" / "Relation.avsc").read_text(encoding="utf-8"))
 PUBLISHED: dict[str, Any] = dict(TIME_TYPES, **{"axt.Relation": RELATION})
 NUMBERS = {"int", "long", "float", "double"}
@@ -437,12 +437,12 @@ VISIT_ID = "9a4c1e07-6b2d-4d3f-8e91-c5f7a0b2d164"
 
 
 def record_target(rid: str, type_: str = "", text: str = "", sender: bytes | None = None) -> dict[str, Any]:
-    """The target of a relation that is a record (spec/types.md, section 8.3)."""
+    """The target of a relation that is a record (spec/fields.md, section 11.3)."""
     return {"id": rid, "sender": sender, "type": type_, "text": text}
 
 
 def outside(uri: str, text: str = "") -> dict[str, Any]:
-    """The target of a relation that is a thing outside AXT (spec/types.md, section 8.3)."""
+    """The target of a relation that is a thing outside AXT (spec/fields.md, section 11.3)."""
     return {"uri": uri, "text": text}
 
 
@@ -571,7 +571,7 @@ RELATION_VALID = [
     ),
 ]
 
-# Records of version 2 whose relations break a rule of spec/types.md, section 8.4, which every receiver
+# Records of version 2 whose relations break a rule of spec/fields.md, section 11.4, which every receiver
 # rejects, or a check, which a receiver that checks reports: (label, type, datum, path, rule).
 REL = "axt.Relation"
 RELATION_BREACHES = [
@@ -702,8 +702,8 @@ def check_cases(schemas: dict[str, Any]) -> None:
     the rule named, first at the path named."""
     tm = time_rules()
     for label, name, datum in VALID + RELATION_VALID:
-        if mr.breaches(schemas[name], datum, tm.time_check):
-            fail(name, f"{label}: {mr.breaches(schemas[name], datum, tm.time_check)}")
+        if tm.receiver_breaches(schemas[name], datum):
+            fail(name, f"{label}: {tm.receiver_breaches(schemas[name], datum)}")
     # Each zoned time has the offset of its zone at its instant, except in the third case, whose offsets are
     # not those of Berlin at the instant: a receiver does not reject such a value (spec/time.md, section 6.2).
     for i, (label, name, datum) in enumerate(VALID + RELATION_VALID):
@@ -711,7 +711,7 @@ def check_cases(schemas: dict[str, Any]) -> None:
             if (tm.offset_at(v["zone"], v["instant_ms"]) == v["offset_seconds"]) != (i != 2):
                 fail(name, f"{label}: the offset {v['offset_seconds']} at {v['instant_ms']}")
     for label, name, datum, path, rule in BREACHES + RELATION_BREACHES:
-        found = mr.breaches(schemas[name], datum, tm.time_check)
+        found = tm.receiver_breaches(schemas[name], datum)
         if not found or found[0][:2] != (path, rule):
             fail(name, f"{label}: {found}")
         elif (
@@ -793,7 +793,7 @@ def published_type(t: Any) -> str | None:
 
 def in_place(t: Any, defined: set[str], namespace: str = "") -> Any:
     """A published schema as a type defines it in place: every named type that an earlier occurrence in the
-    type already defined replaced by its full name (spec/types.md, section 8.6). defined grows with the
+    type already defined replaced by its full name (spec/fields.md, section 11.6). defined grows with the
     names it defines."""
     if isinstance(t, list):
         return [in_place(b, defined, namespace) for b in t]
@@ -1163,7 +1163,7 @@ def check_datum(name: str, schema: Any) -> None:
     """The example datum keeps the rules of the time types and every check of its schema; each zoned time
     has the offset of its zone at its instant by this system's zone rules (spec/time.md, section 6.3)."""
     tm = time_rules()
-    for path, rule, why in mr.breaches(schema, DATA[name], tm.time_check):
+    for path, rule, why in tm.receiver_breaches(schema, DATA[name]):
         fail(f"{name}.{path}" if path else name, f"the example datum breaks {rule}: {why}")
     for v in zoned_values(DATA[name]):
         if tm.offset_at(v["zone"], v["instant_ms"]) != v["offset_seconds"]:

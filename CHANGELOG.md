@@ -17,6 +17,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - Relations on version 2 of every example type, with the published type `axt.Relation`, and their cases in the `types` vectors. ([axt-1037](https://github.com/paxel/axt/issues/45))
 - Typed fields as Avro bricks, `axt.Field` with one brick per value kind and per format, each with its checks. ([axt-1043](https://github.com/paxel/axt/issues/51))
 - Offers and files carry each type as a description of bricks, from which its schema is derived; the new vector category `bricks` tests it. ([axt-1044](https://github.com/paxel/axt/issues/52))
+- The relation brick `axt.RelationField`: a field of relations, each an `axt.Relation`, in any type, with its rules and limits and `bricks` vectors. ([axt-1046](https://github.com/paxel/axt/issues/54))
 
 ### Changed
 

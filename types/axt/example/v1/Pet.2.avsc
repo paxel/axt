@@ -219,7 +219,7 @@
           "type": "record",
           "name": "Relation",
           "namespace": "axt",
-          "doc": "A relation: a link from the record that holds it to another record or to a thing outside AXT, of a kind, with information about the link. Defined in spec/types.md, section 8.",
+          "doc": "A relation: a link from the record that holds it to another record or to a thing outside AXT, of a kind, with information about the link. Defined in spec/fields.md, section 11.",
           "axt.label": "Relation",
           "axt.label_translations": {
             "de": "Verknüpfung"

@@ -1293,7 +1293,7 @@
       "items": {
        "properties": {
         "op": {
-         "enum": ["derive"]
+         "enum": ["decode_record", "derive"]
         }
        }
       }

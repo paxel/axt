@@ -251,70 +251,36 @@ Adding a field with a default is change 1 of section 3.3, and the two versions r
 
 ## 8. Relations
 
-A relation links the record that holds it to another record or to a thing outside AXT, such as an appointment to the pets it is for, with information about the link. Version 2 of every example type holds its relations in its field `relations`, an array of the published type `axt.Relation`, [types/axt/Relation.avsc](../types/axt/Relation.avsc). An app type MAY hold relations in the same way, in a field of an array of `axt.Relation`.
+A relation links the record that holds it to another record or to a thing outside AXT, with information about the link. Relations are a brick: a type has them through a field whose brick is `axt.RelationField`, and the relation record `axt.Relation`, its kinds, targets, rules and limits and its definition in place are in [fields.md](fields.md), section 11. Version 2 of every example type holds its relations in its field `relations`, the list of relations that such a field derives.
 
 ### 8.1 The relation record
 
-| Field        | Avro type                                                 | Value                                                                                                                    |
-| ------------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `id`         | `string` with `uuid`                                      | The id of the relation, unique among the relations of the record and kept for as long as the relation exists             |
-| `kind`       | `string`, default `axt.related`                           | What kind of link it is (section 8.2)                                                                                    |
-| `target`     | `axt.RelationRecordTarget` or `axt.RelationOutsideTarget` | What the relation points at: a record or a thing outside AXT (section 8.3)                                               |
-| `note`       | `string`, default `""`                                    | Plain text about the link (section 5.6); empty when there is none                                                        |
-| `start`      | `["null", axt.DateTime]`, default `null`                  | When the link begins; `null` when it has no beginning or it is not known                                                 |
-| `end`        | `["null", axt.DateTime]`, default `null`                  | The first moment after the link, as the end of section 5.6; `null` when it has no end or it is not known                 |
-| `attributes` | `map` of `string`, default `{}`                           | Further values that the kind needs beyond the other fields, by names that the kind gives them; empty when there are none |
-
-A sender creates the id of a relation as the id of a record ([records.md](records.md), section 2): a UUID of version 4 or 7, generated when the relation is created and never used for another relation of the record. The relations of a record are part of its value, in the order its user gave them.
+Moved to [fields.md](fields.md), section 11.1.
 
 ### 8.2 Kinds
 
-- **Names.** A kind is named like a type: a full name of Avro with a namespace, such as `org.example.catalog.vet`. An app introduces the kinds it needs in its own namespace (section 2), and gives each kind its meaning, the meaning of `start` and `end` for it, and the names and values of its attributes. The namespace `axt` and every namespace that begins with `axt.` are reserved for this specification.
-- **`axt.related`.** AXT defines one kind: `axt.related`, which says only that the two are related, and how is left to the user, such as in the note. It is the default of `kind`, and it has no attributes.
-- **Kinds a receiver does not know.** A receiver MUST NOT reject a record or a relation because it does not know its kind, also not a kind in the namespace `axt`, which a later version of this specification may define. It keeps the relation as it received it, and SHOULD show it generically: by its kind's name, its target, its note, its times and its attributes, as it shows a field it does not know (section 6).
+Moved to [fields.md](fields.md), section 11.2.
 
 ### 8.3 Targets
 
-The field `target` is a union of two records. They are the only union of an example type other than `["null", T]` (section 5.3), and each has a field without a default that the other lacks, so that a value of one is never a value of the other:
-
-- **A record**, `axt.RelationRecordTarget`: `id`, the id of the target record; `sender`, an Ed25519 public key ([keys.md](keys.md)) of the target record's sender, or `null` for a record of the sender of the record that holds the relation; `type`, the full name of the target record's type, which holds its major version, such as `axt.example.v1.Pet`, or empty when it is not known; and `text`, a display text, such as the target's title.
-- **A thing outside AXT**, `axt.RelationOutsideTarget`: `uri`, a URI of [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986) of any scheme, with the format `uri` of [metadata.md](metadata.md), section 6.3; and `text`, a display text, such as the thing's name.
-
-A receiver SHOULD show the display text of a record target while it does not hold the target record, and that of an outside target in place of its URI. It shows and opens a URI as [metadata.md](metadata.md), section 6.3, says of the format `uri`.
+Moved to [fields.md](fields.md), section 11.3. The targets are the only union of an example type other than `["null", T]` (section 5.3).
 
 ### 8.4 Rules and limits
 
-A relation is valid when:
-
-1. its `id` is a UUID in text form, neither the nil UUID nor the max UUID ([records.md](records.md), section 2), and no earlier relation in the same array has the same id, compared as 128-bit values;
-2. its `kind` is a full name of Avro with a namespace, of at most 256 bytes;
-3. the `id` of a record target is a UUID in text form, neither the nil UUID nor the max UUID, and its `type` is empty or a full name of Avro of at most 256 bytes;
-4. the `uri` of an outside target has 1 to 2,048 bytes;
-5. the display text `text` of a target has at most 256 bytes, and the `note` at most 4,096 bytes;
-6. it has at most 32 `attributes`, each name of 1 to 256 bytes and each value of at most 1,024 bytes;
-7. its `start` and its `end` are valid time values ([time.md](time.md), section 8).
-
-An array of `axt.Relation` holds at most 256 relations. Lengths are in bytes of UTF-8; a full name of Avro consists of names of an ASCII letter or `_` followed by ASCII letters, digits and `_`, separated by `.`.
-
-A sender MUST NOT send a record with more than 256 relations in an array or with a relation that is not valid. A receiver MUST reject such a record with the error `VALUE_INVALID`, whose `field` names the first value that breaks a rule in the order of the encoding ([metadata.md](metadata.md), section 7.2): an array of more than 256 relations by its own path, such as `relations`; the second of two relations with one id by its id, such as `relations[1].id`; attributes beyond a limit by the map, such as `relations[0].attributes`; and every other value by its path, such as `relations[0].kind`. As with a time value, these are rules that every receiver checks, not checks of attributes ([metadata.md](metadata.md), section 7.1).
-
-The limits keep what a receiver stores and shows for the links of one record within the bounds of a list on a phone: a long text about a link belongs into a record of its own, to which the relation points. The rule on ids lets a receiver tell the relations of a record apart.
+Moved to [fields.md](fields.md), section 11.4.
 
 ### 8.5 Relations and references
 
-The references of [records.md](records.md), section 8, stay: a field whose value is the id of another record of the same sender. A type uses a relation for a link, unless the link is the type's own meaning, without which a record of the type is not understood, such as the pet that every record of an app type for a pet's weight is taken of; such a link MAY be a reference. Every other link, such as the pets an appointment is for, the vet of a pet or the appointment an invoice belongs to, is a relation, and a record can hold any number of them, of any kind. The example types use relations only.
+Moved to [fields.md](fields.md), section 11.5. The example types use relations only.
 
 ### 8.6 Defined in place
 
-A type that holds `axt.Relation` defines it in place at its first occurrence, as section 5.2 says of every published type: as its published schema, with every named type that an earlier occurrence in the same schema already defined replaced by its full name, and by its full name `"axt.Relation"` after it. Its nested types, `axt.RelationRecordTarget`, `axt.RelationRecordTargetSender` and `axt.RelationOutsideTarget`, keep the names and the namespace `axt` of the published schema. Version 2 of Note, Task, Appointment and Measurement holds an `axt.DateTime` before its relations, so its `axt.Relation` has `"axt.DateTime"` in `start`; version 2 of Person, Car, Pet and Document holds none, so its `axt.Relation` defines `axt.DateTime` in `start`, as the published schema does.
-
-A receiver MUST decline a type whose schema defines `axt.Relation` or one of its nested types otherwise, with `DOES_NOT_RESOLVE` ([protocol.md](protocol.md), section 5.2), as [time.md](time.md), section 3.1, has it decline a time type that is not defined as published.
+The rule is in [fields.md](fields.md), section 11.6, and applies to the example types as to every type: version 2 of Note, Task, Appointment and Measurement holds an `axt.DateTime` before its relations, so its `axt.Relation` has `"axt.DateTime"` in `start`; version 2 of Person, Car, Pet and Document holds none, so its `axt.Relation` defines `axt.DateTime` in `start`, as the published schema does.
 
 ## References
 
 - [Apache Avro 1.12 specification](https://avro.apache.org/docs/1.12.0/specification/)
 - [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) and [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174): key words for requirement levels
-- [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986): URIs, for the target of a relation
 - [RFC 5545](https://www.rfc-editor.org/rfc/rfc5545): iCalendar, for `DTEND` and `RRULE`
 - [RFC 6838](https://www.rfc-editor.org/rfc/rfc6838): media types, for Document's `media_type`
 - [IANA time zone database](https://www.iana.org/time-zones)

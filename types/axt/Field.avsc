@@ -1261,6 +1261,12 @@
               "doc": "An example value as text, which meets the field's checks; the empty string for none (spec/fields.md, section 3.4)."
             }
           ]
+        },
+        {
+          "type": "record",
+          "name": "RelationField",
+          "doc": "A field whose value is a list of relations, each an axt.Relation that links the record to another record or to a thing outside AXT (spec/fields.md, section 11).",
+          "fields": []
         }
       ],
       "doc": "The brick of the field's value: its kind and its checks (spec/fields.md, sections 4 and 5)."

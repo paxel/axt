@@ -161,6 +161,23 @@ def named(t: dict[str, Any], names: dict[str, Any], namespace: str) -> str:
     return ns
 
 
+def all_named(t: Any, names: dict[str, Any], namespace: str = "") -> dict[str, Any]:
+    """Register every named type that the schema defines, also those in an empty array or map or in a branch
+    a value does not take, which a later reference by name needs."""
+    if isinstance(t, list):
+        for b in t:
+            all_named(b, names, namespace)
+    elif isinstance(t, dict):
+        if t.get("type") in ("record", "enum", "fixed"):
+            namespace = named(t, names, namespace)
+        for f in t.get("fields", []):
+            all_named(f["type"], names, namespace)
+        for member in ("items", "values"):
+            if member in t:
+                all_named(t[member], names, namespace)
+    return names
+
+
 def branch_name(b: Any, namespace: str) -> str:
     """The full name of a named branch of a union, or "" for another."""
     if isinstance(b, dict):
@@ -262,7 +279,7 @@ def read(t: Any, r: Reader, names: dict[str, Any], namespace: str = "", depth: i
 
 def decode_all(t: Any, data: bytes) -> Any:
     r = Reader(data)
-    value = read(t, r, {})
+    value = read(t, r, all_named(t, {}))
     if r.pos != len(data):
         raise Undecodable("bytes left over")
     return value
@@ -277,7 +294,7 @@ def record_of(t: Any, names: dict[str, Any], namespace: str) -> Any:
 
 def json_of(t: Any, value: Any, names: dict[str, Any] | None = None, namespace: str = "") -> Any:
     """The meaning of a value as fastavro decodes it with logical types removed."""
-    names = {} if names is None else names
+    names = all_named(t, {}) if names is None else names
     if isinstance(t, str):
         if t not in PRIMITIVES:
             return json_of(names.get(t) or names[f"{namespace}.{t}"], value, names, namespace)
@@ -458,7 +475,7 @@ def op_check_record(i: Any) -> dict[str, Any]:
     if rejected:
         return rejected
     writer = pe.without_logical_types(json.loads(i["schema"]))
-    broken = mr.breaches(writer, value, tm.time_check)
+    broken = tm.receiver_breaches(writer, value)
     if broken:
         path, rule, why = broken[0]
         return no("VALUE_INVALID", f"{rule}: {why}", field=mr.error_field(path))

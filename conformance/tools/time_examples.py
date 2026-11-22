@@ -64,6 +64,11 @@ if _spec is None or _spec.loader is None:
     raise ImportError(f"cannot load {HERE / 'example_types.py'}")
 rules = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(rules)  # runs none of the checks of the example types
+_spec = importlib.util.spec_from_file_location("fields_examples", HERE / "fields_examples.py")
+if _spec is None or _spec.loader is None:
+    raise ImportError(f"cannot load {HERE / 'fields_examples.py'}")
+fe = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(fe)  # for the rules of the relations of spec/fields.md, section 11.4
 
 NAMES = ["Date", "Time", "DateTime", "Duration"]
 FULL = {f"axt.{n}": n for n in NAMES}
@@ -248,11 +253,19 @@ def time_check(full: str, v: dict[str, Any]) -> str | None:
     return broken[0] if broken else None
 
 
-def value_breaches(schema: Any, value: Any) -> list[tuple[str, str, str]]:
-    """The time values inside a value of the schema that are not valid, as (field path, time type, rule), in
-    the order of the encoding: what a receiver reports with VALUE_INVALID (spec/time.md, section 8)."""
-    found: list[tuple[str, str, str]] = mr.breaches(schema, value, time_check, attributes=False)
+def receiver_breaches(schema: Any, value: Any, attributes: bool = True) -> list[tuple[str, str, str]]:
+    """The values inside a value of the schema that break a rule, as (field path, rule, why), in the order of
+    the encoding: the time values that are not valid (spec/time.md, section 8), the relations that break a
+    rule of spec/fields.md, section 11.4, and, with attributes, the values that break a check."""
+    found: list[tuple[str, str, str]] = mr.breaches(schema, value, time_check, attributes, relations=fe)
     return found
+
+
+def value_breaches(schema: Any, value: Any) -> list[tuple[str, str, str]]:
+    """The time values and relations inside a value of the schema that are not valid, as (field path, rule,
+    why), in the order of the encoding: what a receiver reports with VALUE_INVALID (spec/time.md, section 8;
+    spec/fields.md, section 11.4)."""
+    return receiver_breaches(schema, value, attributes=False)
 
 
 # --- zone rules (spec/time.md, section 6) ---------------------------------------------------

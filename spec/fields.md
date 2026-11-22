@@ -11,6 +11,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 - **Typed field**: a datum of `axt.Field`. It describes one field: its common part (section 3) and, in its member `kind`, one brick.
 - **Brick**: one branch of the union `kind`, such as `axt.StringField` or `axt.EmailField`. It names the kind of the field's values and holds the checks and hints of that kind.
 - **Value brick**: a brick of a kind of value: text, a number, a boolean, bytes, an enum, a list, a map, an object, or a time type (section 4).
+- **Relation brick**: `axt.RelationField`, whose value is a list of relations, each linking the record to another record or to a thing outside AXT (section 11).
 - **Semantic brick**: a brick of text of one form, such as an email address, whose check of that form is built in (section 5).
 - **Description**: a typed field whose brick is an `axt.ObjectField`, at the root of a type: the type's full name, version and fields, each a typed field, and so on down to the value bricks (section 9.1).
 - **Derived schema**: the Avro schema of a type, derived from its description by the rule of section 9.2; its fingerprint is the type's fingerprint ([envelope.md](envelope.md), section 5).
@@ -21,7 +22,7 @@ Sender, receiver and type have the meaning of [records.md](records.md), section 
 
 ## 2. The bricks
 
-[types/axt/Field.avsc](../types/axt/Field.avsc) defines `axt.Field` and, in place, every brick and every record a brick holds, so that the file is parsed on its own. Its CRC-64-AVRO is `0x527242bb71c90163`.
+[types/axt/Field.avsc](../types/axt/Field.avsc) defines `axt.Field` and, in place, every brick and every record a brick holds, so that the file is parsed on its own. Its CRC-64-AVRO is `0xbaed02035d879fb5`.
 
 | Brick                | Values                                    | Section |
 | -------------------- | ----------------------------------------- | ------- |
@@ -52,8 +53,9 @@ Sender, receiver and type have the meaning of [records.md](records.md), section 
 | `axt.CurrencyField`  | a currency code                           | 5       |
 | `axt.MediaTypeField` | a media type                              | 5       |
 | `axt.UcumField`      | a unit code                               | 5       |
+| `axt.RelationField`  | a list of relations, each `axt.Relation`  | 11      |
 
-The union `kind` has the bricks in this order. A relation is a kind of value of its own; its brick will join the union.
+The union `kind` has the bricks in this order.
 
 The bricks are one schema rather than a file each because an object, a list and a map hold typed fields of every kind: the union of the bricks is recursive, and Avro defines a named type once in a schema. A description is encoded as a datum of this schema like any other.
 
@@ -202,6 +204,7 @@ The values were produced with [conformance/tools/fields_examples.py](../conforma
 - checks [types/axt/Field.avsc](../types/axt/Field.avsc) by the rules of [types.md](types.md), sections 5.1 and 5.2, and its fingerprint, with fastavro 1.13.1 and the Python `avro` 1.12.2 package;
 - checks that the description of `com.example.Vet` is valid, and 45 descriptions that each break one rule, each with the path of its problem, and the limits of section 9.1;
 - describes each example type of version 1 and checks that the schema derived from its description has the canonical form of its `.avsc` file, and that the derivation is the same when it is done again;
+- describes each example type of version 2, whose field `relations` has the brick `axt.RelationField`, and checks that the type derived for it is that of its `.avsc` file, and derives `com.example.Links`, with relation fields first, after a date and time, twice, as the items of a list and in a nested object (section 11.6);
 - checks the 23 values of the table and the others, a value of each semantic brick that has its format and one that does not, and values of the bricks the type does not use;
 - encodes each description with fastavro and decodes it again with both libraries.
 
@@ -214,7 +217,7 @@ The test vectors of [conformance.md](conformance.md) take precedence over these 
 A description describes one type. In addition to the rules of sections 3 to 6, a description keeps these:
 
 - **The root.** Its brick is `axt.ObjectField`. Its `name` is the full name of the type, with a namespace ([types.md](types.md), section 2), its `version` the version of the type within its major version, at least 1 ([types.md](types.md), section 3.2), and its `title`, if not empty, the name of one of its fields whose brick is `axt.StringField` or a semantic brick: the field whose value a receiver MAY show as the name of a record, as `axt.title` of [types.md](types.md), section 6, says. The root's `doc` and `texts` are those of the type. Its own `name` is not used. It is not `required`, and has no `order`, no `group`, and neither `sensitive` nor `advanced`.
-- **Nested objects and enums.** Their names have no namespace; they take the namespace of the root. No two of the objects and enums of a description, the root among them, have the same full name, and none has the name of a time type. A nested object has the `version` `null`; its `title`, if not empty, names one of its own fields of text, which a receiver MAY show as the name of each of its values.
+- **Nested objects and enums.** Their names have no namespace; they take the namespace of the root. No two of the objects and enums of a description, the root among them, have the same full name, and none has the name of a time type or of a named type that `axt.Relation` defines (section 11.6). A nested object has the `version` `null`; its `title`, if not empty, names one of its own fields of text, which a receiver MAY show as the name of each of its values.
 - **Depth.** Typed fields nest at most 64 deep: the root is at depth 1, and a field of an object, the items of a list and the values of a map are one deeper than the typed field that holds them. The derived schema nests at most 64 deep as JSON, as every schema does ([envelope.md](envelope.md), section 8).
 - **Numbers.** A default of `axt.DoubleField` is finite, and a default of `axt.LongField` is at most 2^53 in magnitude, so that the text of section 9.3 writes it exactly.
 - **Size.** A description in its Avro encoding, and the text of its derived schema (section 9.3), each have at most 256 KiB, the limit of a schema ([envelope.md](envelope.md), section 8).
@@ -227,8 +230,8 @@ The derived schema of a valid description is an Avro 1.12 schema of a record, wr
 
 - **The record.** The root gives the object `{"type": "record", "name": N, "namespace": S, "doc": D, "axt.version": V, "fields": F}`, where S and N are the namespace and the last part of the root's full name, D is the root's `doc`, V its `version`, and F its fields.
 - **The fields.** Each typed field of an object gives one field of its record, in the order of the object: `{"name": n, "type": T, "default": d, "doc": c}` with the typed field's `name` and `doc`, its type T, and its default d where it has one.
-- **The type.** T is the type of the brick, as the table below gives it, or `["null", T]` when the field may hold no value: when its brick is neither `axt.ListField` nor `axt.MapField`, it is not `required`, and its brick gives no default, a `default` of `null` or no member `default` at all, as `axt.ObjectField` and the time bricks have.
-- **The default.** A list has the default `[]` and a map `{}`. A field whose brick gives a default has that default, a default of bytes written as the string whose code points are its bytes, as Avro writes it. A field of the type `["null", T]` has the default `null`. A `required` field whose brick gives no default has none.
+- **The type.** T is the type of the brick, as the table below gives it, or `["null", T]` when the field may hold no value: when its brick is none of `axt.ListField`, `axt.MapField` and `axt.RelationField`, it is not `required`, and its brick gives no default, a `default` of `null` or no member `default` at all, as `axt.ObjectField` and the time bricks have.
+- **The default.** A list and a list of relations have the default `[]`, and a map `{}`. A field whose brick gives a default has that default, a default of bytes written as the string whose code points are its bytes, as Avro writes it. A field of the type `["null", T]` has the default `null`. A `required` field whose brick gives no default has none.
 - **Items and values.** The items of a list and the values of a map have the type of their typed field by the same rule, and no default.
 
 | Brick                                                                      | Type of the brick                                                                                                                    |
@@ -241,8 +244,9 @@ The derived schema of a valid description is an Avro 1.12 schema of a record, wr
 | `axt.MapField`                                                             | `{"type": "map", "values": the type of its values}`                                                                                  |
 | `axt.ObjectField`                                                          | `{"type": "record", "name": its name, "doc": the field's doc, "fields": its fields}`                                                 |
 | `axt.DateField`, `axt.TimeField`, `axt.DateTimeField`, `axt.DurationField` | The published schema of `axt.Date`, `axt.Time`, `axt.DateTime` or `axt.Duration` at its first occurrence, and its full name after it |
+| `axt.RelationField`                                                        | `{"type": "array", "items": axt.Relation as section 11.6 defines it in place}`                                                       |
 
-The first occurrence is the first in the order of the JSON, the fields of each record in their order and depth first, and a time type that a published schema defines inside itself, such as `axt.Time` in a schema that holds `axt.DateTime` first, has its first occurrence there ([time.md](time.md), section 3.1). The derived schema carries no attribute other than `axt.version`: what a receiver shows of a type and checks of its values is in the description, which travels with it.
+The first occurrence is the first in the order of the JSON, the fields of each record in their order and depth first, and a time type that a published schema defines inside itself, such as `axt.Time` in a schema that holds `axt.DateTime` first, has its first occurrence there ([time.md](time.md), section 3.1), as does `axt.DateTime` in `axt.Relation` (section 11.6). The derived schema carries no attribute other than `axt.version` and those of the published schema of `axt.Relation`: what a receiver shows of a type and checks of its values is in the description, which travels with it.
 
 The rule gives the forms that [types.md](types.md), section 5, requires of a type: a value that may be absent is `["null", T]` with the default `null`, a text that may be empty is a `string` whose brick gives the default `""`, and a list is an array with the default `[]`. The description of each example type of version 1 derives a schema with the Parsing Canonical Form of its file under [types/axt/example/v1/](../types/axt/example/v1/), and so its fingerprint.
 
@@ -272,10 +276,72 @@ A reader MUST reject a file, as a whole, whose `axt.schemas` holds an entry with
 
 Where a description is written as JSON, in a file and in the test vectors, it is the datum of `axt.Field` in the form of [conformance.md](conformance.md), section 3.3: bytes as lower-case hexadecimal, and the branch of each union `kind` as an object with one member, named by the full name of the brick, whose value is the brick, such as `{"axt.EmailField": {…}}`, as in the JSON encoding of Avro. The bricks with the same members, such as `axt.EmailField` and `axt.PhoneField`, differ only in their names, so the name is always written.
 
+## 11. Relations
+
+A relation links the record that holds it to another record or to a thing outside AXT, such as an appointment to the pets it is for, with information about the link. A type has relations through a field whose brick is `axt.RelationField`: its value is a list of relations, each a value of the published type `axt.Relation`, [types/axt/Relation.avsc](../types/axt/Relation.avsc), which is normative for what a relation holds. The brick has no member: the rules of a relation are the same in every type, and every receiver checks them (section 11.4). A type MAY have several relation fields, and a relation field MAY be the items of a list or a field of a nested object, as any typed field.
+
+### 11.1 The relation record
+
+| Field        | Avro type                                                 | Value                                                                                                                    |
+| ------------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `id`         | `string` with `uuid`                                      | The id of the relation, unique among the relations of the list and kept for as long as the relation exists               |
+| `kind`       | `string`, default `axt.related`                           | What kind of link it is (section 11.2)                                                                                   |
+| `target`     | `axt.RelationRecordTarget` or `axt.RelationOutsideTarget` | What the relation points at: a record or a thing outside AXT (section 11.3)                                              |
+| `note`       | `string`, default `""`                                    | Plain text about the link ([types.md](types.md), section 5.6); empty when there is none                                  |
+| `start`      | `["null", axt.DateTime]`, default `null`                  | When the link begins; `null` when it has no beginning or it is not known                                                 |
+| `end`        | `["null", axt.DateTime]`, default `null`                  | The first moment after the link, as the end of [types.md](types.md), section 5.6; `null` when it has no end or it is not known |
+| `attributes` | `map` of `string`, default `{}`                           | Further values that the kind needs beyond the other fields, by names that the kind gives them; empty when there are none |
+
+A sender creates the id of a relation as the id of a record ([records.md](records.md), section 2): a UUID of version 4 or 7, generated when the relation is created and never used for another relation of the list. The relations of a list are part of the record's value, in the order its user gave them.
+
+### 11.2 Kinds
+
+- **Names.** A kind is named like a type: a full name of Avro with a namespace, such as `org.example.catalog.vet`. An app introduces the kinds it needs in its own namespace ([types.md](types.md), section 2), and gives each kind its meaning, the meaning of `start` and `end` for it, and the names and values of its attributes. The namespace `axt` and every namespace that begins with `axt.` are reserved for this specification.
+- **`axt.related`.** AXT defines one kind: `axt.related`, which says only that the two are related, and how is left to the user, such as in the note. It is the default of `kind`, and it has no attributes.
+- **Kinds a receiver does not know.** A receiver MUST NOT reject a record or a relation because it does not know its kind, also not a kind in the namespace `axt`, which a later version of this specification may define. It keeps the relation as it received it, and SHOULD show it generically: by its kind's name, its target, its note, its times and its attributes, as it shows a field it does not know ([types.md](types.md), section 6).
+
+### 11.3 Targets
+
+The field `target` is a union of two records. Each has a field without a default that the other lacks, so that a value of one is never a value of the other:
+
+- **A record**, `axt.RelationRecordTarget`: `id`, the id of the target record; `sender`, an Ed25519 public key ([keys.md](keys.md)) of the target record's sender, or `null` for a record of the sender of the record that holds the relation; `type`, the full name of the target record's type, which holds its major version, such as `axt.example.v1.Pet`, or empty when it is not known; and `text`, a display text, such as the target's title.
+- **A thing outside AXT**, `axt.RelationOutsideTarget`: `uri`, a URI of [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986) of any scheme, with the format `uri` of [metadata.md](metadata.md), section 6.3; and `text`, a display text, such as the thing's name.
+
+A receiver SHOULD show the display text of a record target while it does not hold the target record, and that of an outside target in place of its URI. It shows and opens a URI as [metadata.md](metadata.md), section 6.3, says of the format `uri`.
+
+### 11.4 Rules and limits
+
+A relation is valid when:
+
+1. its `id` is a UUID in text form, neither the nil UUID nor the max UUID ([records.md](records.md), section 2), and no earlier relation in the same list has the same id, compared as 128-bit values;
+2. its `kind` is a full name of Avro with a namespace, of at most 256 bytes;
+3. the `id` of a record target is a UUID in text form, neither the nil UUID nor the max UUID, and its `type` is empty or a full name of Avro of at most 256 bytes;
+4. the `uri` of an outside target has 1 to 2,048 bytes;
+5. the display text `text` of a target has at most 256 bytes, and the `note` at most 4,096 bytes;
+6. it has at most 32 `attributes`, each name of 1 to 256 bytes and each value of at most 1,024 bytes;
+7. its `start` and its `end` are valid time values ([time.md](time.md), section 8).
+
+A list of relations holds at most 256 relations. Lengths are in bytes of UTF-8; a full name of Avro consists of names of an ASCII letter or `_` followed by ASCII letters, digits and `_`, separated by `.`.
+
+A sender MUST NOT send a record with more than 256 relations in a list or with a relation that is not valid. A receiver MUST reject such a record with the error `VALUE_INVALID`, whose `field` names the first value that breaks a rule in the order of the encoding ([metadata.md](metadata.md), section 7.2): a list of more than 256 relations by its own path, such as `relations`; the second of two relations with one id by its id, such as `relations[1].id`; attributes beyond a limit by the map, such as `relations[0].attributes`; and every other value by its path, such as `relations[0].kind`. As with a time value, these are rules that every receiver checks, not checks of section 7: the only check of a relation field is `required`, which an empty list breaks (section 3.3).
+
+The limits keep what a receiver stores and shows for the links of one record within the bounds of a list on a phone: a long text about a link belongs into a record of its own, to which the relation points. The rule on ids lets a receiver tell the relations of a list apart.
+
+### 11.5 Relations and references
+
+The references of [records.md](records.md), section 8, stay: a field whose value is the id of another record of the same sender. A type uses a relation for a link, unless the link is the type's own meaning, without which a record of the type is not understood, such as the pet that every record of an app type for a pet's weight is taken of; such a link MAY be a reference. Every other link, such as the pets an appointment is for, the vet of a pet or the appointment an invoice belongs to, is a relation, and a record can hold any number of them, of any kind.
+
+### 11.6 Defined in place
+
+The type of a relation field in the derived schema (section 9.2) is an array whose items are `axt.Relation`, defined in place at its first occurrence, as the time types are: as its published schema, with every named type that an earlier occurrence in the same schema already defined replaced by its full name, and by its full name `"axt.Relation"` after it. Its nested types, `axt.RelationRecordTarget`, `axt.RelationRecordTargetSender` and `axt.RelationOutsideTarget`, keep the names and the namespace `axt` of the published schema. A derived schema that holds an `axt.DateTime` before its first relation field has `"axt.DateTime"` in the `start` of its `axt.Relation`; otherwise its `axt.Relation` defines `axt.DateTime` in `start`, as the published schema does, and a later `axt.DateTimeField` has its full name.
+
+A receiver MUST decline a type whose schema defines `axt.Relation` or one of its nested types otherwise, with `DOES_NOT_RESOLVE` ([protocol.md](protocol.md), section 5.2), as [time.md](time.md), section 3.1, has it decline a time type that is not defined as published.
+
 ## References
 
 - [Apache Avro 1.12 specification](https://avro.apache.org/docs/1.12.0/specification/)
 - [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) and [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174): key words for requirement levels
+- [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986): URIs, for the target of a relation
 - [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785): the JSON Canonicalization Scheme
 - [RFC 9485](https://www.rfc-editor.org/rfc/rfc9485): I-Regexp, an interoperable regular expression format
 - [CommonMark](https://spec.commonmark.org/)

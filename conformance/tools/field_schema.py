@@ -348,6 +348,12 @@ DATE_TIME = rec(
     [f("anchor", ANCHOR, f"The anchor of the field's values ({S}, section 4.7).", default="LOCAL")],
 )
 DURATION = rec("DurationField", f"A field of axt.Duration values (spec/time.md; {S}, section 4.7).", [])
+RELATION = rec(
+    "RelationField",
+    f"A field whose value is a list of relations, each an axt.Relation that links the record to another "
+    f"record or to a thing outside AXT ({S}, section 11).",
+    [],
+)
 
 KINDS = [
     STRING,
@@ -366,6 +372,7 @@ KINDS = [
     DURATION,
     MARKDOWN,
     *[semantic(*s) for s in SEMANTIC],
+    RELATION,
 ]
 
 FIELD = {

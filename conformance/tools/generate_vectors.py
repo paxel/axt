@@ -866,6 +866,33 @@ def raw_schema(t: Any) -> Any:
     return fastavro.parse_schema(pe.without_logical_types(t), _write_hint=False)
 
 
+def name_of(t: dict[str, Any], names: dict[str, Any]) -> None:
+    """Enter a named type into names by its name and its full name, as meaning finds it."""
+    full = (
+        t["name"]
+        if "." in t["name"]
+        else ".".join(x for x in (t.get("namespace", names.get("", "")), t["name"]) if x)
+    )
+    names[t["name"]] = names[full] = t
+    if "namespace" in t:
+        names[""] = t["namespace"]
+
+
+def names_in(t: Any, names: dict[str, Any]) -> None:
+    """Enter every named type that the type defines into names, as meaning would for a value of it."""
+    if isinstance(t, list):
+        for b in t:
+            names_in(b, names)
+    elif isinstance(t, dict):
+        if t["type"] in ("record", "enum", "fixed"):
+            name_of(t, names)
+        for f in t.get("fields", []):
+            names_in(f["type"], names)
+        for member in ("items", "values"):
+            if member in t:
+                names_in(t[member], names)
+
+
 def meaning(t: Any, value: Any, names: dict[str, Any] | None = None) -> Any:
     """A decoded Avro value as JSON: bytes and fixed as hex, logical types as their underlying values."""
     names = {} if names is None else names
@@ -906,21 +933,18 @@ def meaning(t: Any, value: Any, names: dict[str, Any] | None = None) -> Any:
         return meaning(branches[0], value, names)
     kind = t["type"]
     if kind in ("record", "enum", "fixed"):
-        full = (
-            t["name"]
-            if "." in t["name"]
-            else ".".join(x for x in (t.get("namespace", names.get("", "")), t["name"]) if x)
-        )
-        names[t["name"]] = names[full] = t
-        if "namespace" in t:
-            names[""] = t["namespace"]
+        name_of(t, names)
     if kind == "record":
         return {f["name"]: meaning(f["type"], value[f["name"]], names) for f in t["fields"]}
     if kind == "fixed":
         return value.hex()
     if kind == "array":
+        if not value:
+            names_in(t["items"], names)  # an empty array defines the named types of its items all the same
         return [meaning(t["items"], v, names) for v in value]
     if kind == "map":
+        if not value:
+            names_in(t["values"], names)
         return {k: meaning(t["values"], v, names) for k, v in value.items()}
     if kind == "enum":
         return value
@@ -1043,7 +1067,7 @@ def encoding_category() -> Category:
         "DeviceJoin": 0xDFF876FAB5FECF2F,
         "DeviceAdd": 0xC60D1EF44B7B3131,
         "DeviceRemove": 0xD0F57582AAB2AADC,
-        "Offer": 0x0D419C150D98AE9B,
+        "Offer": 0x6CD74C5CD5B0AE53,
         "Accept": 0x6B244FC3913D82AB,
         "Decline": 0x70078F60F3BA4953,
         "Ack": 0x38DD09198076E05C,
@@ -1055,7 +1079,7 @@ def encoding_category() -> Category:
         "Withdraw": se.WITHDRAW_FP,
         "Proposal": 0x2512222A12D90279,
         "ProposalReply": 0x64610CE36E75F8C6,
-        "Field": 0x527242BB71C90163,
+        "Field": 0xBAED02035D879FB5,
     }
     sections = {
         "Envelope": "envelope.md 10.1",
@@ -1669,7 +1693,7 @@ def relation_vectors(c: Category, texts: dict[str, str], record_vector: Callable
     c.add(
         "fingerprint",
         "axt.Relation",
-        ["types.md 7.3", "types.md 8.1"],
+        ["types.md 7.3", "fields.md 11.1"],
         {"schema": text},
         accept({"canonical_form": pcf, "fingerprint": H(pe.fp8(fp))}),
     )
@@ -1696,7 +1720,7 @@ def relation_vectors(c: Category, texts: dict[str, str], record_vector: Callable
         body = single_object(texts2[name], datum)
         record_vector(
             f"a record of axt.example.v1.{name}, version 2, with relations",
-            ["types.md 7.4", "types.md 8.1", "types.md 8.3"],
+            ["types.md 7.4", "fields.md 11.1", "fields.md 11.3"],
             texts2[name],
             None,
             body,
@@ -1714,7 +1738,7 @@ def relation_vectors(c: Category, texts: dict[str, str], record_vector: Callable
         reduced = compact(rules.without_defaults(schema, nested_only=True))
         record_vector(
             f"axt.example.v1.{name}, version 2, written without the defaulted fields of its relations",
-            ["types.md 5.4", "types.md 8.1", "envelope.md 6"],
+            ["types.md 5.4", "fields.md 11.1", "envelope.md 6"],
             reduced,
             texts2[name],
             single_object(reduced, rules.project(schema, ndatum, nested_only=True)),
@@ -1742,15 +1766,15 @@ def relation_vectors(c: Category, texts: dict[str, str], record_vector: Callable
             body,
         )
 
-    # The further records with relations and those that break a rule (example_types.py). decode_record rejects
-    # a relation that breaks a rule of spec/types.md, section 8.4, as a time value that is not valid; a value
-    # that only breaks a check of an attribute is taken (spec/conformance.md, section 5.2).
+    # The further records with relations and those that break a rule (example_types.py). decode_record
+    # rejects a relation that breaks a rule of spec/fields.md, section 11.4, as a time value that is not
+    # valid; a value that only breaks a check of an attribute is taken (spec/conformance.md, section 5.2).
     assert (len(rules.RELATION_VALID), len(rules.RELATION_BREACHES)) == (6, 18)
     for label, key, datum in rules.RELATION_VALID:
         name = key.split(".")[0]
         record_vector(
             f"axt.example.v1.{name}, version 2: {label}",
-            ["types.md 8"],
+            ["fields.md 11"],
             texts2[name],
             None,
             single_object(texts2[name], datum),
@@ -1761,7 +1785,7 @@ def relation_vectors(c: Category, texts: dict[str, str], record_vector: Callable
         expected = reject("VALUE_INVALID", found[0][2], field=found[0][0]) if found else None
         record_vector(
             f"{'reject' if found else 'take'} axt.example.v1.{name}, version 2: {label}",
-            ["types.md 8.4", "metadata.md 7.2"] if found else ["metadata.md 7.1", "conformance.md 5.13"],
+            ["fields.md 11.4", "metadata.md 7.2"] if found else ["metadata.md 7.1", "conformance.md 5.13"],
             texts2[name],
             None,
             single_object(texts2[name], datum),
@@ -1774,7 +1798,7 @@ def relation_vectors(c: Category, texts: dict[str, str], record_vector: Callable
     assert body.count(head + b"\x00") == 1
     record_vector(
         "reject axt.example.v1.Pet, version 2, with a relation whose target has the union index 2",
-        ["envelope.md 1", "types.md 8.3"],
+        ["envelope.md 1", "fields.md 11.3"],
         texts2["Pet"],
         None,
         body.replace(head + b"\x00", head + keys.zigzag(2)),
@@ -1946,7 +1970,7 @@ def metadata_category() -> Category:
 
     def check(label: str, text: str, datum: Any, refs: list[str]) -> None:
         schema = json.loads(text)
-        found = mr.breaches(schema, datum, tm.time_check)
+        found = tm.receiver_breaches(schema, datum)
         expected = (
             reject("VALUE_INVALID", found[0][2], field=mr.error_field(found[0][0])) if found else accept()
         )
@@ -2017,7 +2041,7 @@ def metadata_category() -> Category:
     for label, name, datum in rules.VALID:
         check(f"axt.example.v1.{name}: {label}", examples[name], datum, ["metadata.md 6", "time.md 6"])
     for label, name, datum, path, rule in rules.BREACHES:
-        assert mr.breaches(json.loads(examples[name]), datum, tm.time_check)[0][:2] == (path, rule), label
+        assert tm.receiver_breaches(json.loads(examples[name]), datum)[0][:2] == (path, rule), label
         check(
             f"reject axt.example.v1.{name}: {label}",
             examples[name],
@@ -3962,7 +3986,7 @@ def records_category() -> Category:
                     assert decode_meaning(json.dumps(schema), None, avro_encode(schema, value)) == value, v[
                         "id"
                     ]
-                    assert mr.breaches(schema, value, tm.time_check) == [], v["id"]
+                    assert tm.receiver_breaches(schema, value) == [], v["id"]
     return c
 
 
@@ -6977,7 +7001,8 @@ def bricks_category() -> Category:
     c = Category(
         "bricks",
         "Descriptions of types made of typed fields: the schema derived from each, its canonical form and "
-        "fingerprint, and the descriptions that are not valid (spec/fields.md).",
+        "fingerprint, the descriptions that are not valid, and records of a type with relation fields "
+        "(spec/fields.md).",
     )
     fe = pe.fe
     valid, invalid = fe.vector_descriptions()
@@ -7001,7 +7026,55 @@ def bricks_category() -> Category:
             {"description": B(fe.binary(d))},
             reject("DESCRIPTION_INVALID", f"{where or 'the root'}: {problem}"),
         )
+    brick_records(c, fe)
     return c
+
+
+def brick_records(c: Category, fe: Any) -> None:
+    """Records of the schema derived from com.example.Links, whose relation fields every receiver checks by
+    the rules of spec/fields.md, section 11.4, wherever they are in the type."""
+    text = fe.derived_text(fe.links_description())
+    mimi, vet, r = rules.MIMI, rules.VET, rules.relation
+    one = r("3e8a5b14-7c29-4d6e-a0f3-1b9d2c7e5a46", mimi)
+    two = r("f1b3d5a7-2c4e-4f60-8a1b-3c5d7e9f0a2b", vet, kind="org.example.catalog.vet", note="Her vet.")
+    site = r("1f2e3d4c-5b6a-4978-8a96-a5b4c3d2e1f0", rules.outside("https://example.org/mimi", "Mimi's page"))
+    base = {"links": [one], "seen": None, "sources": [site], "history": [[one, two]], "place": None}
+    place = {"name": "Practice", "links": [two]}
+    cases: list[tuple[str, dict[str, Any]]] = [
+        ("relations in every relation field", dict(base, place=place)),
+        ("no relations, also in the field that is required, which only a check names", dict(base, links=[])),
+        (
+            "a repeated id in a list of relations inside a list",
+            dict(base, history=[[one, dict(one, note="x")]]),
+        ),
+        ("the same relation in two lists, which is no repeated id", dict(base, sources=[one])),
+        (
+            "a kind without a namespace in a nested object",
+            dict(base, place=dict(place, links=[dict(two, kind="vet")])),
+        ),
+        ("257 relations in the second relation field", dict(base, sources=[site] * 257)),
+        (
+            "a target's id that is the nil UUID",
+            dict(base, links=[dict(one, target=dict(mimi, id="00000000-0000-0000-0000-000000000000"))]),
+        ),
+    ]
+    rejected = 0
+    for label, datum in cases:
+        found = tm.value_breaches(json.loads(text), datum)
+        body = single_object(text, datum)
+        if found:
+            rejected += 1
+            expected = reject("VALUE_INVALID", found[0][2], field=found[0][0])
+        else:
+            expected = accept({"value": decode_meaning(text, None, body[10:])})
+        c.add(
+            "decode_record",
+            f"{'reject' if found else 'take'} a record of com.example.Links: {label}",
+            ["fields.md 11.4", "fields.md 11.6", "metadata.md 7.2"],
+            {"writer_schema": text, "reader_schema": None, "body": B(body)},
+            expected,
+        )
+    assert rejected == 4, rejected
 
 
 CATEGORIES = [
@@ -7066,7 +7139,7 @@ def same_values(v: Any) -> Any:
 # The vectors of each category by operation, and of them the rejected ones, as the table of
 # spec/conformance.md, section 7.4, counts them.
 COUNTS = {
-    "bricks": ({"derive": 61}, {"derive": 49}),
+    "bricks": ({"derive": 72, "decode_record": 7}, {"derive": 51, "decode_record": 4}),
     "encoding": (
         {"fingerprint": 25, "decode_message": 40, "decode_body": 56, "encode_message": 8},
         {"decode_message": 17, "decode_body": 37},
