@@ -1,0 +1,3350 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/paxel/axt/blob/summer/vectors/adapter.schema.json",
+ "title": "AXT adapter protocol",
+ "description": "The lines between the conformance runner and an adapter, as spec/conformance.md, sections 4 to 6, defines them: each line is a request of the runner or an answer of the adapter. The input of each operation is input.<op>, its result result.<op>. CC0 1.0.",
+ "oneOf": [
+  {
+   "$ref": "#/$defs/request"
+  },
+  {
+   "$ref": "#/$defs/answer"
+  }
+ ],
+ "$defs": {
+  "request": {
+   "description": "A line from the runner to the adapter (spec/conformance.md, section 6).",
+   "oneOf": [
+    {
+     "$ref": "#/$defs/hello_request"
+    },
+    {
+     "$ref": "#/$defs/vector_request"
+    }
+   ]
+  },
+  "answer": {
+   "description": "A line from the adapter to the runner (spec/conformance.md, section 6).",
+   "oneOf": [
+    {
+     "$ref": "#/$defs/hello_answer"
+    },
+    {
+     "$ref": "#/$defs/output_answer"
+    },
+    {
+     "$ref": "#/$defs/unsupported_answer"
+    },
+    {
+     "$ref": "#/$defs/failure_answer"
+    }
+   ]
+  },
+  "hello_request": {
+   "description": "The runner's first request.",
+   "type": "object",
+   "required": [
+    "id",
+    "op",
+    "input"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "const": "hello"
+    },
+    "op": {
+     "const": "hello"
+    },
+    "input": {
+     "type": "object",
+     "required": [
+      "format"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "format": {
+       "description": "The version of the vector file format.",
+       "const": 1
+      }
+     }
+    }
+   }
+  },
+  "hello_answer": {
+   "description": "The adapter's answer to hello: the name of its library and the categories that library implements (spec/conformance.md, section 2.2).",
+   "type": "object",
+   "required": [
+    "id",
+    "output"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "const": "hello"
+    },
+    "output": {
+     "type": "object",
+     "required": [
+      "name",
+      "categories"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "name": {
+       "type": "string"
+      },
+      "categories": {
+       "type": "array",
+       "items": {
+        "$ref": "#/$defs/category"
+       }
+      }
+     }
+    }
+   }
+  },
+  "category": {
+   "enum": [
+    "encoding",
+    "types",
+    "time",
+    "metadata",
+    "records",
+    "manifest",
+    "keys",
+    "protocol",
+    "file",
+    "qr",
+    "local",
+    "relay",
+    "relay-server",
+    "sync",
+    "shares",
+    "bricks"
+   ]
+  },
+  "vector_id": {
+   "description": "The id of a vector: <category>/<op>/<name>.",
+   "type": "string",
+   "pattern": "^[a-z-]+/[a-z_]+/[a-z0-9-]+$"
+  },
+  "vector_request": {
+   "description": "A request for one vector: its id, its operation and its input, never its expected result. The input of each operation is in its definition operation.<op>.",
+   "type": "object",
+   "required": [
+    "id",
+    "op",
+    "input"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "$ref": "#/$defs/vector_id"
+    },
+    "op": {
+     "enum": [
+      "acked",
+      "add_duration",
+      "apply",
+      "begin_stamping",
+      "change",
+      "check_encryption_key",
+      "check_manifest",
+      "check_record",
+      "check_signing_key",
+      "choose_format",
+      "connection",
+      "contact_key",
+      "decode_body",
+      "decode_message",
+      "decode_record",
+      "deleted",
+      "derive",
+      "describe",
+      "device_add",
+      "device_join",
+      "device_sets",
+      "encode_message",
+      "fingerprint",
+      "fit",
+      "hello_frame",
+      "join_chain",
+      "join_receivers",
+      "listing",
+      "mailbox_id",
+      "merge",
+      "next_stamp",
+      "offer_types",
+      "open",
+      "owed",
+      "owner",
+      "padded_length",
+      "parse_qr",
+      "pass_version",
+      "pass_withdrawal",
+      "proposer",
+      "public_key",
+      "qr_text",
+      "reaction",
+      "read_file",
+      "receive",
+      "relations",
+      "relay",
+      "request",
+      "resend_after_removal",
+      "resolve_date_time",
+      "seal",
+      "session",
+      "shared_value",
+      "short_fingerprint",
+      "shown",
+      "siblings",
+      "sign",
+      "stale",
+      "take_version",
+      "verify",
+      "verify_message",
+      "withdrawal_stamp"
+     ]
+    },
+    "input": {
+     "type": "object"
+    }
+   },
+   "allOf": [
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "acked"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.acked"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "add_duration"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.add_duration"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "apply"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.apply"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "begin_stamping"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.begin_stamping"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "change"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.change"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "check_encryption_key"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.check_encryption_key"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "check_manifest"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.check_manifest"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "check_record"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.check_record"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "check_signing_key"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.check_signing_key"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "choose_format"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.choose_format"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "connection"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.connection"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "contact_key"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.contact_key"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "decode_body"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.decode_body"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "decode_message"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.decode_message"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "decode_record"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.decode_record"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "deleted"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.deleted"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "derive"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.derive"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "describe"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.describe"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "device_add"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.device_add"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "device_join"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.device_join"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "device_sets"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.device_sets"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "encode_message"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.encode_message"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "fingerprint"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.fingerprint"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "fit"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.fit"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "hello_frame"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.hello_frame"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "join_chain"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.join_chain"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "join_receivers"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.join_receivers"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "listing"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.listing"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "mailbox_id"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.mailbox_id"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "merge"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.merge"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "next_stamp"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.next_stamp"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "offer_types"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.offer_types"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "open"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.open"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "owed"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.owed"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "owner"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.owner"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "padded_length"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.padded_length"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "parse_qr"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.parse_qr"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "pass_version"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.pass_version"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "pass_withdrawal"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.pass_withdrawal"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "proposer"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.proposer"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "public_key"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.public_key"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "qr_text"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.qr_text"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "reaction"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.reaction"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "read_file"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.read_file"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "receive"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.receive"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "relations"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.relations"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "relay"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.relay"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "request"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.request"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "resend_after_removal"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.resend_after_removal"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "resolve_date_time"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.resolve_date_time"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "seal"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.seal"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "session"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.session"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "shared_value"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.shared_value"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "short_fingerprint"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.short_fingerprint"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "shown"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.shown"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "siblings"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.siblings"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "sign"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.sign"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "stale"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.stale"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "take_version"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.take_version"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "verify"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.verify"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "verify_message"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.verify_message"
+       }
+      }
+     }
+    },
+    {
+     "if": {
+      "properties": {
+       "op": {
+        "const": "withdrawal_stamp"
+       }
+      }
+     },
+     "then": {
+      "properties": {
+       "input": {
+        "$ref": "#/$defs/input.withdrawal_stamp"
+       }
+      }
+     }
+    }
+   ]
+  },
+  "output_answer": {
+   "description": "The result of a vector. Its form for each operation is result.<op>, which the runner checks with the operation of the request.",
+   "type": "object",
+   "required": [
+    "id",
+    "output"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "$ref": "#/$defs/vector_id"
+    },
+    "output": {
+     "$ref": "#/$defs/result"
+    }
+   }
+  },
+  "unsupported_answer": {
+   "description": "An adapter that cannot perform the operation; the vector fails.",
+   "type": "object",
+   "required": [
+    "id",
+    "unsupported"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "$ref": "#/$defs/vector_id"
+    },
+    "unsupported": {
+     "const": true
+    }
+   }
+  },
+  "failure_answer": {
+   "description": "An adapter that failed for a fault of its own; the vector fails.",
+   "type": "object",
+   "required": [
+    "id",
+    "failure"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "$ref": "#/$defs/vector_id"
+    },
+    "failure": {
+     "type": "string"
+    }
+   }
+  },
+  "result": {
+   "description": "A result of spec/conformance.md, section 4: accept with a value, reject with an error, or the results of the steps of a session.",
+   "oneOf": [
+    {
+     "$ref": "#/$defs/accept"
+    },
+    {
+     "$ref": "#/$defs/reject"
+    },
+    {
+     "$ref": "#/$defs/steps"
+    }
+   ]
+  },
+  "accept": {
+   "type": "object",
+   "required": [
+    "accept"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "accept": {
+     "type": "object"
+    }
+   }
+  },
+  "reject": {
+   "type": "object",
+   "required": [
+    "reject"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "reject": {
+     "$ref": "#/$defs/rejection"
+    }
+   }
+  },
+  "steps": {
+   "type": "object",
+   "required": [
+    "steps"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "steps": {
+     "type": "array"
+    }
+   }
+  },
+  "rejection": {
+   "type": "object",
+   "required": [
+    "error"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "error": {
+     "description": "The error code: a code of spec/protocol.md, section 8.2, a reason of a DECLINE, or a code of spec/conformance.md, section 4.2.",
+     "type": "string",
+     "pattern": "^[A-Z][A-Z_]*$"
+    },
+    "note": {
+     "description": "Why, for people; the runner does not compare it.",
+     "type": "string"
+    },
+    "field": {
+     "description": "For VALUE_INVALID, the path of the value that breaks a rule (spec/metadata.md, section 7.2), or null.",
+     "type": [
+      "string",
+      "null"
+     ]
+    }
+   }
+  },
+  "input.acked": {
+   "description": "The input of acked (spec/conformance.md, section 5.15).",
+   "type": "object",
+   "required": [
+    "sent",
+    "held",
+    "outcome",
+    "receiver_version",
+    "shared",
+    "withdrawal",
+    "state_stamp",
+    "sibling_stamp",
+    "sibling"
+   ]
+  },
+  "result.acked": {
+   "description": "The result of acked (spec/conformance.md, section 5.15): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "outcome",
+        "then",
+        "to_pass"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.add_duration": {
+   "description": "The input of add_duration (spec/conformance.md, section 5.12).",
+   "type": "object",
+   "required": [
+    "date_time",
+    "duration"
+   ]
+  },
+  "result.add_duration": {
+   "description": "The result of add_duration (spec/conformance.md, section 5.12): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "date_time"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.apply": {
+   "description": "The input of apply (spec/conformance.md, section 5.3).",
+   "type": "object",
+   "required": [
+    "policy",
+    "events"
+   ]
+  },
+  "result.apply": {
+   "description": "The result of apply: the result of each step, in the forms of spec/conformance.md, section 5.3.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "steps"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "steps": {
+       "type": "array",
+       "items": {
+        "type": "object"
+       }
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.begin_stamping": {
+   "description": "The input of begin_stamping (spec/conformance.md, section 5.14).",
+   "type": "object",
+   "required": [
+    "device",
+    "states",
+    "now_ms",
+    "highest",
+    "r"
+   ]
+  },
+  "result.begin_stamping": {
+   "description": "The result of begin_stamping (spec/conformance.md, section 5.14): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "begun",
+        "highest",
+        "states"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.change": {
+   "description": "The input of change (spec/conformance.md, section 5.14).",
+   "type": "object",
+   "required": [
+    "state",
+    "device",
+    "action",
+    "values",
+    "schema",
+    "now_ms",
+    "now_ms_state",
+    "highest",
+    "r",
+    "to_pass"
+   ]
+  },
+  "result.change": {
+   "description": "The result of change (spec/conformance.md, section 5.14): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "highest",
+        "made",
+        "state",
+        "to_pass"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.check_encryption_key": {
+   "description": "The input of check_encryption_key (spec/conformance.md, section 5.5).",
+   "type": "object",
+   "required": [
+    "encryption_key"
+   ]
+  },
+  "result.check_encryption_key": {
+   "description": "The result of check_encryption_key (spec/conformance.md, section 5.5): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": []
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.check_manifest": {
+   "description": "The input of check_manifest (spec/conformance.md, section 5.4).",
+   "type": "object",
+   "required": [
+    "body",
+    "envelope_format"
+   ]
+  },
+  "result.check_manifest": {
+   "description": "The result of check_manifest (spec/conformance.md, section 5.4): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "manifest"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.check_record": {
+   "description": "The input of check_record (spec/conformance.md, section 5.13).",
+   "type": "object",
+   "required": [
+    "schema",
+    "body"
+   ]
+  },
+  "result.check_record": {
+   "description": "The result of check_record (spec/conformance.md, section 5.13): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": []
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.check_signing_key": {
+   "description": "The input of check_signing_key (spec/conformance.md, section 5.5).",
+   "type": "object",
+   "required": [
+    "public_key"
+   ]
+  },
+  "result.check_signing_key": {
+   "description": "The result of check_signing_key (spec/conformance.md, section 5.5): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": []
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.choose_format": {
+   "description": "The input of choose_format (spec/conformance.md, section 5.6).",
+   "type": "object",
+   "required": [
+    "own",
+    "theirs"
+   ]
+  },
+  "result.choose_format": {
+   "description": "The result of choose_format (spec/conformance.md, section 5.6): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "format"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.connection": {
+   "description": "The input of connection (spec/conformance.md, section 5.9).",
+   "type": "object",
+   "required": [
+    "role",
+    "certificate_sha256",
+    "expected_key",
+    "frames"
+   ]
+  },
+  "result.connection": {
+   "description": "The result of connection: the result of each step, in the forms of spec/conformance.md, section 5.9.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "steps"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "steps": {
+       "type": "array",
+       "items": {
+        "type": "string"
+       }
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.contact_key": {
+   "description": "The input of contact_key (spec/conformance.md, section 5.6).",
+   "type": "object",
+   "required": [
+    "current",
+    "manifests",
+    "got"
+   ]
+  },
+  "result.contact_key": {
+   "description": "The result of contact_key (spec/conformance.md, section 5.6): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "keys"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.decode_body": {
+   "description": "The input of decode_body (spec/conformance.md, section 5.1).",
+   "type": "object",
+   "required": [
+    "kind",
+    "body"
+   ]
+  },
+  "result.decode_body": {
+   "description": "The result of decode_body (spec/conformance.md, section 5.1): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "value"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.decode_message": {
+   "description": "The input of decode_message (spec/conformance.md, section 5.1).",
+   "type": "object",
+   "required": [
+    "message"
+   ]
+  },
+  "result.decode_message": {
+   "description": "The result of decode_message (spec/conformance.md, section 5.1): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "body",
+        "format",
+        "kind",
+        "record",
+        "sender",
+        "signature"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.decode_record": {
+   "description": "The input of decode_record (spec/conformance.md, sections 5.2, 5.12, 5.16).",
+   "type": "object",
+   "required": [
+    "writer_schema",
+    "reader_schema",
+    "body"
+   ]
+  },
+  "result.decode_record": {
+   "description": "The result of decode_record (spec/conformance.md, sections 5.2, 5.12, 5.16): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "value"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.deleted": {
+   "description": "The input of deleted (spec/conformance.md, section 5.14).",
+   "type": "object",
+   "required": [
+    "state",
+    "writer_fields",
+    "writer_version",
+    "versions"
+   ]
+  },
+  "result.deleted": {
+   "description": "The result of deleted (spec/conformance.md, section 5.14): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "deleted",
+        "message"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.derive": {
+   "description": "The input of derive (spec/conformance.md, section 5.16).",
+   "type": "object",
+   "required": [
+    "description"
+   ]
+  },
+  "result.derive": {
+   "description": "The result of derive (spec/conformance.md, section 5.16): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "canonical_form",
+        "fingerprint",
+        "schema"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.describe": {
+   "description": "The input of describe (spec/conformance.md, section 5.13).",
+   "type": "object",
+   "required": [
+    "schema",
+    "field",
+    "languages"
+   ]
+  },
+  "result.describe": {
+   "description": "The result of describe (spec/conformance.md, section 5.13): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "emoji",
+        "help",
+        "label"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.device_add": {
+   "description": "The input of device_add (spec/conformance.md, section 5.5).",
+   "type": "object",
+   "required": [
+    "message"
+   ]
+  },
+  "result.device_add": {
+   "description": "The result of device_add (spec/conformance.md, section 5.5): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "device",
+        "member"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.device_join": {
+   "description": "The input of device_join (spec/conformance.md, section 5.5).",
+   "type": "object",
+   "required": [
+    "message",
+    "member",
+    "first"
+   ]
+  },
+  "result.device_join": {
+   "description": "The result of device_join (spec/conformance.md, section 5.5): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "action",
+        "device"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.device_sets": {
+   "description": "The input of device_sets (spec/conformance.md, section 5.5).",
+   "type": "object",
+   "required": [
+    "senders",
+    "refused",
+    "steps"
+   ]
+  },
+  "result.device_sets": {
+   "description": "The result of device_sets: the result of each step, in the forms of spec/conformance.md, section 5.5.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "steps"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "steps": {
+       "type": "array",
+       "items": {
+        "type": "object"
+       }
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.encode_message": {
+   "description": "The input of encode_message (spec/conformance.md, section 5.1).",
+   "type": "object",
+   "required": [
+    "format",
+    "kind",
+    "sender",
+    "record",
+    "body",
+    "signature"
+   ]
+  },
+  "result.encode_message": {
+   "description": "The result of encode_message (spec/conformance.md, section 5.1): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "message"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.fingerprint": {
+   "description": "The input of fingerprint (spec/conformance.md, sections 5.1, 5.2, 5.12).",
+   "type": "object",
+   "required": [
+    "schema"
+   ]
+  },
+  "result.fingerprint": {
+   "description": "The result of fingerprint (spec/conformance.md, sections 5.1, 5.2, 5.12): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "canonical_form",
+        "fingerprint"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.fit": {
+   "description": "The input of fit (spec/conformance.md, section 5.4).",
+   "type": "object",
+   "required": [
+    "manifest",
+    "schema",
+    "languages"
+   ]
+  },
+  "result.fit": {
+   "description": "The result of fit (spec/conformance.md, section 5.4): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "fits",
+        "purpose"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.hello_frame": {
+   "description": "The input of hello_frame (spec/conformance.md, section 5.9).",
+   "type": "object",
+   "required": [
+    "seed",
+    "role",
+    "certificate_sha256"
+   ]
+  },
+  "result.hello_frame": {
+   "description": "The result of hello_frame (spec/conformance.md, section 5.9): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "frame"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.join_chain": {
+   "description": "The input of join_chain (spec/conformance.md, section 5.5).",
+   "type": "object",
+   "required": [
+    "chain",
+    "member",
+    "device"
+   ]
+  },
+  "result.join_chain": {
+   "description": "The result of join_chain (spec/conformance.md, section 5.5): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": []
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.join_receivers": {
+   "description": "The input of join_receivers (spec/conformance.md, section 5.15).",
+   "type": "object",
+   "required": [
+    "receivers"
+   ]
+  },
+  "result.join_receivers": {
+   "description": "The result of join_receivers (spec/conformance.md, section 5.15): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "new_state_stamp",
+        "shared",
+        "withdrawal"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.listing": {
+   "description": "The input of listing (spec/conformance.md, section 5.10).",
+   "type": "object",
+   "required": [
+    "body"
+   ]
+  },
+  "result.listing": {
+   "description": "The result of listing (spec/conformance.md, section 5.10): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "messages"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.mailbox_id": {
+   "description": "The input of mailbox_id (spec/conformance.md, section 5.10).",
+   "type": "object",
+   "required": [
+    "secret"
+   ]
+  },
+  "result.mailbox_id": {
+   "description": "The result of mailbox_id (spec/conformance.md, section 5.10): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "mailbox"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.merge": {
+   "description": "The input of merge (spec/conformance.md, section 5.14).",
+   "type": "object",
+   "required": [
+    "own",
+    "other",
+    "now_ms",
+    "highest",
+    "r",
+    "sibling_stamp",
+    "to_pass"
+   ]
+  },
+  "result.merge": {
+   "description": "The result of merge (spec/conformance.md, section 5.14): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "deleted",
+        "highest",
+        "removal_taken",
+        "sibling_stamp",
+        "stands",
+        "state",
+        "to_pass"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.next_stamp": {
+   "description": "The input of next_stamp (spec/conformance.md, section 5.14).",
+   "type": "object",
+   "required": [
+    "now_ms",
+    "highest",
+    "r"
+   ]
+  },
+  "result.next_stamp": {
+   "description": "The result of next_stamp (spec/conformance.md, section 5.14): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "stamp"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.offer_types": {
+   "description": "The input of offer_types (spec/conformance.md, section 5.15).",
+   "type": "object",
+   "required": [
+    "records"
+   ]
+  },
+  "result.offer_types": {
+   "description": "The result of offer_types (spec/conformance.md, section 5.15): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "types"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.open": {
+   "description": "The input of open (spec/conformance.md, section 5.5).",
+   "type": "object",
+   "required": [
+    "sealed",
+    "private_keys"
+   ]
+  },
+  "result.open": {
+   "description": "The result of open (spec/conformance.md, section 5.5): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "message"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.owed": {
+   "description": "The input of owed (spec/conformance.md, section 5.15).",
+   "type": "object",
+   "required": [
+    "shared",
+    "deleted",
+    "version",
+    "withdrawal",
+    "last"
+   ]
+  },
+  "result.owed": {
+   "description": "The result of owed (spec/conformance.md, section 5.15): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "owes",
+        "version"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.owner": {
+   "description": "The input of owner (spec/conformance.md, section 5.15).",
+   "type": "object",
+   "required": [
+    "device",
+    "steps"
+   ]
+  },
+  "result.owner": {
+   "description": "The result of owner: the result of each step, in the forms of spec/conformance.md, section 5.15.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "steps"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "steps": {
+       "type": "array",
+       "items": {
+        "type": "object"
+       }
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.padded_length": {
+   "description": "The input of padded_length (spec/conformance.md, section 5.5).",
+   "type": "object",
+   "required": [
+    "length"
+   ]
+  },
+  "result.padded_length": {
+   "description": "The result of padded_length (spec/conformance.md, section 5.5): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "padded_length"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.parse_qr": {
+   "description": "The input of parse_qr (spec/conformance.md, section 5.8).",
+   "type": "object",
+   "required": [
+    "text"
+   ]
+  },
+  "result.parse_qr": {
+   "description": "The result of parse_qr (spec/conformance.md, section 5.8): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "payload"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.pass_version": {
+   "description": "The input of pass_version (spec/conformance.md, section 5.14).",
+   "type": "object",
+   "required": [
+    "state_stamp",
+    "to_pass",
+    "may_send",
+    "now_ms",
+    "highest",
+    "r"
+   ]
+  },
+  "result.pass_version": {
+   "description": "The result of pass_version (spec/conformance.md, section 5.14): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "highest",
+        "resend",
+        "to_pass"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.pass_withdrawal": {
+   "description": "The input of pass_withdrawal (spec/conformance.md, section 5.15).",
+   "type": "object",
+   "required": [
+    "shared",
+    "withdrawal",
+    "to_pass",
+    "state_stamp"
+   ]
+  },
+  "result.pass_withdrawal": {
+   "description": "The result of pass_withdrawal (spec/conformance.md, section 5.15): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "then",
+        "to_pass"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.proposer": {
+   "description": "The input of proposer (spec/conformance.md, section 5.15).",
+   "type": "object",
+   "required": [
+    "device",
+    "steps"
+   ]
+  },
+  "result.proposer": {
+   "description": "The result of proposer: the result of each step, in the forms of spec/conformance.md, section 5.15.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "steps"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "steps": {
+       "type": "array",
+       "items": {
+        "type": "object"
+       }
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.public_key": {
+   "description": "The input of public_key (spec/conformance.md, section 5.5).",
+   "type": "object",
+   "required": [
+    "seed"
+   ]
+  },
+  "result.public_key": {
+   "description": "The result of public_key (spec/conformance.md, section 5.5): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "public_key"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.qr_text": {
+   "description": "The input of qr_text (spec/conformance.md, section 5.8).",
+   "type": "object",
+   "required": [
+    "payload"
+   ]
+  },
+  "result.qr_text": {
+   "description": "The result of qr_text (spec/conformance.md, section 5.8): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "text"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.reaction": {
+   "description": "The input of reaction (spec/conformance.md, section 5.10).",
+   "type": "object",
+   "required": [
+    "request",
+    "status",
+    "retry_after",
+    "attempt"
+   ]
+  },
+  "result.reaction": {
+   "description": "The result of reaction (spec/conformance.md, section 5.10): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "action",
+        "wait"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.read_file": {
+   "description": "The input of read_file (spec/conformance.md, section 5.7).",
+   "type": "object",
+   "required": [
+    "file",
+    "reader"
+   ]
+  },
+  "result.read_file": {
+   "description": "The result of read_file (spec/conformance.md, section 5.7): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "chain",
+        "manifest",
+        "records",
+        "sender"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.receive": {
+   "description": "The input of receive (spec/conformance.md, section 5.15).",
+   "type": "object",
+   "required": [
+    "policy",
+    "events"
+   ]
+  },
+  "result.receive": {
+   "description": "The result of receive: the result of each step, in the forms of spec/conformance.md, section 5.15.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "steps"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "steps": {
+       "type": "array",
+       "items": {
+        "type": "object"
+       }
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.relations": {
+   "description": "The input of relations (spec/conformance.md, section 5.3).",
+   "type": "object",
+   "required": [
+    "own",
+    "senders",
+    "refused",
+    "relations",
+    "steps"
+   ]
+  },
+  "result.relations": {
+   "description": "The result of relations: the result of each step, in the forms of spec/conformance.md, section 5.3.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "steps"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "steps": {
+       "type": "array",
+       "items": {
+        "type": "object"
+       }
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.relay": {
+   "description": "The input of relay (spec/conformance.md, section 5.11).",
+   "type": "object",
+   "required": [
+    "base_url",
+    "quota_bytes",
+    "requests"
+   ]
+  },
+  "result.relay": {
+   "description": "The result of relay: the result of each step, in the forms of spec/conformance.md, section 5.11.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "steps"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "steps": {
+       "type": "array",
+       "items": {
+        "type": "object"
+       }
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.request": {
+   "description": "The input of request (spec/conformance.md, section 5.10).",
+   "type": "object",
+   "required": [
+    "action",
+    "base_url"
+   ]
+  },
+  "result.request": {
+   "description": "The result of request (spec/conformance.md, section 5.10): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "headers",
+        "method",
+        "url"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.resend_after_removal": {
+   "description": "The input of resend_after_removal (spec/conformance.md, section 5.6).",
+   "type": "object",
+   "required": [
+    "records",
+    "removed"
+   ]
+  },
+  "result.resend_after_removal": {
+   "description": "The result of resend_after_removal (spec/conformance.md, section 5.6): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "ids"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.resolve_date_time": {
+   "description": "The input of resolve_date_time (spec/conformance.md, section 5.12).",
+   "type": "object",
+   "required": [
+    "date_time",
+    "anchor"
+   ]
+  },
+  "result.resolve_date_time": {
+   "description": "The result of resolve_date_time (spec/conformance.md, section 5.12): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "date_time"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.seal": {
+   "description": "The input of seal (spec/conformance.md, section 5.5).",
+   "type": "object",
+   "required": [
+    "message",
+    "encryption_key"
+   ]
+  },
+  "result.seal": {
+   "description": "The result of seal (spec/conformance.md, section 5.5): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "sealed"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.session": {
+   "description": "The input of session (spec/conformance.md, section 5.6).",
+   "type": "object",
+   "required": [
+    "app",
+    "steps"
+   ]
+  },
+  "result.session": {
+   "description": "The result of session: the result of each step, in the forms of spec/conformance.md, section 5.6.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "steps"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "steps": {
+       "type": "array",
+       "items": {
+        "type": "object"
+       }
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.shared_value": {
+   "description": "The input of shared_value (spec/conformance.md, section 5.15).",
+   "type": "object",
+   "required": [
+    "type",
+    "value",
+    "own_user",
+    "links",
+    "shared",
+    "own_keys"
+   ]
+  },
+  "result.shared_value": {
+   "description": "The result of shared_value (spec/conformance.md, section 5.15): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "value"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.short_fingerprint": {
+   "description": "The input of short_fingerprint (spec/conformance.md, section 5.5).",
+   "type": "object",
+   "required": [
+    "public_key"
+   ]
+  },
+  "result.short_fingerprint": {
+   "description": "The result of short_fingerprint (spec/conformance.md, section 5.5): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "short_fingerprint"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.shown": {
+   "description": "The input of shown (spec/conformance.md, section 5.14).",
+   "type": "object",
+   "required": [
+    "sender",
+    "layer"
+   ]
+  },
+  "result.shown": {
+   "description": "The result of shown (spec/conformance.md, section 5.14): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "fields",
+        "record"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.siblings": {
+   "description": "The input of siblings (spec/conformance.md, section 5.14).",
+   "type": "object",
+   "required": [
+    "device",
+    "steps"
+   ]
+  },
+  "result.siblings": {
+   "description": "The result of siblings: the result of each step, in the forms of spec/conformance.md, section 5.14.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "steps"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "steps": {
+       "type": "array",
+       "items": {
+        "type": "object"
+       }
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.sign": {
+   "description": "The input of sign (spec/conformance.md, section 5.5).",
+   "type": "object",
+   "required": [
+    "seed",
+    "data"
+   ]
+  },
+  "result.sign": {
+   "description": "The result of sign (spec/conformance.md, section 5.5): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "signature"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.stale": {
+   "description": "The input of stale (spec/conformance.md, section 5.14).",
+   "type": "object",
+   "required": [
+    "receiver_version",
+    "state_stamp",
+    "sibling_stamp",
+    "to_pass",
+    "counted",
+    "sibling",
+    "may_send",
+    "now_ms",
+    "highest",
+    "r"
+   ]
+  },
+  "result.stale": {
+   "description": "The result of stale (spec/conformance.md, section 5.14): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "highest",
+        "resend",
+        "stamps",
+        "to_pass"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.take_version": {
+   "description": "The input of take_version (spec/conformance.md, section 5.15).",
+   "type": "object",
+   "required": [
+    "occasion",
+    "highest_given",
+    "state_stamp"
+   ]
+  },
+  "result.take_version": {
+   "description": "The result of take_version (spec/conformance.md, section 5.15): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "state_stamp",
+        "version"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.verify": {
+   "description": "The input of verify (spec/conformance.md, section 5.5).",
+   "type": "object",
+   "required": [
+    "public_key",
+    "data",
+    "signature"
+   ]
+  },
+  "result.verify": {
+   "description": "The result of verify (spec/conformance.md, section 5.5): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": []
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.verify_message": {
+   "description": "The input of verify_message (spec/conformance.md, section 5.5).",
+   "type": "object",
+   "required": [
+    "message"
+   ]
+  },
+  "result.verify_message": {
+   "description": "The result of verify_message (spec/conformance.md, section 5.5): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": []
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  },
+  "input.withdrawal_stamp": {
+   "description": "The input of withdrawal_stamp (spec/conformance.md, section 5.14).",
+   "type": "object",
+   "required": [
+    "occasion",
+    "now_ms",
+    "highest",
+    "r",
+    "withdrawals",
+    "state_stamp"
+   ]
+  },
+  "result.withdrawal_stamp": {
+   "description": "The result of withdrawal_stamp (spec/conformance.md, section 5.14): accept with the members it requires, or reject.",
+   "oneOf": [
+    {
+     "type": "object",
+     "required": [
+      "accept"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "accept": {
+       "type": "object",
+       "required": [
+        "highest",
+        "state_stamp",
+        "version"
+       ]
+      }
+     }
+    },
+    {
+     "$ref": "#/$defs/reject"
+    }
+   ]
+  }
+ }
+}

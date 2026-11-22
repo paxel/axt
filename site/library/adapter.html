@@ -9,7 +9,9 @@
 <p>
   The runner starts the adapter and talks to it over its standard input and output. Each request
   and each answer is one line of JSON in UTF-8. The adapter writes nothing else to its standard
-  output, and it answers each request before it reads the next.
+  output, and it answers each request before it reads the next. The JSON Schema
+  <a href="https://github.com/paxel/axt/blob/summer/vectors/adapter.schema.json">adapter.schema.json</a> defines every line, and the input and the result of each
+  operation; the runner checks every line against it.
 </p>
 <ol>
   <li>

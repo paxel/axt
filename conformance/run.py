@@ -7,8 +7,10 @@ The runner starts the adapter command, asks it which categories it implements,
 sends it every vector of those categories as one line of JSON on its standard
 input, reads one line of JSON per vector from its standard output, and compares
 the answer with the vector's expected result. It never sends the expected
-result. It exits with 0 when every vector of every category the adapter
-implements passed, and with 1 otherwise.
+result. It checks every request it sends and every answer it reads against
+vectors/adapter.schema.json, the schema of the adapter protocol. It exits with
+0 when every vector of every category the adapter implements passed, and with
+1 otherwise.
 
 It needs Python 3.11 or later, fastavro (to decode the messages an adapter
 writes) and cryptography (to open what an adapter seals). The Ed25519, X25519
@@ -139,7 +141,8 @@ def short(v: Any) -> str:
 
 
 def validate(value: Any, schema: Any, root: Any, path: str = "$") -> list[str]:
-    """The subset of JSON Schema (draft 2020-12) that vectors.schema.json uses; returns a list of problems."""
+    """The subset of JSON Schema (draft 2020-12) that vectors.schema.json and adapter.schema.json use; returns
+    a list of problems."""
     if "$ref" in schema:
         name = schema["$ref"].split("/")[-1]
         return validate(value, root["$defs"][name], root, path)
@@ -219,15 +222,29 @@ def load_vectors(directory: Path, wanted: set[str]) -> dict[str, Any]:
 # --- the adapter ----------------------------------------------------------------------
 
 
+def protocol_problems(line: Any, schema: Any, definition: str, op: str | None = None) -> list[str]:
+    """Why a line of the adapter protocol is not valid against the definition of adapter.schema.json, if it
+    is not; an output is also checked against the result of its operation, result.<op>."""
+    problems = validate(line, {"$ref": f"#/$defs/{definition}"}, schema)
+    if not problems and op is not None and "output" in line:
+        problems = validate(line["output"], {"$ref": f"#/$defs/result.{op}"}, schema, "$.output")
+    return problems
+
+
 class Adapter:
-    def __init__(self, command: list[str]) -> None:
+    def __init__(self, command: list[str], schema: Any) -> None:
+        self.schema = schema
         self.proc = subprocess.Popen(  # noqa: S603 the command is the adapter the caller names
             command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding="utf-8", bufsize=1
         )
 
     def ask(self, rid: str, op: str, input: Any) -> Any:
         assert self.proc.stdin is not None and self.proc.stdout is not None  # both are pipes
-        self.proc.stdin.write(json.dumps({"id": rid, "op": op, "input": input}, ensure_ascii=False) + "\n")
+        request = {"id": rid, "op": op, "input": input}
+        problems = protocol_problems(request, self.schema, "request")
+        if problems:
+            raise SystemExit(f"the request {rid!r} is not valid against adapter.schema.json: {problems[:5]}")
+        self.proc.stdin.write(json.dumps(request, ensure_ascii=False) + "\n")
         self.proc.stdin.flush()
         line = self.proc.stdout.readline()
         if not line:
@@ -235,6 +252,16 @@ class Adapter:
         answer = json.loads(line)
         if answer.get("id") != rid:
             raise RuntimeError(f"the adapter answered {answer.get('id')!r} to {rid!r}")
+        if op == "hello":
+            problems = protocol_problems(answer, self.schema, "hello_answer")
+            if problems:
+                raise SystemExit(
+                    f"the answer to hello is not valid against adapter.schema.json: {problems[:5]}"
+                )
+        else:
+            problems = protocol_problems(answer, self.schema, "answer", op)
+            if problems:
+                raise ValueError(f"not valid against adapter.schema.json: {problems[:5]}")
         return answer
 
     def close(self) -> None:
@@ -713,7 +740,7 @@ def main() -> None:
     if not command:
         ap.error("no adapter command")
     files = load_vectors(args.vectors, set(args.category))
-    adapter = Adapter(command)
+    adapter = Adapter(command, json.loads((args.vectors / "adapter.schema.json").read_text(encoding="utf-8")))
     try:
         hello = adapter.ask("hello", "hello", {"format": FILE_FORMAT})
         declared = hello.get("output", {}).get("categories", [])

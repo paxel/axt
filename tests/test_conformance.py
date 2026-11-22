@@ -49,8 +49,11 @@ def last_line(text: str) -> str:
 
 
 def test_the_reference_adapter_passes_every_vector() -> None:
+    """The runner checks every request and answer against vectors/adapter.schema.json, so this also shows that
+    the reference adapter's answers to all vectors are valid."""
     done = run(RUNNER, "--", sys.executable, REPO / "conformance" / "reference" / "adapter.py")
     assert done.returncode == 0, done.stdout[-2000:] + done.stderr[-2000:]
+    assert "adapter.schema.json" not in done.stdout
     assert " vectors passed in 16 categories" in last_line(done.stdout)
 
 
@@ -120,3 +123,50 @@ def test_the_code_reads_the_limits_it_derives_from() -> None:
         limits["transports.list_wait"],
         limits["transports.list_messages"],
     )
+
+
+ADAPTER_SCHEMA = REPO / "vectors" / "adapter.schema.json"
+
+
+def test_the_adapter_schema_defines_every_operation_of_the_vectors() -> None:
+    schema = json.loads(ADAPTER_SCHEMA.read_text(encoding="utf-8"))
+    ops = {v["op"] for f in (REPO / "vectors").glob("*/*.json") for v in json.loads(f.read_text())["vectors"]}
+    assert set(schema["$defs"]["vector_request"]["properties"]["op"]["enum"]) == ops
+    assert all(f"input.{op}" in schema["$defs"] and f"result.{op}" in schema["$defs"] for op in ops)
+
+
+def test_the_runner_refuses_lines_that_break_the_adapter_schema() -> None:
+    runner = load(RUNNER)
+    schema = json.loads(ADAPTER_SCHEMA.read_text(encoding="utf-8"))
+
+    def problems(line: Any, definition: str, op: str | None = None) -> list[str]:
+        return list(runner.protocol_problems(line, schema, definition, op))
+
+    vid = "encoding/fingerprint/x"
+    good = {"canonical_form": '"int"', "fingerprint": "00"}
+    assert problems({"id": vid, "output": {"accept": good}}, "answer", "fingerprint") == []
+    assert (
+        problems({"id": vid, "output": {"reject": {"error": "UNDECODABLE"}}}, "answer", "fingerprint") == []
+    )
+    assert problems({"id": vid, "output": {"accept": {"fingerprint": "00"}}}, "answer", "fingerprint")
+    assert problems({"id": vid, "output": {"steps": []}}, "answer", "fingerprint")
+    assert problems({"id": vid, "output": {"steps": [{}]}}, "answer", "session") == []
+    assert problems({"id": vid, "unsupported": False}, "answer", "fingerprint")
+    assert problems({"id": vid, "failure": "x", "output": {}}, "answer", "fingerprint")
+    assert problems({"id": "hello", "output": {"name": "x", "categories": ["nope"]}}, "hello_answer")
+    assert problems({"id": vid, "op": "fingerprint", "input": {}}, "request")
+    assert problems({"id": vid, "op": "nope", "input": {"schema": "x"}}, "request")
+    hello_only = 'print(\'{"id": "hello", "output": {"name": "x", "categories": ["nope"]}}\')'
+    adapter = runner.Adapter([sys.executable, "-c", hello_only], schema)
+    with pytest.raises(SystemExit):
+        adapter.ask("hello", "hello", {"format": 1})
+    adapter.close()
+    adapter = runner.Adapter([sys.executable, "-c", "import sys; sys.stdin.read()"], schema)
+    with pytest.raises(SystemExit):
+        adapter.ask(vid, "fingerprint", {})
+    adapter.close()
+    wrong = 'print(\'{"id": "encoding/fingerprint/x", "output": {"accept": {}}}\')'
+    adapter = runner.Adapter([sys.executable, "-c", wrong], schema)
+    with pytest.raises(ValueError, match="adapter.schema.json"):
+        adapter.ask(vid, "fingerprint", {"schema": '"int"'})
+    adapter.close()

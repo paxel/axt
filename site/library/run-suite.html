@@ -51,7 +51,8 @@
   <a href="https://github.com/paxel/axt/blob/summer/vectors/vectors.schema.json">vectors.schema.json</a>.
   It then starts the adapter and sends the vectors of the categories it names, file by file and in
   the order of each file (<a href="../spec/conformance.html#section-7-1">conformance.md, section
-  7.1</a>). It reports:
+  7.1</a>), and checks every request and every answer against
+  <a href="https://github.com/paxel/axt/blob/summer/vectors/adapter.schema.json">adapter.schema.json</a>. It reports:
 </p>
 <ul>
   <li>each vector that fails, by its id, with what differs;</li>

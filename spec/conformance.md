@@ -119,6 +119,8 @@ A vector expects one of three results:
 - `{"reject": {"error": code}}`: the operation fails with the error code; only the code is compared, and for `VALUE_INVALID` the member `field`, the field path of the value ([metadata.md](metadata.md), section 7.2), or `null` for a path above 1,024 bytes;
 - `{"steps": [...]}`: the results of the steps of a session, one for each step, in the forms the operation defines.
 
+An adapter answers in the same forms; [vectors/adapter.schema.json](../vectors/adapter.schema.json) defines them as `result`, and the form of each operation's result as `result.<op>`.
+
 ### 4.1 What is compared
 
 The runner compares the adapter's answer with the expected result as JSON values, with these rules:
@@ -144,7 +146,7 @@ The codes of [protocol.md](protocol.md), section 8.2, are used wherever the spec
 
 ## 5. Operations
 
-Each operation is defined by its input and its result; the library performs it as the sections named say. Inputs and results are JSON objects; "Bytes" is a value of section 3.2, a key is Bytes of 32 bytes, and a schema text is the JSON text of an Avro schema, as a string.
+Each operation is defined by its input and its result; the library performs it as the sections named say. [vectors/adapter.schema.json](../vectors/adapter.schema.json) defines the members each input requires, as `input.<op>`, and the form of each result with the members an accepted result holds, as `result.<op>`; the tables say what the members mean. Inputs and results are JSON objects; "Bytes" is a value of section 3.2, a key is Bytes of 32 bytes, and a schema text is the JSON text of an Avro schema, as a string.
 
 ### 5.1 encoding
 
@@ -406,12 +408,12 @@ The other operations are those of a sending device on one record and one receive
 
 ## 6. The adapter
 
-An adapter is a program that the runner starts and talks to over its standard input and output: one line of JSON, in UTF-8, in each direction for each request. It writes nothing else to its standard output, and it answers each request before it reads the next.
+An adapter is a program that the runner starts and talks to over its standard input and output: one line of JSON, in UTF-8, in each direction for each request. It writes nothing else to its standard output, and it answers each request before it reads the next. Every line is defined by [vectors/adapter.schema.json](../vectors/adapter.schema.json): a request of the runner by `request`, an answer of the adapter by `answer`. A line that breaks it fails its vector, and a request or an answer to `hello` that breaks it ends the run (section 7.1).
 
-1. The runner's first request is `{"id": "hello", "op": "hello", "input": {"format": 1}}`, where `format` is the version of the vector file format. The adapter answers `{"id": "hello", "output": {"name": ..., "categories": [...]}}`, with the name of its library and the categories that library implements (section 2.2).
-2. For each vector of those categories, the runner sends `{"id": vector id, "op": operation, "input": input}`. It never sends the expected result.
-3. The adapter answers `{"id": the same id, "output": result}`, with a result of a form of section 4: `{"accept": ...}`, `{"reject": {"error": ...}}` or `{"steps": [...]}`. An adapter MUST accept both forms of Bytes of section 3.2 in its input, and MAY use either in its answer.
-4. An adapter that cannot perform an operation answers `{"id": ..., "unsupported": true}`; one that fails for a fault of its own answers `{"id": ..., "failure": text}`. Both fail the vector.
+1. The runner's first request is `hello` (`hello_request`), with the version of the vector file format. The adapter answers (`hello_answer`) with the name of its library and the categories that library implements (section 2.2).
+2. For each vector of those categories, the runner sends its id, its operation and its input (`vector_request`). It never sends the expected result.
+3. The adapter answers with the same id and a result of a form of section 4 (`output_answer`), of the form of `result.<op>` for the operation. An adapter MUST accept both forms of Bytes of section 3.2 in its input, and MAY use either in its answer.
+4. An adapter that cannot perform an operation answers that it is unsupported (`unsupported_answer`); one that fails for a fault of its own answers with a text that says why (`failure_answer`). Both fail the vector.
 5. When the runner closes the adapter's standard input, the adapter ends.
 
 An adapter does what an app would do with its library, with the keys and values in the request. It holds no key of its own and keeps no state from one vector to the next.
@@ -426,7 +428,7 @@ An adapter does what an app would do with its library, with the keys and values 
 python3 conformance/run.py [--vectors DIR] [--category NAME ...] [--verbose] -- ADAPTER COMMAND ...
 ```
 
-It checks every vector file against the schema, starts the adapter, and sends the vectors of the categories the adapter implements, file by file and in the order of each file. It reports each vector that fails and, for each category, how many vectors passed, and it names the categories the adapter does not implement as not run. It exits with 0 only when every vector it ran passed. It needs Python 3.11 or later, fastavro to decode the messages an adapter writes, and the package cryptography to open what an adapter seals.
+It checks every vector file against the schema, starts the adapter, checks every request it sends and every answer it reads against [vectors/adapter.schema.json](../vectors/adapter.schema.json), and sends the vectors of the categories the adapter implements, file by file and in the order of each file. It reports each vector that fails and, for each category, how many vectors passed, and it names the categories the adapter does not implement as not run. It exits with 0 only when every vector it ran passed. It needs Python 3.11 or later, fastavro to decode the messages an adapter writes, and the package cryptography to open what an adapter seals.
 
 ### 7.2 The reference adapter
 
