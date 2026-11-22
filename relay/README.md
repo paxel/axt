@@ -2,7 +2,7 @@
 
 This directory holds the reference relay: a sealed mailbox that stores and forwards end-to-end encrypted messages and sees neither their content nor their type. Anyone can run it. AXT has no default relay operator; each app chooses its relay.
 
-The interface every relay offers is defined in [spec/transports.md](../spec/transports.md), section 5. The reference relay's own document, with its storage, limits, logs and test mode, is [spec/relay.md](../spec/relay.md).
+The interface every relay offers is defined in [spec/transports.md](../spec/transports.md), section 5, and the OpenAPI 3.1 document [spec/relay-api.json](../spec/relay-api.json). The reference relay's own document, with its storage, limits, logs and test mode, is [spec/relay.md](../spec/relay.md).
 
 The reference relay is written in Python 3.11 or later with the standard library only. It is a reference and a test oracle, not a production server. A production relay may be written in any language and store messages in any way, as long as it follows [spec/transports.md](../spec/transports.md), section 5, and passes the `relay-server` vectors ([spec/conformance.md](../spec/conformance.md), section 2.2).
 

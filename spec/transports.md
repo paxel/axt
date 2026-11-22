@@ -251,6 +251,8 @@ An installation has one mailbox at a time, the same for every app that sends to 
 
 The relay is an HTTP service ([RFC 9110](https://www.rfc-editor.org/rfc/rfc9110)), reached over HTTP/1.1 ([RFC 9112](https://www.rfc-editor.org/rfc/rfc9112)) or HTTP/2 ([RFC 9113](https://www.rfc-editor.org/rfc/rfc9113)) with TLS (section 5.7).
 
+The OpenAPI 3.1 document [spec/relay-api.json](relay-api.json) defines its requests, their responses, status codes and headers, and the body of a list. This section says what a relay and an app do with them; the tables below summarize the document.
+
 **The base URL.** A relay is named by its base URL: an absolute URL with the scheme `https`, a host, and a path that ends with `/`, without user information, query, fragment, spaces or control characters, of at most `transports.relay_url` bytes ([types/axt/limits.json](../types/axt/limits.json)), such as `https://relay.example.org/axt/`. The paths of the table below are appended to it.
 
 In the paths, `{mailbox}` is a mailbox id and `{message}` the SHA-256 of a sealed message, each as 64 lower-case hexadecimal digits. "Owner" means that the request carries the header `Authorization`, with the value `Bearer`, one space and the mailbox secret as 64 lower-case hexadecimal digits, in the syntax of [RFC 6750, section 2.1](https://www.rfc-editor.org/rfc/rfc6750#section-2.1).
@@ -266,17 +268,17 @@ In the paths, `{mailbox}` is a mailbox id and `{message}` the SHA-256 of a seale
 
 The relay answers a request that fails with one of these codes:
 
-| Code                       | When                                                                                                                    | The app                                                      |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `400 Bad Request`          | A put whose body is empty or whose SHA-256 is not `{message}`; a `wait` that is not 0 to 60; a query on another request | Does not repeat the request; it is a fault of the app        |
-| `401 Unauthorized`         | An owner request without `Authorization`, or with one that is not a secret in the form above                            | Does not repeat the request                                  |
-| `403 Forbidden`            | An owner request whose secret is not the mailbox's; a mailbox the relay does not create for this app (section 5.6)      | Does not repeat the request                                  |
-| `404 Not Found`            | A mailbox that does not exist; a message the mailbox does not hold                                                      | As section 5.3 says for a put, and section 5.4 for the owner |
-| `411 Length Required`      | A put without `Content-Length`                                                                                          | Sends `Content-Length`                                       |
-| `413 Content Too Large`    | A put above `transports.sealed_message` bytes (section 5.6)                                                             | Does not repeat the request                                  |
-| `429 Too Many Requests`    | A request above the relay's rate limits (section 5.6)                                                                   | Waits as `Retry-After` says, then repeats it                 |
-| `503 Service Unavailable`  | The relay cannot serve the request now                                                                                  | Waits as `Retry-After` or section 5.3 says, then repeats it  |
-| `507 Insufficient Storage` | A put into a mailbox that has no room (section 5.6)                                                                     | Waits as section 5.3 says, then repeats it                   |
+| Code                       | When                                                                                                                                        | The app                                                      |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `400 Bad Request`          | A put whose body is empty or whose SHA-256 is not `{message}`; a `wait` that is not 0 to `transports.list_wait`; a query on another request | Does not repeat the request; it is a fault of the app        |
+| `401 Unauthorized`         | An owner request without `Authorization`, or with one that is not a secret in the form above                                                | Does not repeat the request                                  |
+| `403 Forbidden`            | An owner request whose secret is not the mailbox's; a mailbox the relay does not create for this app (section 5.6)                          | Does not repeat the request                                  |
+| `404 Not Found`            | A mailbox that does not exist; a message the mailbox does not hold                                                                          | As section 5.3 says for a put, and section 5.4 for the owner |
+| `411 Length Required`      | A put without `Content-Length`                                                                                                              | Sends `Content-Length`                                       |
+| `413 Content Too Large`    | A put above `transports.sealed_message` bytes (section 5.6)                                                                                 | Does not repeat the request                                  |
+| `429 Too Many Requests`    | A request above the relay's rate limits (section 5.6)                                                                                       | Waits as `Retry-After` says, then repeats it                 |
+| `503 Service Unavailable`  | The relay cannot serve the request now                                                                                                      | Waits as `Retry-After` or section 5.3 says, then repeats it  |
+| `507 Insufficient Storage` | A put into a mailbox that has no room (section 5.6)                                                                                         | Waits as section 5.3 says, then repeats it                   |
 
 Only the list and the fetch have a body in their response. An app MUST ignore the body of every other response, and MUST NOT send cookies. A relay MUST NOT require cookies or any header that this section does not name.
 
@@ -293,7 +295,7 @@ The relay checks a put in this order: `Content-Length` is present (`411`) and at
 ### 5.4 Fetching and deleting
 
 - **Creating.** The owner creates its mailbox before it gives the id to any other app, and creates it again whenever an owner request gets `404` for the mailbox itself. Creating a mailbox that exists changes nothing.
-- **Listing.** The response to a list is a JSON object ([RFC 8259](https://www.rfc-editor.org/rfc/rfc8259)) with the media type `application/json`. Its member `messages` is an array of the messages held, oldest put first, at most `transports.list_messages` ([types/axt/limits.json](../types/axt/limits.json)), each an object with the members `id`, the message's SHA-256 as 64 lower-case hexadecimal digits, and `size`, its length in bytes. An app MUST ignore members it does not know.
+- **Listing.** The response to a list is a JSON object ([RFC 8259](https://www.rfc-editor.org/rfc/rfc8259)) with the media type `application/json`, the schema `List` of [spec/relay-api.json](relay-api.json). Its member `messages` is an array of the messages held, oldest put first, at most `transports.list_messages` ([types/axt/limits.json](../types/axt/limits.json)), each an object with the members `id`, the message's SHA-256 as 64 lower-case hexadecimal digits, and `size`, its length in bytes. An app MUST ignore members it does not know.
 - **Waiting for messages.** With `wait` from 1 to `transports.list_wait` and no message in the mailbox, the relay holds the response for up to that many seconds until a message is put, and then answers with the list. It MAY answer sooner. Without `wait`, or with 0, it answers at once.
 - **Fetching and deleting.** The owner fetches each listed message, opens it and processes it ([keys.md](keys.md), section 4.5), and then deletes it. It deletes a message that does not open as well. A message it fetched but did not delete, for example because the app stopped, is fetched again and processed as a repeat ([protocol.md](protocol.md), section 9.2). After a list of `transports.list_messages` messages, it lists again.
 - **How often.** An app SHOULD have at most one list of a mailbox waiting at a time, and SHOULD NOT list a mailbox more than once in `transports.list_interval` without `wait`. It lists when it starts and while it runs; 0.1.0 has no push notification. An app away for longer than the holding time loses the messages put before; their senders send them again ([protocol.md](protocol.md), section 11).

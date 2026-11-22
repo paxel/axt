@@ -21,4 +21,6 @@ The specification of AXT, Avro eXchange Transfer, as separate documents. Each do
 
 The limits that the documents name, the sizes, counts, depths and times, are data in [types/axt/limits.json](../types/axt/limits.json), with the JSON Schema [types/axt/limits.schema.json](../types/axt/limits.schema.json): a document names each limit it applies, and the file holds its value.
 
+The interface every relay offers is defined by the OpenAPI 3.1 document [relay-api.json](relay-api.json), which [Transports](transports.md), section 5, explains.
+
 The specification is published under CC0 1.0; see [LICENSING.md](../LICENSING.md).

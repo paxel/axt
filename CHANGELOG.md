@@ -26,6 +26,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [S
 - A proposal can add, change or remove single relations and set single fields within an extension, element by element. ([axt-1041](https://github.com/paxel/axt/issues/49))
 - The limits of the specification are published as data in `types/axt/limits.json`, which the documents name instead of stating the numbers. ([axt-1047](https://github.com/paxel/axt/issues/55))
 - The adapter protocol is published as the JSON Schema `vectors/adapter.schema.json`, and the runner checks every request and answer against it. ([axt-1049](https://github.com/paxel/axt/issues/57))
+- The relay interface is published as the OpenAPI 3.1 document `spec/relay-api.json`, and the relay tests check the reference relay against it. ([axt-1048](https://github.com/paxel/axt/issues/56))
 
 ### Changed
 
