@@ -60,43 +60,43 @@
   "metadata.label": {
    "value": 256,
    "unit": "bytes",
-   "what": "axt.label and each value of axt.label_translations",
+   "what": "The label in the texts of a typed field, an enum symbol or a group, and each value of its label_translations",
    "section": "metadata.md, section 3"
   },
   "metadata.help": {
    "value": 1024,
    "unit": "bytes",
-   "what": "axt.help and each value of axt.help_translations",
+   "what": "The help in the texts of a typed field, an enum symbol or a group, and each value of its help_translations",
    "section": "metadata.md, section 3"
   },
   "metadata.placeholder": {
    "value": 256,
    "unit": "bytes",
-   "what": "axt.placeholder",
+   "what": "The placeholder of a brick of text or of numbers",
    "section": "metadata.md, section 3"
   },
   "metadata.example": {
    "value": 1024,
    "unit": "bytes",
-   "what": "axt.example",
+   "what": "The example of a brick of text or of numbers",
    "section": "metadata.md, section 3"
   },
   "metadata.translations": {
    "value": 64,
    "unit": "entries",
-   "what": "Entries of one axt.label_translations or axt.help_translations",
+   "what": "Entries of one label_translations or help_translations",
    "section": "metadata.md, section 3"
   },
   "metadata.emoji": {
    "value": 10,
    "unit": "code points",
-   "what": "axt.emoji",
+   "what": "The emoji in the texts of a typed field, an enum symbol or a group",
    "section": "metadata.md, section 3"
   },
   "metadata.pattern": {
    "value": 1024,
    "unit": "bytes",
-   "what": "axt.pattern, and the pattern of a brick of text",
+   "what": "The pattern of an axt.StringField",
    "section": "metadata.md, section 6.4"
   },
   "metadata.pattern_quantifier": {
@@ -108,7 +108,7 @@
   "metadata.group_key": {
    "value": 64,
    "unit": "bytes",
-   "what": "A group key, in axt.group and axt.groups and in the groups of an axt.ObjectField",
+   "what": "A group key, in the group of a typed field and in the groups of an axt.ObjectField",
    "section": "metadata.md, section 5.2"
   },
   "manifest.body": {

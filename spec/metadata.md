@@ -15,11 +15,11 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 
 Sender, receiver and type have the meaning of [records.md](records.md), section 1, and [types.md](types.md), section 1.
 
-## 2. The attributes
+## 2. The retired attributes
 
 The attributes `axt.*` of 0.1.0 are retired: what each held is a member of a brick of [types/axt/Field.avsc](../types/axt/Field.avsc), and a derived schema carries no attribute but `axt.version` and those of the published schemas of `axt.Relation` and `axt.Extension` that it holds ([fields.md](fields.md), section 9.2).
 
-## 3. Rules for every attribute
+## 3. Rules of a description
 
 The rules of a description are those of [fields.md](fields.md), section 6.
 
@@ -31,7 +31,7 @@ The texts and hints describe the typed field, enum symbol or group that holds th
 
 The checks of the items of a list or the values of a map apply to each item or value ([fields.md](fields.md), section 4.5).
 
-### 3.3 Attributes that break their rules
+### 3.3 A description that breaks its rules
 
 A description that breaks a rule is not valid, and a receiver declines its type ([fields.md](fields.md), section 10.1).
 

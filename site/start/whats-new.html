@@ -1,7 +1,8 @@
-<!-- page: title="What's new" track="start" order=5 summary="The changes of each AXT version, from the changelog: 0.2.0 adds the documentation site, 0.1.0 was the first release." -->
+<!-- page: title="What's new" track="start" order=5 summary="The changes of each AXT version, from the changelog: 0.2.0 adds typed fields, relations, extensions and the documentation site; 0.1.0 was the first release." -->
 <p class="lede">
   What changed in each version of AXT. Version 0.1.0 was the first release, so its list is
-  everything the standard holds; 0.2.0 adds this site. Below 1.0 a later version may still change things in
+  everything the standard holds; 0.2.0 adds typed fields, relations, extensions, the limits as
+  data and this site. Below 1.0 a later version may still change things in
   incompatible ways; each change is listed in the
   <a href="https://github.com/paxel/axt/blob/summer/CHANGELOG.md">changelog</a>, from which
   this page is taken.
@@ -9,8 +10,7 @@
 
 <h2>0.2.0</h2>
 <p>
-  Not released yet. The specification is the one of 0.1.0; this version adds the documentation
-  site. Each entry links its ticket.
+  Not released yet. Each entry links its ticket.
 </p>
 <h3>Added</h3>
 <ul>
@@ -21,6 +21,27 @@
   <li>The Design an app track: types and their versions, field metadata, the manifest, records, devices, shares and proposals. (<a href="https://github.com/paxel/axt/issues/41">axt-1033</a>)</li>
   <li>The Implement a library track: what a library implements and in what order, the adapter, the suite and the library&#39;s repository. (<a href="https://github.com/paxel/axt/issues/42">axt-1034</a>)</li>
   <li>The Run a relay track: running the reference relay behind a proxy, its logs and limits, and a relay of one&#39;s own. (<a href="https://github.com/paxel/axt/issues/43">axt-1035</a>)</li>
+  <li>Relations on every example type, with the published type <code>axt.Relation</code>, and their cases in the <code>types</code> vectors. (<a href="https://github.com/paxel/axt/issues/45">axt-1037</a>)</li>
+  <li>Typed fields as Avro bricks, <code>axt.Field</code> with one brick per value kind and per format, each with its checks. (<a href="https://github.com/paxel/axt/issues/51">axt-1043</a>)</li>
+  <li>Offers and files carry each type as a description of bricks, from which its schema is derived; the new vector category <code>bricks</code> tests it. (<a href="https://github.com/paxel/axt/issues/52">axt-1044</a>)</li>
+  <li>The relation brick <code>axt.RelationField</code>: a field of relations, each an <code>axt.Relation</code>, in any type, with its rules and limits and <code>bricks</code> vectors. (<a href="https://github.com/paxel/axt/issues/54">axt-1046</a>)</li>
+  <li>Each example type is published as its description of bricks, one version each, with its derived schema and fingerprint generated beside it. (<a href="https://github.com/paxel/axt/issues/53">axt-1045</a>)</li>
+  <li>Relations to records of other senders, named by any key of the sender&#39;s set and shown as linked from, with the <code>records</code> operation <code>relations</code>. (<a href="https://github.com/paxel/axt/issues/46">axt-1038</a>)</li>
+  <li>Relations merge per relation between an owner&#39;s devices and at a receiver, so additions on two devices both stay and removals stay removed. (<a href="https://github.com/paxel/axt/issues/47">axt-1039</a>)</li>
+  <li>Extensions on every example type: an app adds fields of its own as <code>axt.Extension</code> records, which others carry unchanged or merge field by field. (<a href="https://github.com/paxel/axt/issues/60">axt-1052</a>)</li>
+  <li>Each share says whether a record&#39;s relations to unshared targets, outside things and extensions go along; by default they stay out. (<a href="https://github.com/paxel/axt/issues/48">axt-1040</a>)</li>
+  <li>A proposal can add, change or remove single relations and set single fields within an extension, element by element. (<a href="https://github.com/paxel/axt/issues/49">axt-1041</a>)</li>
+  <li>The Design an app track explains relations and extensions on the page Link records, and the library&#39;s build order names them. (<a href="https://github.com/paxel/axt/issues/50">axt-1042</a>)</li>
+  <li>The site describes types by their bricks, with reference pages for the bricks, the limits and the descriptions of the example types. (<a href="https://github.com/paxel/axt/issues/59">axt-1051</a>)</li>
+  <li>The limits of the specification are published as data in <code>types/axt/limits.json</code>, which the documents name instead of stating the numbers. (<a href="https://github.com/paxel/axt/issues/55">axt-1047</a>)</li>
+  <li>The adapter protocol is published as the JSON Schema <code>vectors/adapter.schema.json</code>, and the runner checks every request and answer against it. (<a href="https://github.com/paxel/axt/issues/57">axt-1049</a>)</li>
+  <li>The relay interface is published as the OpenAPI 3.1 document <code>spec/relay-api.json</code>, and the relay tests check the reference relay against it. (<a href="https://github.com/paxel/axt/issues/56">axt-1048</a>)</li>
+</ul>
+<h3>Changed</h3>
+<ul>
+  <li>Deleting a relay mailbox that does not exist succeeds with <code>204</code>, so a deletion can be repeated. (<a href="https://github.com/paxel/axt/issues/56">axt-1048</a>)</li>
+  <li>The documents name the definitions instead of restating them, and the schema attributes are retired: bricks hold texts and checks, which <code>bricks</code> vectors test. (<a href="https://github.com/paxel/axt/issues/58">axt-1050</a>)</li>
+  <li>The test vectors are those of specification 0.2.0. (<a href="https://github.com/paxel/axt/issues/44">axt-1036</a>)</li>
 </ul>
 
 <h2>0.1.0</h2>
